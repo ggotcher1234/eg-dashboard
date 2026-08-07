@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Econ Dev Partners</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #2f7d5c;
+    --accent-dark: #24614a;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    background: var(--navy);
+    color: #fff;
+    padding: 18px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  header h1 {
+    font-size: 18px;
+    margin: 0;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+  header .sub {
+    font-size: 12.5px;
+    color: #c9d6e3;
+    margin-top: 2px;
+  }
+  header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  #userbox {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13.5px;
+  }
+  #userbox .role-pill {
+    background: var(--accent);
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    border-radius: 6px;
+    font-size: 13.5px;
+    padding: 8px 14px;
+    font-weight: 600;
+    transition: background 0.15s ease;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: var(--danger-dark); }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12.5px; }
+
+  main { max-width: 980px; margin: 28px auto; padding: 0 20px 60px; }
+
+  #login-view {
+    max-width: 380px;
+    margin: 90px auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  #login-view h2 { margin-top: 0; font-size: 18px; }
+  #login-view label { display: block; font-size: 12.5px; font-weight: 600; margin: 14px 0 5px; color: var(--muted); }
+  #login-view input {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px;
+  }
+  #login-view button { width: 100%; margin-top: 20px; padding: 10px; }
+  #login-error { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; }
+
+  .toolbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .toolbar input[type="text"] {
+    padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13.5px; width: 260px; background: #fff;
+  }
+  .toolbar .count { font-size: 12.5px; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  thead th {
+    text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted);
+    background: #f8fafb; padding: 10px 14px; border-bottom: 1px solid var(--border);
+  }
+  tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #fafbfc; }
+  td.code { font-weight: 600; color: var(--navy); font-family: "SF Mono", Menlo, monospace; }
+  td.actions { text-align: right; white-space: nowrap; }
+  .inactive-tag { font-size: 10.5px; text-transform: uppercase; color: #9a3f3f; background: #fbe9e9; padding: 2px 7px; border-radius: 999px; margin-left: 8px; }
+  .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; }
+  .readonly-note {
+    background: #fff7e6; border: 1px solid #f0dca6; color: #7a5c17; font-size: 13px;
+    padding: 10px 14px; border-radius: 6px; margin-bottom: 16px;
+  }
+  #banner {
+    display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px;
+  }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+
+  /* Modal */
+  .overlay {
+    display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35);
+    align-items: center; justify-content: center; z-index: 50;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    background: #fff; border-radius: 10px; width: 420px; max-width: 92vw; padding: 26px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  }
+  .modal h3 { margin: 0 0 18px; font-size: 16.5px; }
+  .modal label { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); margin: 12px 0 5px; }
+  .modal input[type="text"], .modal input[type="number"] {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px;
+  }
+  .modal .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  .modal .checkbox-row input { width: auto; }
+  .modal .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+  .modal .field-error { color: var(--danger); font-size: 12px; margin-top: 6px; display: none; }
+  .hidden { display: none !important; }
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="login-view" class="hidden">
+  <h2>EG Dashboard</h2>
+  <div style="font-size:13px; color:var(--muted); margin-top:-8px;">Econ Dev Partners — sign in</div>
+  <form id="login-form">
+    <label for="login-email">Email</label>
+    <input type="text" id="login-email" autocomplete="username" required />
+    <label for="login-password">Password</label>
+    <input type="password" id="login-password" autocomplete="current-password" required />
+    <button type="submit" class="btn-primary">Sign in</button>
+    <div id="login-error"></div>
+  </form>
+</div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <div>
+      <h1>Economic Development Partners</h1>
+      <div class="sub">EG Group internal directory — Section 5.1 &nbsp;·&nbsp; <a class="back-link" href="index.html">← Home</a></div>
+    </div>
+    <div id="userbox">
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span>
+      <button class="btn-ghost" id="signout-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="banner"></div>
+    <div id="readonly-note" class="readonly-note hidden">
+      You're viewing this list read-only. Only a Super Admin can add, edit, or remove partners.
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="search-box" placeholder="Search by name or code…" />
+      <div style="display:flex; align-items:center; gap:14px;">
+        <span class="count" id="row-count"></span>
+        <button class="btn-primary hidden" id="add-btn">+ Add Partner</button>
+      </div>
+    </div>
+
+    <table id="partners-table">
+      <thead>
+        <tr>
+          <th style="width:110px;">Code</th>
+          <th>Name</th>
+          <th style="width:110px;">Region</th>
+          <th style="width:110px;">Budget</th>
+          <th id="actions-header" class="hidden" style="width:130px;"></th>
+        </tr>
+      </thead>
+      <tbody id="partners-tbody"></tbody>
+    </table>
+    <div id="empty-note" class="empty-note hidden">No partners match your search.</div>
+  </main>
+</div>
+
+<!-- Add/Edit modal -->
+<div class="overlay" id="modal-overlay">
+  <div class="modal">
+    <h3 id="modal-title">Add Partner</h3>
+    <form id="partner-form">
+      <input type="hidden" id="form-id" />
+      <label for="form-code">Code (short abbreviation)</label>
+      <input type="text" id="form-code" maxlength="20" required />
+      <div class="field-error" id="code-error">A partner with this code already exists.</div>
+
+      <label for="form-name">Full name</label>
+      <input type="text" id="form-name" required />
+
+      <label for="form-region">Region <span style="font-weight:400; text-transform:none;">(optional, e.g. NY, TX)</span></label>
+      <input type="text" id="form-region" maxlength="10" />
+
+      <label for="form-budget">Budget <span style="font-weight:400; text-transform:none;">(optional, informational)</span></label>
+      <input type="number" id="form-budget" step="0.01" min="0" />
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="form-active" checked />
+        <label for="form-active" style="margin:0; text-transform:none; font-weight:500; color:var(--text);">Active</label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="modal-cancel">Cancel</button>
+        <button type="submit" class="btn-primary" id="modal-save">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Delete confirm modal -->
+<div class="overlay" id="delete-overlay">
+  <div class="modal" style="width:380px;">
+    <h3>Remove partner?</h3>
+    <p style="font-size:13.5px; color:var(--muted);">
+      This removes <strong id="delete-name"></strong> from the partner list. Existing clients already
+      attributed to this partner keep their history — this only affects future assignments.
+    </p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="delete-cancel">Cancel</button>
+      <button type="button" class="btn-danger" id="delete-confirm">Remove</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentUser = null;   // { id, full_name, role, organization_id }
+  let allPartners = [];
+  let isSuperAdmin = false;
+  let pendingDeleteId = null;
+
+  const $ = (id) => document.getElementById(id);
+
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 3000);
+  }
+
+  // ---------- Auth ----------
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("login-email").value.trim();
+    const password = $("login-password").value;
+    $("login-error").style.display = "none";
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      $("login-error").textContent = error.message;
+      $("login-error").style.display = "block";
+      return;
+    }
+    await afterSignIn();
+  });
+
+  $("signout-btn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    $("login-view").classList.remove("hidden");
+  });
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users")
+      .select("id, full_name, role, organization_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      $("loading-view").classList.add("hidden");
+      $("login-view").classList.remove("hidden");
+      $("login-error").textContent = "Signed in, but no matching staff profile was found for this account.";
+      $("login-error").style.display = "block";
+      await sb.auth.signOut();
+      return;
+    }
+
+    currentUser = profile;
+    isSuperAdmin = profile.role === "super_admin";
+
+    $("loading-view").classList.add("hidden");
+    $("login-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = profile.role.replace("_", " ");
+
+    if (isSuperAdmin) {
+      $("add-btn").classList.remove("hidden");
+      $("actions-header").classList.remove("hidden");
+      $("readonly-note").classList.add("hidden");
+    } else {
+      $("add-btn").classList.add("hidden");
+      $("actions-header").classList.add("hidden");
+      $("readonly-note").classList.remove("hidden");
+    }
+
+    await loadPartners();
+  }
+
+  // Restore session on reload
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      afterSignIn();
+    } else {
+      $("loading-view").classList.add("hidden");
+      $("login-view").classList.remove("hidden");
+    }
+  });
+
+  // ---------- Load & render ----------
+  async function loadPartners() {
+    const { data, error } = await sb
+      .from("econ_dev_companies")
+      .select("*")
+      .order("code", { ascending: true });
+
+    if (error) {
+      showBanner("Couldn't load partners: " + error.message, "error");
+      return;
+    }
+    allPartners = data;
+    renderTable();
+  }
+
+  function renderTable() {
+    const q = $("search-box").value.trim().toLowerCase();
+    const rows = allPartners.filter(
+      (p) => !q || p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q)
+    );
+
+    $("row-count").textContent = `${rows.length} of ${allPartners.length} partners`;
+
+    const tbody = $("partners-tbody");
+    tbody.innerHTML = "";
+
+    if (rows.length === 0) {
+      $("empty-note").classList.remove("hidden");
+    } else {
+      $("empty-note").classList.add("hidden");
+    }
+
+    for (const p of rows) {
+      const tr = document.createElement("tr");
+
+      const actionsCell = isSuperAdmin
+        ? `<td class="actions">
+             <button class="btn-secondary btn-sm" onclick="openEdit('${p.id}')">Edit</button>
+             <button class="btn-danger btn-sm" onclick="openDelete('${p.id}')" style="margin-left:6px;">Delete</button>
+           </td>`
+        : "";
+
+      tr.innerHTML = `
+        <td class="code">${escapeHtml(p.code)}</td>
+        <td>${escapeHtml(p.name)}${p.active ? "" : '<span class="inactive-tag">inactive</span>'}</td>
+        <td>${escapeHtml(p.region || "—")}</td>
+        <td>${p.budget != null ? "$" + Number(p.budget).toLocaleString() : "—"}</td>
+        ${actionsCell}
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  $("search-box").addEventListener("input", renderTable);
+
+  // ---------- Add / Edit modal ----------
+  $("add-btn").addEventListener("click", () => openAdd());
+  $("modal-cancel").addEventListener("click", closeModal);
+
+  function openAdd() {
+    $("modal-title").textContent = "Add Partner";
+    $("form-id").value = "";
+    $("form-code").value = "";
+    $("form-name").value = "";
+    $("form-region").value = "";
+    $("form-budget").value = "";
+    $("form-active").checked = true;
+    $("code-error").style.display = "none";
+    $("form-code").disabled = false;
+    $("modal-overlay").classList.add("open");
+    $("form-code").focus();
+  }
+
+  window.openEdit = function (id) {
+    const p = allPartners.find((x) => x.id === id);
+    if (!p) return;
+    $("modal-title").textContent = "Edit Partner";
+    $("form-id").value = p.id;
+    $("form-code").value = p.code;
+    $("form-name").value = p.name;
+    $("form-region").value = p.region || "";
+    $("form-budget").value = p.budget != null ? p.budget : "";
+    $("form-active").checked = p.active;
+    $("code-error").style.display = "none";
+    $("modal-overlay").classList.add("open");
+    $("form-name").focus();
+  };
+
+  function closeModal() {
+    $("modal-overlay").classList.remove("open");
+  }
+
+  $("partner-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("code-error").style.display = "none";
+
+    const id = $("form-id").value;
+    const code = $("form-code").value.trim();
+    const name = $("form-name").value.trim();
+    const region = $("form-region").value.trim() || null;
+    const budgetRaw = $("form-budget").value;
+    const budget = budgetRaw === "" ? null : Number(budgetRaw);
+    const active = $("form-active").checked;
+
+    const saveBtn = $("modal-save");
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+
+    let error;
+    if (id) {
+      ({ error } = await sb
+        .from("econ_dev_companies")
+        .update({ code, name, region, budget, active })
+        .eq("id", id));
+    } else {
+      ({ error } = await sb
+        .from("econ_dev_companies")
+        .insert({ organization_id: currentUser.organization_id, code, name, region, budget, active }));
+    }
+
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save";
+
+    if (error) {
+      if (error.message.includes("duplicate key") || error.code === "23505") {
+        $("code-error").style.display = "block";
+      } else {
+        showBanner("Couldn't save: " + error.message, "error");
+      }
+      return;
+    }
+
+    closeModal();
+    showBanner(id ? "Partner updated." : "Partner added.", "success");
+    await loadPartners();
+  });
+
+  // ---------- Delete ----------
+  window.openDelete = function (id) {
+    const p = allPartners.find((x) => x.id === id);
+    if (!p) return;
+    pendingDeleteId = id;
+    $("delete-name").textContent = `${p.name} (${p.code})`;
+    $("delete-overlay").classList.add("open");
+  };
+
+  $("delete-cancel").addEventListener("click", () => {
+    $("delete-overlay").classList.remove("open");
+    pendingDeleteId = null;
+  });
+
+  $("delete-confirm").addEventListener("click", async () => {
+    if (!pendingDeleteId) return;
+    const { error } = await sb.from("econ_dev_companies").delete().eq("id", pendingDeleteId);
+    $("delete-overlay").classList.remove("open");
+    if (error) {
+      showBanner(
+        error.code === "23503"
+          ? "Can't delete — one or more clients still reference this partner."
+          : "Couldn't delete: " + error.message,
+        "error"
+      );
+    } else {
+      showBanner("Partner removed.", "success");
+      await loadPartners();
+    }
+    pendingDeleteId = null;
+  });
+
+  // Close modals on overlay click (not on the modal card itself)
+  document.querySelectorAll(".overlay").forEach((ov) => {
+    ov.addEventListener("click", (e) => {
+      if (e.target === ov) ov.classList.remove("open");
+    });
+  });
+</script>
+</body>
+</html>

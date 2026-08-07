@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Client Applications</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #2f7d5c;
+    --accent-dark: #24614a;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+
+  header { background: var(--navy); color: #fff; padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 12.5px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  button { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: var(--danger-dark); }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12.5px; }
+  button:disabled { opacity: 0.6; cursor: default; }
+
+  main { max-width: 900px; margin: 28px auto; padding: 0 20px 70px; }
+
+  #login-view { max-width: 380px; margin: 90px auto; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  #login-view h2 { margin-top: 0; font-size: 18px; }
+  #login-view label { display: block; font-size: 12.5px; font-weight: 600; margin: 14px 0 5px; color: var(--muted); }
+  #login-view input { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+  #login-view button { width: 100%; margin-top: 20px; padding: 10px; }
+  #login-error { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; }
+
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tab { padding: 7px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: #eef1f4; color: var(--muted); cursor: pointer; }
+  .tab.active { background: var(--navy); color: #fff; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  thead th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); background: #f8fafb; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.clickable:hover { background: #fafbfc; cursor: pointer; }
+  .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; }
+
+  .badge { font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; padding: 3px 9px; border-radius: 999px; }
+  .badge-pending { background: #fdf1dc; color: var(--amber); }
+  .badge-accepted { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-rejected { background: #fbe9e9; color: var(--danger-dark); }
+  .badge-active { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-finalized { background: #e7eef7; color: var(--navy-light); }
+  .badge-archived { background: #eef1f4; color: var(--muted); }
+  .badge-in_progress { background: #e7eef7; color: var(--navy-light); }
+  .badge-on_hold { background: #fdf1dc; color: var(--amber); }
+  .badge-closed { background: #eef1f4; color: var(--muted); }
+
+  .status-pill-bar { display: flex; gap: 8px; margin: 6px 0 22px; flex-wrap: wrap; }
+  .status-pill { border: 2px solid transparent; border-radius: 999px; padding: 7px 16px; font-size: 11.5px; opacity: 0.45; transition: opacity .15s ease, box-shadow .15s ease; }
+  .status-pill:hover:not(:disabled) { opacity: 0.8; }
+  .status-pill.active { opacity: 1; border-color: currentColor; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+  .status-pill:disabled { cursor: default; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 24px 28px; }
+  .card h2 { margin-top: 0; font-size: 17px; }
+
+  fieldset { border: 1px solid var(--border); border-radius: 8px; margin: 0 0 16px; padding: 16px 18px 18px; }
+  legend { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--navy-light); padding: 0 6px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 16px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
+  .field .hint { font-weight: 400; text-transform: none; color: #9aa4b0; }
+  .field input[type="text"], .field input[type="number"], .field input[type="email"], .field input[type="url"], .field select, .field textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit;
+  }
+  .field textarea { resize: vertical; min-height: 60px; }
+  .checkrow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .checkrow input { width: auto; }
+  .checkrow label { margin: 0; font-weight: 500; text-transform: none; color: var(--text); font-size: 13.5px; }
+  details summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--navy-light); margin-bottom: 10px; }
+  .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+  .required-star { color: var(--danger); }
+
+  .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-bottom: 4px; }
+  .review-item { padding: 8px 0; border-bottom: 1px solid #f0f2f4; }
+  .review-item .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); font-weight: 600; }
+  .review-item .value { font-size: 14px; margin-top: 2px; }
+  .review-section-title { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--navy-light); margin: 22px 0 8px; }
+  .review-section-title:first-child { margin-top: 0; }
+
+  .accept-box { background: #f8fafb; border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; margin-top: 22px; }
+  .accept-box h3 { margin: 0 0 4px; font-size: 15px; }
+  .accept-box .desc { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+  .slug-preview { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .slug-preview strong { color: var(--navy); font-family: "SF Mono", Menlo, monospace; }
+  .field-error { color: var(--danger); font-size: 12px; margin-top: 6px; display: none; }
+
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 50; }
+  .overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 10px; width: 380px; max-width: 92vw; padding: 26px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
+  .modal h3 { margin: 0 0 10px; font-size: 16.5px; }
+  .modal p { font-size: 13.5px; color: var(--muted); }
+  .modal .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .hidden { display: none !important; }
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="login-view" class="hidden">
+  <h2>EG Dashboard</h2>
+  <div style="font-size:13px; color:var(--muted); margin-top:-8px;">Client Applications — sign in</div>
+  <form id="login-form">
+    <label for="login-email">Email</label>
+    <input type="text" id="login-email" autocomplete="username" required />
+    <label for="login-password">Password</label>
+    <input type="password" id="login-password" autocomplete="current-password" required />
+    <button type="submit" class="btn-primary">Sign in</button>
+    <div id="login-error"></div>
+  </form>
+</div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <div>
+      <h1>Client Applications</h1>
+      <div class="sub">EG Group — intake &amp; acceptance — Section 5.2 &nbsp;·&nbsp; <a class="back-link" href="index.html">← Home</a></div>
+    </div>
+    <div id="userbox">
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span>
+      <button class="btn-ghost" id="signout-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="banner"></div>
+
+    <!-- ===== LIST VIEW ===== -->
+    <div id="view-list">
+      <div class="toolbar">
+        <div class="tabs">
+          <span class="tab active" data-status="pending">Pending</span>
+          <span class="tab" data-status="accepted">Accepted</span>
+          <span class="tab" data-status="in_progress">In Progress</span>
+          <span class="tab" data-status="on_hold">On Hold</span>
+          <span class="tab" data-status="closed">Closed</span>
+          <span class="tab" data-status="rejected">Rejected</span>
+          <span class="tab" data-status="all">All</span>
+        </div>
+        <button class="btn-primary" id="new-app-btn">+ New Application</button>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Econ Dev Partner</th>
+            <th>Submitted By</th>
+            <th>Submitted</th>
+            <th style="width:100px;">Status</th>
+            <th id="project-status-header" class="hidden" style="width:120px;">Project Status</th>
+          </tr>
+        </thead>
+        <tbody id="applications-tbody"></tbody>
+      </table>
+      <div id="empty-note" class="empty-note hidden">No applications here yet.</div>
+    </div>
+
+    <!-- ===== NEW APPLICATION VIEW ===== -->
+    <div id="view-new" class="hidden">
+      <div class="card">
+        <h2>New Client Application</h2>
+        <form id="new-app-form">
+
+          <fieldset>
+            <legend>Company basics</legend>
+            <div class="grid-2">
+              <div class="field">
+                <label>Company name <span class="required-star">*</span></label>
+                <input type="text" id="f-company-name" required />
+              </div>
+              <div class="field">
+                <label>Econ Dev partner <span class="required-star">*</span></label>
+                <select id="f-econ-dev" required></select>
+              </div>
+              <div class="field">
+                <label>Website</label>
+                <input type="url" id="f-website" placeholder="https://…" />
+              </div>
+              <div class="field">
+                <label>Phone</label>
+                <input type="text" id="f-phone" />
+              </div>
+              <div class="field">
+                <label>Year founded</label>
+                <input type="number" id="f-year-founded" min="1800" max="2100" />
+              </div>
+              <div class="field">
+                <label>Ownership</label>
+                <select id="f-is-private">
+                  <option value="">Unspecified</option>
+                  <option value="true">Private</option>
+                  <option value="false">Public</option>
+                </select>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Address</legend>
+            <div class="grid-2">
+              <div class="field" style="grid-column: 1 / -1;">
+                <label>Street</label>
+                <input type="text" id="f-street" />
+              </div>
+              <div class="field"><label>City</label><input type="text" id="f-city" /></div>
+              <div class="field"><label>State</label><input type="text" id="f-state" maxlength="2" /></div>
+              <div class="field"><label>Postal code</label><input type="text" id="f-postal" /></div>
+              <div class="field"><label>Country</label><input type="text" id="f-country" /></div>
+              <div class="field"><label>County</label><input type="text" id="f-county" /></div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Primary contact</legend>
+            <div class="grid-2">
+              <div class="field"><label>Name</label><input type="text" id="f-p-name" /></div>
+              <div class="field"><label>Title</label><input type="text" id="f-p-title" /></div>
+              <div class="field"><label>Email</label><input type="email" id="f-p-email" /></div>
+              <div class="field"><label>Phone</label><input type="text" id="f-p-phone" /></div>
+              <div class="field">
+                <label>Temperament</label>
+                <select id="f-p-temperament">
+                  <option value="">Unspecified</option>
+                  <option>Guardian</option>
+                  <option>Artisan</option>
+                  <option>Rational</option>
+                  <option>Idealist</option>
+                </select>
+              </div>
+            </div>
+          </fieldset>
+
+          <details>
+            <summary>Secondary/3rd contact, financials &amp; business profile (optional)</summary>
+
+            <fieldset>
+              <legend>Secondary contact</legend>
+              <div class="grid-2">
+                <div class="field"><label>Name</label><input type="text" id="f-s-name" /></div>
+                <div class="field"><label>Title</label><input type="text" id="f-s-title" /></div>
+                <div class="field"><label>Email</label><input type="email" id="f-s-email" /></div>
+                <div class="field"><label>Phone</label><input type="text" id="f-s-phone" /></div>
+                <div class="field">
+                  <label>Temperament</label>
+                  <select id="f-s-temperament">
+                    <option value="">Unspecified</option>
+                    <option>Guardian</option>
+                    <option>Artisan</option>
+                    <option>Rational</option>
+                    <option>Idealist</option>
+                  </select>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>3rd contact</legend>
+              <div class="grid-2">
+                <div class="field"><label>Name</label><input type="text" id="f-t-name" /></div>
+                <div class="field"><label>Title</label><input type="text" id="f-t-title" /></div>
+                <div class="field"><label>Email</label><input type="email" id="f-t-email" /></div>
+                <div class="field"><label>Phone</label><input type="text" id="f-t-phone" /></div>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Financials</legend>
+              <div class="field"><label>Primary business &amp; NAICS code <span class="hint">(if known)</span></label><input type="text" id="f-naics" /></div>
+              <div class="checkrow"><input type="checkbox" id="f-fte-range" /><label for="f-fte-range">Has 10–100 FTE employees</label></div>
+              <div class="grid-2">
+                <div class="field"><label>FTEs (2025)</label><input type="number" id="f-fte-2025" /></div>
+                <div class="field"><label>FTEs (2024)</label><input type="number" id="f-fte-2024" /></div>
+                <div class="field"><label>FTEs (2023)</label><input type="number" id="f-fte-2023" /></div>
+                <div class="field"><label>FTEs (2022)</label><input type="number" id="f-fte-2022" /></div>
+              </div>
+              <div class="grid-3">
+                <div class="field"><label>Revenue (2022)</label><input type="number" id="f-rev-2022" step="0.01" /></div>
+                <div class="field"><label>Revenue (2023)</label><input type="number" id="f-rev-2023" step="0.01" /></div>
+                <div class="field"><label>Revenue (2024)</label><input type="number" id="f-rev-2024" step="0.01" /></div>
+              </div>
+              <div class="field" style="width:33%;"><label>Revenue (2025)</label><input type="number" id="f-rev-2025" step="0.01" /></div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Business profile</legend>
+              <div class="checkrow"><input type="checkbox" id="f-sales-range" /><label for="f-sales-range">Sales $1M–$50M</label></div>
+              <div class="checkrow"><input type="checkbox" id="f-sales-external" /><label for="f-sales-external">Sales primarily external to region</label></div>
+              <div class="checkrow"><input type="checkbox" id="f-woman" /><label for="f-woman">Woman-owned</label></div>
+              <div class="checkrow"><input type="checkbox" id="f-minority" /><label for="f-minority">Minority-owned</label></div>
+              <div class="checkrow"><input type="checkbox" id="f-veteran" /><label for="f-veteran">Veteran-owned</label></div>
+              <div class="checkrow"><input type="checkbox" id="f-disabled" /><label for="f-disabled">Disabled-owned</label></div>
+              <div class="field" style="width:50%;"><label>% employees in-state</label><input type="number" id="f-pct-instate" min="0" max="100" /></div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Tags</legend>
+              <div class="field">
+                <label>Tags <span class="hint">(comma-separated)</span></label>
+                <input type="text" id="f-tags" placeholder="manufacturing, NY, priority" />
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Links</legend>
+              <div class="field">
+                <label>Social links <span class="hint">(one per line)</span></label>
+                <textarea id="f-social-links"></textarea>
+              </div>
+              <div class="field">
+                <label>News links <span class="hint">(one per line)</span></label>
+                <textarea id="f-news-links"></textarea>
+              </div>
+            </fieldset>
+          </details>
+
+          <fieldset>
+            <legend>Top business issues</legend>
+            <div class="field">
+              <textarea id="f-top-issues" placeholder="What is this company trying to solve?"></textarea>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Documents</legend>
+            <div class="field">
+              <label>Attach files <span class="hint">(written application, sales sheet, etc. — optional)</span></label>
+              <input type="file" id="f-documents" multiple />
+            </div>
+          </fieldset>
+
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" id="new-app-cancel">Cancel</button>
+            <button type="submit" class="btn-primary" id="new-app-submit">Submit application</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===== REVIEW VIEW ===== -->
+    <div id="view-review" class="hidden">
+      <button class="btn-ghost" id="review-back" style="margin-bottom:12px; padding-left:0;">&larr; Back to applications</button>
+      <div class="card" id="review-card"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Reject confirm modal -->
+<div class="overlay" id="reject-overlay">
+  <div class="modal">
+    <h3>Reject this application?</h3>
+    <p>The submitter will be able to see it was marked rejected. This can't be undone from here.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="reject-cancel">Cancel</button>
+      <button type="button" class="btn-danger" id="reject-confirm">Reject application</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentUser = null;
+  let isSuperAdmin = false;
+  let allApplications = [];
+  let allPartners = [];
+  let allUsers = [];
+  let clientsByApp = {};   // application id -> { id, status, project_status } for accepted applications
+  let activeTab = "pending";
+  let reviewingAppId = null;
+  let pendingRejectId = null;
+
+  const $ = (id) => document.getElementById(id);
+  const usersById = () => Object.fromEntries(allUsers.map((u) => [u.id, u]));
+  const partnersById = () => Object.fromEntries(allPartners.map((p) => [p.id, p]));
+
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 4000);
+  }
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+  function fmtDate(d) {
+    if (!d) return "—";
+    return new Date(d).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  }
+  function fmtMoney(n) {
+    if (n == null || n === "") return "—";
+    return "$" + Number(n).toLocaleString();
+  }
+  function slugify(str) {
+    return (str || "").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 28);
+  }
+
+  // ---------- Auth ----------
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("login-email").value.trim();
+    const password = $("login-password").value;
+    $("login-error").style.display = "none";
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      $("login-error").textContent = error.message;
+      $("login-error").style.display = "block";
+      return;
+    }
+    await afterSignIn();
+  });
+
+  $("signout-btn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    $("login-view").classList.remove("hidden");
+  });
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users")
+      .select("id, full_name, role, organization_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      $("loading-view").classList.add("hidden");
+      $("login-view").classList.remove("hidden");
+      $("login-error").textContent = "Signed in, but no matching staff profile was found for this account.";
+      $("login-error").style.display = "block";
+      await sb.auth.signOut();
+      return;
+    }
+
+    currentUser = profile;
+    isSuperAdmin = profile.role === "super_admin";
+
+    $("loading-view").classList.add("hidden");
+    $("login-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = profile.role.replace("_", " ");
+
+    await Promise.all([loadPartners(), loadUsers()]);
+    await loadApplications();
+    showListView();
+  }
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      afterSignIn();
+    } else {
+      $("loading-view").classList.add("hidden");
+      $("login-view").classList.remove("hidden");
+    }
+  });
+
+  // ---------- Data loading ----------
+  async function loadPartners() {
+    const { data, error } = await sb.from("econ_dev_companies").select("*").eq("active", true).order("name");
+    if (error) { showBanner("Couldn't load Econ Dev partners: " + error.message, "error"); return; }
+    allPartners = data;
+    const sel = $("f-econ-dev");
+    sel.innerHTML = '<option value="">Select a partner…</option>' +
+      allPartners.map((p) => `<option value="${p.id}">${escapeHtml(p.code)} — ${escapeHtml(p.name)}</option>`).join("");
+  }
+
+  async function loadUsers() {
+    const { data, error } = await sb.from("users").select("id, full_name, role").order("full_name");
+    if (error) { showBanner("Couldn't load the staff directory: " + error.message, "error"); return; }
+    allUsers = data;
+  }
+
+  async function loadApplications() {
+    const { data, error } = await sb.from("client_applications").select("*").order("submitted_at", { ascending: false });
+    if (error) { showBanner("Couldn't load applications: " + error.message, "error"); return; }
+    allApplications = data;
+    await loadClientsForAcceptedApps();
+    renderList();
+  }
+
+  // Bulk-loads project_status for every accepted application's client, so the
+  // list can show/filter by it without a query per row. (The review panel
+  // does its own fresh single-row fetch when opened, so reassignments show
+  // up immediately there even if this cached copy is a little stale.)
+  async function loadClientsForAcceptedApps() {
+    const clientIds = [...new Set(allApplications.filter((a) => a.status === "accepted" && a.client_id).map((a) => a.client_id))];
+    clientsByApp = {};
+    if (clientIds.length === 0) return;
+    const { data, error } = await sb.from("clients").select("id, status, project_status").in("id", clientIds);
+    if (error) { showBanner("Couldn't load client project status: " + error.message, "error"); return; }
+    const byClientId = Object.fromEntries(data.map((c) => [c.id, c]));
+    for (const a of allApplications) {
+      if (a.client_id && byClientId[a.client_id]) clientsByApp[a.id] = byClientId[a.client_id];
+    }
+  }
+
+  // ---------- List view ----------
+  function showListView() {
+    $("view-list").classList.remove("hidden");
+    $("view-new").classList.add("hidden");
+    $("view-review").classList.add("hidden");
+    renderList();
+  }
+
+  const PROJECT_STATUSES = ["accepted", "in_progress", "on_hold", "closed"];
+
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+      activeTab = tab.dataset.status;
+      renderList();
+    });
+  });
+
+  function renderList() {
+    const showProjectCol = activeTab === "all" || PROJECT_STATUSES.includes(activeTab);
+    $("project-status-header").classList.toggle("hidden", !showProjectCol);
+
+    let rows;
+    if (activeTab === "all") {
+      rows = allApplications;
+    } else if (PROJECT_STATUSES.includes(activeTab)) {
+      rows = allApplications.filter((a) => a.status === "accepted" && (clientsByApp[a.id]?.project_status || "accepted") === activeTab);
+    } else {
+      rows = allApplications.filter((a) => a.status === activeTab);
+    }
+
+    const pById = partnersById();
+    const uById = usersById();
+    const tbody = $("applications-tbody");
+    tbody.innerHTML = "";
+
+    $("empty-note").classList.toggle("hidden", rows.length > 0);
+
+    for (const a of rows) {
+      const partner = pById[a.econ_dev_company_id];
+      const submitter = uById[a.submitted_by];
+      const projectStatus = clientsByApp[a.id]?.project_status;
+      const tr = document.createElement("tr");
+      tr.className = "clickable";
+      tr.innerHTML = `
+        <td>${escapeHtml(a.company_name)}</td>
+        <td>${partner ? escapeHtml(partner.code) : "—"}</td>
+        <td>${submitter ? escapeHtml(submitter.full_name) : "—"}</td>
+        <td>${fmtDate(a.submitted_at)}</td>
+        <td><span class="badge badge-${a.status}">${a.status}</span></td>
+        ${showProjectCol ? `<td>${projectStatus ? `<span class="badge badge-${projectStatus}">${projectStatus.replace("_", " ")}</span>` : "—"}</td>` : ""}
+      `;
+      tr.addEventListener("click", () => showReviewView(a.id));
+      tbody.appendChild(tr);
+    }
+  }
+
+  // ---------- New application view ----------
+  $("new-app-btn").addEventListener("click", () => {
+    $("new-app-form").reset();
+    $("view-list").classList.add("hidden");
+    $("view-new").classList.remove("hidden");
+  });
+  $("new-app-cancel").addEventListener("click", showListView);
+
+  $("new-app-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const companyName = $("f-company-name").value.trim();
+    const econDevId = $("f-econ-dev").value;
+    if (!companyName || !econDevId) {
+      showBanner("Company name and Econ Dev partner are required.", "error");
+      return;
+    }
+
+    const address = {
+      street: $("f-street").value.trim() || undefined,
+      city: $("f-city").value.trim() || undefined,
+      state: $("f-state").value.trim() || undefined,
+      postal: $("f-postal").value.trim() || undefined,
+      county: $("f-county").value.trim() || undefined,
+    };
+    const hasAddress = Object.values(address).some((v) => v);
+
+    const toLines = (id) => {
+      const raw = $(id).value.trim();
+      return raw ? raw.split("\n").map((s) => s.trim()).filter(Boolean) : null;
+    };
+    const toTags = (id) => {
+      const raw = $(id).value.trim();
+      return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : null;
+    };
+    const numOrNull = (id) => { const v = $(id).value; return v === "" ? null : Number(v); };
+    const boolOrNull = (id) => { const v = $(id).value; return v === "" ? null : v === "true"; };
+    const strOrNull = (id) => { const v = $(id).value.trim(); return v === "" ? null : v; };
+
+    const payload = {
+      organization_id: currentUser.organization_id,
+      econ_dev_company_id: econDevId,
+      company_name: companyName,
+      address: hasAddress ? address : null,
+      phone: $("f-phone").value.trim() || null,
+      year_founded: numOrNull("f-year-founded"),
+      website: $("f-website").value.trim() || null,
+      social_links: toLines("f-social-links"),
+      news_links: toLines("f-news-links"),
+      country: strOrNull("f-country"),
+      is_private: boolOrNull("f-is-private"),
+      primary_officer_name: $("f-p-name").value.trim() || null,
+      primary_officer_title: $("f-p-title").value.trim() || null,
+      primary_officer_email: $("f-p-email").value.trim() || null,
+      primary_officer_phone: $("f-p-phone").value.trim() || null,
+      primary_officer_temperament: strOrNull("f-p-temperament"),
+      secondary_officer_name: $("f-s-name").value.trim() || null,
+      secondary_officer_title: $("f-s-title").value.trim() || null,
+      secondary_officer_email: $("f-s-email").value.trim() || null,
+      secondary_officer_phone: $("f-s-phone").value.trim() || null,
+      secondary_officer_temperament: strOrNull("f-s-temperament"),
+      tertiary_officer_name: strOrNull("f-t-name"),
+      tertiary_officer_title: strOrNull("f-t-title"),
+      tertiary_officer_email: strOrNull("f-t-email"),
+      tertiary_officer_phone: strOrNull("f-t-phone"),
+      naics_code: strOrNull("f-naics"),
+      fte_range_10_to_100: $("f-fte-range").checked,
+      fte_2022: numOrNull("f-fte-2022"),
+      fte_2023: numOrNull("f-fte-2023"),
+      fte_2024: numOrNull("f-fte-2024"),
+      fte_2025: numOrNull("f-fte-2025"),
+      revenue_2022: numOrNull("f-rev-2022"),
+      revenue_2023: numOrNull("f-rev-2023"),
+      revenue_2024: numOrNull("f-rev-2024"),
+      revenue_2025: numOrNull("f-rev-2025"),
+      sales_1_to_50m: $("f-sales-range").checked,
+      sales_primarily_external: $("f-sales-external").checked,
+      woman_owned: $("f-woman").checked,
+      minority_owned: $("f-minority").checked,
+      veteran_owned: $("f-veteran").checked,
+      disabled_owned: $("f-disabled").checked,
+      pct_employees_in_state: numOrNull("f-pct-instate"),
+      top_business_issues: $("f-top-issues").value.trim() || null,
+      tags: toTags("f-tags"),
+      submitted_by: currentUser.id,
+    };
+
+    const btn = $("new-app-submit");
+    btn.disabled = true;
+    btn.textContent = "Submitting…";
+    const { data: inserted, error } = await sb.from("client_applications").insert(payload).select().single();
+
+    if (error) {
+      btn.disabled = false;
+      btn.textContent = "Submit application";
+      showBanner("Couldn't submit: " + error.message, "error");
+      return;
+    }
+
+    const files = $("f-documents").files;
+    if (files && files.length) {
+      btn.textContent = "Uploading documents…";
+      const uploadErrors = await uploadDocuments(files, { applicationId: inserted.id });
+      if (uploadErrors.length) {
+        showBanner("Application submitted, but some files didn't upload: " + uploadErrors.join("; "), "error");
+      } else {
+        showBanner("Application submitted.", "success");
+      }
+    } else {
+      showBanner("Application submitted.", "success");
+    }
+
+    btn.disabled = false;
+    btn.textContent = "Submit application";
+    await loadApplications();
+    activeTab = "pending";
+    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.status === "pending"));
+    showListView();
+  });
+
+  // ---------- Review view ----------
+  $("review-back").addEventListener("click", showListView);
+
+  function showReviewView(appId) {
+    reviewingAppId = appId;
+    $("view-list").classList.add("hidden");
+    $("view-new").classList.add("hidden");
+    $("view-review").classList.remove("hidden");
+    renderReview();
+  }
+
+  // Looked up fresh each time an accepted application is opened, so the
+  // Team Lead shown always reflects who's assigned right now (not who was
+  // assigned at accept time — Super Admins can reassign later).
+  async function fetchClientAndTeamLead(clientId) {
+    const { data: client } = await sb.from("clients").select("id, name, slug, status, project_status").eq("id", clientId).single();
+    const { data: assignment } = await sb
+      .from("client_assignments")
+      .select("user_id")
+      .eq("client_id", clientId)
+      .eq("is_team_lead", true)
+      .maybeSingle();
+    return { client: client || null, teamLead: assignment ? usersById()[assignment.user_id] : null };
+  }
+
+  function sanitizeFilename(name) {
+    return name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  }
+
+  const SPECIALTY_LABELS = {
+    team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
+    gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
+  };
+
+  // Shared hours visibility (Section 4.3/5.3): every assigned consultant —
+  // not just the Team Lead — sees everyone's allotted and spent hours once
+  // they're on the client. RLS already enforces this (client_assignments_select
+  // / time_entries_select both key off is_assigned_to_client), this just
+  // renders what the database already allows the current viewer to see.
+  async function fetchAssignmentsAndHours(clientId) {
+    const { data: rows, error } = await sb
+      .from("client_assignments")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("specialty_type")
+      .order("slot_number");
+    if (error) { showBanner("Couldn't load assignments: " + error.message, "error"); return []; }
+
+    let hoursByAssignment = {};
+    const ids = rows.map((r) => r.id);
+    if (ids.length) {
+      const { data: entries, error: tErr } = await sb.from("time_entries").select("assignment_id, hours").in("assignment_id", ids);
+      if (!tErr) {
+        for (const e of entries) hoursByAssignment[e.assignment_id] = (hoursByAssignment[e.assignment_id] || 0) + Number(e.hours);
+      }
+    }
+    return rows.map((r) => ({ ...r, hoursSpent: hoursByAssignment[r.id] || 0 }));
+  }
+
+  // Fetches every document attached to this application, plus (once
+  // accepted) anything attached directly to the resulting client — a
+  // promoted row satisfies both, so it's returned once, not twice.
+  async function fetchDocuments(a, clientId) {
+    let query = sb.from("documents").select("*").order("uploaded_at", { ascending: false });
+    query = clientId ? query.or(`application_id.eq.${a.id},client_id.eq.${clientId}`) : query.eq("application_id", a.id);
+    const { data, error } = await query;
+    if (error) { showBanner("Couldn't load documents: " + error.message, "error"); return []; }
+    return data;
+  }
+
+  // Uploads each file to the private client-documents bucket and inserts a
+  // matching `documents` row. Pass applicationId before acceptance, or
+  // clientId once a client exists — the storage path prefix and the RLS
+  // policy on storage.objects both key off which one you pass.
+  async function uploadDocuments(fileList, { applicationId, clientId }) {
+    const prefix = clientId ? `clients/${clientId}` : `applications/${applicationId}`;
+    const errors = [];
+    for (const file of Array.from(fileList)) {
+      const path = `${prefix}/${Date.now()}-${sanitizeFilename(file.name)}`;
+      const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+      if (uploadErr) { errors.push(`${file.name}: ${uploadErr.message}`); continue; }
+      const { error: rowErr } = await sb.from("documents").insert({
+        application_id: applicationId || null,
+        client_id: clientId || null,
+        file_name: file.name,
+        storage_path: path,
+        visibility: "internal",
+        uploaded_by: currentUser.id,
+      });
+      if (rowErr) errors.push(`${file.name}: ${rowErr.message}`);
+    }
+    return errors;
+  }
+
+  async function renderReview() {
+    const a = allApplications.find((x) => x.id === reviewingAppId);
+    if (!a) { showListView(); return; }
+    const partner = partnersById()[a.econ_dev_company_id];
+    const submitter = usersById()[a.submitted_by];
+    const reviewer = a.reviewed_by ? usersById()[a.reviewed_by] : null;
+
+    let client = null, teamLead = null;
+    if (a.status === "accepted" && a.client_id) {
+      ({ client, teamLead } = await fetchClientAndTeamLead(a.client_id));
+    }
+    const documents = await fetchDocuments(a, client ? client.id : null);
+    const assignments = client ? await fetchAssignmentsAndHours(client.id) : [];
+
+    const projectStatuses = ["accepted", "in_progress", "on_hold", "closed"];
+    const projectStatusLabels = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+    const canEditProjectStatus = client && (isSuperAdmin || (teamLead && teamLead.id === currentUser.id));
+
+    const item = (label, value) => `<div class="review-item"><div class="label">${label}</div><div class="value">${value || "—"}</div></div>`;
+    const linksList = (arr) => (arr && arr.length) ? arr.map((l) => `<div>${escapeHtml(l)}</div>`).join("") : "—";
+
+    let html = `
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:8px;">
+        <div>
+          <h2 style="margin:0;">${escapeHtml(a.company_name)}</h2>
+          <div style="color:var(--muted); font-size:13px; margin-top:2px;">
+            Submitted by ${submitter ? escapeHtml(submitter.full_name) : "—"} on ${fmtDate(a.submitted_at)}
+          </div>
+        </div>
+        <span class="badge badge-${a.status}">${a.status}</span>
+      </div>
+
+      <div style="font-size:13.5px; color:var(--muted); margin-bottom:6px;">
+        Team Lead:
+        <strong style="color:var(--text);">
+          ${
+            teamLead
+              ? escapeHtml(teamLead.full_name)
+              : a.status === "pending"
+                ? "Not yet assigned — assign it below when you accept"
+                : a.status === "rejected"
+                  ? "—"
+                  : "Unassigned"
+          }
+        </strong>
+      </div>
+
+      ${
+        client
+          ? `<div class="status-pill-bar" id="project-status-toggle">
+              ${projectStatuses.map((s) => `<button type="button" data-pstatus="${s}" class="badge badge-${s} status-pill ${s === client.project_status ? "active" : ""}" ${canEditProjectStatus ? "" : "disabled"}>${projectStatusLabels[s]}</button>`).join("")}
+            </div>`
+          : ""
+      }
+
+      <div class="review-section-title">Company basics</div>
+      <div class="review-grid">
+        ${item("Econ Dev partner", partner ? `${escapeHtml(partner.code)} — ${escapeHtml(partner.name)}` : "—")}
+        ${item("Website", a.website ? `<a href="${escapeHtml(a.website)}" target="_blank" rel="noopener">${escapeHtml(a.website)}</a>` : "—")}
+        ${item("Phone", escapeHtml(a.phone))}
+        ${item("Year founded", escapeHtml(a.year_founded))}
+        ${item("Ownership", a.is_private == null ? "—" : (a.is_private ? "Private" : "Public"))}
+      </div>
+
+      <div class="review-section-title">Address</div>
+      <div class="review-grid">
+        ${item("Street", a.address ? escapeHtml(a.address.street) : "—")}
+        ${item("City / State / Postal", a.address ? `${escapeHtml(a.address.city || "")} ${escapeHtml(a.address.state || "")} ${escapeHtml(a.address.postal || "")}`.trim() || "—" : "—")}
+        ${item("Country", escapeHtml(a.country))}
+        ${item("County", a.address ? escapeHtml(a.address.county) : "—")}
+      </div>
+
+      <div class="review-section-title">Primary contact</div>
+      <div class="review-grid">
+        ${item("Name", escapeHtml(a.primary_officer_name))}
+        ${item("Title", escapeHtml(a.primary_officer_title))}
+        ${item("Email", escapeHtml(a.primary_officer_email))}
+        ${item("Phone", escapeHtml(a.primary_officer_phone))}
+        ${item("Temperament", escapeHtml(a.primary_officer_temperament))}
+      </div>
+
+      <div class="review-section-title">Secondary contact</div>
+      <div class="review-grid">
+        ${item("Name", escapeHtml(a.secondary_officer_name))}
+        ${item("Title", escapeHtml(a.secondary_officer_title))}
+        ${item("Email", escapeHtml(a.secondary_officer_email))}
+        ${item("Phone", escapeHtml(a.secondary_officer_phone))}
+        ${item("Temperament", escapeHtml(a.secondary_officer_temperament))}
+      </div>
+
+      <div class="review-section-title">3rd contact</div>
+      <div class="review-grid">
+        ${item("Name", escapeHtml(a.tertiary_officer_name))}
+        ${item("Title", escapeHtml(a.tertiary_officer_title))}
+        ${item("Email", escapeHtml(a.tertiary_officer_email))}
+        ${item("Phone", escapeHtml(a.tertiary_officer_phone))}
+      </div>
+
+      <div class="review-section-title">Financials</div>
+      <div class="review-grid">
+        ${item("Primary business &amp; NAICS code", escapeHtml(a.naics_code))}
+        ${item("Has 10–100 FTE employees", a.fte_range_10_to_100 == null ? "—" : (a.fte_range_10_to_100 ? "Yes" : "No"))}
+        ${item("FTEs 2025 / 2024", `${a.fte_2025 ?? "—"} / ${a.fte_2024 ?? "—"}`)}
+        ${item("FTEs 2023 / 2022", `${a.fte_2023 ?? "—"} / ${a.fte_2022 ?? "—"}`)}
+        ${item("Revenue 2025", fmtMoney(a.revenue_2025))}
+        ${item("Revenue 2024", fmtMoney(a.revenue_2024))}
+        ${item("Revenue 2023", fmtMoney(a.revenue_2023))}
+        ${item("Revenue 2022", fmtMoney(a.revenue_2022))}
+        ${item("% employees in-state", a.pct_employees_in_state != null ? a.pct_employees_in_state + "%" : "—")}
+      </div>
+
+      <div class="review-section-title">Business profile</div>
+      <div class="review-grid">
+        ${item("Sales $1M–$50M", a.sales_1_to_50m ? "Yes" : "No")}
+        ${item("Sales primarily external", a.sales_primarily_external ? "Yes" : "No")}
+        ${item("Woman-owned", a.woman_owned ? "Yes" : "No")}
+        ${item("Minority-owned", a.minority_owned ? "Yes" : "No")}
+        ${item("Veteran-owned", a.veteran_owned ? "Yes" : "No")}
+        ${item("Disabled-owned", a.disabled_owned ? "Yes" : "No")}
+      </div>
+
+      <div class="review-section-title">Links &amp; tags</div>
+      <div class="review-grid">
+        ${item("Social links", linksList(a.social_links))}
+        ${item("News links", linksList(a.news_links))}
+        ${item("Tags", a.tags && a.tags.length ? a.tags.map(escapeHtml).join(", ") : "—")}
+      </div>
+
+      <div class="review-section-title">Top business issues</div>
+      <div class="review-item" style="border-bottom:none;"><div class="value">${a.top_business_issues ? escapeHtml(a.top_business_issues) : "—"}</div></div>
+
+      <div class="review-section-title">Documents</div>
+      <div id="documents-list">
+        ${
+          documents.length
+            ? documents.map((d) => `
+                <div class="review-item" style="display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f0f2f4;">
+                  <div>
+                    <div class="value" style="margin:0;">${escapeHtml(d.file_name)}</div>
+                    <div style="font-size:12px; color:var(--muted); margin-top:2px;">
+                      ${usersById()[d.uploaded_by] ? escapeHtml(usersById()[d.uploaded_by].full_name) : "—"} · ${fmtDate(d.uploaded_at)}
+                      · <span class="badge badge-${d.visibility === "client_facing" ? "accepted" : "pending"}" style="text-transform:none;">${d.visibility === "client_facing" ? "Client-facing" : "Internal"}</span>
+                    </div>
+                  </div>
+                  <button type="button" class="btn-secondary btn-sm doc-download" data-path="${escapeHtml(d.storage_path)}" data-name="${escapeHtml(d.file_name)}">Download</button>
+                </div>
+              `).join("")
+            : `<div class="review-item" style="border-bottom:none; color:var(--muted); font-size:13.5px;">No documents attached yet.</div>`
+        }
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>Attach more files</label>
+        <input type="file" id="doc-upload-input" multiple />
+      </div>
+    `;
+
+    if (a.status !== "pending") {
+      html += `<div class="review-section-title">Review</div>
+        <div class="review-grid">
+          ${item("Reviewed by", reviewer ? escapeHtml(reviewer.full_name) : "—")}
+          ${item("Reviewed on", fmtDate(a.reviewed_at))}
+        </div>`;
+    }
+
+    if (a.status === "accepted") {
+      const totalAllotted = assignments.reduce((sum, r) => sum + Number(r.hours_allotted), 0);
+      const totalSpent = assignments.reduce((sum, r) => sum + r.hoursSpent, 0);
+
+      html += `<div class="review-section-title">Client</div>
+        <div class="review-grid">
+          ${item("Lifecycle status", client ? `<span class="badge badge-${client.status}">${client.status}</span>` : "—")}
+          ${item("Team Lead", teamLead ? escapeHtml(teamLead.full_name) : "Unassigned")}
+          ${item("Client address", client ? `${escapeHtml(client.slug)}.egdashboardbuilder.com` : "—")}
+        </div>
+
+        <div class="review-section-title">Assignments &amp; Hours</div>
+        ${
+          assignments.length
+            ? `<table style="width:100%; border-collapse:collapse; margin-bottom:4px;">
+                <thead>
+                  <tr>
+                    <th style="text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); padding:6px 8px; border-bottom:1px solid var(--border);">Specialty</th>
+                    <th style="text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); padding:6px 8px; border-bottom:1px solid var(--border);">Consultant</th>
+                    <th style="text-align:right; font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); padding:6px 8px; border-bottom:1px solid var(--border);">Allotted</th>
+                    <th style="text-align:right; font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); padding:6px 8px; border-bottom:1px solid var(--border);">Spent</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${assignments.map((r) => {
+                    const person = usersById()[r.user_id];
+                    const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
+                    return `<tr>
+                      <td style="padding:6px 8px; border-bottom:1px solid #f0f2f4; font-size:13.5px;">${escapeHtml(label)}</td>
+                      <td style="padding:6px 8px; border-bottom:1px solid #f0f2f4; font-size:13.5px;">${person ? escapeHtml(person.full_name) : "—"}</td>
+                      <td style="padding:6px 8px; border-bottom:1px solid #f0f2f4; font-size:13.5px; text-align:right;">${Number(r.hours_allotted)}</td>
+                      <td style="padding:6px 8px; border-bottom:1px solid #f0f2f4; font-size:13.5px; text-align:right;">${r.hoursSpent}</td>
+                    </tr>`;
+                  }).join("")}
+                  <tr>
+                    <td colspan="2" style="padding:6px 8px; font-weight:700; font-size:13.5px;">Total</td>
+                    <td style="padding:6px 8px; font-weight:700; font-size:13.5px; text-align:right;">${totalAllotted} / ${client ? Number(client.budget_hours_available) : "—"}</td>
+                    <td style="padding:6px 8px; font-weight:700; font-size:13.5px; text-align:right;">${totalSpent}</td>
+                  </tr>
+                </tbody>
+              </table>`
+            : `<div class="review-item" style="border-bottom:none; color:var(--muted); font-size:13.5px;">No assignments visible.</div>`
+        }`;
+    }
+
+    if (a.status === "pending" && isSuperAdmin) {
+      const suggestedSlug = slugify(a.company_name);
+      const sortedUsers = [...allUsers].sort((x, y) => {
+        const rank = { team_lead: 0, super_admin: 1, consultant: 2 };
+        const r = (rank[x.role] ?? 3) - (rank[y.role] ?? 3);
+        return r !== 0 ? r : x.full_name.localeCompare(y.full_name);
+      });
+      html += `
+        <div class="accept-box">
+          <h3>Accept this application</h3>
+          <div class="desc">Creates the client, provisions their file, and assigns the Team Lead — Section 5.2.</div>
+          <div class="grid-2">
+            <div class="field">
+              <label>Budget hours available <span class="required-star">*</span></label>
+              <input type="number" id="accept-budget" min="0" step="0.5" required />
+            </div>
+            <div class="field">
+              <label>Team Lead <span class="required-star">*</span></label>
+              <select id="accept-tl" required>
+                <option value="">Select…</option>
+                ${sortedUsers.map((u) => `<option value="${u.id}">${escapeHtml(u.full_name)} (${u.role.replace("_", " ")})</option>`).join("")}
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Client web address <span class="required-star">*</span> <span class="hint">(memorable, lowercase — Section 8.1)</span></label>
+            <input type="text" id="accept-slug" value="${escapeHtml(suggestedSlug)}" />
+            <div class="slug-preview">Clients will reach their page at <strong id="slug-preview-text">${escapeHtml(suggestedSlug)}</strong>.egdashboardbuilder.com</div>
+            <div class="field-error" id="slug-error">That address is already taken — try another.</div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-danger" id="reject-btn">Reject</button>
+            <button type="button" class="btn-primary" id="accept-btn">Accept &amp; create client</button>
+          </div>
+        </div>
+      `;
+    } else if (a.status === "pending" && !isSuperAdmin) {
+      html += `<div class="accept-box"><div class="desc" style="margin:0;">Waiting on a Super Admin to review and accept this application.</div></div>`;
+    }
+
+    $("review-card").innerHTML = html;
+
+    if (a.status === "pending" && isSuperAdmin) {
+      const slugInput = $("accept-slug");
+      slugInput.addEventListener("input", () => {
+        $("slug-preview-text").textContent = slugify(slugInput.value);
+      });
+      $("accept-btn").addEventListener("click", () => submitAccept(a.id));
+      $("reject-btn").addEventListener("click", () => {
+        pendingRejectId = a.id;
+        $("reject-overlay").classList.add("open");
+      });
+    }
+
+    const toggle = document.getElementById("project-status-toggle");
+    if (toggle && client) {
+      toggle.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const newStatus = btn.dataset.pstatus;
+          if (newStatus === client.project_status) return;
+          toggle.querySelectorAll("button").forEach((b) => (b.disabled = true));
+          const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", client.id);
+          toggle.querySelectorAll("button").forEach((b) => (b.disabled = false));
+          if (error) {
+            showBanner("Couldn't update project status: " + error.message, "error");
+            return;
+          }
+          if (clientsByApp[a.id]) clientsByApp[a.id].project_status = newStatus;
+          showBanner("Project status updated.", "success");
+          renderReview();
+        });
+      });
+    }
+
+    document.querySelectorAll(".doc-download").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(btn.dataset.path, 60);
+        btn.disabled = false;
+        if (error) {
+          showBanner("Couldn't open " + btn.dataset.name + ": " + error.message, "error");
+          return;
+        }
+        window.open(data.signedUrl, "_blank");
+      });
+    });
+
+    const uploadInput = $("doc-upload-input");
+    if (uploadInput) {
+      uploadInput.addEventListener("change", async () => {
+        if (!uploadInput.files.length) return;
+        uploadInput.disabled = true;
+        const uploadErrors = await uploadDocuments(uploadInput.files, {
+          applicationId: client ? null : a.id,
+          clientId: client ? client.id : null,
+        });
+        if (uploadErrors.length) {
+          showBanner("Some files didn't upload: " + uploadErrors.join("; "), "error");
+        } else {
+          showBanner("Document(s) uploaded.", "success");
+        }
+        renderReview();
+      });
+    }
+  }
+
+  async function submitAccept(appId) {
+    const budget = $("accept-budget").value;
+    const teamLeadId = $("accept-tl").value;
+    const slug = slugify($("accept-slug").value);
+    $("slug-error").style.display = "none";
+
+    if (!budget || !teamLeadId || !slug) {
+      showBanner("Budget hours, Team Lead, and a client address are all required to accept.", "error");
+      return;
+    }
+
+    const btn = $("accept-btn");
+    btn.disabled = true;
+    btn.textContent = "Creating client…";
+
+    const { data: clientId, error } = await sb.rpc("accept_client_application", {
+      p_application_id: appId,
+      p_budget_hours_available: Number(budget),
+      p_team_lead_id: teamLeadId,
+      p_slug: slug,
+    });
+
+    btn.disabled = false;
+    btn.textContent = "Accept & create client";
+
+    if (error) {
+      if (error.message.includes("duplicate key") || error.code === "23505") {
+        $("slug-error").style.display = "block";
+      } else {
+        showBanner("Couldn't accept: " + error.message, "error");
+      }
+      return;
+    }
+
+    showBanner(`Client created at ${slug}.egdashboardbuilder.com.`, "success");
+    await loadApplications();
+    showListView();
+  }
+
+  $("reject-cancel").addEventListener("click", () => {
+    $("reject-overlay").classList.remove("open");
+    pendingRejectId = null;
+  });
+
+  $("reject-confirm").addEventListener("click", async () => {
+    if (!pendingRejectId) return;
+    const { error } = await sb.from("client_applications")
+      .update({ status: "rejected", reviewed_by: currentUser.id, reviewed_at: new Date().toISOString() })
+      .eq("id", pendingRejectId);
+    $("reject-overlay").classList.remove("open");
+    pendingRejectId = null;
+    if (error) {
+      showBanner("Couldn't reject: " + error.message, "error");
+      return;
+    }
+    showBanner("Application rejected.", "success");
+    await loadApplications();
+    showListView();
+  });
+
+  document.querySelectorAll(".overlay").forEach((ov) => {
+    ov.addEventListener("click", (e) => { if (e.target === ov) ov.classList.remove("open"); });
+  });
+</script>
+</body>
+</html>

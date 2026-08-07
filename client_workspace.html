@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Client Workspace</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #2f7d5c;
+    --accent-dark: #24614a;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+
+  header { background: var(--navy); color: #fff; padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 12.5px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  button { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: var(--danger-dark); }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12.5px; }
+  button:disabled { opacity: 0.55; cursor: default; }
+
+  main { max-width: 960px; margin: 28px auto; padding: 0 20px 70px; }
+
+  #login-view { max-width: 380px; margin: 90px auto; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  #login-view h2 { margin-top: 0; font-size: 18px; }
+  #login-view label { display: block; font-size: 12.5px; font-weight: 600; margin: 14px 0 5px; color: var(--muted); }
+  #login-view input { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+  #login-view button { width: 100%; margin-top: 20px; padding: 10px; }
+  #login-error { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; }
+
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+
+  .badge { font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; padding: 3px 9px; border-radius: 999px; }
+  .badge-active { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-finalized { background: #e7eef7; color: var(--navy-light); }
+  .badge-archived { background: #eef1f4; color: var(--muted); }
+  .badge-accepted { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-in_progress { background: #e7eef7; color: var(--navy-light); }
+  .badge-on_hold { background: #fdf1dc; color: var(--amber); }
+  .badge-closed { background: #eef1f4; color: var(--muted); }
+
+  .status-pill-bar { display: flex; gap: 8px; margin: 6px 0 4px; flex-wrap: wrap; }
+  .status-pill { border: 2px solid transparent; border-radius: 999px; padding: 7px 16px; font-size: 11.5px; opacity: 0.45; transition: opacity .15s ease, box-shadow .15s ease; }
+  .status-pill:hover:not(:disabled) { opacity: 0.8; }
+  .status-pill.active { opacity: 1; border-color: currentColor; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+  .status-pill:disabled { cursor: default; }
+
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .toolbar input[type="text"] { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13.5px; width: 260px; background: #fff; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  thead th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); background: #f8fafb; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.clickable:hover { background: #fafbfc; cursor: pointer; }
+  td.actions { text-align: right; white-space: nowrap; }
+  .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 24px 28px; margin-bottom: 20px; }
+  .card h2 { margin-top: 0; font-size: 17px; }
+  .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  .meta-line { font-size: 13.5px; color: var(--muted); margin: 4px 0; }
+  .meta-line strong { color: var(--text); }
+
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
+  .field input[type="text"], .field input[type="number"], .field select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit;
+  }
+  .required-star { color: var(--danger); }
+
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 50; }
+  .overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 10px; width: 400px; max-width: 92vw; padding: 26px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
+  .modal h3 { margin: 0 0 10px; font-size: 16.5px; }
+  .modal p { font-size: 13.5px; color: var(--muted); }
+  .modal .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .field-error { color: var(--danger); font-size: 12.5px; margin-top: 8px; display: none; }
+  .hidden { display: none !important; }
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+
+  .locked-note { background: #fdf1dc; border: 1px solid #f0dca6; color: #7a5c17; font-size: 13px; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
+
+  .hours-summary-row { display: flex; gap: 14px; margin: 4px 0 18px; flex-wrap: wrap; }
+  .hours-box { background: #f8fafb; border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; min-width: 150px; flex: 1; }
+  .hours-box label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
+  .hours-box input { width: 100%; border: none; background: transparent; font-size: 22px; font-weight: 700; color: var(--navy); padding: 0; font-family: inherit; }
+  .hours-box input:disabled { color: var(--text); opacity: 0.85; }
+  .hours-box input:focus { outline: none; }
+  .hours-box.highlight { background: #e9f5ee; border-color: #bfe3cf; }
+  .hours-box.highlight.negative { background: #fbe9e9; border-color: #f0c2c0; }
+  #hours-unassigned-display { font-size: 22px; font-weight: 700; color: var(--accent-dark); }
+  #hours-unassigned-display.zero { color: var(--accent-dark); }
+  #hours-unassigned-display.negative { color: var(--danger-dark); }
+
+  .row-input { width: 100%; padding: 5px 7px; border: 1px solid transparent; border-radius: 5px; font-size: 13.5px; font-family: inherit; background: transparent; text-align: right; }
+  .row-input:hover, .row-input:focus { border-color: var(--border); background: #fff; }
+  .row-select { width: 100%; padding: 5px 7px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; font-family: inherit; background: #fff; }
+  .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+  .icon-btn { padding: 4px 8px; font-size: 13px; line-height: 1; }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="login-view" class="hidden">
+  <h2>EG Dashboard</h2>
+  <div style="font-size:13px; color:var(--muted); margin-top:-8px;">Client Workspace — sign in</div>
+  <form id="login-form">
+    <label for="login-email">Email</label>
+    <input type="text" id="login-email" autocomplete="username" required />
+    <label for="login-password">Password</label>
+    <input type="password" id="login-password" autocomplete="current-password" required />
+    <button type="submit" class="btn-primary">Sign in</button>
+    <div id="login-error"></div>
+  </form>
+</div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <div>
+      <h1>Client Workspace</h1>
+      <div class="sub">EG Group — assignments &amp; hours &nbsp;·&nbsp; <a class="back-link" href="index.html">← Home</a></div>
+    </div>
+    <div id="userbox">
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span>
+      <button class="btn-ghost" id="signout-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="banner"></div>
+
+    <!-- ===== CLIENT PICKER ===== -->
+    <div id="view-picker">
+      <div class="toolbar">
+        <input type="text" id="picker-search" placeholder="Search your clients…" />
+        <span class="hint" id="picker-count" style="font-size:12.5px; color:var(--muted);"></span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Client</th>
+            <th>Econ Dev Partner</th>
+            <th style="width:110px;">Status</th>
+            <th style="width:130px;">Project Status</th>
+          </tr>
+        </thead>
+        <tbody id="picker-tbody"></tbody>
+      </table>
+      <div id="picker-empty" class="empty-note hidden">You're not assigned to any clients yet.</div>
+    </div>
+
+    <!-- ===== WORKSPACE ===== -->
+    <div id="view-workspace" class="hidden">
+      <button class="btn-ghost" id="workspace-back" style="margin-bottom:12px; padding-left:0;">&larr; Back to my clients</button>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 id="ws-name" style="margin:0;"></h2>
+            <div class="meta-line" id="ws-address"></div>
+          </div>
+          <span class="badge" id="ws-lifecycle-badge"></span>
+        </div>
+        <div class="meta-line" id="ws-partner"></div>
+        <div class="meta-line">
+          Team Lead: <strong id="ws-team-lead"></strong>
+          <button class="btn-ghost btn-sm hidden" id="reassign-tl-btn" style="margin-left:6px;">Reassign</button>
+        </div>
+        <div class="meta-line" id="ws-budget"></div>
+
+        <div id="ws-locked-note" class="locked-note hidden">
+          This client is On Hold / Closed — hours can't be changed by the Team Lead or consultants right now. A Super Admin can still make changes if needed.
+        </div>
+
+        <div class="status-pill-bar" id="project-status-toggle"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Assignments &amp; Hours</h2>
+        </div>
+
+        <div class="hours-summary-row">
+          <div class="hours-box">
+            <label for="total-budget-input">Total Hours (Budget)</label>
+            <input type="number" id="total-budget-input" min="0" step="0.5" />
+          </div>
+          <div class="hours-box">
+            <label for="tl-hours-input">Team Lead Hours</label>
+            <input type="number" id="tl-hours-input" min="0" step="0.5" />
+          </div>
+          <div class="hours-box highlight">
+            <label>Hours Unassigned</label>
+            <div id="hours-unassigned-display">—</div>
+          </div>
+        </div>
+        <div class="field-error" id="summary-error"></div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Specialty</th>
+              <th>Consultant</th>
+              <th style="width:110px; text-align:right;">Hours</th>
+              <th style="width:80px; text-align:right;">Spent</th>
+              <th id="assignments-actions-header" class="hidden" style="width:70px;"></th>
+            </tr>
+          </thead>
+          <tbody id="assignments-tbody"></tbody>
+        </table>
+        <button class="btn-secondary btn-sm hidden" id="add-row-btn" style="margin-top:12px;">+ Add row</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Remove assignment confirm -->
+<div class="overlay" id="remove-overlay">
+  <div class="modal" style="width:360px;">
+    <h3>Remove this assignment?</h3>
+    <p id="remove-text"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="remove-cancel">Cancel</button>
+      <button type="button" class="btn-danger" id="remove-confirm">Remove</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reassign Team Lead modal (Super Admin only) -->
+<div class="overlay" id="reassign-overlay">
+  <div class="modal">
+    <h3>Reassign Team Lead</h3>
+    <p>This replaces who leads the client. Their hour allotment and slot are unaffected.</p>
+    <form id="reassign-form">
+      <div class="field">
+        <label>New Team Lead <span class="required-star">*</span></label>
+        <select id="reassign-user" required>
+          <option value="">Select…</option>
+        </select>
+      </div>
+      <div class="field-error" id="reassign-error"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="reassign-cancel">Cancel</button>
+        <button type="submit" class="btn-primary" id="reassign-submit">Reassign</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const RECENTS_KEY = "eg_recent_clients"; // shared with home.html so "recent clients" is consistent app-wide
+
+  let currentUser = null;
+  let isSuperAdmin = false;
+  let allUsers = [];
+  let allClients = [];
+  let currentClient = null;
+  let currentAssignments = [];
+  let isTeamLeadHere = false;
+  let pendingRemoveId = null;
+
+  const $ = (id) => document.getElementById(id);
+  const usersById = () => Object.fromEntries(allUsers.map((u) => [u.id, u]));
+  const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
+
+  const SPECIALTY_LABELS = {
+    team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
+    gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
+  };
+  const PROJECT_STATUSES = ["accepted", "in_progress", "on_hold", "closed"];
+  const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 4000);
+  }
+
+  // ---------- Auth ----------
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("login-email").value.trim();
+    const password = $("login-password").value;
+    $("login-error").style.display = "none";
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      $("login-error").textContent = error.message;
+      $("login-error").style.display = "block";
+      return;
+    }
+    await afterSignIn();
+  });
+
+  $("signout-btn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    $("login-view").classList.remove("hidden");
+  });
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users")
+      .select("id, full_name, role, organization_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      $("loading-view").classList.add("hidden");
+      $("login-view").classList.remove("hidden");
+      $("login-error").textContent = "Signed in, but no matching staff profile was found for this account.";
+      $("login-error").style.display = "block";
+      await sb.auth.signOut();
+      return;
+    }
+
+    currentUser = profile;
+    isSuperAdmin = profile.role === "super_admin";
+
+    $("loading-view").classList.add("hidden");
+    $("login-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = profile.role.replace("_", " ");
+
+    await loadUsers();
+    await loadClients();
+
+    const deepLinkId = new URLSearchParams(location.search).get("client");
+    if (deepLinkId) {
+      openClient(deepLinkId);
+    } else {
+      showPickerView();
+    }
+  }
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      afterSignIn();
+    } else {
+      $("loading-view").classList.add("hidden");
+      $("login-view").classList.remove("hidden");
+    }
+  });
+
+  async function loadUsers() {
+    const { data, error } = await sb.from("users").select("id, full_name, role").order("full_name");
+    if (error) { showBanner("Couldn't load the staff directory: " + error.message, "error"); return; }
+    allUsers = data;
+  }
+
+  async function loadClients() {
+    const { data, error } = await sb
+      .from("clients")
+      .select("*, econ_dev_companies(code, name)")
+      .order("name");
+    if (error) { showBanner("Couldn't load clients: " + error.message, "error"); return; }
+    allClients = data;
+    renderPicker();
+  }
+
+  // ---------- Picker view ----------
+  function showPickerView() {
+    $("view-picker").classList.remove("hidden");
+    $("view-workspace").classList.add("hidden");
+    renderPicker();
+  }
+
+  $("picker-search").addEventListener("input", renderPicker);
+
+  function renderPicker() {
+    const q = $("picker-search").value.trim().toLowerCase();
+    const rows = allClients.filter((c) => !q || c.name.toLowerCase().includes(q));
+    $("picker-count").textContent = `${rows.length} of ${allClients.length} clients`;
+    $("picker-empty").classList.toggle("hidden", allClients.length > 0);
+
+    const tbody = $("picker-tbody");
+    tbody.innerHTML = "";
+    for (const c of rows) {
+      const partner = c.econ_dev_companies;
+      const tr = document.createElement("tr");
+      tr.className = "clickable";
+      tr.innerHTML = `
+        <td>${escapeHtml(c.name)}</td>
+        <td>${partner ? escapeHtml(partner.code) : "—"}</td>
+        <td><span class="badge badge-${c.status}">${c.status}</span></td>
+        <td><span class="badge badge-${c.project_status}">${PROJECT_STATUS_LABELS[c.project_status] || c.project_status}</span></td>
+      `;
+      tr.addEventListener("click", () => openClient(c.id));
+      tbody.appendChild(tr);
+    }
+  }
+
+  // ---------- Workspace view ----------
+  $("workspace-back").addEventListener("click", showPickerView);
+
+  async function openClient(clientId) {
+    const { data: client, error } = await sb
+      .from("clients")
+      .select("*, econ_dev_companies(code, name)")
+      .eq("id", clientId)
+      .single();
+    if (error) { showBanner("Couldn't open client: " + error.message, "error"); return; }
+    currentClient = client;
+
+    try {
+      let recents = JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]").filter((r) => r.id !== client.id);
+      recents.unshift({ id: client.id, name: client.name, slug: client.slug, viewedAt: Date.now() });
+      localStorage.setItem(RECENTS_KEY, JSON.stringify(recents.slice(0, 8)));
+    } catch { /* localStorage unavailable — recents just won't persist, non-critical */ }
+
+    await loadAssignments();
+
+    $("view-picker").classList.add("hidden");
+    $("view-workspace").classList.remove("hidden");
+    renderWorkspace();
+  }
+
+  async function loadAssignments() {
+    const { data: rows, error } = await sb
+      .from("client_assignments")
+      .select("*")
+      .eq("client_id", currentClient.id)
+      .order("specialty_type")
+      .order("slot_number");
+    if (error) { showBanner("Couldn't load assignments: " + error.message, "error"); return; }
+
+    let hoursByAssignment = {};
+    const ids = rows.map((r) => r.id);
+    if (ids.length) {
+      const { data: entries, error: tErr } = await sb.from("time_entries").select("assignment_id, hours").in("assignment_id", ids);
+      if (!tErr) for (const e of entries) hoursByAssignment[e.assignment_id] = (hoursByAssignment[e.assignment_id] || 0) + Number(e.hours);
+    }
+    currentAssignments = rows.map((r) => ({ ...r, hoursSpent: hoursByAssignment[r.id] || 0 }));
+    isTeamLeadHere = currentAssignments.some((r) => r.user_id === currentUser.id && r.is_team_lead);
+  }
+
+  function renderWorkspace() {
+    const c = currentClient;
+    const partner = c.econ_dev_companies;
+    const teamLeadRow = currentAssignments.find((r) => r.is_team_lead);
+    const teamLead = teamLeadRow ? usersById()[teamLeadRow.user_id] : null;
+    const editable = c.project_status !== "on_hold" && c.project_status !== "closed";
+    const canManageAssignments = isSuperAdmin || (isTeamLeadHere && editable);
+
+    $("ws-name").textContent = c.name;
+    $("ws-address").textContent = `${c.slug}.egdashboardbuilder.com`;
+    $("ws-lifecycle-badge").className = `badge badge-${c.status}`;
+    $("ws-lifecycle-badge").textContent = c.status;
+    $("ws-partner").innerHTML = `Econ Dev partner: <strong>${partner ? escapeHtml(partner.code) + " — " + escapeHtml(partner.name) : "—"}</strong>`;
+    $("ws-team-lead").textContent = teamLead ? teamLead.full_name : "Unassigned";
+    $("reassign-tl-btn").classList.toggle("hidden", !isSuperAdmin);
+
+    const totalAllotted = currentAssignments.reduce((sum, r) => sum + Number(r.hours_allotted), 0);
+    const totalSpent = currentAssignments.reduce((sum, r) => sum + r.hoursSpent, 0);
+    $("ws-budget").innerHTML = `Budget: <strong>${totalAllotted} / ${Number(c.budget_hours_available)}</strong> hours allotted &middot; <strong>${totalSpent}</strong> hours spent`;
+
+    $("ws-locked-note").classList.toggle("hidden", editable || isSuperAdmin);
+
+    $("project-status-toggle").innerHTML = PROJECT_STATUSES.map((s) => `
+      <button type="button" data-pstatus="${s}" class="badge badge-${s} status-pill ${s === c.project_status ? "active" : ""}" ${(isSuperAdmin || isTeamLeadHere) ? "" : "disabled"}>${PROJECT_STATUS_LABELS[s]}</button>
+    `).join("");
+    document.querySelectorAll("#project-status-toggle button").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const newStatus = btn.dataset.pstatus;
+        if (newStatus === c.project_status) return;
+        document.querySelectorAll("#project-status-toggle button").forEach((b) => (b.disabled = true));
+        const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", c.id);
+        if (error) {
+          showBanner("Couldn't update project status: " + error.message, "error");
+          document.querySelectorAll("#project-status-toggle button").forEach((b) => (b.disabled = false));
+          return;
+        }
+        showBanner("Project status updated.", "success");
+        await openClient(c.id);
+      });
+    });
+
+    const totalBudgetInput = $("total-budget-input");
+    const tlHoursInput = $("tl-hours-input");
+    totalBudgetInput.value = Number(c.budget_hours_available);
+    totalBudgetInput.disabled = !isSuperAdmin;
+    tlHoursInput.value = teamLeadRow ? Number(teamLeadRow.hours_allotted) : 0;
+    tlHoursInput.disabled = !isSuperAdmin || !teamLeadRow;
+    $("summary-error").style.display = "none";
+
+    $("add-row-btn").classList.toggle("hidden", !canManageAssignments);
+    $("assignments-actions-header").classList.toggle("hidden", !canManageAssignments);
+
+    renderAssignmentsTable(canManageAssignments);
+    recalcUnassigned();
+  }
+
+  function specialtyOptionsHtml() {
+    const opts = [
+      ["market_research", "Market Research"], ["digital_marketing", "Digital Marketing"], ["gis", "GIS"],
+      ["watering_holes", "Watering Holes"], ["admin", "Admin"], ["quality_control", "Quality Control"],
+    ];
+    return '<option value="">Select…</option>' + opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+  }
+  function consultantOptionsHtml() {
+    return '<option value="">Select…</option>' + allUsers.map((u) => `<option value="${u.id}">${escapeHtml(u.full_name)}</option>`).join("");
+  }
+
+  // ---------- Assignments spreadsheet ----------
+  function renderAssignmentsTable(canManageAssignments) {
+    const tbody = $("assignments-tbody");
+    tbody.innerHTML = "";
+    for (const r of currentAssignments) {
+      if (r.is_team_lead) continue; // shown in the summary box above, not the spreadsheet
+      const person = usersById()[r.user_id];
+      const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
+      const tr = document.createElement("tr");
+      tr.dataset.assignmentId = r.id;
+      tr.innerHTML = `
+        <td>${escapeHtml(label)}</td>
+        <td>${person ? escapeHtml(person.full_name) : "—"}</td>
+        <td style="text-align:right;"><input type="number" class="row-input row-hours-input" min="0" step="0.5" value="${Number(r.hours_allotted)}" ${canManageAssignments ? "" : "disabled"} /></td>
+        <td style="text-align:right;">${r.hoursSpent}</td>
+        ${canManageAssignments ? `<td class="row-actions"><button class="btn-danger icon-btn" data-remove="${r.id}">Remove</button></td>` : ""}
+      `;
+      tbody.appendChild(tr);
+    }
+
+    document.querySelectorAll(".row-hours-input").forEach((input) => {
+      input.addEventListener("input", recalcUnassigned);
+      input.addEventListener("change", async () => {
+        const tr = input.closest("tr");
+        const assignmentId = tr.dataset.assignmentId;
+        const { error } = await sb.from("client_assignments").update({ hours_allotted: Number(input.value) }).eq("id", assignmentId);
+        if (error) {
+          showBanner(error.message.includes("exceed Budget") ? "That would exceed the client's Budget Hours Available." : "Couldn't save: " + error.message, "error");
+          await openClient(currentClient.id);
+          return;
+        }
+        const r = currentAssignments.find((x) => x.id === assignmentId);
+        if (r) r.hours_allotted = Number(input.value);
+        showBanner("Hours updated.", "success");
+      });
+    });
+    document.querySelectorAll("[data-remove]").forEach((btn) => {
+      btn.addEventListener("click", () => openRemove(btn.dataset.remove));
+    });
+  }
+
+  $("add-row-btn").addEventListener("click", () => {
+    const tbody = $("assignments-tbody");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><select class="row-select new-specialty">${specialtyOptionsHtml()}</select></td>
+      <td><select class="row-select new-consultant">${consultantOptionsHtml()}</select></td>
+      <td style="text-align:right;"><input type="number" class="row-input row-hours-input new-hours" min="0" step="0.5" value="0" /></td>
+      <td style="text-align:right; color:var(--muted);">—</td>
+      <td class="row-actions">
+        <button type="button" class="btn-primary icon-btn" data-save-row>&check;</button>
+        <button type="button" class="btn-secondary icon-btn" data-cancel-row>&times;</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+
+    tr.querySelector(".new-hours").addEventListener("input", recalcUnassigned);
+    tr.querySelector("[data-cancel-row]").addEventListener("click", () => { tr.remove(); recalcUnassigned(); });
+    tr.querySelector("[data-save-row]").addEventListener("click", async () => {
+      const specialty = tr.querySelector(".new-specialty").value;
+      const userId = tr.querySelector(".new-consultant").value;
+      const hours = Number(tr.querySelector(".new-hours").value);
+      if (!specialty || !userId) {
+        showBanner("Pick a specialty and a consultant before adding the row.", "error");
+        return;
+      }
+      const existing = currentAssignments.filter((r) => r.specialty_type === specialty);
+      const nextSlot = existing.length ? Math.max(...existing.map((r) => r.slot_number)) + 1 : 1;
+
+      const { error } = await sb.from("client_assignments").insert({
+        client_id: currentClient.id, user_id: userId, specialty_type: specialty, slot_number: nextSlot, hours_allotted: hours,
+      });
+      if (error) {
+        showBanner(error.message.includes("exceed Budget") ? "That would exceed the client's Budget Hours Available." : "Couldn't add: " + error.message, "error");
+        return;
+      }
+      showBanner("Consultant assigned.", "success");
+      await openClient(currentClient.id);
+    });
+
+    recalcUnassigned();
+  });
+
+  function recalcUnassigned() {
+    const total = Number($("total-budget-input").value) || 0;
+    const tl = Number($("tl-hours-input").value) || 0;
+    let rowsSum = 0;
+    document.querySelectorAll(".row-hours-input").forEach((input) => { rowsSum += Number(input.value) || 0; });
+    const unassigned = total - tl - rowsSum;
+    const el = $("hours-unassigned-display");
+    el.textContent = unassigned;
+    el.className = unassigned === 0 ? "zero" : (unassigned < 0 ? "negative" : "");
+    el.parentElement.classList.toggle("negative", unassigned < 0);
+  }
+
+  $("total-budget-input").addEventListener("input", recalcUnassigned);
+  $("total-budget-input").addEventListener("change", async () => {
+    if ($("total-budget-input").disabled) return;
+    $("summary-error").style.display = "none";
+    const { error } = await sb.from("clients").update({ budget_hours_available: Number($("total-budget-input").value) }).eq("id", currentClient.id);
+    if (error) {
+      $("summary-error").textContent = error.message;
+      $("summary-error").style.display = "block";
+      await openClient(currentClient.id);
+      return;
+    }
+    currentClient.budget_hours_available = Number($("total-budget-input").value);
+    showBanner("Total budget updated.", "success");
+  });
+
+  $("tl-hours-input").addEventListener("input", recalcUnassigned);
+  $("tl-hours-input").addEventListener("change", async () => {
+    if ($("tl-hours-input").disabled) return;
+    const teamLeadRow = currentAssignments.find((r) => r.is_team_lead);
+    if (!teamLeadRow) return;
+    $("summary-error").style.display = "none";
+    const { error } = await sb.from("client_assignments").update({ hours_allotted: Number($("tl-hours-input").value) }).eq("id", teamLeadRow.id);
+    if (error) {
+      $("summary-error").textContent = error.message.includes("exceed Budget") ? "That would exceed the client's Budget Hours Available." : error.message;
+      $("summary-error").style.display = "block";
+      await openClient(currentClient.id);
+      return;
+    }
+    teamLeadRow.hours_allotted = Number($("tl-hours-input").value);
+    showBanner("Team Lead hours updated.", "success");
+  });
+
+  // ---------- Remove assignment ----------
+  function openRemove(assignmentId) {
+    const r = currentAssignments.find((x) => x.id === assignmentId);
+    if (!r) return;
+    const person = usersById()[r.user_id];
+    pendingRemoveId = assignmentId;
+    $("remove-text").textContent = `Remove ${person ? person.full_name : "this consultant"} from ${SPECIALTY_LABELS[r.specialty_type] || r.specialty_type}? Their logged hours stay on record.`;
+    $("remove-overlay").classList.add("open");
+  }
+  $("remove-cancel").addEventListener("click", () => { $("remove-overlay").classList.remove("open"); pendingRemoveId = null; });
+
+  $("remove-confirm").addEventListener("click", async () => {
+    if (!pendingRemoveId) return;
+    const { error } = await sb.from("client_assignments").delete().eq("id", pendingRemoveId);
+    $("remove-overlay").classList.remove("open");
+    pendingRemoveId = null;
+    if (error) {
+      showBanner("Couldn't remove: " + error.message, "error");
+      return;
+    }
+    showBanner("Assignment removed.", "success");
+    await openClient(currentClient.id);
+  });
+
+  // ---------- Reassign Team Lead ----------
+  $("reassign-tl-btn").addEventListener("click", () => {
+    $("reassign-form").reset();
+    $("reassign-error").style.display = "none";
+    const sel = $("reassign-user");
+    sel.innerHTML = '<option value="">Select…</option>' + allUsers.map((u) => `<option value="${u.id}">${escapeHtml(u.full_name)} (${u.role.replace("_", " ")})</option>`).join("");
+    $("reassign-overlay").classList.add("open");
+  });
+  $("reassign-cancel").addEventListener("click", () => $("reassign-overlay").classList.remove("open"));
+
+  $("reassign-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("reassign-error").style.display = "none";
+    const btn = $("reassign-submit");
+    btn.disabled = true;
+    btn.textContent = "Reassigning…";
+
+    const { error } = await sb.from("client_assignments")
+      .update({ user_id: $("reassign-user").value })
+      .eq("client_id", currentClient.id)
+      .eq("is_team_lead", true);
+
+    btn.disabled = false;
+    btn.textContent = "Reassign";
+
+    if (error) {
+      $("reassign-error").textContent = error.message;
+      $("reassign-error").style.display = "block";
+      return;
+    }
+
+    $("reassign-overlay").classList.remove("open");
+    showBanner("Team Lead reassigned.", "success");
+    await openClient(currentClient.id);
+  });
+
+  document.querySelectorAll(".overlay").forEach((ov) => {
+    ov.addEventListener("click", (e) => { if (e.target === ov) ov.classList.remove("open"); });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Team Directory</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #2f7d5c;
+    --accent-dark: #24614a;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    background: var(--navy);
+    color: #fff;
+    padding: 18px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; letter-spacing: 0.2px; }
+  header .sub { font-size: 12.5px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  #userbox .role-pill {
+    background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  button {
+    font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px;
+    padding: 8px 14px; font-weight: 600; transition: background 0.15s ease;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: var(--danger-dark); }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12.5px; }
+
+  main { max-width: 900px; margin: 28px auto; padding: 0 20px 60px; }
+
+  #login-view {
+    max-width: 380px; margin: 90px auto; background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  #login-view h2 { margin-top: 0; font-size: 18px; }
+  #login-view label { display: block; font-size: 12.5px; font-weight: 600; margin: 14px 0 5px; color: var(--muted); }
+  #login-view input { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+  #login-view button { width: 100%; margin-top: 20px; padding: 10px; }
+  #login-error { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; }
+
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .search-wrap { position: relative; }
+  .search-wrap svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); opacity: 0.45; }
+  .search-wrap input[type="text"] {
+    padding: 9px 12px 9px 34px; border: 1px solid var(--border); border-radius: 8px; font-size: 13.5px;
+    width: 300px; background: #fff;
+  }
+  .toolbar .count { font-size: 12.5px; color: var(--muted); }
+
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  thead th {
+    text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted);
+    background: #f8fafb; padding: 10px 14px; border-bottom: 1px solid var(--border);
+  }
+  tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #fafbfc; }
+  td.actions { text-align: right; white-space: nowrap; }
+  .avatar-sm {
+    width: 28px; height: 28px; border-radius: 50%; background: var(--navy-light); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; flex-shrink: 0;
+  }
+  .avatar {
+    width: 38px; height: 38px; border-radius: 50%; background: var(--navy-light); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 13.5px; font-weight: 700; flex-shrink: 0;
+  }
+  .role-badge {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.3px; padding: 2px 8px; border-radius: 999px;
+    font-weight: 700; margin-left: 8px;
+  }
+  .role-badge.super_admin { background: #f3e2c8; color: #8a5a12; }
+  .role-badge.team_lead { background: #d7e7f7; color: #1f4a75; }
+  .role-badge.consultant { background: #e2e8ee; color: #4b5a6b; }
+  .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; }
+
+  /* Profile modal */
+  .overlay {
+    display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35);
+    align-items: center; justify-content: center; z-index: 50; padding: 20px;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    background: #fff; border-radius: 10px; width: 440px; max-width: 100%; padding: 28px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.18); max-height: 88vh; overflow-y: auto;
+  }
+  .profile-header { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  .profile-header .avatar { width: 56px; height: 56px; font-size: 19px; }
+  .profile-header h3 { margin: 0; font-size: 18px; }
+  .profile-header .profile-title { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .modal hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+  .modal label { display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin: 12px 0 5px; }
+  .modal input[type="text"], .modal input[type="email"], .modal textarea, .modal select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit;
+  }
+  .modal textarea { resize: vertical; min-height: 64px; }
+  .field-static { font-size: 14px; padding: 4px 0; }
+  .field-static a { color: var(--navy-light); }
+  .field-static.muted { color: var(--muted); font-style: italic; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+  .readonly-hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .field-error { color: var(--danger); font-size: 12px; margin-top: 8px; }
+  .import-row { display: flex; justify-content: space-between; gap: 10px; padding: 5px 2px; font-size: 12.5px; border-bottom: 1px solid #f0f2f4; }
+  .import-row:last-child { border-bottom: none; }
+  .import-status { font-weight: 700; white-space: nowrap; }
+  .import-status.created { color: var(--accent-dark); }
+  .import-status.skipped { color: var(--muted); }
+  .import-status.failed { color: var(--danger); }
+  .import-status.pending { color: var(--muted); }
+  .hidden { display: none !important; }
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="login-view" class="hidden">
+  <h2>EG Dashboard</h2>
+  <div style="font-size:13px; color:var(--muted); margin-top:-8px;">Team Directory — sign in</div>
+  <form id="login-form">
+    <label for="login-email">Email</label>
+    <input type="text" id="login-email" autocomplete="username" required />
+    <label for="login-password">Password</label>
+    <input type="password" id="login-password" autocomplete="current-password" required />
+    <button type="submit" class="btn-primary">Sign in</button>
+    <div id="login-error"></div>
+  </form>
+</div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <div>
+      <h1>Team Directory</h1>
+      <div class="sub">EG Group staff — Team Leads &amp; Consultants &nbsp;·&nbsp; <a class="back-link" href="index.html">← Home</a></div>
+    </div>
+    <div id="userbox">
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span>
+      <button class="btn-ghost" id="signout-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="banner"></div>
+
+    <div class="toolbar">
+      <div class="search-wrap">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+          <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input type="text" id="search-box" placeholder="Search by name, title, or specialty…" />
+      </div>
+      <div style="display:flex; align-items:center; gap:14px;">
+        <span class="count" id="row-count"></span>
+        <button class="btn-secondary hidden" id="import-btn">Import EG Team List</button>
+        <button class="btn-primary hidden" id="add-btn">+ Add Team Member</button>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Title</th>
+          <th style="width:110px;">Role</th>
+          <th style="width:130px;">Phone</th>
+          <th>Email</th>
+          <th style="width:80px;"></th>
+        </tr>
+      </thead>
+      <tbody id="team-tbody"></tbody>
+    </table>
+    <div id="empty-note" class="empty-note hidden">No one matches your search.</div>
+  </main>
+</div>
+
+<!-- Delete confirm modal -->
+<div class="overlay" id="delete-overlay">
+  <div class="modal" style="width:380px;">
+    <h3 style="margin:0 0 8px; font-size:16.5px;">Remove team member?</h3>
+    <p style="font-size:13.5px; color:var(--muted);">
+      This deletes <strong id="delete-name"></strong>'s login and directory profile. If they have any client
+      assignments or logged hours on record, this will be blocked automatically to protect that history.
+    </p>
+    <div class="field-error" id="delete-error" style="display:none;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="delete-cancel">Cancel</button>
+      <button type="button" class="btn-danger" id="delete-confirm">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import EG Team modal -->
+<div class="overlay" id="import-overlay">
+  <div class="modal" style="width:460px;">
+    <h3 style="margin:0 0 4px; font-size:16.5px;">Import EG Team List</h3>
+    <div id="import-intro" style="font-size:12.5px; color:var(--muted); margin-bottom:10px;">
+      Creates a login + profile for each of the 27 people from the EG Team contact list. Anyone whose email already exists in the directory is skipped, not duplicated — safe to run more than once.
+    </div>
+    <div id="import-log" style="max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:8px 10px; display:none;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="import-close">Close</button>
+      <button type="button" class="btn-primary" id="import-run">Start Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Team Member modal -->
+<div class="overlay" id="add-overlay">
+  <div class="modal" style="width:420px;">
+    <h3 style="margin:0 0 4px; font-size:16.5px;">Add Team Member</h3>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:6px;">Creates a login account (no email is sent) and their directory profile in one step.</div>
+    <form id="add-form">
+      <label for="add-name">Full Name</label>
+      <input type="text" id="add-name" required />
+
+      <label for="add-email">Email</label>
+      <input type="email" id="add-email" required />
+
+      <label for="add-role">Role</label>
+      <select id="add-role">
+        <option value="consultant">Consultant</option>
+        <option value="team_lead">Team Lead</option>
+      </select>
+
+      <label for="add-title">Title <span style="font-weight:400; text-transform:none;">(optional)</span></label>
+      <input type="text" id="add-title" placeholder="e.g. GIS Researcher" />
+
+      <label for="add-specialty">Default Specialty <span style="font-weight:400; text-transform:none;">(optional)</span></label>
+      <select id="add-specialty">
+        <option value="">—</option>
+        <option value="team_lead">Team Lead</option>
+        <option value="market_research">Market Research</option>
+        <option value="digital_marketing">Digital Marketing</option>
+        <option value="gis">GIS</option>
+        <option value="watering_holes">Watering Holes</option>
+        <option value="admin">Admin</option>
+        <option value="quality_control">Quality Control</option>
+      </select>
+
+      <label for="add-phone">Phone <span style="font-weight:400; text-transform:none;">(optional)</span></label>
+      <input type="text" id="add-phone" />
+
+      <div class="field-error" id="add-error" style="display:none;"></div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="add-cancel">Cancel</button>
+        <button type="submit" class="btn-primary" id="add-save">Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Profile modal -->
+<div class="overlay" id="profile-overlay">
+  <div class="modal">
+    <div class="profile-header">
+      <div class="avatar" id="pf-avatar"></div>
+      <div>
+        <h3 id="pf-name"></h3>
+        <div class="profile-title" id="pf-title-display"></div>
+      </div>
+      <span class="role-badge" id="pf-role-badge" style="margin-left:auto;"></span>
+    </div>
+
+    <form id="profile-form">
+      <input type="hidden" id="pf-id" />
+      <hr />
+
+      <label for="pf-title">Title</label>
+      <input type="text" id="pf-title" placeholder="e.g. GIS Researcher" />
+
+      <label for="pf-specialty">Default Specialty <span style="font-weight:400; text-transform:none;">(pre-fills Team Lead's assignment screen)</span></label>
+      <select id="pf-specialty">
+        <option value="">—</option>
+        <option value="team_lead">Team Lead</option>
+        <option value="market_research">Market Research</option>
+        <option value="digital_marketing">Digital Marketing</option>
+        <option value="gis">GIS</option>
+        <option value="watering_holes">Watering Holes</option>
+        <option value="admin">Admin</option>
+        <option value="quality_control">Quality Control</option>
+      </select>
+
+      <label for="pf-role">Role <span id="pf-role-lock-note" style="font-weight:400; text-transform:none;">(Super Admin only)</span></label>
+      <select id="pf-role">
+        <option value="consultant">Consultant</option>
+        <option value="team_lead">Team Lead</option>
+      </select>
+
+      <label for="pf-about">About</label>
+      <textarea id="pf-about" placeholder="A short bio…"></textarea>
+
+      <label>Email</label>
+      <div class="field-static" id="pf-email-display"></div>
+
+      <label for="pf-secondary-email">Secondary Email</label>
+      <input type="email" id="pf-secondary-email" />
+
+      <label for="pf-phone">Phone</label>
+      <input type="text" id="pf-phone" />
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="profile-cancel">Close</button>
+        <button type="submit" class="btn-primary hidden" id="profile-save">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const SPECIALTY_LABELS = {
+    team_lead: "Team Lead",
+    market_research: "Market Research",
+    digital_marketing: "Digital Marketing",
+    gis: "GIS",
+    watering_holes: "Watering Holes",
+    admin: "Admin",
+    quality_control: "Quality Control",
+  };
+  const ROLE_LABELS = { super_admin: "Super Admin", team_lead: "Team Lead", consultant: "Consultant" };
+
+  // Deduped 27-person EG Team contact list (from EG_contacts.csv — see
+  // 009_seed_team_contacts.sql for the merge/mapping notes: Chris Gibbons,
+  // Ryan Murray, and Paul Fisher each had two rows in the export, merged
+  // here into one with a secondary_email).
+  const TEAM_IMPORT_LIST = [
+    { full_name: "Alan Christensen", email: "alan@alanchristensen.com", role: "team_lead", title: "Team Leader", phone: "4353400167", default_specialty: "team_lead" },
+    { full_name: "Amjad Syed", email: "asyed@allisinfo.com", role: "consultant", title: "Geographic Intelligence Systems", phone: "989-835-5811", default_specialty: "gis" },
+    { full_name: "Angela Woods", email: "angelawoods@provenci.com", role: "consultant", title: "", phone: "561-314-9464", default_specialty: "" },
+    { full_name: "Ann Sigsby", email: "asigsby@aim-intel.com", role: "consultant", title: "", phone: "", default_specialty: "" },
+    { full_name: "Bob Pickford", email: "bpickford@hcdc.com", role: "consultant", title: "", phone: "", default_specialty: "" },
+    { full_name: "Brent Willson", email: "brent@customerledinnovations.com", role: "consultant", title: "Market Research Consultant", phone: "703-647-0462", default_specialty: "market_research" },
+    { full_name: "Brian Lee", email: "brian@revelation.agency", role: "consultant", title: "", phone: "608-622-7767", default_specialty: "" },
+    { full_name: "Chris Gibbons", email: "cgibbons@economicgardening.org", role: "consultant", title: "", phone: "13036703599", secondary_email: "christiangibbons47@gmail.com", default_specialty: "" },
+    { full_name: "Collin Bunch", email: "collinbunch6@gmail.com", role: "consultant", title: "", phone: "5735291747", default_specialty: "" },
+    { full_name: "Diana Gibbons", email: "rbenson@economicgardening.org", role: "consultant", title: "Vice President", phone: "", default_specialty: "" },
+    { full_name: "Eric Ervin", email: "eervin@newmediaminds.com", role: "consultant", title: "", phone: "", default_specialty: "" },
+    { full_name: "Erik Deckers", email: "erik.deckers@gmail.com", role: "consultant", title: "Digital Marketing Specialist", phone: "5745294135", default_specialty: "digital_marketing" },
+    { full_name: "Ethan Migliori", email: "ethan.migliori@gmail.com", role: "consultant", title: "", phone: "", default_specialty: "" },
+    { full_name: "Joy Wikoff", email: "jwikoff@aim-intel.com", role: "consultant", title: "", phone: "", default_specialty: "" },
+    { full_name: "Julie Dreyer", email: "jdreyer@execpc.com", role: "consultant", title: "", phone: "262-782-1818", default_specialty: "" },
+    { full_name: "Kelly Berry", email: "kelly@resourceability.com", role: "team_lead", title: "Team Leader", phone: "715-830-8244", default_specialty: "team_lead" },
+    { full_name: "Kelly Hill", email: "khill@salesadvisorsfl.com", role: "team_lead", title: "Team Leader", phone: "4075785277", default_specialty: "team_lead" },
+    { full_name: "Linda Pophal", email: "linda@stratcommunications.com", role: "consultant", title: "", phone: "", default_specialty: "" },
+    { full_name: "Madhumitha Mahankali", email: "mmahankali@aim-intel.com", role: "consultant", title: "", phone: "", default_specialty: "" },
+    { full_name: "Mary Ellen Bates", email: "mbates@batesinfo.com", role: "consultant", title: "principal, Bates Information Services", phone: "303 772 7095", default_specialty: "" },
+    { full_name: "Matthew Gosser", email: "matthewgosser6@gmail.com", role: "consultant", title: "", phone: "", default_specialty: "" },
+    { full_name: "Michelle Page", email: "michelle@revenuechasers.com", role: "consultant", title: "", phone: "", default_specialty: "" },
+    { full_name: "Paul Fisher", email: "paul@ursosventures.com", role: "consultant", title: "", phone: "", secondary_email: "pfisher@hcdc.com", default_specialty: "" },
+    { full_name: "Ryan Murray", email: "ryan@learnbiz.co", role: "consultant", title: "", phone: "435-841-5296", secondary_email: "ryan@learnbiz.com", default_specialty: "" },
+    { full_name: "Sara Eardley", email: "seardley@aim-intel.com", role: "consultant", title: "", phone: "", default_specialty: "" },
+    { full_name: "Steven Groves", email: "sgroves@socialmarketingconversations.com", role: "consultant", title: "Digital Marketing", phone: "16029031010", default_specialty: "digital_marketing" },
+    { full_name: "Travin Shelton", email: "tshelton1208@gmail.com", role: "consultant", title: "", phone: "", default_specialty: "" },
+  ];
+
+  let currentUser = null; // { id, full_name, role, organization_id }
+  let isSuperAdmin = false;
+  let allUsers = [];
+  let openProfileId = null;
+
+  const $ = (id) => document.getElementById(id);
+
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 3000);
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : str;
+    return div.innerHTML;
+  }
+
+  function initials(name) {
+    return (name || "?")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0].toUpperCase())
+      .join("");
+  }
+
+  // ---------- Auth ----------
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("login-email").value.trim();
+    const password = $("login-password").value;
+    $("login-error").style.display = "none";
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      $("login-error").textContent = error.message;
+      $("login-error").style.display = "block";
+      return;
+    }
+    await afterSignIn();
+  });
+
+  $("signout-btn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    $("login-view").classList.remove("hidden");
+  });
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users")
+      .select("id, full_name, role, organization_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      $("loading-view").classList.add("hidden");
+      $("login-view").classList.remove("hidden");
+      $("login-error").textContent = "Signed in, but no matching staff profile was found for this account.";
+      $("login-error").style.display = "block";
+      await sb.auth.signOut();
+      return;
+    }
+
+    currentUser = profile;
+    isSuperAdmin = profile.role === "super_admin";
+
+    $("loading-view").classList.add("hidden");
+    $("login-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = profile.role.replace("_", " ");
+    $("add-btn").classList.toggle("hidden", !isSuperAdmin);
+    $("import-btn").classList.toggle("hidden", !isSuperAdmin);
+
+    await loadUsers();
+  }
+
+  // Shared by the single "Add Team Member" form and the bulk importer —
+  // calls the admin-create-team-member edge function with the signed-in
+  // Super Admin's own session token (never the service role key, which
+  // only ever lives inside that function).
+  async function callCreateTeamMember(payload) {
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-create-team-member`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`,
+        "apikey": SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(payload),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || "Couldn't add this person.");
+    return result;
+  }
+
+  async function callDeleteTeamMember(userId) {
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-create-team-member`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`,
+        "apikey": SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ user_id: userId }),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || "Couldn't delete this person.");
+    return result;
+  }
+
+  let pendingDeleteId = null;
+
+  window.openDelete = function (id) {
+    const u = allUsers.find((x) => x.id === id);
+    if (!u || !isSuperAdmin) return;
+    pendingDeleteId = id;
+    $("delete-name").textContent = u.full_name;
+    $("delete-error").style.display = "none";
+    $("delete-overlay").classList.add("open");
+  };
+
+  $("delete-cancel").addEventListener("click", () => {
+    $("delete-overlay").classList.remove("open");
+    pendingDeleteId = null;
+  });
+
+  $("delete-confirm").addEventListener("click", async () => {
+    if (!pendingDeleteId) return;
+    const btn = $("delete-confirm");
+    btn.disabled = true;
+    btn.textContent = "Deleting…";
+    $("delete-error").style.display = "none";
+
+    try {
+      await callDeleteTeamMember(pendingDeleteId);
+      $("delete-overlay").classList.remove("open");
+      showBanner("Team member removed.", "success");
+      await loadUsers();
+    } catch (err) {
+      $("delete-error").textContent = err.message;
+      $("delete-error").style.display = "block";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Delete";
+      pendingDeleteId = null;
+    }
+  });
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      afterSignIn();
+    } else {
+      $("loading-view").classList.add("hidden");
+      $("login-view").classList.remove("hidden");
+    }
+  });
+
+  // ---------- Load & render ----------
+  async function loadUsers() {
+    const { data, error } = await sb
+      .from("users")
+      .select("id, full_name, title, role, email, secondary_email, phone, about, default_specialty")
+      .neq("role", "super_admin") // Super Admins aren't part of this directory (Team Leads & Consultants only)
+      .order("full_name", { ascending: true });
+
+    if (error) {
+      showBanner("Couldn't load the directory: " + error.message, "error");
+      return;
+    }
+    allUsers = data;
+    renderList();
+  }
+
+  function renderList() {
+    const q = $("search-box").value.trim().toLowerCase();
+    const rows = allUsers.filter((u) => {
+      if (!q) return true;
+      const specialtyLabel = u.default_specialty ? SPECIALTY_LABELS[u.default_specialty] || "" : "";
+      return (
+        (u.full_name || "").toLowerCase().includes(q) ||
+        (u.title || "").toLowerCase().includes(q) ||
+        specialtyLabel.toLowerCase().includes(q)
+      );
+    });
+
+    $("row-count").textContent = `${rows.length} of ${allUsers.length} people`;
+
+    const tbody = $("team-tbody");
+    tbody.innerHTML = "";
+    $("empty-note").classList.toggle("hidden", rows.length !== 0);
+
+    for (const u of rows) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div class="avatar-sm">${escapeHtml(initials(u.full_name))}</div>
+            <div style="font-weight:600;">${escapeHtml(u.full_name)}</div>
+          </div>
+        </td>
+        <td>${escapeHtml(u.title || (u.default_specialty ? SPECIALTY_LABELS[u.default_specialty] : "") || "—")}</td>
+        <td><span class="role-badge ${u.role}">${ROLE_LABELS[u.role] || u.role}</span></td>
+        <td>${escapeHtml(u.phone || "—")}</td>
+        <td><a href="mailto:${escapeHtml(u.email)}" style="color:var(--navy-light);">${escapeHtml(u.email)}</a></td>
+        <td class="actions">
+          <button class="btn-secondary btn-sm" onclick="openProfile('${u.id}')">Edit</button>
+          ${isSuperAdmin ? `<button class="btn-danger btn-sm" style="margin-left:6px;" onclick="openDelete('${u.id}')">Delete</button>` : ""}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  $("search-box").addEventListener("input", renderList);
+
+  // ---------- Add Team Member modal ----------
+  $("add-btn").addEventListener("click", () => {
+    $("add-form").reset();
+    $("add-error").style.display = "none";
+    $("add-overlay").classList.add("open");
+  });
+  $("add-cancel").addEventListener("click", () => $("add-overlay").classList.remove("open"));
+
+  $("add-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("add-error").style.display = "none";
+
+    const payload = {
+      full_name: $("add-name").value.trim(),
+      email: $("add-email").value.trim(),
+      role: $("add-role").value,
+      title: $("add-title").value.trim(),
+      default_specialty: $("add-specialty").value,
+      phone: $("add-phone").value.trim(),
+    };
+
+    const saveBtn = $("add-save");
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Adding…";
+
+    try {
+      await callCreateTeamMember(payload);
+      $("add-overlay").classList.remove("open");
+      showBanner(`${payload.full_name} added.`, "success");
+      await loadUsers();
+    } catch (err) {
+      $("add-error").textContent = err.message;
+      $("add-error").style.display = "block";
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Add";
+    }
+  });
+
+  // ---------- Import EG Team List (bulk) ----------
+  $("import-btn").addEventListener("click", () => {
+    $("import-log").style.display = "none";
+    $("import-log").innerHTML = "";
+    $("import-intro").style.display = "block";
+    $("import-run").classList.remove("hidden");
+    $("import-run").disabled = false;
+    $("import-run").textContent = "Start Import";
+    $("import-overlay").classList.add("open");
+  });
+  $("import-close").addEventListener("click", () => $("import-overlay").classList.remove("open"));
+
+  $("import-run").addEventListener("click", async () => {
+    const runBtn = $("import-run");
+    runBtn.disabled = true;
+    runBtn.textContent = "Importing…";
+    $("import-intro").style.display = "none";
+
+    const log = $("import-log");
+    log.style.display = "block";
+    log.innerHTML = "";
+
+    const existingEmails = new Set(allUsers.map((u) => (u.email || "").toLowerCase()));
+    const rowEls = {};
+    TEAM_IMPORT_LIST.forEach((p, i) => {
+      const row = document.createElement("div");
+      row.className = "import-row";
+      row.innerHTML = `<span>${escapeHtml(p.full_name)}</span><span class="import-status pending" id="import-status-${i}">Pending…</span>`;
+      log.appendChild(row);
+      rowEls[i] = row.querySelector(".import-status");
+    });
+
+    let created = 0, skipped = 0, failed = 0;
+
+    for (let i = 0; i < TEAM_IMPORT_LIST.length; i++) {
+      const p = TEAM_IMPORT_LIST[i];
+      const statusEl = rowEls[i];
+
+      if (existingEmails.has(p.email.toLowerCase())) {
+        statusEl.textContent = "Already exists";
+        statusEl.className = "import-status skipped";
+        skipped++;
+        continue;
+      }
+
+      statusEl.textContent = "Adding…";
+      try {
+        await callCreateTeamMember({
+          full_name: p.full_name,
+          email: p.email,
+          role: p.role,
+          title: p.title,
+          phone: p.phone,
+          secondary_email: p.secondary_email || "",
+          default_specialty: p.default_specialty,
+        });
+        statusEl.textContent = "Created";
+        statusEl.className = "import-status created";
+        created++;
+      } catch (err) {
+        if (/already been registered|already exists/i.test(err.message)) {
+          statusEl.textContent = "Already exists";
+          statusEl.className = "import-status skipped";
+          skipped++;
+        } else {
+          statusEl.textContent = err.message;
+          statusEl.className = "import-status failed";
+          failed++;
+        }
+      }
+    }
+
+    runBtn.classList.add("hidden");
+    showBanner(`Import finished: ${created} created, ${skipped} already existed, ${failed} failed.`, failed > 0 ? "error" : "success");
+    await loadUsers();
+  });
+
+  // ---------- Profile modal ----------
+  function openProfile(id) {
+    const u = allUsers.find((x) => x.id === id);
+    if (!u) return;
+    openProfileId = id;
+
+    const canEdit = isSuperAdmin || u.id === currentUser.id;
+    const canEditRole = isSuperAdmin;
+
+    $("pf-avatar").textContent = initials(u.full_name);
+    $("pf-name").textContent = u.full_name;
+    $("pf-title-display").textContent = u.title || (u.default_specialty ? SPECIALTY_LABELS[u.default_specialty] : "") || "";
+    $("pf-role-badge").textContent = ROLE_LABELS[u.role] || u.role;
+    $("pf-role-badge").className = "role-badge " + u.role;
+
+    $("pf-id").value = u.id;
+    $("pf-title").value = u.title || "";
+    $("pf-specialty").value = u.default_specialty || "";
+    $("pf-role").value = u.role;
+    $("pf-about").value = u.about || "";
+    $("pf-secondary-email").value = u.secondary_email || "";
+    $("pf-phone").value = u.phone || "";
+    $("pf-email-display").innerHTML = `<a href="mailto:${escapeHtml(u.email)}">${escapeHtml(u.email)}</a>`;
+
+    // Lock down fields the viewer isn't allowed to touch
+    $("pf-title").disabled = !canEdit;
+    $("pf-specialty").disabled = !canEdit;
+    $("pf-about").disabled = !canEdit;
+    $("pf-secondary-email").disabled = !canEdit;
+    $("pf-phone").disabled = !canEdit;
+    $("pf-role").disabled = !canEditRole;
+    $("pf-role-lock-note").textContent = canEditRole ? "" : "(Super Admin only)";
+
+    $("profile-save").classList.toggle("hidden", !canEdit);
+
+    $("profile-overlay").classList.add("open");
+  }
+
+  $("profile-cancel").addEventListener("click", closeProfile);
+  function closeProfile() {
+    $("profile-overlay").classList.remove("open");
+    openProfileId = null;
+  }
+
+  $("profile-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!openProfileId) return;
+
+    const u = allUsers.find((x) => x.id === openProfileId);
+    const canEdit = isSuperAdmin || u.id === currentUser.id;
+    if (!canEdit) return;
+
+    const payload = {
+      title: $("pf-title").value.trim() || null,
+      default_specialty: $("pf-specialty").value || null,
+      about: $("pf-about").value.trim() || null,
+      secondary_email: $("pf-secondary-email").value.trim() || null,
+      phone: $("pf-phone").value.trim() || null,
+    };
+    if (isSuperAdmin) {
+      payload.role = $("pf-role").value;
+    }
+
+    const saveBtn = $("profile-save");
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+
+    const { error } = await sb.from("users").update(payload).eq("id", openProfileId);
+
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save";
+
+    if (error) {
+      showBanner("Couldn't save: " + error.message, "error");
+      return;
+    }
+
+    closeProfile();
+    showBanner("Profile updated.", "success");
+    await loadUsers();
+  });
+
+  document.querySelectorAll(".overlay").forEach((ov) => {
+    ov.addEventListener("click", (e) => {
+      if (e.target === ov) ov.classList.remove("open");
+    });
+  });
+</script>
+</body>
+</html>
