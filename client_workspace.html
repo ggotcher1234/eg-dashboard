@@ -552,15 +552,35 @@
       const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
       const tr = document.createElement("tr");
       tr.dataset.assignmentId = r.id;
+      const consultantCell = !person && canManageAssignments
+        ? `<select class="row-select row-consultant-select">${consultantOptionsHtml()}</select>`
+        : `${person ? escapeHtml(person.full_name) : `<span style="color:var(--muted);">Unassigned</span>`}`;
       tr.innerHTML = `
         <td>${escapeHtml(label)}</td>
-        <td>${person ? escapeHtml(person.full_name) : "—"}</td>
+        <td>${consultantCell}</td>
         <td style="text-align:right;"><input type="number" class="row-input row-hours-input" min="0" step="0.5" value="${Number(r.hours_allotted)}" ${canManageAssignments ? "" : "disabled"} /></td>
         <td style="text-align:right;">${r.hoursSpent}</td>
         ${canManageAssignments ? `<td class="row-actions"><button class="btn-danger icon-btn" data-remove="${r.id}">Remove</button></td>` : ""}
       `;
       tbody.appendChild(tr);
     }
+
+    document.querySelectorAll(".row-consultant-select").forEach((select) => {
+      select.addEventListener("change", async () => {
+        const tr = select.closest("tr");
+        const assignmentId = tr.dataset.assignmentId;
+        if (!select.value) return;
+        select.disabled = true;
+        const { error } = await sb.from("client_assignments").update({ user_id: select.value }).eq("id", assignmentId);
+        select.disabled = false;
+        if (error) {
+          showBanner("Couldn't assign consultant: " + error.message, "error");
+          return;
+        }
+        showBanner("Consultant assigned.", "success");
+        await openClient(currentClient.id);
+      });
+    });
 
     document.querySelectorAll(".row-hours-input").forEach((input) => {
       input.addEventListener("input", recalcUnassigned);

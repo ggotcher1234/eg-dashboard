@@ -1008,7 +1008,7 @@
                     const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
                     return `<tr>
                       <td style="padding:6px 8px; border-bottom:1px solid #f0f2f4; font-size:13.5px;">${escapeHtml(label)}</td>
-                      <td style="padding:6px 8px; border-bottom:1px solid #f0f2f4; font-size:13.5px;">${person ? escapeHtml(person.full_name) : "—"}</td>
+                      <td style="padding:6px 8px; border-bottom:1px solid #f0f2f4; font-size:13.5px; color:${person ? "inherit" : "var(--muted)"};">${person ? escapeHtml(person.full_name) : "Unassigned"}</td>
                       <td style="padding:6px 8px; border-bottom:1px solid #f0f2f4; font-size:13.5px; text-align:right;">${Number(r.hours_allotted)}</td>
                       <td style="padding:6px 8px; border-bottom:1px solid #f0f2f4; font-size:13.5px; text-align:right;">${r.hoursSpent}</td>
                     </tr>`;
@@ -1039,7 +1039,7 @@
           <div class="grid-2">
             <div class="field">
               <label>Budget hours available <span class="required-star">*</span></label>
-              <input type="number" id="accept-budget" min="0" step="0.5" required />
+              <input type="number" id="accept-budget" min="0" step="0.5" value="36" required />
             </div>
             <div class="field">
               <label>Team Lead <span class="required-star">*</span></label>
@@ -1052,7 +1052,16 @@
               <label>Team Lead hours <span class="hint">(out of the budget above)</span></label>
               <input type="number" id="accept-tl-hours" min="0" step="0.5" value="7" />
             </div>
+            <div class="field">
+              <label>Admin hours <span class="hint">(out of the budget above)</span></label>
+              <input type="number" id="accept-admin-hours" min="0" step="0.5" value="2" />
+            </div>
+            <div class="field">
+              <label>QC hours <span class="hint">(out of the budget above)</span></label>
+              <input type="number" id="accept-qc-hours" min="0" step="0.5" value="3" />
+            </div>
           </div>
+          <div class="desc" style="margin-top:-4px;">Team Lead, Admin, and QC slots are created automatically with these hours — Admin and QC start unassigned and can be given to a specific consultant later, from the Client Workspace.</div>
           <div class="field">
             <label>Client web address <span class="required-star">*</span> <span class="hint">(memorable, lowercase — Section 8.1)</span></label>
             <input type="text" id="accept-slug" value="${escapeHtml(suggestedSlug)}" />
@@ -1139,6 +1148,8 @@
     const budget = $("accept-budget").value;
     const teamLeadId = $("accept-tl").value;
     const teamLeadHours = $("accept-tl-hours").value === "" ? 0 : Number($("accept-tl-hours").value);
+    const adminHours = $("accept-admin-hours").value === "" ? 0 : Number($("accept-admin-hours").value);
+    const qcHours = $("accept-qc-hours").value === "" ? 0 : Number($("accept-qc-hours").value);
     const slug = slugify($("accept-slug").value);
     $("slug-error").style.display = "none";
 
@@ -1146,8 +1157,8 @@
       showBanner("Budget hours, Team Lead, and a client address are all required to accept.", "error");
       return;
     }
-    if (teamLeadHours > Number(budget)) {
-      showBanner("Team Lead hours can't exceed the total budget hours.", "error");
+    if (teamLeadHours + adminHours + qcHours > Number(budget)) {
+      showBanner("Team Lead + Admin + QC hours can't exceed the total budget hours.", "error");
       return;
     }
 
@@ -1160,6 +1171,8 @@
       p_budget_hours_available: Number(budget),
       p_team_lead_id: teamLeadId,
       p_slug: slug,
+      p_admin_hours: adminHours,
+      p_qc_hours: qcHours,
     });
 
     if (error) {
