@@ -194,10 +194,6 @@
           <span class="badge" id="ws-lifecycle-badge"></span>
         </div>
         <div class="meta-line" id="ws-partner"></div>
-        <div class="meta-line">
-          Team Lead: <strong id="ws-team-lead"></strong>
-          <button class="btn-ghost btn-sm hidden" id="reassign-tl-btn" style="margin-left:6px;">Reassign</button>
-        </div>
         <div class="meta-line" id="ws-budget"></div>
 
         <div id="ws-locked-note" class="locked-note hidden">
@@ -217,10 +213,6 @@
             <label for="total-budget-input">Total Hours (Budget)</label>
             <input type="number" id="total-budget-input" min="0" step="0.5" />
           </div>
-          <div class="hours-box">
-            <label for="tl-hours-input">Team Lead Hours</label>
-            <input type="number" id="tl-hours-input" min="0" step="0.5" />
-          </div>
           <div class="hours-box highlight">
             <label>Hours Unassigned</label>
             <div id="hours-unassigned-display">—</div>
@@ -239,6 +231,14 @@
             </tr>
           </thead>
           <tbody id="assignments-tbody"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2" style="font-weight:700;">Total Hours Allotted</td>
+              <td style="text-align:right; font-weight:700;" id="assignments-total-display">0</td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tfoot>
         </table>
         <button class="btn-secondary btn-sm hidden" id="add-row-btn" style="margin-top:12px;">+ Add row</button>
       </div>
@@ -249,33 +249,12 @@
 <!-- Remove assignment confirm -->
 <div class="overlay" id="remove-overlay">
   <div class="modal" style="width:360px;">
-    <h3>Remove this assignment?</h3>
+    <h3 id="remove-title">Remove this assignment?</h3>
     <p id="remove-text"></p>
     <div class="modal-actions">
       <button type="button" class="btn-secondary" id="remove-cancel">Cancel</button>
       <button type="button" class="btn-danger" id="remove-confirm">Remove</button>
     </div>
-  </div>
-</div>
-
-<!-- Reassign Team Lead modal (Super Admin only) -->
-<div class="overlay" id="reassign-overlay">
-  <div class="modal">
-    <h3>Reassign Team Lead</h3>
-    <p>This replaces who leads the client. Their hour allotment and slot are unaffected.</p>
-    <form id="reassign-form">
-      <div class="field">
-        <label>New Team Lead <span class="required-star">*</span></label>
-        <select id="reassign-user" required>
-          <option value="">Select…</option>
-        </select>
-      </div>
-      <div class="field-error" id="reassign-error"></div>
-      <div class="modal-actions">
-        <button type="button" class="btn-secondary" id="reassign-cancel">Cancel</button>
-        <button type="submit" class="btn-primary" id="reassign-submit">Reassign</button>
-      </div>
-    </form>
   </div>
 </div>
 
@@ -294,6 +273,7 @@
   let currentAssignments = [];
   let isTeamLeadHere = false;
   let pendingRemoveId = null;
+  let pendingRemoveMode = "delete"; // "delete" | "clear"
 
   const $ = (id) => document.getElementById(id);
   const usersById = () => Object.fromEntries(allUsers.map((u) => [u.id, u]));
@@ -478,8 +458,6 @@
   function renderWorkspace() {
     const c = currentClient;
     const partner = c.econ_dev_companies;
-    const teamLeadRow = currentAssignments.find((r) => r.is_team_lead);
-    const teamLead = teamLeadRow ? usersById()[teamLeadRow.user_id] : null;
     const editable = c.project_status !== "on_hold" && c.project_status !== "closed";
     const canManageAssignments = isSuperAdmin || (isTeamLeadHere && editable);
 
@@ -488,8 +466,6 @@
     $("ws-lifecycle-badge").className = `badge badge-${c.status}`;
     $("ws-lifecycle-badge").textContent = c.status;
     $("ws-partner").innerHTML = `Econ Dev partner: <strong>${partner ? escapeHtml(partner.code) + " — " + escapeHtml(partner.name) : "—"}</strong>`;
-    $("ws-team-lead").textContent = teamLead ? teamLead.full_name : "Unassigned";
-    $("reassign-tl-btn").classList.toggle("hidden", !isSuperAdmin);
 
     const totalAllotted = currentAssignments.reduce((sum, r) => sum + Number(r.hours_allotted), 0);
     const totalSpent = currentAssignments.reduce((sum, r) => sum + r.hoursSpent, 0);
@@ -517,11 +493,8 @@
     });
 
     const totalBudgetInput = $("total-budget-input");
-    const tlHoursInput = $("tl-hours-input");
     totalBudgetInput.value = Number(c.budget_hours_available);
     totalBudgetInput.disabled = !isSuperAdmin;
-    tlHoursInput.value = teamLeadRow ? Number(teamLeadRow.hours_allotted) : 0;
-    tlHoursInput.disabled = !isSuperAdmin || !teamLeadRow;
     $("summary-error").style.display = "none";
 
     $("add-row-btn").classList.toggle("hidden", !canManageAssignments);
@@ -531,36 +504,65 @@
     recalcUnassigned();
   }
 
+  // The standard slot template (Section 5.2 / old Podio setup) — every
+  // accepted client gets exactly these rows, in this order, whether filled
+  // in or not (see 012_full_slot_template_at_accept.sql). Anything else
+  // (added later via "+ Add row") shows up after these, in specialty order.
+  const FIXED_SLOTS = [
+    ["team_lead", 1], ["team_lead", 2],
+    ["market_research", 1], ["market_research", 2], ["market_research", 3],
+    ["digital_marketing", 1], ["digital_marketing", 2],
+    ["gis", 1], ["gis", 2],
+    ["admin", 1],
+    ["quality_control", 1],
+  ];
+  function fixedSlotIndex(specialty, slot) {
+    return FIXED_SLOTS.findIndex(([s, n]) => s === specialty && n === slot);
+  }
+  function sortedAssignments() {
+    return [...currentAssignments].sort((a, b) => {
+      const ia = fixedSlotIndex(a.specialty_type, a.slot_number);
+      const ib = fixedSlotIndex(b.specialty_type, b.slot_number);
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+      return a.specialty_type.localeCompare(b.specialty_type) || a.slot_number - b.slot_number;
+    });
+  }
+
   function specialtyOptionsHtml() {
     const opts = [
-      ["market_research", "Market Research"], ["digital_marketing", "Digital Marketing"], ["gis", "GIS"],
+      ["team_lead", "Team Lead"], ["market_research", "Market Research"], ["digital_marketing", "Digital Marketing"], ["gis", "GIS"],
       ["watering_holes", "Watering Holes"], ["admin", "Admin"], ["quality_control", "Quality Control"],
     ];
     return '<option value="">Select…</option>' + opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
   }
-  function consultantOptionsHtml() {
-    return '<option value="">Select…</option>' + allUsers.map((u) => `<option value="${u.id}">${escapeHtml(u.full_name)}</option>`).join("");
+  function consultantOptionsHtml(selectedId) {
+    return '<option value="">Unassigned</option>' + allUsers.map((u) => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${escapeHtml(u.full_name)}</option>`).join("");
   }
 
   // ---------- Assignments spreadsheet ----------
   function renderAssignmentsTable(canManageAssignments) {
     const tbody = $("assignments-tbody");
     tbody.innerHTML = "";
-    for (const r of currentAssignments) {
-      if (r.is_team_lead) continue; // shown in the summary box above, not the spreadsheet
+    for (const r of sortedAssignments()) {
       const person = usersById()[r.user_id];
       const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
       const tr = document.createElement("tr");
       tr.dataset.assignmentId = r.id;
-      const consultantCell = !person && canManageAssignments
-        ? `<select class="row-select row-consultant-select">${consultantOptionsHtml()}</select>`
+      const consultantCell = canManageAssignments
+        ? `<select class="row-select row-consultant-select">${consultantOptionsHtml(r.user_id)}</select>`
         : `${person ? escapeHtml(person.full_name) : `<span style="color:var(--muted);">Unassigned</span>`}`;
+      const isFixed = fixedSlotIndex(r.specialty_type, r.slot_number) !== -1;
+      const actionBtn = isFixed
+        ? `<button class="btn-secondary icon-btn" data-clear="${r.id}">Clear</button>`
+        : `<button class="btn-danger icon-btn" data-remove="${r.id}">Remove</button>`;
       tr.innerHTML = `
         <td>${escapeHtml(label)}</td>
         <td>${consultantCell}</td>
         <td style="text-align:right;"><input type="number" class="row-input row-hours-input" min="0" step="0.5" value="${Number(r.hours_allotted)}" ${canManageAssignments ? "" : "disabled"} /></td>
         <td style="text-align:right;">${r.hoursSpent}</td>
-        ${canManageAssignments ? `<td class="row-actions"><button class="btn-danger icon-btn" data-remove="${r.id}">Remove</button></td>` : ""}
+        ${canManageAssignments ? `<td class="row-actions">${actionBtn}</td>` : ""}
       `;
       tbody.appendChild(tr);
     }
@@ -569,15 +571,14 @@
       select.addEventListener("change", async () => {
         const tr = select.closest("tr");
         const assignmentId = tr.dataset.assignmentId;
-        if (!select.value) return;
         select.disabled = true;
-        const { error } = await sb.from("client_assignments").update({ user_id: select.value }).eq("id", assignmentId);
+        const { error } = await sb.from("client_assignments").update({ user_id: select.value || null }).eq("id", assignmentId);
         select.disabled = false;
         if (error) {
-          showBanner("Couldn't assign consultant: " + error.message, "error");
+          showBanner("Couldn't update consultant: " + error.message, "error");
           return;
         }
-        showBanner("Consultant assigned.", "success");
+        showBanner(select.value ? "Consultant assigned." : "Slot cleared to unassigned.", "success");
         await openClient(currentClient.id);
       });
     });
@@ -599,8 +600,14 @@
       });
     });
     document.querySelectorAll("[data-remove]").forEach((btn) => {
-      btn.addEventListener("click", () => openRemove(btn.dataset.remove));
+      btn.addEventListener("click", () => openRemove(btn.dataset.remove, "delete"));
     });
+    document.querySelectorAll("[data-clear]").forEach((btn) => {
+      btn.addEventListener("click", () => openRemove(btn.dataset.clear, "clear"));
+    });
+
+    const total = currentAssignments.reduce((sum, r) => sum + Number(r.hours_allotted), 0);
+    $("assignments-total-display").textContent = total;
   }
 
   $("add-row-btn").addEventListener("click", () => {
@@ -647,14 +654,15 @@
 
   function recalcUnassigned() {
     const total = Number($("total-budget-input").value) || 0;
-    const tl = Number($("tl-hours-input").value) || 0;
     let rowsSum = 0;
     document.querySelectorAll(".row-hours-input").forEach((input) => { rowsSum += Number(input.value) || 0; });
-    const unassigned = total - tl - rowsSum;
+    const unassigned = total - rowsSum;
     const el = $("hours-unassigned-display");
     el.textContent = unassigned;
     el.className = unassigned === 0 ? "zero" : (unassigned < 0 ? "negative" : "");
     el.parentElement.classList.toggle("negative", unassigned < 0);
+    const totalEl = $("assignments-total-display");
+    if (totalEl) totalEl.textContent = rowsSum;
   }
 
   $("total-budget-input").addEventListener("input", recalcUnassigned);
@@ -672,80 +680,39 @@
     showBanner("Total budget updated.", "success");
   });
 
-  $("tl-hours-input").addEventListener("input", recalcUnassigned);
-  $("tl-hours-input").addEventListener("change", async () => {
-    if ($("tl-hours-input").disabled) return;
-    const teamLeadRow = currentAssignments.find((r) => r.is_team_lead);
-    if (!teamLeadRow) return;
-    $("summary-error").style.display = "none";
-    const { error } = await sb.from("client_assignments").update({ hours_allotted: Number($("tl-hours-input").value) }).eq("id", teamLeadRow.id);
-    if (error) {
-      $("summary-error").textContent = error.message.includes("exceed Budget") ? "That would exceed the client's Budget Hours Available." : error.message;
-      $("summary-error").style.display = "block";
-      await openClient(currentClient.id);
-      return;
-    }
-    teamLeadRow.hours_allotted = Number($("tl-hours-input").value);
-    showBanner("Team Lead hours updated.", "success");
-  });
-
-  // ---------- Remove assignment ----------
-  function openRemove(assignmentId) {
+  // ---------- Remove / clear assignment ----------
+  function openRemove(assignmentId, mode) {
     const r = currentAssignments.find((x) => x.id === assignmentId);
     if (!r) return;
     const person = usersById()[r.user_id];
     pendingRemoveId = assignmentId;
-    $("remove-text").textContent = `Remove ${person ? person.full_name : "this consultant"} from ${SPECIALTY_LABELS[r.specialty_type] || r.specialty_type}? Their logged hours stay on record.`;
+    pendingRemoveMode = mode;
+    const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
+    if (mode === "clear") {
+      $("remove-title").textContent = "Clear this slot?";
+      $("remove-confirm").textContent = "Clear";
+      $("remove-text").textContent = `Reset ${label} back to unassigned with 0 hours? Logged hours stay on record.`;
+    } else {
+      $("remove-title").textContent = "Remove this assignment?";
+      $("remove-confirm").textContent = "Remove";
+      $("remove-text").textContent = `Remove ${person ? person.full_name : "this consultant"} from ${label}? Their logged hours stay on record.`;
+    }
     $("remove-overlay").classList.add("open");
   }
   $("remove-cancel").addEventListener("click", () => { $("remove-overlay").classList.remove("open"); pendingRemoveId = null; });
 
   $("remove-confirm").addEventListener("click", async () => {
     if (!pendingRemoveId) return;
-    const { error } = await sb.from("client_assignments").delete().eq("id", pendingRemoveId);
+    const { error } = pendingRemoveMode === "clear"
+      ? await sb.from("client_assignments").update({ user_id: null, hours_allotted: 0 }).eq("id", pendingRemoveId)
+      : await sb.from("client_assignments").delete().eq("id", pendingRemoveId);
     $("remove-overlay").classList.remove("open");
     pendingRemoveId = null;
     if (error) {
-      showBanner("Couldn't remove: " + error.message, "error");
+      showBanner((pendingRemoveMode === "clear" ? "Couldn't clear: " : "Couldn't remove: ") + error.message, "error");
       return;
     }
-    showBanner("Assignment removed.", "success");
-    await openClient(currentClient.id);
-  });
-
-  // ---------- Reassign Team Lead ----------
-  $("reassign-tl-btn").addEventListener("click", () => {
-    $("reassign-form").reset();
-    $("reassign-error").style.display = "none";
-    const sel = $("reassign-user");
-    sel.innerHTML = '<option value="">Select…</option>' + allUsers.map((u) => `<option value="${u.id}">${escapeHtml(u.full_name)} (${u.role.replace("_", " ")})</option>`).join("");
-    $("reassign-overlay").classList.add("open");
-  });
-  $("reassign-cancel").addEventListener("click", () => $("reassign-overlay").classList.remove("open"));
-
-  $("reassign-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    $("reassign-error").style.display = "none";
-    const btn = $("reassign-submit");
-    btn.disabled = true;
-    btn.textContent = "Reassigning…";
-
-    const { error } = await sb.from("client_assignments")
-      .update({ user_id: $("reassign-user").value })
-      .eq("client_id", currentClient.id)
-      .eq("is_team_lead", true);
-
-    btn.disabled = false;
-    btn.textContent = "Reassign";
-
-    if (error) {
-      $("reassign-error").textContent = error.message;
-      $("reassign-error").style.display = "block";
-      return;
-    }
-
-    $("reassign-overlay").classList.remove("open");
-    showBanner("Team Lead reassigned.", "success");
+    showBanner(pendingRemoveMode === "clear" ? "Slot cleared." : "Assignment removed.", "success");
     await openClient(currentClient.id);
   });
 
