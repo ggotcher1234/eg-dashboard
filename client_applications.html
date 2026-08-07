@@ -736,7 +736,7 @@
   // Team Lead shown always reflects who's assigned right now (not who was
   // assigned at accept time — Super Admins can reassign later).
   async function fetchClientAndTeamLead(clientId) {
-    const { data: client } = await sb.from("clients").select("id, name, slug, status, project_status").eq("id", clientId).single();
+    const { data: client } = await sb.from("clients").select("id, name, slug, status, project_status, budget_hours_available").eq("id", clientId).single();
     const { data: assignment } = await sb
       .from("client_assignments")
       .select("user_id")
@@ -1047,6 +1047,10 @@
                 ${sortedUsers.map((u) => `<option value="${u.id}">${escapeHtml(u.full_name)} (${u.role.replace("_", " ")})</option>`).join("")}
               </select>
             </div>
+            <div class="field">
+              <label>Team Lead hours <span class="hint">(out of the budget above)</span></label>
+              <input type="number" id="accept-tl-hours" min="0" step="0.5" value="7" />
+            </div>
           </div>
           <div class="field">
             <label>Client web address <span class="required-star">*</span> <span class="hint">(memorable, lowercase — Section 8.1)</span></label>
@@ -1133,11 +1137,16 @@
   async function submitAccept(appId) {
     const budget = $("accept-budget").value;
     const teamLeadId = $("accept-tl").value;
+    const teamLeadHours = $("accept-tl-hours").value === "" ? 0 : Number($("accept-tl-hours").value);
     const slug = slugify($("accept-slug").value);
     $("slug-error").style.display = "none";
 
     if (!budget || !teamLeadId || !slug) {
       showBanner("Budget hours, Team Lead, and a client address are all required to accept.", "error");
+      return;
+    }
+    if (teamLeadHours > Number(budget)) {
+      showBanner("Team Lead hours can't exceed the total budget hours.", "error");
       return;
     }
 
@@ -1152,10 +1161,9 @@
       p_slug: slug,
     });
 
-    btn.disabled = false;
-    btn.textContent = "Accept & create client";
-
     if (error) {
+      btn.disabled = false;
+      btn.textContent = "Accept & create client";
       if (error.message.includes("duplicate key") || error.code === "23505") {
         $("slug-error").style.display = "block";
       } else {
@@ -1164,6 +1172,28 @@
       return;
     }
 
+    // accept_client_application() creates the Team Lead's own assignment row
+    // with hours_allotted = 0 — this is the one field it doesn't take as a
+    // parameter, so we set it here right after, same as everything else the
+    // Super Admin just specified.
+    if (teamLeadHours > 0) {
+      const { error: hoursErr } = await sb
+        .from("client_assignments")
+        .update({ hours_allotted: teamLeadHours })
+        .eq("client_id", clientId)
+        .eq("is_team_lead", true);
+      if (hoursErr) {
+        showBanner(`Client created, but couldn't set Team Lead hours: ${hoursErr.message}. Set it from the Client Workspace instead.`, "error");
+        btn.disabled = false;
+        btn.textContent = "Accept & create client";
+        await loadApplications();
+        showListView();
+        return;
+      }
+    }
+
+    btn.disabled = false;
+    btn.textContent = "Accept & create client";
     showBanner(`Client created at ${slug}.egdashboardbuilder.com.`, "success");
     await loadApplications();
     showListView();
