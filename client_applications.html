@@ -778,6 +778,9 @@
     team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
     gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
   };
+  // Admin and QC are sunk costs — spent always equals allotted, automatically.
+  // Kept in sync with the same rule in client_workspace.html.
+  const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
 
   // Shared hours visibility (Section 4.3/5.3): every assigned consultant —
   // not just the Team Lead — sees everyone's allotted and spent hours once
@@ -801,7 +804,10 @@
         for (const e of entries) hoursByAssignment[e.assignment_id] = (hoursByAssignment[e.assignment_id] || 0) + Number(e.hours);
       }
     }
-    return rows.map((r) => ({ ...r, hoursSpent: hoursByAssignment[r.id] || 0 }));
+    return rows.map((r) => ({
+      ...r,
+      hoursSpent: SUNK_COST_SPECIALTIES.includes(r.specialty_type) ? Number(r.hours_allotted) : (hoursByAssignment[r.id] || 0),
+    }));
   }
 
   // Fetches every document attached to this application, plus (once

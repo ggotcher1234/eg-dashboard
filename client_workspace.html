@@ -316,6 +316,9 @@
     team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
     gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
   };
+  // Admin and QC are treated as sunk costs — spent always equals allotted,
+  // automatically, from the moment hours are assigned. Not logged hour-by-hour.
+  const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
   const PROJECT_STATUSES = ["accepted", "in_progress", "on_hold", "closed"];
   const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
 
@@ -484,7 +487,13 @@
       const { data: entries, error: tErr } = await sb.from("time_entries").select("assignment_id, hours").in("assignment_id", ids);
       if (!tErr) for (const e of entries) hoursByAssignment[e.assignment_id] = (hoursByAssignment[e.assignment_id] || 0) + Number(e.hours);
     }
-    currentAssignments = rows.map((r) => ({ ...r, hoursSpent: hoursByAssignment[r.id] || 0 }));
+    // Admin and Quality Control are sunk costs, not hour-by-hour tracked
+    // work — as soon as hours are allotted to them, they count as spent,
+    // no logging needed. Everything else still rolls up from time_entries.
+    currentAssignments = rows.map((r) => ({
+      ...r,
+      hoursSpent: SUNK_COST_SPECIALTIES.includes(r.specialty_type) ? Number(r.hours_allotted) : (hoursByAssignment[r.id] || 0),
+    }));
     isTeamLeadHere = currentAssignments.some((r) => r.user_id === currentUser.id && r.is_team_lead);
   }
 
@@ -594,8 +603,10 @@
         ? `<button class="btn-secondary icon-btn" data-clear="${r.id}">Clear</button>`
         : `<button class="btn-danger icon-btn" data-remove="${r.id}">Remove</button>`;
       // Anyone logs their own time; a Super Admin can log for anyone. Only
-      // meaningful once a consultant is actually in the slot.
-      const canLogHours = !!person && (isSuperAdmin || person.id === currentUser.id);
+      // meaningful once a consultant is actually in the slot. Admin/QC are
+      // sunk costs (spent = allotted automatically) so there's nothing to log.
+      const isSunkCost = SUNK_COST_SPECIALTIES.includes(r.specialty_type);
+      const canLogHours = !isSunkCost && !!person && (isSuperAdmin || person.id === currentUser.id);
       const spentCell = canLogHours
         ? `${r.hoursSpent} <button class="btn-secondary icon-btn" data-log="${r.id}" title="Log hours">+</button>`
         : `${r.hoursSpent}`;
@@ -636,9 +647,12 @@
           await openClient(currentClient.id);
           return;
         }
-        const r = currentAssignments.find((x) => x.id === assignmentId);
-        if (r) r.hours_allotted = Number(input.value);
         showBanner("Hours updated.", "success");
+        // Full reload rather than a local patch — for Admin/QC this is what
+        // keeps Spent in sync with Allotted (they're sunk costs, computed
+        // together in loadAssignments()), and it's cheap/safe for every
+        // other row too.
+        await openClient(currentClient.id);
       });
     });
     document.querySelectorAll("[data-remove]").forEach((btn) => {
