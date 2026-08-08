@@ -1,0 +1,27 @@
+-- 018_public_view_bypass_rls.sql
+--
+-- Fixes: client_public.html showing "Page not found" for a client that
+-- genuinely exists and has an active share link.
+--
+-- Root cause: `clients_select` (and the policies on client_share_links,
+-- client_content, documents) only grant access via is_super_admin() or
+-- is_assigned_to_client() — both check auth.uid(), which is null for an
+-- anonymous visitor. get_client_public_view() is `security definer` so it's
+-- SUPPOSED to run past RLS on the visitor's behalf, and that's exactly what
+-- happened in local PGlite testing — but only because the local test
+-- session runs as an actual Postgres superuser, which always bypasses RLS
+-- no matter what. In Supabase Cloud, the role that owns this function is
+-- not a true superuser, so RLS was still silently filtering every row down
+-- to zero, and the function's own "not found" branch fired for real
+-- clients. This is a genuine gap between the local test environment and
+-- Supabase Cloud that this migration closes.
+--
+-- Fix: explicitly turn row security off for the duration of this function's
+-- execution. This doesn't require dropping/recreating the function (ALTER
+-- FUNCTION ... SET is enough), and it's safe here specifically because the
+-- function only ever returns the three hand-picked, non-sensitive columns
+-- coded inside it (Section 4.3) — it can't be used to read anything else.
+--
+-- Safe to re-run.
+
+alter function get_client_public_view(text) set row_security = off;
