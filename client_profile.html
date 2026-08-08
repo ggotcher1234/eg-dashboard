@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Client Profile</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #2f7d5c;
+    --accent-dark: #24614a;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  .hidden { display: none !important; }
+
+  header { background: var(--navy); color: #fff; padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 12.5px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  button { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: var(--danger-dark); }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12.5px; }
+  button:disabled { opacity: 0.55; cursor: default; }
+
+  main { max-width: 900px; margin: 28px auto; padding: 0 20px 70px; }
+
+  #login-view { max-width: 380px; margin: 90px auto; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  #login-view h2 { margin-top: 0; font-size: 18px; }
+  #login-view label { display: block; font-size: 12.5px; font-weight: 600; margin: 14px 0 5px; color: var(--muted); }
+  #login-view input { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+  #login-view button { width: 100%; margin-top: 20px; padding: 10px; }
+  #login-error { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; }
+
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+
+  .badge { font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; padding: 3px 9px; border-radius: 999px; }
+  .badge-active { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-finalized { background: #e7eef7; color: var(--navy-light); }
+  .badge-archived { background: #eef1f4; color: var(--muted); }
+  .badge-client_facing { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-internal { background: #eef1f4; color: var(--muted); }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 24px 28px; margin-bottom: 16px; }
+  .card h2 { margin-top: 0; font-size: 17px; }
+  .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  .meta-line { font-size: 13.5px; color: var(--muted); margin: 4px 0; }
+  .meta-line a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
+  .meta-line a:hover { text-decoration: underline; }
+
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
+  .field input[type="text"], .field input[type="url"], .field input[type="email"], .field textarea, .field select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit;
+  }
+  .field textarea { resize: vertical; min-height: 90px; }
+  .field-hint { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+
+  /* Accordion sections */
+  .accordion-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+  .accordion-header h2 { display: flex; align-items: center; gap: 8px; }
+  .accordion-chevron { font-size: 12px; color: var(--muted); transition: transform 0.15s ease; }
+  .accordion-header.open .accordion-chevron { transform: rotate(90deg); }
+  .accordion-body { display: none; margin-top: 14px; }
+  .accordion-body.open { display: block; }
+
+  .list-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f0f2f4; }
+  .list-row:last-child { border-bottom: none; }
+  .list-row-main { font-size: 13.5px; }
+  .list-row-main .lr-title { font-weight: 600; }
+  .list-row-main .lr-sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .list-row-main .lr-sub a { color: var(--navy-light); text-decoration: none; }
+  .list-row-main .lr-sub a:hover { text-decoration: underline; }
+  .list-empty { color: var(--muted); font-size: 13.5px; padding: 8px 0; }
+
+  .add-row-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); align-items: flex-end; }
+  .add-row-form .field { margin-bottom: 0; flex: 1; min-width: 140px; }
+  .add-row-form label { font-size: 11px; }
+
+  .icon-btn { padding: 4px 8px; font-size: 13px; line-height: 1; flex-shrink: 0; }
+
+  .doc-area-label { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); font-weight: 700; margin: 18px 0 8px; }
+  .doc-area-label:first-child { margin-top: 0; }
+  .upload-btn-wrap { position: relative; display: inline-block; }
+  .upload-btn-wrap input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+  .no-client-note { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="login-view" class="hidden">
+  <h2>EG Dashboard</h2>
+  <div style="font-size:13px; color:var(--muted); margin-top:-8px;">Client Profile — sign in</div>
+  <form id="login-form">
+    <label for="login-email">Email</label>
+    <input type="text" id="login-email" autocomplete="username" required />
+    <label for="login-password">Password</label>
+    <input type="password" id="login-password" autocomplete="current-password" required />
+    <button type="submit" class="btn-primary">Sign in</button>
+    <div id="login-error"></div>
+  </form>
+</div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <div>
+      <h1>Client Profile &amp; Documents</h1>
+      <div class="sub">EG Group &nbsp;·&nbsp; <a class="back-link" href="index.html">Home</a></div>
+    </div>
+    <div id="userbox">
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span>
+      <button class="btn-ghost" id="signout-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="banner"></div>
+
+    <div id="no-client-view" class="no-client-note hidden">
+      Open a client from <a href="client_workspace.html">the Workspace</a> first, then use the "Profile &amp; Documents" link there to get here.
+    </div>
+
+    <div id="profile-view" class="hidden">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 id="p-name" style="margin:0;"></h2>
+          </div>
+          <span class="badge" id="p-lifecycle-badge"></span>
+        </div>
+        <div class="meta-line">
+          <a href="#" id="p-workspace-link">&larr; Assignments &amp; Hours</a>
+          &nbsp;&middot;&nbsp;
+          <a href="#" id="p-app-info-link">Application Info &rarr;</a>
+        </div>
+      </div>
+
+      <!-- ===== Company Information ===== -->
+      <div class="card">
+        <h2>Company Information</h2>
+        <form id="company-form">
+          <div class="field-grid">
+            <div>
+              <div class="field">
+                <label for="co-logo">Logo URL</label>
+                <input type="url" id="co-logo" placeholder="https://…" />
+              </div>
+              <div class="field">
+                <label for="co-website">Website</label>
+                <input type="url" id="co-website" placeholder="https://…" />
+              </div>
+              <div class="field">
+                <label for="co-address">Address</label>
+                <input type="text" id="co-address" />
+              </div>
+              <div class="field">
+                <label for="co-naics">NAICS codes</label>
+                <input type="text" id="co-naics" placeholder="339113, 336992" />
+              </div>
+            </div>
+            <div>
+              <div class="field">
+                <label for="co-linkedin">LinkedIn</label>
+                <input type="url" id="co-linkedin" placeholder="https://…" />
+              </div>
+              <div class="field">
+                <label for="co-facebook">Facebook</label>
+                <input type="url" id="co-facebook" placeholder="https://…" />
+              </div>
+              <div class="field">
+                <label for="co-instagram">Instagram</label>
+                <input type="url" id="co-instagram" placeholder="https://…" />
+              </div>
+              <div class="field">
+                <label for="co-twitter">X / Twitter</label>
+                <input type="url" id="co-twitter" placeholder="https://…" />
+              </div>
+              <div class="field">
+                <label for="co-youtube">YouTube</label>
+                <input type="url" id="co-youtube" placeholder="https://…" />
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label for="co-description">Company Description <span class="field-hint">(supports **bold** and "- " bullet lines)</span></label>
+            <textarea id="co-description" rows="6"></textarea>
+          </div>
+          <button type="submit" class="btn-primary btn-sm" id="company-save-btn">Save Company Info</button>
+        </form>
+      </div>
+
+      <!-- ===== EG Workflow Documents ===== -->
+      <div class="card">
+        <h2>EG Workflow Documents</h2>
+        <form id="workflow-form">
+          <div class="field-grid">
+            <div>
+              <div class="field">
+                <label for="wf-discovery">1. Discovery Document URL</label>
+                <input type="url" id="wf-discovery" placeholder="https://…" />
+              </div>
+              <div class="field">
+                <label for="wf-controlling">2. Controlling Document URL</label>
+                <input type="url" id="wf-controlling" placeholder="https://…" />
+              </div>
+            </div>
+            <div>
+              <div class="field">
+                <label for="wf-review">3. Research Review Recording URL</label>
+                <input type="url" id="wf-review" placeholder="https://fathom.video/share/…" />
+              </div>
+              <div class="field">
+                <label for="wf-closeout">4. Close-Out Survey URL</label>
+                <input type="url" id="wf-closeout" placeholder="https://…" />
+              </div>
+            </div>
+          </div>
+          <button type="submit" class="btn-primary btn-sm" id="workflow-save-btn">Save Workflow Links</button>
+        </form>
+      </div>
+
+      <!-- ===== Accordion list sections (Contacts, Competitors, Top Customers, Resource Vault, Next Steps) ===== -->
+      <div id="list-sections"></div>
+
+      <!-- ===== Research Area Documents + General Documents ===== -->
+      <div class="card">
+        <h2>Documents</h2>
+        <div class="meta-line" style="margin-bottom:6px;">Upload the deliverable file straight in — mark it "Client-facing" to have it show on the client's public dashboard, or leave it "Internal" for EG-only files.</div>
+        <div id="doc-sections"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentUser = null;
+  let isSuperAdmin = false;
+  let currentClient = null;
+  let canEdit = false; // Super Admin or assigned to this client
+
+  const $ = (id) => document.getElementById(id);
+  const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
+  const sanitizeFilename = (name) => name.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 4000);
+  }
+
+  // ---------- Auth ----------
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("login-email").value.trim();
+    const password = $("login-password").value;
+    $("login-error").style.display = "none";
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      $("login-error").textContent = error.message;
+      $("login-error").style.display = "block";
+      return;
+    }
+    await afterSignIn();
+  });
+
+  $("signout-btn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    $("login-view").classList.remove("hidden");
+  });
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users")
+      .select("id, full_name, role, organization_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      $("loading-view").classList.add("hidden");
+      $("login-view").classList.remove("hidden");
+      $("login-error").textContent = "Signed in, but no matching staff profile was found for this account.";
+      $("login-error").style.display = "block";
+      await sb.auth.signOut();
+      return;
+    }
+
+    currentUser = profile;
+    isSuperAdmin = profile.role === "super_admin";
+
+    $("loading-view").classList.add("hidden");
+    $("login-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = profile.role.replace("_", " ");
+
+    const clientId = new URLSearchParams(location.search).get("client");
+    if (clientId) {
+      await loadClient(clientId);
+    } else {
+      $("no-client-view").classList.remove("hidden");
+    }
+  }
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      afterSignIn();
+    } else {
+      $("loading-view").classList.add("hidden");
+      $("login-view").classList.remove("hidden");
+    }
+  });
+
+  async function loadClient(clientId) {
+    const { data: client, error } = await sb.from("clients").select("*").eq("id", clientId).single();
+    if (error || !client) {
+      $("no-client-view").classList.remove("hidden");
+      showBanner("Couldn't load that client — you may not be assigned to it.", "error");
+      return;
+    }
+    currentClient = client;
+    canEdit = isSuperAdmin || true; // RLS is the real gate — client_content/*-write already require is_assigned_to_client(); this just controls whether we show the form vs read-only text, so default to showing it and let RLS reject bad writes with a clear error.
+
+    $("profile-view").classList.remove("hidden");
+    $("p-name").textContent = client.name;
+    $("p-lifecycle-badge").className = `badge badge-${client.status}`;
+    $("p-lifecycle-badge").textContent = client.status;
+    $("p-workspace-link").href = `client_workspace.html?client=${client.id}`;
+    $("p-app-info-link").href = `client_applications.html?client=${client.id}`;
+
+    fillCompanyForm(client);
+    await loadWorkflowLinks(client.id);
+    renderListSections();
+    await Promise.all([
+      loadListSection(CONTACTS_CONFIG),
+      loadListSection(COMPETITORS_CONFIG),
+      loadListSection(TOP_CUSTOMERS_CONFIG),
+      loadListSection(RESOURCE_VAULT_CONFIG),
+      loadListSection(NEXT_STEPS_CONFIG),
+    ]);
+    renderDocSections();
+    await loadDocuments();
+  }
+
+  // ---------- Company Information ----------
+  function fillCompanyForm(c) {
+    $("co-logo").value = c.logo_url || "";
+    $("co-website").value = c.website_url || "";
+    $("co-address").value = c.address || "";
+    $("co-naics").value = c.naics_codes || "";
+    $("co-linkedin").value = c.linkedin_url || "";
+    $("co-facebook").value = c.facebook_url || "";
+    $("co-instagram").value = c.instagram_url || "";
+    $("co-twitter").value = c.twitter_url || "";
+    $("co-youtube").value = c.youtube_url || "";
+    $("co-description").value = c.description || "";
+  }
+
+  $("company-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("company-save-btn");
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    const { error } = await sb.from("clients").update({
+      logo_url: $("co-logo").value.trim() || null,
+      website_url: $("co-website").value.trim() || null,
+      address: $("co-address").value.trim() || null,
+      naics_codes: $("co-naics").value.trim() || null,
+      linkedin_url: $("co-linkedin").value.trim() || null,
+      facebook_url: $("co-facebook").value.trim() || null,
+      instagram_url: $("co-instagram").value.trim() || null,
+      twitter_url: $("co-twitter").value.trim() || null,
+      youtube_url: $("co-youtube").value.trim() || null,
+      description: $("co-description").value.trim() || null,
+    }).eq("id", currentClient.id);
+    btn.disabled = false;
+    btn.textContent = "Save Company Info";
+    if (error) { showBanner("Couldn't save company info: " + error.message, "error"); return; }
+    showBanner("Company info saved.", "success");
+  });
+
+  // ---------- EG Workflow Documents ----------
+  async function loadWorkflowLinks(clientId) {
+    const { data, error } = await sb.from("client_content").select("*").eq("client_id", clientId).maybeSingle();
+    if (error) { showBanner("Couldn't load workflow links: " + error.message, "error"); return; }
+    $("wf-discovery").value = (data && data.discovery_doc_url) || "";
+    $("wf-controlling").value = (data && data.controlling_doc_url) || "";
+    $("wf-review").value = (data && data.research_review_url) || "";
+    $("wf-closeout").value = (data && data.closeout_survey_url) || "";
+  }
+
+  $("workflow-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("workflow-save-btn");
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    const { error } = await sb.from("client_content").update({
+      discovery_doc_url: $("wf-discovery").value.trim() || null,
+      controlling_doc_url: $("wf-controlling").value.trim() || null,
+      research_review_url: $("wf-review").value.trim() || null,
+      closeout_survey_url: $("wf-closeout").value.trim() || null,
+    }).eq("client_id", currentClient.id);
+    btn.disabled = false;
+    btn.textContent = "Save Workflow Links";
+    if (error) { showBanner("Couldn't save workflow links: " + error.message, "error"); return; }
+    showBanner("Workflow links saved.", "success");
+  });
+
+  // ---------- Generic accordion list sections ----------
+  const CONTACTS_CONFIG = {
+    key: "contacts", table: "client_contacts", title: "Company Contacts",
+    fields: [
+      { name: "name", label: "Name", type: "text", required: true },
+      { name: "title", label: "Title", type: "text" },
+      { name: "email", label: "Email", type: "email" },
+      { name: "phone", label: "Phone", type: "text" },
+    ],
+    render: (r) => ({ title: r.name, sub: [r.title, r.email, r.phone].filter(Boolean).join(" · ") }),
+  };
+  const COMPETITORS_CONFIG = {
+    key: "competitors", table: "client_competitors", title: "Competitors",
+    fields: [
+      { name: "name", label: "Name", type: "text", required: true },
+      { name: "website_url", label: "Website", type: "url" },
+      { name: "notes", label: "Notes", type: "text" },
+    ],
+    render: (r) => ({ title: r.name, subHtml: [r.website_url ? `<a href="${escapeHtml(r.website_url)}" target="_blank" rel="noopener">${escapeHtml(r.website_url)}</a>` : "", escapeHtml(r.notes || "")].filter(Boolean).join(" · ") }),
+  };
+  const TOP_CUSTOMERS_CONFIG = {
+    key: "top_customers", table: "client_top_customers", title: "Top Customers",
+    fields: COMPETITORS_CONFIG.fields,
+    render: COMPETITORS_CONFIG.render,
+  };
+  const RESOURCE_VAULT_CONFIG = {
+    key: "resource_vault", table: "client_resource_vault_items", title: "Resource Vault",
+    fields: [
+      { name: "title", label: "Title", type: "text", required: true },
+      { name: "url", label: "URL", type: "url", required: true },
+    ],
+    render: (r) => ({ title: r.title, subHtml: `<a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.url)}</a>` }),
+  };
+  const NEXT_STEPS_CONFIG = {
+    key: "next_steps", table: "client_next_steps", title: "Project Next Steps",
+    fields: [{ name: "description", label: "Next step", type: "text", required: true }],
+    isChecklist: true,
+    render: (r) => ({ title: r.description }),
+  };
+  const LIST_CONFIGS = [CONTACTS_CONFIG, COMPETITORS_CONFIG, TOP_CUSTOMERS_CONFIG, RESOURCE_VAULT_CONFIG, NEXT_STEPS_CONFIG];
+  const listData = {}; // key -> rows
+
+  function renderListSections() {
+    const container = $("list-sections");
+    container.innerHTML = LIST_CONFIGS.map((cfg) => `
+      <div class="card">
+        <div class="accordion-header" data-accordion="${cfg.key}">
+          <h2><span class="accordion-chevron">&#9656;</span> ${escapeHtml(cfg.title)} <span class="meta-line" id="${cfg.key}-count" style="margin:0;"></span></h2>
+        </div>
+        <div class="accordion-body" id="${cfg.key}-body">
+          <div id="${cfg.key}-list"></div>
+          <form class="add-row-form" id="${cfg.key}-add-form">
+            ${cfg.fields.map((f) => `
+              <div class="field">
+                <label for="${cfg.key}-new-${f.name}">${escapeHtml(f.label)}</label>
+                <input type="${f.type}" id="${cfg.key}-new-${f.name}" ${f.required ? "required" : ""} />
+              </div>
+            `).join("")}
+            <button type="submit" class="btn-secondary btn-sm">+ Add</button>
+          </form>
+        </div>
+      </div>
+    `).join("");
+
+    document.querySelectorAll("[data-accordion]").forEach((hdr) => {
+      hdr.addEventListener("click", () => {
+        hdr.classList.toggle("open");
+        $(`${hdr.dataset.accordion}-body`).classList.toggle("open");
+      });
+    });
+
+    for (const cfg of LIST_CONFIGS) {
+      $(`${cfg.key}-add-form`).addEventListener("submit", (e) => { e.preventDefault(); addListRow(cfg); });
+    }
+  }
+
+  async function loadListSection(cfg) {
+    const { data, error } = await sb.from(cfg.table).select("*").eq("client_id", currentClient.id).order("sort_order").order("created_at");
+    if (error) { showBanner(`Couldn't load ${cfg.title}: ` + error.message, "error"); return; }
+    listData[cfg.key] = data;
+    renderListRows(cfg);
+  }
+
+  function renderListRows(cfg) {
+    const rows = listData[cfg.key] || [];
+    $(`${cfg.key}-count`).textContent = rows.length ? `(${rows.length})` : "";
+    const list = $(`${cfg.key}-list`);
+    if (!rows.length) {
+      list.innerHTML = `<div class="list-empty">Nothing added yet.</div>`;
+      return;
+    }
+    list.innerHTML = rows.map((r) => {
+      const rendered = cfg.render(r);
+      const checklistPrefix = cfg.isChecklist
+        ? `<input type="checkbox" class="list-checkbox" data-toggle-id="${r.id}" ${r.completed ? "checked" : ""} style="margin-right:8px;" />`
+        : "";
+      return `
+        <div class="list-row">
+          <div class="list-row-main">
+            <div class="lr-title" style="${cfg.isChecklist && r.completed ? "text-decoration:line-through; color:var(--muted);" : ""}">${checklistPrefix}${escapeHtml(rendered.title)}</div>
+            ${rendered.sub || rendered.subHtml ? `<div class="lr-sub">${rendered.subHtml || escapeHtml(rendered.sub)}</div>` : ""}
+          </div>
+          <button type="button" class="btn-danger icon-btn" data-delete-id="${r.id}" title="Delete">&times;</button>
+        </div>
+      `;
+    }).join("");
+
+    list.querySelectorAll("[data-delete-id]").forEach((btn) => {
+      btn.addEventListener("click", () => deleteListRow(cfg, btn.dataset.deleteId));
+    });
+    list.querySelectorAll("[data-toggle-id]").forEach((cb) => {
+      cb.addEventListener("change", () => toggleNextStep(cb.dataset.toggleId, cb.checked));
+    });
+  }
+
+  async function addListRow(cfg) {
+    const values = { client_id: currentClient.id };
+    for (const f of cfg.fields) {
+      const v = $(`${cfg.key}-new-${f.name}`).value.trim();
+      if (f.required && !v) { showBanner(`${f.label} is required.`, "error"); return; }
+      values[f.name] = v || null;
+    }
+    const { error } = await sb.from(cfg.table).insert(values);
+    if (error) { showBanner(`Couldn't add to ${cfg.title}: ` + error.message, "error"); return; }
+    $(`${cfg.key}-add-form`).reset();
+    showBanner(`Added to ${cfg.title}.`, "success");
+    await loadListSection(cfg);
+  }
+
+  async function deleteListRow(cfg, id) {
+    const { error } = await sb.from(cfg.table).delete().eq("id", id);
+    if (error) { showBanner(`Couldn't delete: ` + error.message, "error"); return; }
+    await loadListSection(cfg);
+  }
+
+  async function toggleNextStep(id, completed) {
+    const { error } = await sb.from("client_next_steps").update({ completed }).eq("id", id);
+    if (error) { showBanner("Couldn't update: " + error.message, "error"); return; }
+    await loadListSection(NEXT_STEPS_CONFIG);
+  }
+
+  // ---------- Documents (research-area tagged + general) ----------
+  const RESEARCH_AREAS = [
+    ["market_dynamics", "Market Dynamics Research"],
+    ["outbound", "Outbound Marketing"],
+    ["inbound", "Inbound Marketing"],
+    ["watering_holes", "Watering Holes"],
+  ];
+  let allDocuments = [];
+
+  function renderDocSections() {
+    const container = $("doc-sections");
+    const sections = [...RESEARCH_AREAS.map(([key, label]) => [key, label]), [null, "General Documents"]];
+    container.innerHTML = sections.map(([key, label]) => `
+      <div class="doc-area-label">${escapeHtml(label)}</div>
+      <div id="doc-list-${key || "general"}"></div>
+      <label class="btn-secondary btn-sm upload-btn-wrap">
+        + Upload file
+        <input type="file" multiple class="doc-upload-input" data-area="${key || ""}" />
+      </label>
+    `).join("");
+
+    document.querySelectorAll(".doc-upload-input").forEach((input) => {
+      input.addEventListener("change", async () => {
+        if (!input.files.length) return;
+        input.disabled = true;
+        const errors = await uploadDocuments(input.files, input.dataset.area || null);
+        input.disabled = false;
+        input.value = "";
+        if (errors.length) showBanner("Some files didn't upload: " + errors.join("; "), "error");
+        else showBanner("File(s) uploaded.", "success");
+        await loadDocuments();
+      });
+    });
+  }
+
+  async function loadDocuments() {
+    const { data, error } = await sb.from("documents").select("*").eq("client_id", currentClient.id).order("uploaded_at", { ascending: false });
+    if (error) { showBanner("Couldn't load documents: " + error.message, "error"); return; }
+    allDocuments = data;
+    for (const [key] of RESEARCH_AREAS) renderDocList(key);
+    renderDocList(null);
+  }
+
+  function renderDocList(area) {
+    const el = $(`doc-list-${area || "general"}`);
+    const docs = allDocuments.filter((d) => d.research_area === area);
+    if (!docs.length) { el.innerHTML = `<div class="list-empty">No files yet.</div>`; return; }
+    el.innerHTML = docs.map((d) => `
+      <div class="list-row">
+        <div class="list-row-main">
+          <div class="lr-title doc-download" data-path="${escapeHtml(d.storage_path)}" data-name="${escapeHtml(d.file_name)}" style="cursor:pointer; color:var(--navy-light);">${escapeHtml(d.file_name)}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button type="button" class="btn-secondary icon-btn doc-visibility-toggle" data-id="${d.id}" data-visibility="${d.visibility}">
+            ${d.visibility === "client_facing" ? "Client-facing" : "Internal"}
+          </button>
+          <button type="button" class="btn-danger icon-btn" data-delete-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}" title="Delete">&times;</button>
+        </div>
+      </div>
+    `).join("");
+
+    el.querySelectorAll(".doc-download").forEach((div) => {
+      div.addEventListener("click", async () => {
+        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(div.dataset.path, 60);
+        if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+        window.open(data.signedUrl, "_blank");
+      });
+    });
+    el.querySelectorAll(".doc-visibility-toggle").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const next = btn.dataset.visibility === "client_facing" ? "internal" : "client_facing";
+        const { error } = await sb.from("documents").update({ visibility: next }).eq("id", btn.dataset.id);
+        if (error) { showBanner("Couldn't update visibility: " + error.message, "error"); return; }
+        await loadDocuments();
+      });
+    });
+    el.querySelectorAll("[data-delete-doc]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await sb.storage.from("client-documents").remove([btn.dataset.path]);
+        const { error } = await sb.from("documents").delete().eq("id", btn.dataset.deleteDoc);
+        if (error) { showBanner("Couldn't delete file: " + error.message, "error"); return; }
+        await loadDocuments();
+      });
+    });
+  }
+
+  async function uploadDocuments(fileList, researchArea) {
+    const errors = [];
+    for (const file of Array.from(fileList)) {
+      const path = `clients/${currentClient.id}/${Date.now()}-${sanitizeFilename(file.name)}`;
+      const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+      if (uploadErr) { errors.push(`${file.name}: ${uploadErr.message}`); continue; }
+      const { error: rowErr } = await sb.from("documents").insert({
+        client_id: currentClient.id,
+        file_name: file.name,
+        storage_path: path,
+        visibility: "internal",
+        research_area: researchArea,
+        uploaded_by: currentUser.id,
+      });
+      if (rowErr) errors.push(`${file.name}: ${rowErr.message}`);
+    }
+    return errors;
+  }
+</script>
+</body>
+</html>
