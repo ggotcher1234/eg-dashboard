@@ -107,19 +107,30 @@
     { label: "Watering Holes", keys: ["watering_holes"] },
   ];
 
+  // Known hosting-platform domains whose own subdomain (e.g. "egdb" in
+  // egdb.netlify.app) is NOT a client slug — without this list, any site
+  // hosted at <name>.netlify.app would misread its own site name as the
+  // client's memorable subdomain and ignore ?slug= entirely.
+  const HOSTING_PLATFORM_SUFFIXES = ["netlify.app", "vercel.app", "pages.dev", "github.io", "web.app"];
+
   function resolveSlug() {
-    // Preferred long-term: a memorable subdomain (Section 8.1), e.g.
-    // acmerobotics.egdashboardbuilder.com — once wildcard DNS is wired up,
-    // the first hostname label IS the slug.
+    // ?slug= always wins when present — this is also how testing/preview
+    // links work today, before wildcard DNS for real client subdomains
+    // (Section 8.1) is set up at all.
+    const qsSlug = new URLSearchParams(location.search).get("slug");
+    if (qsSlug) return qsSlug;
+
+    // Long-term: a memorable subdomain, e.g. acmerobotics.egdashboardbuilder.com
+    // — once wildcard DNS is wired up, the first hostname label IS the slug.
+    // Hosting-platform domains (netlify.app, etc.) are excluded so a site's
+    // own name (e.g. "egdb" in egdb.netlify.app) is never mistaken for one.
     const host = location.hostname;
+    const onHostingPlatform = HOSTING_PLATFORM_SUFFIXES.some((suf) => host === suf || host.endsWith("." + suf));
+    if (onHostingPlatform) return null;
+
     const labels = host.split(".");
     const looksLikeApex = labels.length <= 2 || ["www", "app", "dashboard", "localhost"].includes(labels[0]);
     if (!looksLikeApex) return labels[0];
-
-    // Fallback for now (single shared domain, no wildcard DNS yet):
-    // client_public.html?slug=acmerobotics
-    const qsSlug = new URLSearchParams(location.search).get("slug");
-    if (qsSlug) return qsSlug;
 
     return null;
   }
