@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Client Dashboard — EG Group</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #2f7d5c;
+    --accent-dark: #24614a;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  .hidden { display: none !important; }
+
+  #loading-view, #error-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; text-align: center; padding: 20px; }
+  #error-view .error-box { max-width: 420px; }
+  #error-view h2 { color: var(--text); font-size: 18px; margin-bottom: 8px; }
+
+  header { background: var(--navy); color: #fff; padding: 26px 32px; }
+  header .eg-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.6px; color: #a9bdd2; font-weight: 600; }
+  header h1 { font-size: 24px; margin: 4px 0 8px; font-weight: 700; }
+  .badge { font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; padding: 4px 10px; border-radius: 999px; display: inline-block; }
+  .badge-active { background: rgba(47,125,92,0.25); color: #bfe3cf; }
+  .badge-finalized { background: rgba(31,74,117,0.35); color: #cddcec; }
+  .badge-archived { background: rgba(255,255,255,0.12); color: #c9d6e3; }
+
+  main { max-width: 880px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  .area-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 22px 24px; margin-bottom: 20px; }
+  .area-card h2 { font-size: 15px; margin: 0 0 14px; color: var(--navy); text-transform: uppercase; letter-spacing: 0.4px; }
+  .area-empty { color: var(--muted); font-size: 13.5px; font-style: italic; }
+  .field-row { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #f0f2f4; }
+  .field-row:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+  .field-label { font-weight: 600; font-size: 13px; color: var(--text); margin-bottom: 3px; }
+  .field-value { font-size: 13.5px; color: var(--text); line-height: 1.5; white-space: pre-wrap; }
+
+  .docs-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 22px 24px; margin-bottom: 20px; }
+  .docs-card h2 { font-size: 15px; margin: 0 0 14px; color: var(--navy); text-transform: uppercase; letter-spacing: 0.4px; }
+  .doc-link { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--navy-light); margin-bottom: 8px; cursor: pointer; text-decoration: none; }
+  .doc-link:hover { text-decoration: underline; }
+  .doc-link .doc-icon { font-size: 15px; }
+  .docs-empty { color: var(--muted); font-size: 13.5px; font-style: italic; }
+
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 10px 20px 40px; }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="error-view" class="hidden">
+  <div class="error-box">
+    <h2>Page not found</h2>
+    <div id="error-message">This client dashboard link isn't available. Please check the link or contact your EG Group consultant.</div>
+  </div>
+</div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <div class="eg-label">EG Group &middot; Client Dashboard</div>
+    <h1 id="client-name"></h1>
+    <span class="badge" id="status-badge"></span>
+  </header>
+
+  <main>
+    <div id="areas-container"></div>
+
+    <div class="docs-card">
+      <h2>Documents</h2>
+      <div id="docs-container"></div>
+    </div>
+  </main>
+
+  <footer>Prepared by EG Group. Questions about this engagement? Reach out to your assigned consultant.</footer>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const STATUS_LABELS = { active: "Active Engagement", finalized: "Completed Engagement", archived: "Archived" };
+
+  // The four research areas from Section 4.3 of the spec, in their fixed
+  // display order — always shown, even if a client has no content yet in
+  // one of them. Each entry lists the possible jsonb keys that map to it,
+  // since the authoring side of research_areas is intentionally
+  // free-form/evolving (same flexible shape as the original builder).
+  const AREA_DEFS = [
+    { label: "Market Dynamics Research", keys: ["market_dynamics", "market_dynamics_research"] },
+    { label: "Outbound Marketing", keys: ["outbound", "outbound_marketing"] },
+    { label: "Inbound Marketing", keys: ["inbound", "inbound_marketing"] },
+    { label: "Watering Holes", keys: ["watering_holes"] },
+  ];
+
+  function resolveSlug() {
+    // Preferred long-term: a memorable subdomain (Section 8.1), e.g.
+    // acmerobotics.egdashboardbuilder.com — once wildcard DNS is wired up,
+    // the first hostname label IS the slug.
+    const host = location.hostname;
+    const labels = host.split(".");
+    const looksLikeApex = labels.length <= 2 || ["www", "app", "dashboard", "localhost"].includes(labels[0]);
+    if (!looksLikeApex) return labels[0];
+
+    // Fallback for now (single shared domain, no wildcard DNS yet):
+    // client_public.html?slug=acmerobotics
+    const qsSlug = new URLSearchParams(location.search).get("slug");
+    if (qsSlug) return qsSlug;
+
+    return null;
+  }
+
+  function renderFieldValue(v) {
+    if (v == null) return "";
+    if (typeof v === "string") return escapeHtml(v);
+    if (typeof v === "number" || typeof v === "boolean") return escapeHtml(String(v));
+    return escapeHtml(JSON.stringify(v));
+  }
+
+  function renderAreaContent(value) {
+    if (value == null) return `<div class="area-empty">No content added yet.</div>`;
+
+    if (typeof value === "string") {
+      return `<div class="field-row"><div class="field-value">${renderFieldValue(value)}</div></div>`;
+    }
+
+    if (typeof value === "object" && !Array.isArray(value)) {
+      const keys = Object.keys(value);
+      if (!keys.length) return `<div class="area-empty">No content added yet.</div>`;
+      return keys.map((k) => `
+        <div class="field-row">
+          <div class="field-label">${escapeHtml(k)}</div>
+          <div class="field-value">${renderFieldValue(value[k])}</div>
+        </div>
+      `).join("");
+    }
+
+    return `<div class="field-row"><div class="field-value">${renderFieldValue(value)}</div></div>`;
+  }
+
+  function renderAreas(researchAreas) {
+    const data = researchAreas || {};
+    const usedKeys = new Set();
+
+    const definedHtml = AREA_DEFS.map((def) => {
+      const matchKey = def.keys.find((k) => Object.prototype.hasOwnProperty.call(data, k));
+      if (matchKey) usedKeys.add(matchKey);
+      const content = matchKey ? data[matchKey] : null;
+      return `
+        <div class="area-card">
+          <h2>${escapeHtml(def.label)}</h2>
+          ${renderAreaContent(content)}
+        </div>
+      `;
+    }).join("");
+
+    // Anything present in the data that didn't map to one of the four
+    // canonical areas above is still shown, not silently dropped.
+    const leftoverKeys = Object.keys(data).filter((k) => !usedKeys.has(k));
+    const leftoverHtml = leftoverKeys.length
+      ? `
+        <div class="area-card">
+          <h2>Additional Notes</h2>
+          ${leftoverKeys.map((k) => `
+            <div class="field-row">
+              <div class="field-label">${escapeHtml(k)}</div>
+              <div class="field-value">${renderAreaContent(data[k])}</div>
+            </div>
+          `).join("")}
+        </div>
+      `
+      : "";
+
+    return definedHtml + leftoverHtml;
+  }
+
+  function renderDocs(docs) {
+    if (!docs || !docs.length) {
+      return `<div class="docs-empty">No documents have been shared yet.</div>`;
+    }
+    return docs.map((d) => `<a class="doc-link" data-path="${escapeHtml(d.storage_path)}"><span class="doc-icon">&#128196;</span>${escapeHtml(d.file_name)}</a>`).join("");
+  }
+
+  function showError(message) {
+    $("loading-view").classList.add("hidden");
+    $("app-view").classList.add("hidden");
+    if (message) $("error-message").textContent = message;
+    $("error-view").classList.remove("hidden");
+  }
+
+  async function init() {
+    const slug = resolveSlug();
+    if (!slug) {
+      showError("No client was specified in this link. Please check the URL and try again.");
+      return;
+    }
+
+    const { data, error } = await sb.rpc("get_client_public_view", { p_slug: slug });
+    if (error || !data || !data.length) {
+      showError();
+      return;
+    }
+
+    const row = data[0];
+    document.title = `${row.client_name} — EG Group`;
+    $("client-name").textContent = row.client_name;
+    $("status-badge").textContent = STATUS_LABELS[row.client_status] || row.client_status;
+    $("status-badge").className = `badge badge-${row.client_status}`;
+
+    $("areas-container").innerHTML = renderAreas(row.research_areas);
+    $("docs-container").innerHTML = renderDocs(row.documents);
+
+    $("docs-container").querySelectorAll(".doc-link").forEach((el) => {
+      el.addEventListener("click", async (e) => {
+        e.preventDefault();
+        const { data: signed, error: signErr } = await sb.storage.from("client-documents").createSignedUrl(el.dataset.path, 60);
+        if (signErr) { alert("Couldn't open this file: " + signErr.message); return; }
+        window.open(signed.signedUrl, "_blank");
+      });
+    });
+
+    $("loading-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+  }
+
+  init();
+</script>
+</body>
+</html>
