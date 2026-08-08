@@ -258,6 +258,33 @@
   </div>
 </div>
 
+<!-- Log hours -->
+<div class="overlay" id="log-hours-overlay">
+  <div class="modal" style="width:360px;">
+    <h3>Log hours</h3>
+    <p id="log-hours-text"></p>
+    <form id="log-hours-form">
+      <div class="field">
+        <label>Hours <span class="required-star">*</span></label>
+        <input type="number" id="log-hours-amount" min="0.25" step="0.25" required />
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="log-hours-date" required />
+      </div>
+      <div class="field">
+        <label>Note <span class="hint">(optional)</span></label>
+        <input type="text" id="log-hours-note" maxlength="200" />
+      </div>
+      <div class="field-error" id="log-hours-error"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="log-hours-cancel">Cancel</button>
+        <button type="submit" class="btn-primary" id="log-hours-submit">Log hours</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
   const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
@@ -274,6 +301,7 @@
   let isTeamLeadHere = false;
   let pendingRemoveId = null;
   let pendingRemoveMode = "delete"; // "delete" | "clear"
+  let pendingLogAssignmentId = null;
 
   const $ = (id) => document.getElementById(id);
   const usersById = () => Object.fromEntries(allUsers.map((u) => [u.id, u]));
@@ -557,11 +585,17 @@
       const actionBtn = isFixed
         ? `<button class="btn-secondary icon-btn" data-clear="${r.id}">Clear</button>`
         : `<button class="btn-danger icon-btn" data-remove="${r.id}">Remove</button>`;
+      // Anyone logs their own time; a Super Admin can log for anyone. Only
+      // meaningful once a consultant is actually in the slot.
+      const canLogHours = !!person && (isSuperAdmin || person.id === currentUser.id);
+      const spentCell = canLogHours
+        ? `${r.hoursSpent} <button class="btn-secondary icon-btn" data-log="${r.id}" title="Log hours">+</button>`
+        : `${r.hoursSpent}`;
       tr.innerHTML = `
         <td>${escapeHtml(label)}</td>
         <td>${consultantCell}</td>
         <td style="text-align:right;"><input type="number" class="row-input row-hours-input" min="0" step="0.5" value="${Number(r.hours_allotted)}" ${canManageAssignments ? "" : "disabled"} /></td>
-        <td style="text-align:right;">${r.hoursSpent}</td>
+        <td style="text-align:right; white-space:nowrap;">${spentCell}</td>
         ${canManageAssignments ? `<td class="row-actions">${actionBtn}</td>` : ""}
       `;
       tbody.appendChild(tr);
@@ -604,6 +638,9 @@
     });
     document.querySelectorAll("[data-clear]").forEach((btn) => {
       btn.addEventListener("click", () => openRemove(btn.dataset.clear, "clear"));
+    });
+    document.querySelectorAll("[data-log]").forEach((btn) => {
+      btn.addEventListener("click", () => openLogHours(btn.dataset.log));
     });
 
     const total = currentAssignments.reduce((sum, r) => sum + Number(r.hours_allotted), 0);
@@ -713,6 +750,57 @@
       return;
     }
     showBanner(pendingRemoveMode === "clear" ? "Slot cleared." : "Assignment removed.", "success");
+    await openClient(currentClient.id);
+  });
+
+  // ---------- Log hours (Section 5.4) ----------
+  function openLogHours(assignmentId) {
+    const r = currentAssignments.find((x) => x.id === assignmentId);
+    if (!r) return;
+    const person = usersById()[r.user_id];
+    if (!person) return; // shouldn't happen — button only renders for assigned rows
+    const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
+    pendingLogAssignmentId = assignmentId;
+    $("log-hours-form").reset();
+    $("log-hours-error").style.display = "none";
+    $("log-hours-text").textContent = isSuperAdmin && person.id !== currentUser.id
+      ? `Logging hours for ${person.full_name} on ${label}.`
+      : `Logging your hours on ${label}.`;
+    $("log-hours-date").value = new Date().toISOString().slice(0, 10);
+    $("log-hours-overlay").classList.add("open");
+  }
+  $("log-hours-cancel").addEventListener("click", () => { $("log-hours-overlay").classList.remove("open"); pendingLogAssignmentId = null; });
+
+  $("log-hours-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!pendingLogAssignmentId) return;
+    const r = currentAssignments.find((x) => x.id === pendingLogAssignmentId);
+    if (!r) return;
+    $("log-hours-error").style.display = "none";
+    const btn = $("log-hours-submit");
+    btn.disabled = true;
+    btn.textContent = "Logging…";
+
+    const { error } = await sb.from("time_entries").insert({
+      assignment_id: pendingLogAssignmentId,
+      consultant_id: r.user_id,
+      hours: Number($("log-hours-amount").value),
+      entry_date: $("log-hours-date").value,
+      note: $("log-hours-note").value.trim() || null,
+    });
+
+    btn.disabled = false;
+    btn.textContent = "Log hours";
+
+    if (error) {
+      $("log-hours-error").textContent = error.message;
+      $("log-hours-error").style.display = "block";
+      return;
+    }
+
+    $("log-hours-overlay").classList.remove("open");
+    pendingLogAssignmentId = null;
+    showBanner("Hours logged.", "success");
     await openClient(currentClient.id);
   });
 
