@@ -64,6 +64,16 @@
   .badge-finalized { background: #e7eef7; color: var(--navy-light); }
   .badge-archived { background: #eef1f4; color: var(--muted); }
   .badge-client_facing { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-accepted { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-in_progress { background: #e7eef7; color: var(--navy-light); }
+  .badge-on_hold { background: #fdf1dc; color: var(--amber); }
+  .badge-closed { background: #eef1f4; color: var(--muted); }
+
+  .status-pill-bar { display: flex; gap: 8px; margin: 6px 0 4px; flex-wrap: wrap; }
+  .status-pill { border: 2px solid transparent; border-radius: 999px; padding: 7px 16px; font-size: 11.5px; opacity: 0.45; transition: opacity .15s ease, box-shadow .15s ease; }
+  .status-pill:hover:not(:disabled) { opacity: 0.8; }
+  .status-pill.active { opacity: 1; border-color: currentColor; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+  .status-pill:disabled { cursor: default; }
   .badge-internal { background: #eef1f4; color: var(--muted); }
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 24px 28px; margin-bottom: 16px; }
@@ -181,6 +191,7 @@
               <div class="field">
                 <label for="co-logo">Logo URL</label>
                 <input type="url" id="co-logo" placeholder="https://…" />
+                <div class="field-hint">Tip: use a direct image link (PNG/JPG/SVG). Leave blank to hide.</div>
               </div>
               <div class="field">
                 <label for="co-website">Website</label>
@@ -217,6 +228,23 @@
                 <input type="url" id="co-youtube" placeholder="https://…" />
               </div>
             </div>
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <label for="co-brand-name">Preview Header — Brand Name</label>
+              <input type="text" id="co-brand-name" placeholder="Defaults to company name" />
+              <div class="field-hint">Shown in the top-left of the Preview / Client dashboard header.</div>
+            </div>
+            <div class="field">
+              <label for="co-brand-url">Preview Header — Brand URL</label>
+              <input type="url" id="co-brand-url" placeholder="https://…" />
+              <div class="field-hint">Link applied to the brand name in the header.</div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Client Status</label>
+            <div class="status-pill-bar" id="p-status-toggle"></div>
+            <div class="field-hint">Status determines whether the client appears in the active list (does not show on the exported dashboard).</div>
           </div>
           <div class="field">
             <label for="co-description">Company Description <span class="field-hint">(supports **bold** and "- " bullet lines)</span></label>
@@ -282,6 +310,10 @@
   let isSuperAdmin = false;
   let currentClient = null;
   let canEdit = false; // Super Admin or assigned to this client
+  let isTeamLeadHere = false;
+
+  const PROJECT_STATUSES = ["accepted", "in_progress", "on_hold", "closed"];
+  const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
 
   const $ = (id) => document.getElementById(id);
   const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
@@ -374,6 +406,15 @@
     currentClient = client;
     canEdit = isSuperAdmin || true; // RLS is the real gate — client_content/*-write already require is_assigned_to_client(); this just controls whether we show the form vs read-only text, so default to showing it and let RLS reject bad writes with a clear error.
 
+    const { data: myAssignment } = await sb
+      .from("client_assignments")
+      .select("is_team_lead")
+      .eq("client_id", client.id)
+      .eq("user_id", currentUser.id)
+      .eq("is_team_lead", true)
+      .maybeSingle();
+    isTeamLeadHere = !!myAssignment;
+
     $("profile-view").classList.remove("hidden");
     $("p-name").textContent = client.name;
     $("p-lifecycle-badge").className = `badge badge-${client.status}`;
@@ -381,6 +422,7 @@
     $("p-workspace-link").href = `client_workspace.html?client=${client.id}`;
     $("p-app-info-link").href = `client_applications.html?client=${client.id}`;
 
+    renderStatusToggle(client);
     fillCompanyForm(client);
     await loadWorkflowLinks(client.id);
     renderListSections();
@@ -394,12 +436,38 @@
     await loadDocuments();
   }
 
+  // ---------- Client Status ----------
+  function renderStatusToggle(c) {
+    const canEditStatus = isSuperAdmin || isTeamLeadHere;
+    $("p-status-toggle").innerHTML = PROJECT_STATUSES.map((s) => `
+      <button type="button" data-pstatus="${s}" class="badge badge-${s} status-pill ${s === c.project_status ? "active" : ""}" ${canEditStatus ? "" : "disabled"}>${PROJECT_STATUS_LABELS[s]}</button>
+    `).join("");
+    document.querySelectorAll("#p-status-toggle button").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const newStatus = btn.dataset.pstatus;
+        if (newStatus === currentClient.project_status) return;
+        document.querySelectorAll("#p-status-toggle button").forEach((b) => (b.disabled = true));
+        const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", currentClient.id);
+        if (error) {
+          showBanner("Couldn't update project status: " + error.message, "error");
+          renderStatusToggle(currentClient);
+          return;
+        }
+        currentClient.project_status = newStatus;
+        showBanner("Project status updated.", "success");
+        renderStatusToggle(currentClient);
+      });
+    });
+  }
+
   // ---------- Company Information ----------
   function fillCompanyForm(c) {
     $("co-logo").value = c.logo_url || "";
     $("co-website").value = c.website_url || "";
     $("co-address").value = c.address || "";
     $("co-naics").value = c.naics_codes || "";
+    $("co-brand-name").value = c.brand_name || "";
+    $("co-brand-url").value = c.brand_url || "";
     $("co-linkedin").value = c.linkedin_url || "";
     $("co-facebook").value = c.facebook_url || "";
     $("co-instagram").value = c.instagram_url || "";
@@ -418,6 +486,8 @@
       website_url: $("co-website").value.trim() || null,
       address: $("co-address").value.trim() || null,
       naics_codes: $("co-naics").value.trim() || null,
+      brand_name: $("co-brand-name").value.trim() || null,
+      brand_url: $("co-brand-url").value.trim() || null,
       linkedin_url: $("co-linkedin").value.trim() || null,
       facebook_url: $("co-facebook").value.trim() || null,
       instagram_url: $("co-instagram").value.trim() || null,

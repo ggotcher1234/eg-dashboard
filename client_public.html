@@ -122,7 +122,7 @@
   <header>
     <div class="header-left">
       <div class="brand-badge"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></div>
-      <h1>Economic Gardening Dashboard</h1>
+      <h1 id="brand-title">Economic Gardening Dashboard</h1>
     </div>
     <div class="header-right">
       Client: <strong id="client-name"></strong><br />
@@ -257,6 +257,17 @@
     container.querySelectorAll(".doc-link").forEach((el) => {
       el.addEventListener("click", (e) => { e.preventDefault(); openSignedDoc(el.dataset.path)(); });
     });
+  }
+
+  function renderBrandHeader(row) {
+    const c = row.company || {};
+    const name = c.brand_name || row.client_name || "Economic Gardening Dashboard";
+    const el = $("brand-title");
+    if (c.brand_url) {
+      el.innerHTML = `<a href="${escapeHtml(c.brand_url)}" target="_blank" rel="noopener" style="color:inherit; text-decoration:none;">${escapeHtml(name)}</a>`;
+    } else {
+      el.textContent = name;
+    }
   }
 
   function renderCompany(row) {
@@ -449,6 +460,7 @@
     $("client-name").textContent = row.client_name;
     $("status-line").textContent = STATUS_LABELS[row.client_status] || row.client_status;
 
+    renderBrandHeader(row);
     renderCompany(row);
     renderStatPills(row);
     renderActionBars(row);

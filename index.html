@@ -32,6 +32,19 @@
   #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
   #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
 
+  #notif-wrap { position: relative; }
+  #notif-bell { position: relative; font-size: 15px; line-height: 1; }
+  .notif-count { position: absolute; top: -3px; right: -3px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; min-width: 16px; height: 16px; border-radius: 999px; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
+  .notif-dropdown { position: absolute; top: 40px; right: 0; width: 320px; max-height: 420px; overflow-y: auto; background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60; }
+  .notif-dropdown-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; font-weight: 700; }
+  .notif-item { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .notif-item:last-child { border-bottom: none; }
+  .notif-item .notif-msg { margin-bottom: 5px; line-height: 1.4; }
+  .notif-item .notif-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--muted); gap: 8px; }
+  .notif-item .notif-meta a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
+  .notif-item .notif-meta a:hover { text-decoration: underline; }
+  .notif-empty { padding: 22px 14px; text-align: center; color: var(--muted); font-size: 13px; }
+
   button, a.btn { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 9px 16px; font-weight: 600; transition: background 0.15s ease; text-decoration: none; display: inline-block; }
   .btn-primary { background: var(--accent); color: #fff; }
   .btn-primary:hover { background: var(--accent-dark); }
@@ -140,6 +153,19 @@
       </div>
     </div>
     <div id="userbox">
+      <div id="notif-wrap" class="hidden">
+        <button class="btn-ghost" id="notif-bell" title="Notifications">
+          &#128276;
+          <span id="notif-count" class="notif-count hidden">0</span>
+        </button>
+        <div id="notif-dropdown" class="notif-dropdown hidden">
+          <div class="notif-dropdown-header">
+            <span>Notifications</span>
+            <button class="btn-ghost btn-sm" id="notif-mark-all">Mark all read</button>
+          </div>
+          <div id="notif-list"></div>
+        </div>
+      </div>
       <span id="user-name"></span>
       <span class="role-pill" id="user-role"></span>
       <button class="btn-ghost" id="signout-btn">Sign out</button>
@@ -220,6 +246,7 @@
   let currentUser = null;
   let allClients = [];
   let activeClient = null;
+  let unreadNotifications = [];
 
   const $ = (id) => document.getElementById(id);
   const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
@@ -292,11 +319,88 @@
 
     // Admin-only links (Partners, Applications, Team Directory) are only useful to a
     // Super Admin day-to-day — Team Leads/Consultants get a clean client-picker-only view.
-    $("quicklinks-section").classList.toggle("hidden", profile.role !== "super_admin");
+    const isSuperAdminUser = profile.role === "super_admin";
+    $("quicklinks-section").classList.toggle("hidden", !isSuperAdminUser);
+
+    // Notifications (e.g. "Team Lead closed client X") are Super-Admin-only —
+    // RLS blocks everyone else from reading the table at all.
+    $("notif-wrap").classList.toggle("hidden", !isSuperAdminUser);
+    if (isSuperAdminUser) await loadNotifications();
 
     await loadClients();
     renderRecents();
   }
+
+  // ---------- Notifications (Super Admin only) ----------
+  function timeAgo(iso) {
+    const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.round(hrs / 24)}d ago`;
+  }
+
+  async function loadNotifications() {
+    const { data, error } = await sb
+      .from("notifications")
+      .select("*")
+      .is("read_at", null)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error) return;
+    unreadNotifications = data || [];
+    renderNotifications();
+  }
+
+  function renderNotifications() {
+    const count = unreadNotifications.length;
+    $("notif-count").textContent = count > 9 ? "9+" : String(count);
+    $("notif-count").classList.toggle("hidden", count === 0);
+    $("notif-list").innerHTML = count
+      ? unreadNotifications.map((n) => `
+          <div class="notif-item">
+            <div class="notif-msg">${escapeHtml(n.message)}</div>
+            <div class="notif-meta">
+              <span>${timeAgo(n.created_at)}</span>
+              <span>
+                ${n.client_id ? `<a href="client_workspace.html?client=${n.client_id}">View client</a> &middot;` : ""}
+                <a href="#" class="notif-dismiss" data-id="${n.id}">Dismiss</a>
+              </span>
+            </div>
+          </div>
+        `).join("")
+      : `<div class="notif-empty">You're all caught up.</div>`;
+    $("notif-list").querySelectorAll(".notif-dismiss").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        markNotificationRead(el.dataset.id);
+      });
+    });
+  }
+
+  async function markNotificationRead(id) {
+    await sb.from("notifications").update({ read_at: new Date().toISOString(), read_by: currentUser.id }).eq("id", id);
+    unreadNotifications = unreadNotifications.filter((n) => n.id !== id);
+    renderNotifications();
+  }
+
+  $("notif-bell").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("notif-dropdown").classList.toggle("hidden");
+  });
+
+  $("notif-mark-all").addEventListener("click", async () => {
+    if (!unreadNotifications.length) return;
+    const ids = unreadNotifications.map((n) => n.id);
+    await sb.from("notifications").update({ read_at: new Date().toISOString(), read_by: currentUser.id }).in("id", ids);
+    unreadNotifications = [];
+    renderNotifications();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!$("notif-wrap").contains(e.target)) $("notif-dropdown").classList.add("hidden");
+  });
 
   sb.auth.getSession().then(({ data: { session } }) => {
     if (session) {
