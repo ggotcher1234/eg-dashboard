@@ -675,21 +675,21 @@
       const specialty = tr.querySelector(".new-specialty").value;
       const userId = tr.querySelector(".new-consultant").value;
       const hours = Number(tr.querySelector(".new-hours").value);
-      if (!specialty || !userId) {
-        showBanner("Pick a specialty and a consultant before adding the row.", "error");
+      if (!specialty) {
+        showBanner("Pick a specialty before adding the row.", "error");
         return;
       }
       const existing = currentAssignments.filter((r) => r.specialty_type === specialty);
       const nextSlot = existing.length ? Math.max(...existing.map((r) => r.slot_number)) + 1 : 1;
 
       const { error } = await sb.from("client_assignments").insert({
-        client_id: currentClient.id, user_id: userId, specialty_type: specialty, slot_number: nextSlot, hours_allotted: hours,
+        client_id: currentClient.id, user_id: userId || null, specialty_type: specialty, slot_number: nextSlot, hours_allotted: hours,
       });
       if (error) {
         showBanner(error.message.includes("exceed Budget") ? "That would exceed the client's Budget Hours Available." : "Couldn't add: " + error.message, "error");
         return;
       }
-      showBanner("Consultant assigned.", "success");
+      showBanner("Row added.", "success");
       await openClient(currentClient.id);
     });
 
