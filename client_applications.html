@@ -47,6 +47,7 @@
   header .btn-ghost { color: #c9d6e3; }
   header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
   .btn-sm { padding: 5px 10px; font-size: 12.5px; }
+  .icon-btn { padding: 4px 8px; font-size: 13px; line-height: 1; }
   button:disabled { opacity: 0.6; cursor: default; }
 
   main { max-width: 900px; margin: 28px auto; padding: 0 20px 70px; }
@@ -193,6 +194,7 @@
             <th>Submitted</th>
             <th style="width:100px;">Status</th>
             <th id="project-status-header" class="hidden" style="width:120px;">Project Status</th>
+            <th id="delete-header" class="hidden" style="width:40px;"></th>
           </tr>
         </thead>
         <tbody id="applications-tbody"></tbody>
@@ -401,6 +403,17 @@
   </div>
 </div>
 
+<div class="overlay" id="delete-client-overlay">
+  <div class="modal">
+    <h3>Delete this client?</h3>
+    <p id="delete-client-text"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="delete-client-cancel">Cancel</button>
+      <button type="button" class="btn-danger" id="delete-client-confirm">Delete permanently</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
@@ -415,6 +428,7 @@
   let activeTab = "pending";
   let reviewingAppId = null;
   let pendingRejectId = null;
+  let pendingDeleteAppId = null;
 
   const $ = (id) => document.getElementById(id);
   const usersById = () => Object.fromEntries(allUsers.map((u) => [u.id, u]));
@@ -569,6 +583,7 @@
   function renderList() {
     const showProjectCol = activeTab === "all" || PROJECT_STATUSES.includes(activeTab);
     $("project-status-header").classList.toggle("hidden", !showProjectCol);
+    $("delete-header").classList.toggle("hidden", !isSuperAdmin);
 
     let rows;
     if (activeTab === "all") {
@@ -599,10 +614,15 @@
         <td>${fmtDate(a.submitted_at)}</td>
         <td><span class="badge badge-${a.status}">${a.status}</span></td>
         ${showProjectCol ? `<td>${projectStatus ? `<span class="badge badge-${projectStatus}">${projectStatus.replace("_", " ")}</span>` : "—"}</td>` : ""}
+        ${isSuperAdmin ? `<td onclick="event.stopPropagation()"><button class="btn-danger icon-btn" data-delete-app="${a.id}" title="Delete this client">&times;</button></td>` : ""}
       `;
       tr.addEventListener("click", () => showReviewView(a.id));
       tbody.appendChild(tr);
     }
+
+    document.querySelectorAll("[data-delete-app]").forEach((btn) => {
+      btn.addEventListener("click", () => openDeleteApp(btn.dataset.deleteApp));
+    });
   }
 
   // ---------- New application view ----------
@@ -1234,6 +1254,59 @@
       return;
     }
     showBanner("Application rejected.", "success");
+    await loadApplications();
+    showListView();
+  });
+
+  // ---------- Delete client (Super Admin only) ----------
+  function openDeleteApp(appId) {
+    const a = allApplications.find((x) => x.id === appId);
+    if (!a) return;
+    pendingDeleteAppId = appId;
+    $("delete-client-text").textContent = a.client_id
+      ? `This permanently deletes ${a.company_name} — every assignment, allotted and spent hour, document, and record of history for this client. This can't be undone.`
+      : `${a.company_name} hasn't been accepted into a client yet, so there are no hours or assignments on it — this just removes the application. This can't be undone.`;
+    $("delete-client-overlay").classList.add("open");
+  }
+  $("delete-client-cancel").addEventListener("click", () => {
+    $("delete-client-overlay").classList.remove("open");
+    pendingDeleteAppId = null;
+  });
+
+  $("delete-client-confirm").addEventListener("click", async () => {
+    if (!pendingDeleteAppId) return;
+    const a = allApplications.find((x) => x.id === pendingDeleteAppId);
+    if (!a) return;
+    const btn = $("delete-client-confirm");
+    btn.disabled = true;
+    btn.textContent = "Deleting…";
+
+    // Deleting the client cascades away its assignments, hours, documents,
+    // share link, and audit history. client_applications.client_id gets set
+    // null by the FK (not cascaded) rather than deleted, so we clean up the
+    // now-orphaned application row ourselves right after.
+    if (a.client_id) {
+      const { error: clientErr } = await sb.from("clients").delete().eq("id", a.client_id);
+      if (clientErr) {
+        btn.disabled = false;
+        btn.textContent = "Delete permanently";
+        showBanner("Couldn't delete client: " + clientErr.message, "error");
+        return;
+      }
+    }
+
+    const { error: appErr } = await sb.from("client_applications").delete().eq("id", pendingDeleteAppId);
+
+    btn.disabled = false;
+    btn.textContent = "Delete permanently";
+    $("delete-client-overlay").classList.remove("open");
+    pendingDeleteAppId = null;
+
+    if (appErr) {
+      showBanner("Client deleted, but couldn't remove the application row: " + appErr.message, "error");
+    } else {
+      showBanner("Client deleted.", "success");
+    }
     await loadApplications();
     showListView();
   });
