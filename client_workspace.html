@@ -179,6 +179,7 @@
             <th>Econ Dev Partner</th>
             <th style="width:110px;">Status</th>
             <th style="width:130px;">Project Status</th>
+            <th id="picker-delete-header" class="hidden" style="width:40px;"></th>
           </tr>
         </thead>
         <tbody id="picker-tbody"></tbody>
@@ -290,6 +291,18 @@
   </div>
 </div>
 
+<!-- Delete client (Super Admin only) -->
+<div class="overlay" id="delete-client-overlay">
+  <div class="modal">
+    <h3>Delete this client?</h3>
+    <p id="delete-client-text"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="delete-client-cancel">Cancel</button>
+      <button type="button" class="btn-danger" id="delete-client-confirm">Delete permanently</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
@@ -307,6 +320,7 @@
   let pendingRemoveId = null;
   let pendingRemoveMode = "delete"; // "delete" | "clear"
   let pendingLogAssignmentId = null;
+  let pendingDeleteClientId = null;
 
   const $ = (id) => document.getElementById(id);
   const usersById = () => Object.fromEntries(allUsers.map((u) => [u.id, u]));
@@ -429,6 +443,7 @@
     const rows = allClients.filter((c) => !q || c.name.toLowerCase().includes(q));
     $("picker-count").textContent = `${rows.length} of ${allClients.length} clients`;
     $("picker-empty").classList.toggle("hidden", allClients.length > 0);
+    $("picker-delete-header").classList.toggle("hidden", !isSuperAdmin);
 
     const tbody = $("picker-tbody");
     tbody.innerHTML = "";
@@ -441,10 +456,15 @@
         <td>${partner ? escapeHtml(partner.code) : "—"}</td>
         <td><span class="badge badge-${c.status}">${c.status}</span></td>
         <td><span class="badge badge-${c.project_status}">${PROJECT_STATUS_LABELS[c.project_status] || c.project_status}</span></td>
+        ${isSuperAdmin ? `<td onclick="event.stopPropagation()"><button class="btn-danger icon-btn" data-delete-client="${c.id}" title="Delete this client">&times;</button></td>` : ""}
       `;
       tr.addEventListener("click", () => openClient(c.id));
       tbody.appendChild(tr);
     }
+
+    document.querySelectorAll("[data-delete-client]").forEach((btn) => {
+      btn.addEventListener("click", () => openDeleteClient(btn.dataset.deleteClient));
+    });
   }
 
   // ---------- Workspace view ----------
@@ -826,6 +846,44 @@
     pendingLogAssignmentId = null;
     showBanner("Hours logged.", "success");
     await openClient(currentClient.id);
+  });
+
+  // ---------- Delete client (Super Admin only) ----------
+  function openDeleteClient(clientId) {
+    const c = allClients.find((x) => x.id === clientId);
+    if (!c) return;
+    pendingDeleteClientId = clientId;
+    $("delete-client-text").textContent = `This permanently deletes ${c.name} — every assignment, allotted and spent hour, document, and record of history for this client. This can't be undone.`;
+    $("delete-client-overlay").classList.add("open");
+  }
+  $("delete-client-cancel").addEventListener("click", () => {
+    $("delete-client-overlay").classList.remove("open");
+    pendingDeleteClientId = null;
+  });
+
+  $("delete-client-confirm").addEventListener("click", async () => {
+    if (!pendingDeleteClientId) return;
+    const btn = $("delete-client-confirm");
+    btn.disabled = true;
+    btn.textContent = "Deleting…";
+
+    // Cascades away assignments, hours, documents, share link, and audit
+    // history. client_applications.client_id (if any) just gets set null
+    // by the FK rather than deleted, so its row survives — not shown here
+    // since this picker only lists `clients`, not applications.
+    const { error } = await sb.from("clients").delete().eq("id", pendingDeleteClientId);
+
+    btn.disabled = false;
+    btn.textContent = "Delete permanently";
+    $("delete-client-overlay").classList.remove("open");
+    pendingDeleteClientId = null;
+
+    if (error) {
+      showBanner("Couldn't delete client: " + error.message, "error");
+      return;
+    }
+    showBanner("Client deleted.", "success");
+    await loadClients();
   });
 
   document.querySelectorAll(".overlay").forEach((ov) => {
