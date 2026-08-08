@@ -509,7 +509,19 @@
 
     await Promise.all([loadPartners(), loadUsers()]);
     await loadApplications();
-    showListView();
+
+    // Deep link from Client Workspace's "View Application Info" link —
+    // jump straight to that client's application record instead of the
+    // list. RLS already scopes what loadApplications() returned, so if
+    // this doesn't resolve (e.g. a Consultant without access), it just
+    // falls back to whatever list they're allowed to see.
+    const deepLinkClientId = new URLSearchParams(location.search).get("client");
+    const deepLinkApp = deepLinkClientId ? allApplications.find((a) => a.client_id === deepLinkClientId) : null;
+    if (deepLinkApp) {
+      showReviewView(deepLinkApp.id);
+    } else {
+      showListView();
+    }
   }
 
   sb.auth.getSession().then(({ data: { session } }) => {

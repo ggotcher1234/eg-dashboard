@@ -89,6 +89,8 @@
   .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
   .meta-line { font-size: 13.5px; color: var(--muted); margin: 4px 0; }
   .meta-line strong { color: var(--text); }
+  .meta-line a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
+  .meta-line a:hover { text-decoration: underline; }
 
   .field { margin-bottom: 12px; }
   .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
@@ -201,6 +203,9 @@
         </div>
         <div class="meta-line" id="ws-partner"></div>
         <div class="meta-line" id="ws-budget"></div>
+        <div class="meta-line hidden" id="ws-app-info-row">
+          <a href="#" id="ws-app-info-link">Application Info &rarr;</a>
+        </div>
 
         <div id="ws-locked-note" class="locked-note hidden">
           This client is On Hold / Closed — hours can't be changed by the Team Lead or consultants right now. A Super Admin can still make changes if needed.
@@ -532,6 +537,11 @@
     const totalAllotted = currentAssignments.reduce((sum, r) => sum + Number(r.hours_allotted), 0);
     const totalSpent = currentAssignments.reduce((sum, r) => sum + r.hoursSpent, 0);
     $("ws-budget").innerHTML = `Budget: <strong>${totalAllotted} / ${Number(c.budget_hours_available)}</strong> hours allotted &middot; <strong>${totalSpent}</strong> hours spent`;
+
+    // Application Info (company basics, contact, etc.) is Team Lead / Super
+    // Admin only, matching Podio — Consultants just get Assignments & Hours.
+    $("ws-app-info-row").classList.toggle("hidden", !(isSuperAdmin || isTeamLeadHere));
+    $("ws-app-info-link").href = `client_applications.html?client=${c.id}`;
 
     $("ws-locked-note").classList.toggle("hidden", editable || isSuperAdmin);
 
