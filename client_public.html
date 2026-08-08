@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Client Dashboard — EG Group</title>
+<title>Economic Gardening Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root {
     --navy: #14304d;
     --navy-light: #1f4a75;
-    --accent: #2f7d5c;
-    --accent-dark: #24614a;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
     --amber: #a9740f;
     --danger: #b3403a;
     --bg: #f4f6f8;
@@ -27,33 +27,84 @@
   #error-view .error-box { max-width: 420px; }
   #error-view h2 { color: var(--text); font-size: 18px; margin-bottom: 8px; }
 
-  header { background: var(--navy); color: #fff; padding: 26px 32px; }
-  header .eg-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.6px; color: #a9bdd2; font-weight: 600; }
-  header .client-pill { display: inline-block; background: rgba(255,255,255,0.14); color: #cddcec; font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px; padding: 3px 10px; border-radius: 999px; margin-top: 10px; }
-  header h1 { font-size: 24px; margin: 4px 0 8px; font-weight: 700; }
-  .badge { font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; padding: 4px 10px; border-radius: 999px; display: inline-block; }
-  .badge-active { background: rgba(47,125,92,0.25); color: #bfe3cf; }
-  .badge-finalized { background: rgba(31,74,117,0.35); color: #cddcec; }
-  .badge-archived { background: rgba(255,255,255,0.12); color: #c9d6e3; }
+  header { background: var(--navy); color: #fff; padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .brand-badge { background: #fff; border-radius: 8px; padding: 6px 12px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 30px; display: block; }
+  header h1 { font-size: 19px; margin: 0; font-weight: 700; }
+  .header-right { text-align: right; font-size: 12px; color: #a9bdd2; }
+  .header-right strong { color: #fff; }
 
-  main { max-width: 880px; margin: 0 auto; padding: 32px 20px 80px; }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px 20px 80px; }
 
-  .area-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 22px 24px; margin-bottom: 20px; }
-  .area-card h2 { font-size: 15px; margin: 0 0 14px; color: var(--navy); text-transform: uppercase; letter-spacing: 0.4px; }
-  .area-empty { color: var(--muted); font-size: 13.5px; font-style: italic; }
-  .field-row { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #f0f2f4; }
-  .field-row:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
-  .field-label { font-weight: 600; font-size: 13px; color: var(--text); margin-bottom: 3px; }
-  .field-value { font-size: 13.5px; color: var(--text); line-height: 1.5; white-space: pre-wrap; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 22px 26px; margin-bottom: 16px; }
 
-  .docs-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 22px 24px; margin-bottom: 20px; }
-  .docs-card h2 { font-size: 15px; margin: 0 0 14px; color: var(--navy); text-transform: uppercase; letter-spacing: 0.4px; }
-  .doc-link { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--navy-light); margin-bottom: 8px; cursor: pointer; text-decoration: none; }
+  .company-top { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 14px; }
+  .company-logo { width: 64px; height: 64px; border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; background: #fafbfc; }
+  .company-logo img { max-width: 100%; max-height: 100%; }
+  .company-name { font-size: 21px; font-weight: 700; color: var(--navy); margin: 0; }
+  .company-address { font-size: 13px; color: var(--muted); margin-top: 3px; }
+
+  .company-description { font-size: 14px; line-height: 1.65; }
+  .company-description p { margin: 0 0 10px; }
+  .company-description ul { margin: 0 0 10px; padding-left: 22px; }
+  .company-description strong { color: var(--navy); text-transform: uppercase; font-size: 12.5px; letter-spacing: 0.3px; }
+
+  .company-naics { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .company-website { display: inline-block; font-size: 13.5px; font-weight: 700; color: var(--accent-dark); text-decoration: none; margin-top: 10px; }
+  .company-website:hover { text-decoration: underline; }
+  .company-socials { margin-top: 8px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .social-link { font-size: 13px; font-weight: 600; text-decoration: none; }
+  .social-link.li { color: #0a66c2; }
+  .social-link.fb { color: #1877f2; }
+  .social-link.ig { color: #c1327a; }
+  .social-link.tw { color: #14304d; }
+  .social-link.yt { color: #c4302b; }
+  .social-link:hover { text-decoration: underline; }
+
+  .stat-pills { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .stat-pill { display: inline-flex; align-items: center; gap: 9px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 9px 16px; font-size: 13px; font-weight: 700; color: var(--navy); cursor: pointer; }
+  .stat-pill:hover { border-color: var(--accent); }
+  .stat-pill .count { background: #eef1f4; color: var(--muted); border-radius: 999px; padding: 2px 9px; font-size: 11.5px; }
+
+  .action-bar { background: var(--accent); color: #fff; border-radius: 8px; padding: 13px 20px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; cursor: pointer; font-weight: 700; font-size: 14px; }
+  .action-bar:hover { background: var(--accent-dark); }
+  .action-bar .ab-chevron { transition: transform 0.15s ease; }
+  .action-bar.open .ab-chevron { transform: rotate(90deg); }
+  .action-body { display: none; background: #fff; border: 1px solid var(--border); border-radius: 8px; margin: -4px 0 12px; padding: 14px 20px; }
+  .action-body.open { display: block; }
+  .action-empty { color: var(--muted); font-size: 13.5px; font-style: italic; }
+  .action-row { padding: 8px 0; border-bottom: 1px solid #f0f2f4; font-size: 13.5px; }
+  .action-row:last-child { border-bottom: none; }
+  .action-row .ar-title { font-weight: 600; }
+  .action-row .ar-sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .action-row .ar-sub a { color: var(--accent-dark); text-decoration: none; }
+  .action-row.done .ar-title { text-decoration: line-through; color: var(--muted); }
+
+  .workflow-tracker { display: flex; margin: 4px 0; }
+  .wf-step {
+    flex: 1; padding: 12px 20px 12px 32px; background: #cfd6dc; color: #fff; font-size: 12px; font-weight: 700;
+    text-align: center; text-transform: uppercase; letter-spacing: 0.3px; position: relative;
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%, 16px 50%);
+    margin-left: -16px; text-decoration: none; display: flex; align-items: center; justify-content: center;
+  }
+  .wf-step:first-child { margin-left: 0; clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%); }
+  .wf-step.filled { background: var(--accent); cursor: pointer; }
+  .wf-step.filled:hover { background: var(--accent-dark); }
+
+  .research-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 4px; }
+  .research-card { border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #fff; }
+  .research-card .rc-header { background: var(--accent); color: #fff; padding: 11px 14px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .research-card .rc-body { padding: 12px 14px; }
+  .research-card .rc-empty { color: var(--muted); font-size: 12.5px; font-style: italic; }
+  .doc-link { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--accent-dark); margin-bottom: 6px; cursor: pointer; text-decoration: none; }
   .doc-link:hover { text-decoration: underline; }
-  .doc-link .doc-icon { font-size: 15px; }
-  .docs-empty { color: var(--muted); font-size: 13.5px; font-style: italic; }
+  .doc-link:last-child { margin-bottom: 0; }
 
-  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 10px 20px 40px; }
+  footer { background: var(--navy); color: #a9bdd2; padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+  footer .footer-right { display: flex; gap: 20px; text-transform: uppercase; letter-spacing: 0.3px; font-size: 10.5px; }
+  footer .footer-right div div:first-child { color: #7d93aa; }
+  footer .footer-right div div:last-child { color: #fff; font-weight: 700; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -69,22 +120,55 @@
 
 <div id="app-view" class="hidden">
   <header>
-    <div class="eg-label">EG Group &middot; Client Dashboard</div>
-    <div class="client-pill">Client</div>
-    <h1 id="client-name"></h1>
-    <span class="badge" id="status-badge"></span>
+    <div class="header-left">
+      <div class="brand-badge"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></div>
+      <h1>Economic Gardening Dashboard</h1>
+    </div>
+    <div class="header-right">
+      Client: <strong id="client-name"></strong><br />
+      <span id="status-line"></span>
+    </div>
   </header>
 
   <main>
-    <div id="areas-container"></div>
+    <div class="card">
+      <div class="company-top">
+        <div class="company-logo hidden" id="company-logo-wrap"><img id="company-logo" alt="" /></div>
+        <div>
+          <h2 class="company-name" id="company-name"></h2>
+          <div class="company-address" id="company-address"></div>
+        </div>
+      </div>
+      <div class="company-description" id="company-description"></div>
+      <div class="company-naics hidden" id="company-naics"></div>
+      <a class="company-website hidden" id="company-website" target="_blank" rel="noopener"></a>
+      <div class="company-socials" id="company-socials"></div>
+      <div class="stat-pills" id="stat-pills"></div>
+    </div>
 
-    <div class="docs-card">
-      <h2>Documents</h2>
-      <div id="docs-container"></div>
+    <div id="action-bars"></div>
+
+    <div class="card">
+      <div class="workflow-tracker" id="workflow-tracker"></div>
+    </div>
+
+    <div class="research-grid" id="research-grid"></div>
+
+    <div class="card hidden" id="general-docs-card">
+      <div class="research-card" style="border:none;">
+        <div class="rc-header" style="border-radius:8px;"><span>&#128193;</span> Additional Documents</div>
+        <div class="rc-body" id="general-docs-body"></div>
+      </div>
     </div>
   </main>
 
-  <footer>Prepared by EG Group. Questions about this engagement? Reach out to your assigned consultant.</footer>
+  <footer>
+    <div>Economic Gardening Research Engagement</div>
+    <div class="footer-right">
+      <div><div>Dashboard</div><div>Client Portal</div></div>
+      <div><div>Confidential</div><div>For Client Use Only</div></div>
+    </div>
+  </footer>
 </div>
 
 <script>
@@ -97,16 +181,11 @@
 
   const STATUS_LABELS = { active: "Active Engagement", finalized: "Completed Engagement", archived: "Archived" };
 
-  // The four research areas from Section 4.3 of the spec, in their fixed
-  // display order — always shown, even if a client has no content yet in
-  // one of them. Each entry lists the possible jsonb keys that map to it,
-  // since the authoring side of research_areas is intentionally
-  // free-form/evolving (same flexible shape as the original builder).
-  const AREA_DEFS = [
-    { label: "Market Dynamics Research", keys: ["market_dynamics", "market_dynamics_research"] },
-    { label: "Outbound Marketing", keys: ["outbound", "outbound_marketing"] },
-    { label: "Inbound Marketing", keys: ["inbound", "inbound_marketing"] },
-    { label: "Watering Holes", keys: ["watering_holes"] },
+  const RESEARCH_AREAS = [
+    ["market_dynamics", "Market Dynamics Research", "&#128200;"],
+    ["outbound", "Outbound Marketing", "&#127919;"],
+    ["inbound", "Inbound Marketing", "&#127793;"],
+    ["watering_holes", "Watering Holes", "&#9749;"],
   ];
 
   // Known hosting-platform domains whose own subdomain (e.g. "egdb" in
@@ -137,75 +216,212 @@
     return null;
   }
 
-  function renderFieldValue(v) {
-    if (v == null) return "";
-    if (typeof v === "string") return escapeHtml(v);
-    if (typeof v === "number" || typeof v === "boolean") return escapeHtml(String(v));
-    return escapeHtml(JSON.stringify(v));
+  // Very small markdown-lite renderer for the free-text Company Description
+  // field: "- " lines become bullets, **text** becomes bold/uppercase
+  // section labels (matching the reference tool's "**NCEG GOALS**" style).
+  function renderDescription(text) {
+    if (!text) return "";
+    const lines = String(text).split(/\r?\n/);
+    let html = "";
+    let inList = false;
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) { if (inList) { html += "</ul>"; inList = false; } continue; }
+      if (line.startsWith("- ")) {
+        if (!inList) { html += "<ul>"; inList = true; }
+        html += `<li>${escapeHtml(line.slice(2))}</li>`;
+      } else {
+        if (inList) { html += "</ul>"; inList = false; }
+        const bolded = escapeHtml(line).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        html += `<p>${bolded}</p>`;
+      }
+    }
+    if (inList) html += "</ul>";
+    return html;
   }
 
-  function renderAreaContent(value) {
-    if (value == null) return `<div class="area-empty">No content added yet.</div>`;
-
-    if (typeof value === "string") {
-      return `<div class="field-row"><div class="field-value">${renderFieldValue(value)}</div></div>`;
-    }
-
-    if (typeof value === "object" && !Array.isArray(value)) {
-      const keys = Object.keys(value);
-      if (!keys.length) return `<div class="area-empty">No content added yet.</div>`;
-      return keys.map((k) => `
-        <div class="field-row">
-          <div class="field-label">${escapeHtml(k)}</div>
-          <div class="field-value">${renderFieldValue(value[k])}</div>
-        </div>
-      `).join("");
-    }
-
-    return `<div class="field-row"><div class="field-value">${renderFieldValue(value)}</div></div>`;
+  function openSignedDoc(path) {
+    return async () => {
+      const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, 60);
+      if (error) { alert("Couldn't open this file: " + error.message); return; }
+      window.open(data.signedUrl, "_blank");
+    };
   }
 
-  function renderAreas(researchAreas) {
-    const data = researchAreas || {};
-    const usedKeys = new Set();
+  function renderDocLinks(docs) {
+    if (!docs || !docs.length) return `<div class="rc-empty">No files shared yet.</div>`;
+    return docs.map((d) => `<a class="doc-link" data-path="${escapeHtml(d.storage_path)}">&#128196; ${escapeHtml(d.file_name)}</a>`).join("");
+  }
 
-    const definedHtml = AREA_DEFS.map((def) => {
-      const matchKey = def.keys.find((k) => Object.prototype.hasOwnProperty.call(data, k));
-      if (matchKey) usedKeys.add(matchKey);
-      const content = matchKey ? data[matchKey] : null;
+  function wireDocLinks(container) {
+    container.querySelectorAll(".doc-link").forEach((el) => {
+      el.addEventListener("click", (e) => { e.preventDefault(); openSignedDoc(el.dataset.path)(); });
+    });
+  }
+
+  function renderCompany(row) {
+    const c = row.company || {};
+    if (c.logo_url) {
+      $("company-logo-wrap").classList.remove("hidden");
+      $("company-logo").src = c.logo_url;
+    }
+    $("company-name").textContent = row.client_name;
+    $("company-address").textContent = c.address || "";
+    $("company-description").innerHTML = renderDescription(c.description);
+
+    if (c.naics_codes) {
+      $("company-naics").classList.remove("hidden");
+      $("company-naics").textContent = "NAICS: " + c.naics_codes;
+    }
+    if (c.website_url) {
+      const websiteEl = $("company-website");
+      websiteEl.classList.remove("hidden");
+      websiteEl.href = c.website_url;
+      websiteEl.textContent = c.website_url;
+    }
+
+    const socials = [
+      c.linkedin_url && ["li", "LinkedIn", c.linkedin_url],
+      c.facebook_url && ["fb", "Facebook", c.facebook_url],
+      c.instagram_url && ["ig", "Instagram", c.instagram_url],
+      c.twitter_url && ["tw", "X / Twitter", c.twitter_url],
+      c.youtube_url && ["yt", "YouTube", c.youtube_url],
+    ].filter(Boolean);
+    $("company-socials").innerHTML = socials
+      .map(([cls, label, url]) => `<a class="social-link ${cls}" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`)
+      .join("");
+  }
+
+  function renderStatPills(row) {
+    const competitorsCount = (row.competitors || []).length;
+    const customersCount = (row.top_customers || []).length;
+    const steps = row.next_steps || [];
+    const stepsDone = steps.filter((s) => s.completed).length;
+    $("stat-pills").innerHTML = `
+      <div class="stat-pill" data-scroll="bar-competitors">&#127970; Competitors <span class="count">${competitorsCount}</span></div>
+      <div class="stat-pill" data-scroll="bar-top_customers">&#127991; Top Customers <span class="count">${customersCount}</span></div>
+      <div class="stat-pill" data-scroll="bar-next_steps">&#9989; Next Steps <span class="count">${stepsDone}/${steps.length}</span></div>
+    `;
+    $("stat-pills").querySelectorAll("[data-scroll]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const target = $(el.dataset.scroll);
+        if (target) { target.scrollIntoView({ behavior: "smooth", block: "center" }); openBar(el.dataset.scroll); }
+      });
+    });
+  }
+
+  function openBar(id) {
+    const bar = $(id);
+    const body = $(id + "-body");
+    if (bar && body && !bar.classList.contains("open")) {
+      bar.classList.add("open");
+      body.classList.add("open");
+    }
+  }
+
+  const ACTION_BAR_DEFS = [
+    { key: "contacts", icon: "&#128100;", label: (n) => `${n} Contacts` },
+    { key: "team", icon: "&#128101;", label: () => "Economic Gardening Team" },
+    { key: "resource_vault", icon: "&#128193;", label: () => "Resource Vault" },
+    { key: "competitors", icon: "&#127970;", label: (n) => `${n} Competitors` },
+    { key: "top_customers", icon: "&#127991;", label: (n) => `${n} Top Customers` },
+    { key: "next_steps", icon: "&#9989;", label: () => "Project Next Steps" },
+  ];
+
+  function renderActionBars(row) {
+    const container = $("action-bars");
+    container.innerHTML = ACTION_BAR_DEFS.map((def) => {
+      const rows = row[def.key] || [];
       return `
-        <div class="area-card">
-          <h2>${escapeHtml(def.label)}</h2>
-          ${renderAreaContent(content)}
+        <div class="action-bar" id="bar-${def.key}" data-target="${def.key}">
+          <span>${def.icon} ${escapeHtml(def.label(rows.length))}</span>
+          <span class="ab-chevron">&#9656;</span>
         </div>
+        <div class="action-body" id="bar-${def.key}-body">${renderActionBody(def.key, rows)}</div>
       `;
     }).join("");
 
-    // Anything present in the data that didn't map to one of the four
-    // canonical areas above is still shown, not silently dropped.
-    const leftoverKeys = Object.keys(data).filter((k) => !usedKeys.has(k));
-    const leftoverHtml = leftoverKeys.length
-      ? `
-        <div class="area-card">
-          <h2>Additional Notes</h2>
-          ${leftoverKeys.map((k) => `
-            <div class="field-row">
-              <div class="field-label">${escapeHtml(k)}</div>
-              <div class="field-value">${renderAreaContent(data[k])}</div>
-            </div>
-          `).join("")}
-        </div>
-      `
-      : "";
-
-    return definedHtml + leftoverHtml;
+    container.querySelectorAll(".action-bar").forEach((bar) => {
+      bar.addEventListener("click", () => {
+        bar.classList.toggle("open");
+        $(bar.id + "-body").classList.toggle("open");
+      });
+    });
   }
 
-  function renderDocs(docs) {
-    if (!docs || !docs.length) {
-      return `<div class="docs-empty">No documents have been shared yet.</div>`;
+  function renderActionBody(key, rows) {
+    if (!rows.length) return `<div class="action-empty">Nothing here yet.</div>`;
+    if (key === "contacts") {
+      return rows.map((r) => `
+        <div class="action-row">
+          <div class="ar-title">${escapeHtml(r.name)}</div>
+          <div class="ar-sub">${[r.title, r.email, r.phone].filter(Boolean).map(escapeHtml).join(" · ")}</div>
+        </div>
+      `).join("");
     }
-    return docs.map((d) => `<a class="doc-link" data-path="${escapeHtml(d.storage_path)}"><span class="doc-icon">&#128196;</span>${escapeHtml(d.file_name)}</a>`).join("");
+    if (key === "team") {
+      const SPECIALTY_LABELS = { team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing", gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control" };
+      return rows.map((r) => `
+        <div class="action-row">
+          <div class="ar-title">${escapeHtml(r.name)}</div>
+          <div class="ar-sub">${escapeHtml(SPECIALTY_LABELS[r.specialty] || r.specialty)}</div>
+        </div>
+      `).join("");
+    }
+    if (key === "resource_vault") {
+      return rows.map((r) => `
+        <div class="action-row">
+          <div class="ar-title"><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener" style="color:var(--accent-dark); text-decoration:none;">${escapeHtml(r.title)}</a></div>
+        </div>
+      `).join("");
+    }
+    if (key === "competitors" || key === "top_customers") {
+      return rows.map((r) => `
+        <div class="action-row">
+          <div class="ar-title">${escapeHtml(r.name)}</div>
+          <div class="ar-sub">${[r.website_url ? `<a href="${escapeHtml(r.website_url)}" target="_blank" rel="noopener">${escapeHtml(r.website_url)}</a>` : "", escapeHtml(r.notes || "")].filter(Boolean).join(" · ")}</div>
+        </div>
+      `).join("");
+    }
+    if (key === "next_steps") {
+      return rows.map((r) => `<div class="action-row ${r.completed ? "done" : ""}"><div class="ar-title">${r.completed ? "&#9745;" : "&#9744;"} ${escapeHtml(r.description)}</div></div>`).join("");
+    }
+    return "";
+  }
+
+  const WORKFLOW_STEPS = [
+    ["discovery_doc_url", "Discovery Call Notes"],
+    ["controlling_doc_url", "Controlling Document"],
+    ["research_review_url", "Research Review"],
+    ["closeout_survey_url", "Close-Out Evaluation"],
+  ];
+
+  function renderWorkflow(workflow) {
+    const w = workflow || {};
+    $("workflow-tracker").innerHTML = WORKFLOW_STEPS.map(([key, label]) => {
+      const url = w[key];
+      return url
+        ? `<a class="wf-step filled" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`
+        : `<div class="wf-step">${escapeHtml(label)}</div>`;
+    }).join("");
+  }
+
+  function renderResearchGrid(researchAreas) {
+    const data = researchAreas || {};
+    $("research-grid").innerHTML = RESEARCH_AREAS.map(([key, label, icon]) => `
+      <div class="research-card">
+        <div class="rc-header"><span>${icon}</span> ${escapeHtml(label)}</div>
+        <div class="rc-body">${renderDocLinks(data[key])}</div>
+      </div>
+    `).join("");
+    wireDocLinks($("research-grid"));
+  }
+
+  function renderGeneralDocs(docs) {
+    if (!docs || !docs.length) return;
+    $("general-docs-card").classList.remove("hidden");
+    $("general-docs-body").innerHTML = renderDocLinks(docs);
+    wireDocLinks($("general-docs-body"));
   }
 
   function showError(message) {
@@ -229,22 +445,16 @@
     }
 
     const row = data[0];
-    document.title = `${row.client_name} — EG Group`;
+    document.title = `${row.client_name} — Economic Gardening Dashboard`;
     $("client-name").textContent = row.client_name;
-    $("status-badge").textContent = STATUS_LABELS[row.client_status] || row.client_status;
-    $("status-badge").className = `badge badge-${row.client_status}`;
+    $("status-line").textContent = STATUS_LABELS[row.client_status] || row.client_status;
 
-    $("areas-container").innerHTML = renderAreas(row.research_areas);
-    $("docs-container").innerHTML = renderDocs(row.documents);
-
-    $("docs-container").querySelectorAll(".doc-link").forEach((el) => {
-      el.addEventListener("click", async (e) => {
-        e.preventDefault();
-        const { data: signed, error: signErr } = await sb.storage.from("client-documents").createSignedUrl(el.dataset.path, 60);
-        if (signErr) { alert("Couldn't open this file: " + signErr.message); return; }
-        window.open(signed.signedUrl, "_blank");
-      });
-    });
+    renderCompany(row);
+    renderStatPills(row);
+    renderActionBars(row);
+    renderWorkflow(row.workflow);
+    renderResearchGrid(row.research_areas);
+    renderGeneralDocs(row.documents);
 
     $("loading-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
