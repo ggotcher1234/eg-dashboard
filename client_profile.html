@@ -253,11 +253,15 @@
       <!-- ===== Accordion list sections (Contacts, Competitors, Top Customers, Resource Vault, Next Steps) ===== -->
       <div id="list-sections"></div>
 
-      <!-- ===== Research Area Documents + General Documents ===== -->
+      <!-- ===== Documents ===== -->
       <div class="card">
         <h2>Documents</h2>
-        <div class="meta-line" style="margin-bottom:6px;">Upload the deliverable file straight in — mark it "Client-facing" to have it show on the client's public dashboard, or leave it "Internal" for EG-only files.</div>
-        <div id="doc-sections"></div>
+        <div class="meta-line" style="margin-bottom:6px;">Drop your file in, same as attaching a file in Podio. Then use the dropdown on each file to say which research area it belongs to (or leave it General), and mark it "Client-facing" if it should show on the client's public dashboard.</div>
+        <label class="btn-primary btn-sm upload-btn-wrap" style="display:inline-block; margin-bottom:14px;">
+          + Upload file(s)
+          <input type="file" multiple id="doc-upload-input" />
+        </label>
+        <div id="doc-list"></div>
       </div>
     </div>
   </main>
@@ -378,7 +382,6 @@
       loadListSection(RESOURCE_VAULT_CONFIG),
       loadListSection(NEXT_STEPS_CONFIG),
     ]);
-    renderDocSections();
     await loadDocuments();
   }
 
@@ -587,59 +590,45 @@
     await loadListSection(NEXT_STEPS_CONFIG);
   }
 
-  // ---------- Documents (research-area tagged + general) ----------
+  // ---------- Documents: one upload box, assign area afterward ----------
   const RESEARCH_AREAS = [
     ["market_dynamics", "Market Dynamics Research"],
     ["outbound", "Outbound Marketing"],
     ["inbound", "Inbound Marketing"],
     ["watering_holes", "Watering Holes"],
   ];
+  const AREA_OPTIONS_HTML = '<option value="">General</option>' + RESEARCH_AREAS.map(([k, l]) => `<option value="${k}">${escapeHtml(l)}</option>`).join("");
   let allDocuments = [];
 
-  function renderDocSections() {
-    const container = $("doc-sections");
-    const sections = [...RESEARCH_AREAS.map(([key, label]) => [key, label]), [null, "General Documents"]];
-    container.innerHTML = sections.map(([key, label]) => `
-      <div class="doc-area-label">${escapeHtml(label)}</div>
-      <div id="doc-list-${key || "general"}"></div>
-      <label class="btn-secondary btn-sm upload-btn-wrap">
-        + Upload file
-        <input type="file" multiple class="doc-upload-input" data-area="${key || ""}" />
-      </label>
-    `).join("");
-
-    document.querySelectorAll(".doc-upload-input").forEach((input) => {
-      input.addEventListener("change", async () => {
-        if (!input.files.length) return;
-        input.disabled = true;
-        const errors = await uploadDocuments(input.files, input.dataset.area || null);
-        input.disabled = false;
-        input.value = "";
-        if (errors.length) showBanner("Some files didn't upload: " + errors.join("; "), "error");
-        else showBanner("File(s) uploaded.", "success");
-        await loadDocuments();
-      });
-    });
-  }
+  $("doc-upload-input").addEventListener("change", async () => {
+    const input = $("doc-upload-input");
+    if (!input.files.length) return;
+    input.disabled = true;
+    const errors = await uploadDocuments(input.files);
+    input.disabled = false;
+    input.value = "";
+    if (errors.length) showBanner("Some files didn't upload: " + errors.join("; "), "error");
+    else showBanner("File(s) uploaded — use the dropdown on each to assign it to a research area.", "success");
+    await loadDocuments();
+  });
 
   async function loadDocuments() {
     const { data, error } = await sb.from("documents").select("*").eq("client_id", currentClient.id).order("uploaded_at", { ascending: false });
     if (error) { showBanner("Couldn't load documents: " + error.message, "error"); return; }
     allDocuments = data;
-    for (const [key] of RESEARCH_AREAS) renderDocList(key);
-    renderDocList(null);
+    renderDocList();
   }
 
-  function renderDocList(area) {
-    const el = $(`doc-list-${area || "general"}`);
-    const docs = allDocuments.filter((d) => d.research_area === area);
-    if (!docs.length) { el.innerHTML = `<div class="list-empty">No files yet.</div>`; return; }
-    el.innerHTML = docs.map((d) => `
+  function renderDocList() {
+    const el = $("doc-list");
+    if (!allDocuments.length) { el.innerHTML = `<div class="list-empty">No files yet — use "+ Upload file(s)" above.</div>`; return; }
+    el.innerHTML = allDocuments.map((d) => `
       <div class="list-row">
         <div class="list-row-main">
           <div class="lr-title doc-download" data-path="${escapeHtml(d.storage_path)}" data-name="${escapeHtml(d.file_name)}" style="cursor:pointer; color:var(--navy-light);">${escapeHtml(d.file_name)}</div>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
+          <select class="row-select doc-area-select" data-id="${d.id}" style="width:auto; padding:4px 6px; font-size:12.5px;">${AREA_OPTIONS_HTML}</select>
           <button type="button" class="btn-secondary icon-btn doc-visibility-toggle" data-id="${d.id}" data-visibility="${d.visibility}">
             ${d.visibility === "client_facing" ? "Client-facing" : "Internal"}
           </button>
@@ -648,11 +637,27 @@
       </div>
     `).join("");
 
+    // Set each select to the document's current area (can't do this via the
+    // template string above without fighting HTML-escaping the "selected"
+    // attribute placement, so it's set directly here instead).
+    el.querySelectorAll(".doc-area-select").forEach((sel) => {
+      const doc = allDocuments.find((d) => d.id === sel.dataset.id);
+      sel.value = doc && doc.research_area ? doc.research_area : "";
+    });
+
     el.querySelectorAll(".doc-download").forEach((div) => {
       div.addEventListener("click", async () => {
         const { data, error } = await sb.storage.from("client-documents").createSignedUrl(div.dataset.path, 60);
         if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
         window.open(data.signedUrl, "_blank");
+      });
+    });
+    el.querySelectorAll(".doc-area-select").forEach((sel) => {
+      sel.addEventListener("change", async () => {
+        const { error } = await sb.from("documents").update({ research_area: sel.value || null }).eq("id", sel.dataset.id);
+        if (error) { showBanner("Couldn't assign area: " + error.message, "error"); return; }
+        showBanner("Assigned.", "success");
+        await loadDocuments();
       });
     });
     el.querySelectorAll(".doc-visibility-toggle").forEach((btn) => {
@@ -673,7 +678,7 @@
     });
   }
 
-  async function uploadDocuments(fileList, researchArea) {
+  async function uploadDocuments(fileList) {
     const errors = [];
     for (const file of Array.from(fileList)) {
       const path = `clients/${currentClient.id}/${Date.now()}-${sanitizeFilename(file.name)}`;
@@ -684,7 +689,7 @@
         file_name: file.name,
         storage_path: path,
         visibility: "internal",
-        research_area: researchArea,
+        research_area: null,
         uploaded_by: currentUser.id,
       });
       if (rowErr) errors.push(`${file.name}: ${rowErr.message}`);
