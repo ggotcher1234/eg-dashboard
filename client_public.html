@@ -358,6 +358,17 @@
         $(bar.id + "-body").classList.toggle("open");
       });
     });
+
+    // Resource Vault items with an uploaded file (either the client's own,
+    // or resolved live from a shared template) open via a signed URL, same
+    // as the Documents section — the client-documents bucket isn't public.
+    container.querySelectorAll(".rv-doc-link").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openSignedDoc(el.dataset.path)();
+      });
+    });
   }
 
   function renderActionBody(key, rows) {
@@ -380,12 +391,19 @@
       `).join("");
     }
     if (key === "resource_vault") {
-      return rows.map((r) => `
-        <div class="action-row">
-          <div class="ar-title"><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener" style="color:var(--accent-dark); text-decoration:none;">${escapeHtml(r.title)}</a></div>
-          ${r.description ? `<div class="ar-sub">${escapeHtml(r.description)}</div>` : ""}
-        </div>
-      `).join("");
+      return rows.map((r) => {
+        const titleHtml = r.storage_path
+          ? `<a class="rv-doc-link" data-path="${escapeHtml(r.storage_path)}" href="#" style="color:var(--accent-dark); text-decoration:none;">${escapeHtml(r.title)}</a>`
+          : r.url
+          ? `<a href="${escapeHtml(r.url)}" target="_blank" rel="noopener" style="color:var(--accent-dark); text-decoration:none;">${escapeHtml(r.title)}</a>`
+          : escapeHtml(r.title);
+        return `
+          <div class="action-row">
+            <div class="ar-title">${titleHtml}</div>
+            ${r.description ? `<div class="ar-sub">${escapeHtml(r.description)}</div>` : ""}
+          </div>
+        `;
+      }).join("");
     }
     if (key === "competitors" || key === "top_customers") {
       return rows.map((r) => `

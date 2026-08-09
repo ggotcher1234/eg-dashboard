@@ -116,6 +116,9 @@
   .lre-fields .field { margin-bottom: 0; flex: 1; min-width: 140px; }
   .lre-fields label { font-size: 11px; }
   .list-row-edit .icon-btn { flex-shrink: 0; }
+  .rv-readonly { font-size: 13.5px; padding: 8px 0 4px; color: var(--ink); }
+  .rv-file-link { cursor: pointer; color: var(--navy-light, #2f6690); font-weight: 600; font-size: 13px; }
+  .rv-file-link:hover { text-decoration: underline; }
 
   .add-row-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); align-items: flex-end; }
   .add-row-form .field { margin-bottom: 0; flex: 1; min-width: 140px; }
@@ -539,21 +542,34 @@
     fields: COMPETITORS_CONFIG.fields,
     render: COMPETITORS_CONFIG.render,
   };
+  // Resource Vault is a hybrid: the 8 standard EG resources are shared
+  // "templates" (managed once, org-wide, from resource_templates.html —
+  // Super-Admin only) linked into every client; title/description/file
+  // always resolve live from the template, so they show read-only here.
+  // A client can ALSO have its own custom resources on top of those 8,
+  // which stay fully editable (including their own uploaded file) right
+  // on this page. custom: "resourceVault" tells the generic accordion
+  // renderer to use the bespoke markup/handlers below instead of the
+  // plain text-field add-form / inline-edit-row machinery.
   const RESOURCE_VAULT_CONFIG = {
-    key: "resource_vault", table: "client_resource_vault_items", title: "Resource Vault",
-    hint: "Links to files, folders, docs, slides, OPML, etc.",
-    fields: [
-      { name: "title", label: "Title", type: "text", required: true },
-      { name: "description", label: "Description (shows below icon)", type: "text" },
-      { name: "url", label: "URL / Path", type: "url", required: true },
-    ],
-    render: (r) => ({
-      title: r.title,
-      subHtml: [
-        r.description ? escapeHtml(r.description) : "",
-        `<a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.url)}</a>`,
-      ].filter(Boolean).join(" · "),
-    }),
+    key: "resource_vault", title: "Resource Vault", custom: "resourceVault",
+    hint: "Links to files, folders, docs, slides, etc. The 8 standard EG resources are shared across every client — manage those from Resource Templates. Add anything client-specific below.",
+    customLoad: async (clientId) => {
+      const { data, error } = await sb
+        .from("client_resource_vault_items")
+        .select("id, title, description, storage_path, template_id, sort_order, resource_vault_templates(title, description, storage_path)")
+        .eq("client_id", clientId)
+        .order("sort_order")
+        .order("created_at");
+      if (error) { showBanner("Couldn't load Resource Vault: " + error.message, "error"); return []; }
+      return data.map((r) => ({
+        id: r.id,
+        isTemplate: !!r.template_id,
+        title: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.title) || "") : (r.title || ""),
+        description: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.description) || "") : (r.description || ""),
+        storagePath: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.storage_path) || null) : (r.storage_path || null),
+      }));
+    },
   };
   const NEXT_STEPS_CONFIG = {
     key: "next_steps", table: "client_next_steps", title: "Project Next Steps",
@@ -604,7 +620,23 @@
         <div class="accordion-body" id="${cfg.key}-body">
           ${cfg.hint ? `<div class="field-hint" style="margin-bottom:10px;">${escapeHtml(cfg.hint)}</div>` : ""}
           <div id="${cfg.key}-list"></div>
-          ${cfg.readOnly ? `<div class="field-hint" style="margin-top:8px;">Managed from Assignments &amp; Hours on the Client Workspace page.</div>` : `
+          ${cfg.readOnly ? `<div class="field-hint" style="margin-top:8px;">Managed from Assignments &amp; Hours on the Client Workspace page.</div>` : cfg.custom === "resourceVault" ? `
+          <form class="add-row-form" id="resource-vault-add-form">
+            <div class="field">
+              <label for="rv-new-title">Title</label>
+              <input type="text" id="rv-new-title" required />
+            </div>
+            <div class="field">
+              <label for="rv-new-description">Description (shows below icon)</label>
+              <input type="text" id="rv-new-description" />
+            </div>
+            <div class="field">
+              <label for="rv-new-file">File (optional)</label>
+              <input type="file" id="rv-new-file" />
+            </div>
+            <button type="submit" class="btn-secondary btn-sm">+ Add Resource</button>
+          </form>
+          ` : `
           <form class="add-row-form" id="${cfg.key}-add-form">
             ${cfg.fields.map((f) => `
               <div class="field">
@@ -638,6 +670,10 @@
 
     for (const cfg of LIST_CONFIGS) {
       if (cfg.readOnly) continue;
+      if (cfg.custom === "resourceVault") {
+        $("resource-vault-add-form").addEventListener("submit", (e) => { e.preventDefault(); addCustomResourceVaultItem(); });
+        continue;
+      }
       $(`${cfg.key}-add-form`).addEventListener("submit", (e) => { e.preventDefault(); addListRow(cfg); });
     }
   }
@@ -660,6 +696,15 @@
     const list = $(`${cfg.key}-list`);
     if (!rows.length) {
       list.innerHTML = `<div class="list-empty">Nothing added yet.</div>`;
+      return;
+    }
+
+    // Resource Vault gets its own bespoke rendering — template-linked rows
+    // (the 8 shared EG resources) are read-only here with a file link and
+    // an "unlink" button; custom per-client rows stay inline-editable with
+    // an upload control instead of a URL field. See renderResourceVaultRows.
+    if (cfg.key === "resource_vault") {
+      renderResourceVaultRows(rows);
       return;
     }
 
@@ -737,6 +782,163 @@
     list.querySelectorAll("[data-toggle-id]").forEach((cb) => {
       cb.addEventListener("change", () => toggleNextStep(cb.dataset.toggleId, cb.checked));
     });
+  }
+
+  // Best-effort human-friendly file name from a storage path like
+  // clients/{id}/resource-vault/1699999999-my_file.pdf -> "my_file.pdf".
+  function fileNameFromPath(path) {
+    if (!path) return "";
+    const last = path.split("/").pop();
+    return last.replace(/^\d+-/, "");
+  }
+
+  function renderResourceVaultRows(rows) {
+    const list = $("resource_vault-list");
+    list.innerHTML = rows.map((r) => {
+      const fileHtml = r.storagePath
+        ? `<span class="rv-file-link" data-path="${escapeHtml(r.storagePath)}">&#128196; ${escapeHtml(fileNameFromPath(r.storagePath))}</span>`
+        : `<span class="field-hint">No file uploaded yet${r.isTemplate ? " — add one from Resource Templates." : "."}</span>`;
+
+      if (r.isTemplate) {
+        return `
+          <div class="list-row-edit">
+            <div class="lre-fields">
+              <div class="field"><label>Title</label><div class="rv-readonly">${escapeHtml(r.title)}</div></div>
+              <div class="field"><label>Description (shows below icon)</label><div class="rv-readonly">${escapeHtml(r.description || "—")}</div></div>
+              <div class="field"><label>File</label>${fileHtml}</div>
+            </div>
+            <button type="button" class="btn-danger icon-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="list-row-edit">
+          <div class="lre-fields">
+            <div class="field">
+              <label>Title</label>
+              <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="title" value="${escapeHtml(r.title)}" required />
+            </div>
+            <div class="field">
+              <label>Description (shows below icon)</label>
+              <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="description" value="${escapeHtml(r.description || "")}" />
+            </div>
+            <div class="field">
+              <label>File</label>
+              ${r.storagePath
+                ? `<div style="display:flex; align-items:center; gap:10px;">${fileHtml}<button type="button" class="btn-secondary btn-sm" data-remove-file="${r.id}">Remove</button></div>`
+                : `<label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload file<input type="file" class="rv-upload-input" data-row-id="${r.id}" style="display:none;" /></label>`}
+            </div>
+          </div>
+          <button type="button" class="btn-danger icon-btn" data-delete-id="${r.id}" title="Delete">&times;</button>
+        </div>
+      `;
+    }).join("");
+
+    list.querySelectorAll(".row-input-edit[data-rv-field]").forEach((inp) => {
+      const original = inp.value;
+      inp.addEventListener("blur", async () => {
+        const value = inp.value.trim();
+        const rowId = inp.dataset.rvRowId;
+        const fieldName = inp.dataset.rvField;
+        if (value === original) return;
+        if (fieldName === "title" && !value) {
+          showBanner("Title can't be empty.", "error");
+          inp.value = original;
+          return;
+        }
+        const { error } = await sb.from("client_resource_vault_items").update({ [fieldName]: value || null }).eq("id", rowId);
+        if (error) {
+          showBanner("Couldn't save: " + error.message, "error");
+          inp.value = original;
+          return;
+        }
+      });
+    });
+
+    list.querySelectorAll(".rv-file-link").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(el.dataset.path, 60);
+        if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+        window.open(data.signedUrl, "_blank");
+      });
+    });
+
+    list.querySelectorAll("[data-unlink-id]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const { error } = await sb.from("client_resource_vault_items").delete().eq("id", btn.dataset.unlinkId);
+        if (error) { showBanner("Couldn't remove: " + error.message, "error"); return; }
+        await loadListSection(RESOURCE_VAULT_CONFIG);
+      });
+    });
+
+    list.querySelectorAll("[data-delete-id]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const row = (listData.resource_vault || []).find((x) => x.id === btn.dataset.deleteId);
+        if (row && row.storagePath) await sb.storage.from("client-documents").remove([row.storagePath]);
+        const { error } = await sb.from("client_resource_vault_items").delete().eq("id", btn.dataset.deleteId);
+        if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
+        await loadListSection(RESOURCE_VAULT_CONFIG);
+      });
+    });
+
+    list.querySelectorAll("[data-remove-file]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const rowId = btn.dataset.removeFile;
+        const row = (listData.resource_vault || []).find((x) => x.id === rowId);
+        if (row && row.storagePath) await sb.storage.from("client-documents").remove([row.storagePath]);
+        const { error } = await sb.from("client_resource_vault_items").update({ storage_path: null }).eq("id", rowId);
+        if (error) { showBanner("Couldn't remove file: " + error.message, "error"); return; }
+        await loadListSection(RESOURCE_VAULT_CONFIG);
+      });
+    });
+
+    list.querySelectorAll(".rv-upload-input").forEach((input) => {
+      input.addEventListener("change", async () => {
+        if (!input.files.length) return;
+        const file = input.files[0];
+        const rowId = input.dataset.rowId;
+        input.disabled = true;
+        const path = `clients/${currentClient.id}/resource-vault/${Date.now()}-${sanitizeFilename(file.name)}`;
+        const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+        if (uploadErr) {
+          showBanner("Couldn't upload file: " + uploadErr.message, "error");
+          input.disabled = false;
+          return;
+        }
+        const { error } = await sb.from("client_resource_vault_items").update({ storage_path: path }).eq("id", rowId);
+        if (error) { showBanner("Couldn't save file: " + error.message, "error"); input.disabled = false; return; }
+        await loadListSection(RESOURCE_VAULT_CONFIG);
+      });
+    });
+  }
+
+  async function addCustomResourceVaultItem() {
+    const title = $("rv-new-title").value.trim();
+    const description = $("rv-new-description").value.trim();
+    const fileInput = $("rv-new-file");
+    if (!title) { showBanner("Title is required.", "error"); return; }
+
+    let storagePath = null;
+    if (fileInput.files.length) {
+      const file = fileInput.files[0];
+      storagePath = `clients/${currentClient.id}/resource-vault/${Date.now()}-${sanitizeFilename(file.name)}`;
+      const { error: uploadErr } = await sb.storage.from("client-documents").upload(storagePath, file);
+      if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    }
+
+    const sortOrder = (listData.resource_vault || []).length + 1;
+    const { error } = await sb.from("client_resource_vault_items").insert({
+      client_id: currentClient.id,
+      title,
+      description: description || null,
+      storage_path: storagePath,
+      sort_order: sortOrder,
+    });
+    if (error) { showBanner("Couldn't add resource: " + error.message, "error"); return; }
+    $("resource-vault-add-form").reset();
+    showBanner("Resource added.", "success");
+    await loadListSection(RESOURCE_VAULT_CONFIG);
   }
 
   async function addListRow(cfg) {

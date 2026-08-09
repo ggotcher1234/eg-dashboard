@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Resource Templates</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  header { background: var(--navy); color: #fff; padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; letter-spacing: 0.2px; }
+  header .sub { font-size: 12.5px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  header .brand-row { display: flex; align-items: center; gap: 14px; }
+  .brand-badge { background: #fff; border-radius: 8px; padding: 5px 10px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 26px; display: block; }
+  #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  button { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: var(--danger-dark); }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12.5px; }
+  main { max-width: 820px; margin: 28px auto; padding: 0 20px 60px; }
+  #login-view { max-width: 380px; margin: 90px auto; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  #login-view h2 { margin-top: 0; font-size: 18px; }
+  #login-view label { display: block; font-size: 12.5px; font-weight: 600; margin: 14px 0 5px; color: var(--muted); }
+  #login-view input { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+  #login-view button { width: 100%; margin-top: 20px; padding: 10px; }
+  #login-error { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; }
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+  #not-admin-note { max-width: 460px; margin: 90px auto; text-align: center; color: var(--muted); font-size: 14px; }
+  .intro { font-size: 13.5px; color: var(--muted); margin-bottom: 18px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 14px; }
+  .tpl-row { display: flex; align-items: flex-start; gap: 14px; padding: 14px 0; border-bottom: 1px solid #f0f2f4; }
+  .tpl-row:last-child { border-bottom: none; }
+  .tpl-handle { color: var(--muted); font-size: 12px; padding-top: 30px; width: 20px; text-align: center; flex-shrink: 0; }
+  .tpl-fields { display: flex; gap: 16px; flex-wrap: wrap; flex: 1; }
+  .tpl-fields .field { flex: 1; min-width: 160px; margin-bottom: 0; }
+  .field label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 5px; }
+  .field input[type="text"] { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13.5px; font-family: inherit; }
+  .tpl-file-col { min-width: 190px; }
+  .tpl-file-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; }
+  .tpl-file-link:hover { text-decoration: underline; }
+  .field-hint { font-size: 12px; color: var(--muted); }
+  .tpl-actions { flex-shrink: 0; padding-top: 22px; }
+  .add-card { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+  .add-card .field { flex: 1; min-width: 160px; }
+  .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; }
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="login-view" class="hidden">
+  <h2>EG Dashboard</h2>
+  <div style="font-size:13px; color:var(--muted); margin-top:-8px;">Resource Templates — sign in</div>
+  <form id="login-form">
+    <label for="login-email">Email</label>
+    <input type="text" id="login-email" autocomplete="username" required />
+    <label for="login-password">Password</label>
+    <input type="password" id="login-password" autocomplete="current-password" required />
+    <button type="submit" class="btn-primary">Sign in</button>
+    <div id="login-error"></div>
+  </form>
+</div>
+
+<div id="not-admin-view" class="hidden">
+  <header>
+    <div class="brand-row">
+      <div class="brand-badge"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></div>
+      <div><h1>Resource Templates</h1></div>
+    </div>
+    <div id="userbox2"><button class="btn-ghost" id="signout-btn2">Sign out</button></div>
+  </header>
+  <div id="not-admin-note">This page is Super-Admin only. Ask a Super Admin to manage the shared Resource Vault files.</div>
+</div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <div class="brand-row">
+      <div class="brand-badge"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></div>
+      <div>
+        <h1>Resource Templates</h1>
+        <div class="sub">Shared across every client &nbsp;·&nbsp; <a class="back-link" href="index.html">← Home</a></div>
+      </div>
+    </div>
+    <div id="userbox">
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span>
+      <button class="btn-ghost" id="signout-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="banner"></div>
+    <div class="intro">
+      These are the standard resources shown in every client's Resource Vault. Upload or replace a file here and it
+      updates immediately for every client that has it — no need to re-upload it per client. Title and description
+      changes work the same way.
+    </div>
+
+    <div class="card">
+      <div id="tpl-list"></div>
+      <div id="tpl-empty" class="empty-note hidden">No shared resources yet — add the first one below.</div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 4px; font-size:15px;">Add a Resource</h3>
+      <div class="field-hint" style="margin-bottom:12px;">This will appear in every client's Resource Vault right away.</div>
+      <form id="add-form" class="add-card">
+        <div class="field">
+          <label for="add-title">Title</label>
+          <input type="text" id="add-title" required />
+        </div>
+        <div class="field">
+          <label for="add-description">Description (shows below icon)</label>
+          <input type="text" id="add-description" />
+        </div>
+        <div class="field">
+          <label for="add-file">File (optional)</label>
+          <input type="file" id="add-file" />
+        </div>
+        <button type="submit" class="btn-primary btn-sm">+ Add Resource</button>
+      </form>
+    </div>
+  </main>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentUser = null;
+  let templates = [];
+
+  const $ = (id) => document.getElementById(id);
+
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 3000);
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : str;
+    return div.innerHTML;
+  }
+
+  const sanitizeFilename = (name) => name.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+  function fileNameFromPath(path) {
+    if (!path) return "";
+    const last = path.split("/").pop();
+    return last.replace(/^\d+-/, "");
+  }
+
+  async function signOut() {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    $("not-admin-view").classList.add("hidden");
+    $("login-view").classList.remove("hidden");
+  }
+  $("signout-btn").addEventListener("click", signOut);
+  $("signout-btn2").addEventListener("click", signOut);
+
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("login-email").value.trim();
+    const password = $("login-password").value;
+    $("login-error").style.display = "none";
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      $("login-error").textContent = error.message;
+      $("login-error").style.display = "block";
+      return;
+    }
+    await afterSignIn();
+  });
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users")
+      .select("id, full_name, role, organization_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      $("loading-view").classList.add("hidden");
+      $("login-view").classList.remove("hidden");
+      $("login-error").textContent = "Signed in, but no matching staff profile was found for this account.";
+      $("login-error").style.display = "block";
+      await sb.auth.signOut();
+      return;
+    }
+
+    currentUser = profile;
+    $("loading-view").classList.add("hidden");
+    $("login-view").classList.add("hidden");
+
+    if (profile.role !== "super_admin") {
+      $("not-admin-view").classList.remove("hidden");
+      return;
+    }
+
+    $("app-view").classList.remove("hidden");
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = profile.role.replace("_", " ");
+    await loadTemplates();
+  }
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      afterSignIn();
+    } else {
+      $("loading-view").classList.add("hidden");
+      $("login-view").classList.remove("hidden");
+    }
+  });
+
+  async function loadTemplates() {
+    const { data, error } = await sb
+      .from("resource_vault_templates")
+      .select("*")
+      .eq("organization_id", currentUser.organization_id)
+      .order("sort_order")
+      .order("created_at");
+    if (error) { showBanner("Couldn't load templates: " + error.message, "error"); return; }
+    templates = data;
+    renderTemplates();
+  }
+
+  function renderTemplates() {
+    const list = $("tpl-list");
+    $("tpl-empty").classList.toggle("hidden", templates.length !== 0);
+    if (!templates.length) { list.innerHTML = ""; return; }
+
+    list.innerHTML = templates.map((t) => `
+      <div class="tpl-row">
+        <div class="tpl-fields">
+          <div class="field">
+            <label>Title</label>
+            <input type="text" class="tpl-input" data-id="${t.id}" data-field="title" value="${escapeHtml(t.title)}" />
+          </div>
+          <div class="field">
+            <label>Description (shows below icon)</label>
+            <input type="text" class="tpl-input" data-id="${t.id}" data-field="description" value="${escapeHtml(t.description || "")}" />
+          </div>
+          <div class="field tpl-file-col">
+            <label>File</label>
+            ${t.storage_path
+              ? `<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                   <span class="tpl-file-link" data-path="${escapeHtml(t.storage_path)}">&#128196; ${escapeHtml(fileNameFromPath(t.storage_path))}</span>
+                   <button type="button" class="btn-secondary btn-sm" data-replace="${t.id}">Replace</button>
+                 </div>`
+              : `<label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload file<input type="file" class="tpl-upload-input" data-id="${t.id}" style="display:none;" /></label>`}
+          </div>
+        </div>
+        <div class="tpl-actions">
+          <button type="button" class="btn-danger btn-sm" data-delete="${t.id}">Delete</button>
+        </div>
+      </div>
+    `).join("");
+
+    list.querySelectorAll(".tpl-input").forEach((inp) => {
+      const original = inp.value;
+      inp.addEventListener("blur", async () => {
+        const value = inp.value.trim();
+        const id = inp.dataset.id;
+        const fieldName = inp.dataset.field;
+        if (value === original) return;
+        if (fieldName === "title" && !value) { showBanner("Title can't be empty.", "error"); inp.value = original; return; }
+        const { error } = await sb.from("resource_vault_templates").update({ [fieldName]: value || null }).eq("id", id);
+        if (error) { showBanner("Couldn't save: " + error.message, "error"); inp.value = original; return; }
+        showBanner("Saved — updated for every client.", "success");
+      });
+    });
+
+    list.querySelectorAll(".tpl-file-link").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(el.dataset.path, 60);
+        if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+        window.open(data.signedUrl, "_blank");
+      });
+    });
+
+    list.querySelectorAll("[data-delete]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const t = templates.find((x) => x.id === btn.dataset.delete);
+        if (!confirm(`Delete "${t.title}"? This removes it from every client's Resource Vault.`)) return;
+        if (t.storage_path) await sb.storage.from("client-documents").remove([t.storage_path]);
+        const { error } = await sb.from("resource_vault_templates").delete().eq("id", t.id);
+        if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
+        showBanner("Resource deleted.", "success");
+        await loadTemplates();
+      });
+    });
+
+    list.querySelectorAll(".tpl-upload-input").forEach((input) => {
+      input.addEventListener("change", () => handleTemplateUpload(input.dataset.id, input.files[0]));
+    });
+
+    list.querySelectorAll("[data-replace]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const picker = document.createElement("input");
+        picker.type = "file";
+        picker.addEventListener("change", () => handleTemplateUpload(btn.dataset.replace, picker.files[0]));
+        picker.click();
+      });
+    });
+  }
+
+  async function handleTemplateUpload(templateId, file) {
+    if (!file) return;
+    const t = templates.find((x) => x.id === templateId);
+    const oldPath = t ? t.storage_path : null;
+    const path = `resource-templates/${currentUser.organization_id}/${Date.now()}-${sanitizeFilename(file.name)}`;
+    const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+    if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    const { error } = await sb.from("resource_vault_templates").update({ storage_path: path }).eq("id", templateId);
+    if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
+    if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
+    showBanner("File uploaded — updated for every client.", "success");
+    await loadTemplates();
+  }
+
+  $("add-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const title = $("add-title").value.trim();
+    const description = $("add-description").value.trim();
+    const fileInput = $("add-file");
+    if (!title) { showBanner("Title is required.", "error"); return; }
+
+    let storagePath = null;
+    if (fileInput.files.length) {
+      const file = fileInput.files[0];
+      storagePath = `resource-templates/${currentUser.organization_id}/${Date.now()}-${sanitizeFilename(file.name)}`;
+      const { error: uploadErr } = await sb.storage.from("client-documents").upload(storagePath, file);
+      if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    }
+
+    const sortOrder = templates.length + 1;
+    const { error } = await sb.from("resource_vault_templates").insert({
+      organization_id: currentUser.organization_id,
+      title,
+      description: description || null,
+      storage_path: storagePath,
+      sort_order: sortOrder,
+    });
+    if (error) { showBanner("Couldn't add resource: " + error.message, "error"); return; }
+    $("add-form").reset();
+    showBanner("Resource added — now shows for every client.", "success");
+    await loadTemplates();
+  });
+</script>
+</body>
+</html>
