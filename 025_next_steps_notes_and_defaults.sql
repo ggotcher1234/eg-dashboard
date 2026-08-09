@@ -17,12 +17,7 @@
 --    default-template inserts (client_assignments) that already happen
 --    there.
 --
--- The exact Notes wording for steps 3-5 was inferred from a partially
--- truncated screenshot -- Greg, please double check these three:
---   - Controlling Document: "Agree on documented research approach"
---   - Research Controlling Document: "Assign EG team to research areas"
---   - Client Research Review Call: "Zoom call with researchers"
--- Easy to correct with an UPDATE statement once confirmed.
+-- Notes wording confirmed against Greg's reference screenshot.
 --
 -- Safe to re-run (the accept_client_application default-seeding only ever
 -- runs once per client, at accept time, same as the existing assignment
@@ -329,7 +324,7 @@ begin
     (v_client_id, 'Discovery Call', null, false, 2),
     (v_client_id, 'Controlling Document', 'Agree on documented research approach', false, 3),
     (v_client_id, 'Research Controlling Document', 'Assign EG team to research areas', false, 4),
-    (v_client_id, 'Client Research Review Call', 'Zoom call with researchers', false, 5),
+    (v_client_id, 'Client Research Review Call', 'Zoom Call with Researchers', false, 5),
     (v_client_id, 'Close-Out Survey', 'How did we do?', false, 6);
 
   update client_applications
