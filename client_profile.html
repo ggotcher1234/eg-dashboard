@@ -530,16 +530,34 @@
   };
   const COMPETITORS_CONFIG = {
     key: "competitors", table: "client_competitors", title: "Competitors",
+    hint: "Import or export the list as a CSV with columns: Company, URL, Location, Notes.",
     fields: [
-      { name: "name", label: "Name", type: "text", required: true },
-      { name: "website_url", label: "Website", type: "url" },
+      { name: "name", label: "Company", type: "text", required: true },
+      { name: "website_url", label: "URL", type: "url" },
+      { name: "location", label: "Location", type: "text" },
       { name: "notes", label: "Notes/NAICS Code", type: "text" },
     ],
-    render: (r) => ({ title: r.name, subHtml: [r.website_url ? `<a href="${escapeHtml(r.website_url)}" target="_blank" rel="noopener">${escapeHtml(r.website_url)}</a>` : "", escapeHtml(r.notes || "")].filter(Boolean).join(" · ") }),
+    // Maps this config's own field names to the CSV column headers Greg's
+    // reference tool uses (Company, URL, Location, Notes), in order —
+    // shared by Competitors and Top Customers since they're the same shape.
+    csv: {
+      headers: ["Company", "URL", "Location", "Notes"],
+      fieldOrder: ["name", "website_url", "location", "notes"],
+    },
+    render: (r) => ({
+      title: r.name,
+      subHtml: [
+        r.website_url ? `<a href="${escapeHtml(r.website_url)}" target="_blank" rel="noopener">${escapeHtml(r.website_url)}</a>` : "",
+        escapeHtml(r.location || ""),
+        escapeHtml(r.notes || ""),
+      ].filter(Boolean).join(" · "),
+    }),
   };
   const TOP_CUSTOMERS_CONFIG = {
     key: "top_customers", table: "client_top_customers", title: "Top Customers",
+    hint: COMPETITORS_CONFIG.hint,
     fields: COMPETITORS_CONFIG.fields,
+    csv: COMPETITORS_CONFIG.csv,
     render: COMPETITORS_CONFIG.render,
   };
   // Resource Vault is a hybrid: the 8 standard EG resources are shared
@@ -645,6 +663,11 @@
               </div>
             `).join("")}
             <button type="submit" class="btn-secondary btn-sm">+ Add</button>
+            ${cfg.csv ? `
+            <button type="button" class="btn-secondary btn-sm" data-csv-import="${cfg.key}">&#8593; Import CSV</button>
+            <button type="button" class="btn-secondary btn-sm" data-csv-export="${cfg.key}">&#8595; Export CSV</button>
+            <input type="file" accept=".csv,text/csv" id="${cfg.key}-csv-file" style="display:none;" />
+            ` : ""}
           </form>
           `}
         </div>
@@ -675,7 +698,96 @@
         continue;
       }
       $(`${cfg.key}-add-form`).addEventListener("submit", (e) => { e.preventDefault(); addListRow(cfg); });
+
+      if (cfg.csv) {
+        const fileInput = $(`${cfg.key}-csv-file`);
+        document.querySelector(`[data-csv-import="${cfg.key}"]`).addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", () => importCsvRows(cfg, fileInput.files[0]));
+        document.querySelector(`[data-csv-export="${cfg.key}"]`).addEventListener("click", () => exportCsvRows(cfg));
+      }
     }
+  }
+
+  // ---------- CSV import/export for Competitors & Top Customers ----------
+  // Minimal RFC-4180-ish parser: handles quoted fields, escaped "" quotes,
+  // and commas/newlines inside quotes. Good enough for a spreadsheet export
+  // pasted/saved as CSV — not trying to handle every edge case in the spec.
+  function parseCsv(text) {
+    const rows = [];
+    let row = [], field = "", inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+        else if (c === '"') { inQuotes = false; }
+        else { field += c; }
+      } else if (c === '"') {
+        inQuotes = true;
+      } else if (c === ",") {
+        row.push(field); field = "";
+      } else if (c === "\n" || c === "\r") {
+        if (c === "\r" && text[i + 1] === "\n") i++;
+        row.push(field); field = "";
+        if (row.some((v) => v !== "")) rows.push(row);
+        row = [];
+      } else {
+        field += c;
+      }
+    }
+    if (field !== "" || row.length) { row.push(field); if (row.some((v) => v !== "")) rows.push(row); }
+    return rows;
+  }
+
+  function csvField(value) {
+    const v = value == null ? "" : String(value);
+    return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  }
+
+  function exportCsvRows(cfg) {
+    const rows = listData[cfg.key] || [];
+    const lines = [cfg.csv.headers.map(csvField).join(",")];
+    for (const r of rows) {
+      lines.push(cfg.csv.fieldOrder.map((f) => csvField(r[f])).join(","));
+    }
+    const blob = new Blob([lines.join("\r\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${currentClient.name.replace(/[^a-zA-Z0-9]+/g, "_")}-${cfg.key}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importCsvRows(cfg, file) {
+    if (!file) return;
+    const fileInput = $(`${cfg.key}-csv-file`);
+    const text = await file.text();
+    let allRows = parseCsv(text);
+    if (!allRows.length) { showBanner("That CSV looks empty.", "error"); fileInput.value = ""; return; }
+
+    // Drop a header row if the first row's first cell looks like the
+    // "Company" header rather than actual data (case-insensitive, so an
+    // export from this same feature — or Greg's reference tool — round-trips).
+    if (allRows[0][0] && allRows[0][0].trim().toLowerCase() === cfg.csv.headers[0].toLowerCase()) {
+      allRows = allRows.slice(1);
+    }
+
+    const nameFieldIndex = cfg.csv.fieldOrder.indexOf(cfg.fields.find((f) => f.required)?.name);
+    const values = allRows
+      .filter((r) => nameFieldIndex < 0 || (r[nameFieldIndex] || "").trim())
+      .map((r, i) => {
+        const obj = { client_id: currentClient.id, sort_order: (listData[cfg.key] || []).length + i + 1 };
+        cfg.csv.fieldOrder.forEach((fieldName, idx) => { obj[fieldName] = (r[idx] || "").trim() || null; });
+        return obj;
+      });
+
+    if (!values.length) { showBanner("No rows found in that CSV to import.", "error"); fileInput.value = ""; return; }
+
+    const { error } = await sb.from(cfg.table).insert(values);
+    fileInput.value = "";
+    if (error) { showBanner(`Couldn't import CSV: ` + error.message, "error"); return; }
+    showBanner(`Imported ${values.length} row${values.length === 1 ? "" : "s"} into ${cfg.title}.`, "success");
+    await loadListSection(cfg);
   }
 
   async function loadListSection(cfg) {
