@@ -425,20 +425,28 @@
   }
 
   const WORKFLOW_STEPS = [
-    ["discovery_doc_url", "Discovery Call Notes"],
-    ["controlling_doc_url", "Controlling Document"],
-    ["research_review_url", "Research Review"],
-    ["closeout_survey_url", "Close-Out Evaluation"],
+    { urlKey: "discovery_doc_url", pathKey: "discovery_doc_storage_path", label: "Discovery Call Notes" },
+    { urlKey: "controlling_doc_url", pathKey: "controlling_doc_storage_path", label: "Controlling Document" },
+    { urlKey: "research_review_url", pathKey: null, label: "Research Review" },
+    { urlKey: "closeout_survey_url", pathKey: "closeout_survey_storage_path", label: "Close-Out Evaluation" },
   ];
 
   function renderWorkflow(workflow) {
     const w = workflow || {};
-    $("workflow-tracker").innerHTML = WORKFLOW_STEPS.map(([key, label]) => {
-      const url = w[key];
-      return url
-        ? `<a class="wf-step filled" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`
-        : `<div class="wf-step">${escapeHtml(label)}</div>`;
+    $("workflow-tracker").innerHTML = WORKFLOW_STEPS.map((step) => {
+      const path = step.pathKey ? w[step.pathKey] : null;
+      const url = w[step.urlKey];
+      if (path) {
+        return `<a class="wf-step filled wf-doc-link" data-path="${escapeHtml(path)}" href="#">${escapeHtml(step.label)}</a>`;
+      }
+      if (url) {
+        return `<a class="wf-step filled" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(step.label)}</a>`;
+      }
+      return `<div class="wf-step">${escapeHtml(step.label)}</div>`;
     }).join("");
+    $("workflow-tracker").querySelectorAll(".wf-doc-link").forEach((el) => {
+      el.addEventListener("click", (e) => { e.preventDefault(); openSignedDoc(el.dataset.path)(); });
+    });
   }
 
   function renderResearchGrid(researchAreas) {

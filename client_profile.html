@@ -259,16 +259,17 @@
       <!-- ===== EG Workflow Documents ===== -->
       <div class="card">
         <h2>EG Workflow Documents</h2>
+        <div class="field-hint" style="margin-bottom:10px;">Discovery, Controlling, and Close-Out are client-specific files — upload them directly. Research Review links out to the Fathom call recording instead.</div>
         <form id="workflow-form">
           <div class="field-grid">
             <div>
               <div class="field">
-                <label for="wf-discovery">1. Discovery Document URL</label>
-                <input type="url" id="wf-discovery" placeholder="https://…" />
+                <label>1. Discovery Document</label>
+                <div id="wf-discovery-file"></div>
               </div>
               <div class="field">
-                <label for="wf-controlling">2. Controlling Document URL</label>
-                <input type="url" id="wf-controlling" placeholder="https://…" />
+                <label>2. Controlling Document</label>
+                <div id="wf-controlling-file"></div>
               </div>
             </div>
             <div>
@@ -277,12 +278,12 @@
                 <input type="url" id="wf-review" placeholder="https://fathom.video/share/…" />
               </div>
               <div class="field">
-                <label for="wf-closeout">4. Close-Out Survey URL</label>
-                <input type="url" id="wf-closeout" placeholder="https://…" />
+                <label>4. Close-Out Survey</label>
+                <div id="wf-closeout-file"></div>
               </div>
             </div>
           </div>
-          <button type="submit" class="btn-primary btn-sm" id="workflow-save-btn">Save Workflow Links</button>
+          <button type="submit" class="btn-primary btn-sm" id="workflow-save-btn">Save Research Review Link</button>
         </form>
       </div>
 
@@ -491,13 +492,80 @@
   });
 
   // ---------- EG Workflow Documents ----------
+  // Discovery/Controlling/Close-Out are client-unique files the Team Lead
+  // uploads directly (same upload-only pattern as Resource Vault's custom
+  // items) — no more pasting a URL for these three. Research Review stays
+  // a URL field: it's a link to an externally-hosted Fathom call
+  // recording, not a document to upload.
+  const WORKFLOW_FILE_FIELDS = [
+    { key: "discovery", label: "Discovery Document", column: "discovery_doc_storage_path" },
+    { key: "controlling", label: "Controlling Document", column: "controlling_doc_storage_path" },
+    { key: "closeout", label: "Close-Out Survey", column: "closeout_survey_storage_path" },
+  ];
+  let workflowData = null;
+
   async function loadWorkflowLinks(clientId) {
     const { data, error } = await sb.from("client_content").select("*").eq("client_id", clientId).maybeSingle();
     if (error) { showBanner("Couldn't load workflow links: " + error.message, "error"); return; }
-    $("wf-discovery").value = (data && data.discovery_doc_url) || "";
-    $("wf-controlling").value = (data && data.controlling_doc_url) || "";
-    $("wf-review").value = (data && data.research_review_url) || "";
-    $("wf-closeout").value = (data && data.closeout_survey_url) || "";
+    workflowData = data || {};
+    $("wf-review").value = workflowData.research_review_url || "";
+    WORKFLOW_FILE_FIELDS.forEach(renderWorkflowFileField);
+  }
+
+  function renderWorkflowFileField(f) {
+    const container = $(`wf-${f.key}-file`);
+    const path = workflowData && workflowData[f.column];
+    if (path) {
+      container.innerHTML = `
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <span class="wf-file-link" style="cursor:pointer; color:var(--navy-light); font-weight:600; font-size:13px;">&#128196; ${escapeHtml(fileNameFromPath(path))}</span>
+          <button type="button" class="btn-secondary btn-sm" data-wf-replace>Replace</button>
+          <button type="button" class="btn-secondary btn-sm" data-wf-remove>Remove</button>
+        </div>
+      `;
+      container.querySelector(".wf-file-link").addEventListener("click", async () => {
+        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, 60);
+        if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+        window.open(data.signedUrl, "_blank");
+      });
+      container.querySelector("[data-wf-replace]").addEventListener("click", () => pickWorkflowFile(f));
+      container.querySelector("[data-wf-remove]").addEventListener("click", () => removeWorkflowFile(f));
+    } else {
+      container.innerHTML = `<label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload file<input type="file" class="wf-upload-input" style="display:none;" /></label>`;
+      container.querySelector(".wf-upload-input").addEventListener("change", (e) => {
+        if (e.target.files.length) uploadWorkflowFile(f, e.target.files[0]);
+      });
+    }
+  }
+
+  function pickWorkflowFile(f) {
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.addEventListener("change", () => { if (picker.files.length) uploadWorkflowFile(f, picker.files[0]); });
+    picker.click();
+  }
+
+  async function uploadWorkflowFile(f, file) {
+    const oldPath = workflowData && workflowData[f.column];
+    const path = `clients/${currentClient.id}/workflow/${f.key}-${Date.now()}-${sanitizeFilename(file.name)}`;
+    const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+    if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    const { error } = await sb.from("client_content").update({ [f.column]: path }).eq("client_id", currentClient.id);
+    if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
+    if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
+    workflowData[f.column] = path;
+    renderWorkflowFileField(f);
+    showBanner(`${f.label} uploaded.`, "success");
+  }
+
+  async function removeWorkflowFile(f) {
+    const oldPath = workflowData && workflowData[f.column];
+    const { error } = await sb.from("client_content").update({ [f.column]: null }).eq("client_id", currentClient.id);
+    if (error) { showBanner("Couldn't remove file: " + error.message, "error"); return; }
+    if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
+    workflowData[f.column] = null;
+    renderWorkflowFileField(f);
+    showBanner(`${f.label} removed.`, "success");
   }
 
   $("workflow-form").addEventListener("submit", async (e) => {
@@ -506,15 +574,13 @@
     btn.disabled = true;
     btn.textContent = "Saving…";
     const { error } = await sb.from("client_content").update({
-      discovery_doc_url: $("wf-discovery").value.trim() || null,
-      controlling_doc_url: $("wf-controlling").value.trim() || null,
       research_review_url: $("wf-review").value.trim() || null,
-      closeout_survey_url: $("wf-closeout").value.trim() || null,
     }).eq("client_id", currentClient.id);
     btn.disabled = false;
-    btn.textContent = "Save Workflow Links";
-    if (error) { showBanner("Couldn't save workflow links: " + error.message, "error"); return; }
-    showBanner("Workflow links saved.", "success");
+    btn.textContent = "Save Research Review Link";
+    if (error) { showBanner("Couldn't save the Research Review link: " + error.message, "error"); return; }
+    if (workflowData) workflowData.research_review_url = $("wf-review").value.trim() || null;
+    showBanner("Research Review link saved.", "success");
   });
 
   // ---------- Generic accordion list sections ----------
