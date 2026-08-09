@@ -147,6 +147,11 @@
   header .brand-row { display: flex; align-items: center; gap: 14px; }
   .brand-badge { background: #fff; border-radius: 8px; padding: 5px 10px; display: flex; align-items: center; flex-shrink: 0; }
   .brand-badge img { height: 26px; display: block; }
+  .share-link-row { margin-top: 12px; }
+  .share-link-row label { display: block; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 4px; }
+  .share-link-bar { display: flex; gap: 8px; align-items: center; }
+  .share-link-bar input { flex: 1; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: #f8fafb; color: var(--text); font-family: inherit; }
+  .share-link-bar .btn-secondary.disabled-link { opacity: 0.5; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -201,6 +206,14 @@
           <a href="#" id="p-workspace-link">&larr; Assignments &amp; Hours</a>
           &nbsp;&middot;&nbsp;
           <a href="#" id="p-app-info-link">Application Info &rarr;</a>
+        </div>
+        <div class="share-link-row" id="share-link-row">
+          <label>Client-Facing Link</label>
+          <div class="share-link-bar">
+            <input type="text" id="share-link-input" readonly />
+            <button type="button" class="btn-secondary btn-sm" id="share-link-copy-btn">Copy</button>
+            <a class="btn-secondary btn-sm" id="share-link-open-btn" href="#" target="_blank" rel="noopener">Open &rarr;</a>
+          </div>
         </div>
       </div>
 
@@ -313,6 +326,10 @@
   const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // Always build client-facing links against the real hosted site, never
+  // against wherever this internal tool happens to be opened from (e.g. a
+  // local file:// path) — the client will never have access to that.
+  const PUBLIC_SITE_BASE = "https://egdb.netlify.app/";
 
   let currentUser = null;
   let isSuperAdmin = false;
@@ -429,6 +446,7 @@
     $("p-lifecycle-badge").textContent = client.status;
     $("p-workspace-link").href = `client_workspace.html?client=${client.id}`;
     $("p-app-info-link").href = `client_applications.html?client=${client.id}`;
+    renderShareLink(client);
 
     renderStatusToggle(client);
     fillCompanyForm(client);
@@ -438,6 +456,36 @@
     await loadDocuments();
     await loadResearchQuestions();
   }
+
+  // ---------- Client-Facing Link ----------
+  function renderShareLink(client) {
+    const input = $("share-link-input");
+    const copyBtn = $("share-link-copy-btn");
+    const openBtn = $("share-link-open-btn");
+    if (!client.slug) {
+      input.value = "This client doesn't have a link slug set yet — contact a Super Admin.";
+      openBtn.href = "#";
+      openBtn.classList.add("disabled-link");
+      copyBtn.disabled = true;
+      return;
+    }
+    const shareUrl = new URL(`client_public.html?slug=${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href;
+    input.value = shareUrl;
+    openBtn.href = shareUrl;
+    openBtn.classList.remove("disabled-link");
+    copyBtn.disabled = false;
+  }
+
+  $("share-link-copy-btn").addEventListener("click", async () => {
+    const input = $("share-link-input");
+    input.select();
+    try {
+      await navigator.clipboard.writeText(input.value);
+      showBanner("Client-facing link copied.", "success");
+    } catch (e) {
+      showBanner("Couldn't copy automatically — the link is selected, press Cmd/Ctrl+C.", "error");
+    }
+  });
 
   // ---------- Client Status ----------
   function renderStatusToggle(c) {

@@ -118,12 +118,7 @@
   .destination-card .dc-title { font-weight: 700; font-size: 14px; color: var(--navy); }
   .destination-card .dc-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
-  .preview-box { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 18px; }
-  .preview-box h4 { font-size: 12.5px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.3px; margin: 16px 0 6px; }
-  .preview-box h4:first-child { margin-top: 0; }
-  .preview-note { background: #fdf1dc; border: 1px solid #f0dca6; color: #7a5c17; font-size: 12.5px; padding: 8px 12px; border-radius: 6px; margin-bottom: 14px; }
-  .research-item { font-size: 13.5px; margin-bottom: 6px; padding: 8px 10px; background: #f8fafb; border-radius: 6px; }
-  .doc-link { display: block; font-size: 13px; color: var(--navy-light); margin-bottom: 5px; cursor: pointer; }
+  .destination-card.disabled-link { opacity: 0.5; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -232,12 +227,11 @@
         <div class="dc-title">Profile &amp; Documents</div>
         <div class="dc-sub">Company info, contacts, competitors, research files</div>
       </a>
-      <div class="destination-card" id="cm-dashboard-btn">
-        <div class="dc-title">Client Dashboard <span style="font-weight:400; text-transform:none; color:var(--muted); font-size:11px;">(preview)</span></div>
-        <div class="dc-sub">What the client would see on their page</div>
-      </div>
+      <a class="destination-card" id="cm-dashboard-btn" href="#" target="_blank" rel="noopener">
+        <div class="dc-title">Client-Facing Dashboard</div>
+        <div class="dc-sub">Open the live page the client sees</div>
+      </a>
     </div>
-    <div id="dashboard-preview" class="preview-box hidden"></div>
   </div>
 </div>
 
@@ -245,6 +239,10 @@
   const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // Always build client-facing links against the real hosted site, never
+  // against wherever this internal tool happens to be opened from (e.g. a
+  // local file:// path) — the client will never have access to that.
+  const PUBLIC_SITE_BASE = "https://egdb.netlify.app/";
   const RECENTS_KEY = "eg_recent_clients";
 
   let currentUser = null;
@@ -488,8 +486,13 @@
     $("cm-meta").innerHTML = `${partner ? escapeHtml(partner.code) + " — " + escapeHtml(partner.name) : "—"} &middot; <span class="badge badge-${client.status}">${client.status}</span> <span class="badge badge-${client.project_status}">${PROJECT_STATUS_LABELS[client.project_status] || client.project_status}</span>`;
     $("cm-hours-link").href = `client_workspace.html?client=${client.id}`;
     $("cm-profile-link").href = `client_profile.html?client=${client.id}`;
-    $("dashboard-preview").classList.add("hidden");
-    $("dashboard-preview").innerHTML = "";
+    if (client.slug) {
+      $("cm-dashboard-btn").href = new URL(`client_public.html?slug=${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href;
+      $("cm-dashboard-btn").classList.remove("disabled-link");
+    } else {
+      $("cm-dashboard-btn").href = "#";
+      $("cm-dashboard-btn").classList.add("disabled-link");
+    }
     $("client-overlay").classList.add("open");
   }
 
@@ -498,58 +501,7 @@
 
   $("cm-hours-link").addEventListener("click", () => renderRecents()); // refresh recents order after visiting
   $("cm-profile-link").addEventListener("click", () => renderRecents());
-
-  $("cm-dashboard-btn").addEventListener("click", async () => {
-    const box = $("dashboard-preview");
-    if (!box.classList.contains("hidden")) { box.classList.add("hidden"); return; }
-    box.classList.remove("hidden");
-    box.innerHTML = `<div class="preview-note">Loading preview…</div>`;
-
-    const client = activeClient;
-    let researchAreas = {};
-    let clientFacingDocs = [];
-
-    if (client.status === "finalized") {
-      const { data: snap } = await sb
-        .from("engagement_snapshots")
-        .select("research_areas, documents")
-        .eq("client_id", client.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (snap) { researchAreas = snap.research_areas || {}; clientFacingDocs = snap.documents || []; }
-    } else {
-      const { data: content } = await sb.from("client_content").select("research_areas").eq("client_id", client.id).maybeSingle();
-      researchAreas = content ? content.research_areas || {} : {};
-      const { data: docs } = await sb.from("documents").select("file_name, storage_path").eq("client_id", client.id).eq("visibility", "client_facing");
-      clientFacingDocs = docs || [];
-    }
-
-    const areaKeys = Object.keys(researchAreas || {});
-    const areasHtml = areaKeys.length
-      ? areaKeys.map((k) => `<div class="research-item"><strong>${escapeHtml(k)}:</strong> ${escapeHtml(typeof researchAreas[k] === "string" ? researchAreas[k] : JSON.stringify(researchAreas[k]))}</div>`).join("")
-      : `<div class="research-item" style="color:var(--muted);">No research content added yet.</div>`;
-
-    const docsHtml = clientFacingDocs.length
-      ? clientFacingDocs.map((d) => `<span class="doc-link" data-path="${escapeHtml(d.storage_path)}">${escapeHtml(d.file_name)}</span>`).join("")
-      : `<div style="color:var(--muted); font-size:13px;">No client-facing documents yet.</div>`;
-
-    box.innerHTML = `
-      <div class="preview-note">This is a simplified staff preview of what ${escapeHtml(client.name)}'s public page currently shows — the full polished client-facing dashboard is being built next.</div>
-      <h4>Research Areas</h4>
-      ${areasHtml}
-      <h4>Client-Facing Documents</h4>
-      ${docsHtml}
-    `;
-
-    box.querySelectorAll(".doc-link").forEach((el) => {
-      el.addEventListener("click", async () => {
-        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(el.dataset.path, 60);
-        if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
-        window.open(data.signedUrl, "_blank");
-      });
-    });
-  });
+  $("cm-dashboard-btn").addEventListener("click", () => renderRecents());
 </script>
 </body>
 </html>
