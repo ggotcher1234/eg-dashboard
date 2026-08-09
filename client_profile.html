@@ -109,6 +109,14 @@
   .list-row-main .lr-sub a:hover { text-decoration: underline; }
   .list-empty { color: var(--muted); font-size: 13.5px; padding: 8px 0; }
 
+  .list-row-edit { display: flex; align-items: flex-end; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0f2f4; }
+  .list-row-edit:first-child { padding-top: 0; }
+  .list-row-edit .list-checkbox { margin-bottom: 9px; flex-shrink: 0; }
+  .lre-fields { display: flex; gap: 16px; flex-wrap: wrap; flex: 1; }
+  .lre-fields .field { margin-bottom: 0; flex: 1; min-width: 140px; }
+  .lre-fields label { font-size: 11px; }
+  .list-row-edit .icon-btn { flex-shrink: 0; }
+
   .add-row-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); align-items: flex-end; }
   .add-row-form .field { margin-bottom: 0; flex: 1; min-width: 140px; }
   .add-row-form label { font-size: 11px; }
@@ -654,21 +662,74 @@
       list.innerHTML = `<div class="list-empty">Nothing added yet.</div>`;
       return;
     }
-    list.innerHTML = rows.map((r) => {
-      const rendered = cfg.render(r);
-      const checklistPrefix = cfg.isChecklist
-        ? `<input type="checkbox" class="list-checkbox" data-toggle-id="${r.id}" ${r.completed ? "checked" : ""} style="margin-right:8px;" />`
-        : "";
-      return `
-        <div class="list-row">
-          <div class="list-row-main">
-            <div class="lr-title" style="${cfg.isChecklist && r.completed ? "text-decoration:line-through; color:var(--muted);" : ""}">${checklistPrefix}${escapeHtml(rendered.title)}</div>
-            ${rendered.sub || rendered.subHtml ? `<div class="lr-sub">${rendered.subHtml || escapeHtml(rendered.sub)}</div>` : ""}
+
+    // Read-only sections (Team Members) keep the simple title/sub display —
+    // nothing there is directly editable, it just reflects the Assignments
+    // & Hours page. Every other section renders each existing row as
+    // inline-editable fields (same look as the "+ Add" row below it), so
+    // there's no separate read-only vs. edit mode — every field, on every
+    // row, is always live and editable, matching the reference tool.
+    if (cfg.readOnly) {
+      list.innerHTML = rows.map((r) => {
+        const rendered = cfg.render(r);
+        return `
+          <div class="list-row">
+            <div class="list-row-main">
+              <div class="lr-title">${escapeHtml(rendered.title)}</div>
+              ${rendered.sub || rendered.subHtml ? `<div class="lr-sub">${rendered.subHtml || escapeHtml(rendered.sub)}</div>` : ""}
+            </div>
           </div>
-          ${cfg.readOnly ? "" : `<button type="button" class="btn-danger icon-btn" data-delete-id="${r.id}" title="Delete">&times;</button>`}
+        `;
+      }).join("");
+      return;
+    }
+
+    list.innerHTML = rows.map((r) => `
+      <div class="list-row-edit">
+        ${cfg.isChecklist ? `<input type="checkbox" class="list-checkbox" data-toggle-id="${r.id}" ${r.completed ? "checked" : ""} />` : ""}
+        <div class="lre-fields">
+          ${cfg.fields.map((f) => `
+            <div class="field">
+              <label>${escapeHtml(f.label)}</label>
+              <input
+                type="${f.type}"
+                class="row-input-edit"
+                data-row-id="${r.id}"
+                data-field="${f.name}"
+                ${f.required ? "required" : ""}
+                value="${escapeHtml(r[f.name] || "")}"
+                style="${cfg.isChecklist && f.name === cfg.fields[0].name && r.completed ? "text-decoration:line-through; color:var(--muted);" : ""}"
+              />
+            </div>
+          `).join("")}
         </div>
-      `;
-    }).join("");
+        <button type="button" class="btn-danger icon-btn" data-delete-id="${r.id}" title="Delete">&times;</button>
+      </div>
+    `).join("");
+
+    list.querySelectorAll(".row-input-edit").forEach((inp) => {
+      const original = inp.value;
+      inp.addEventListener("blur", async () => {
+        const value = inp.value.trim();
+        const rowId = inp.dataset.rowId;
+        const fieldName = inp.dataset.field;
+        const fieldCfg = cfg.fields.find((f) => f.name === fieldName);
+        if (value === original) return;
+        if (fieldCfg.required && !value) {
+          showBanner(`${fieldCfg.label} can't be empty.`, "error");
+          inp.value = original;
+          return;
+        }
+        const { error } = await sb.from(cfg.table).update({ [fieldName]: value || null }).eq("id", rowId);
+        if (error) {
+          showBanner(`Couldn't save: ` + error.message, "error");
+          inp.value = original;
+          return;
+        }
+        const row = (listData[cfg.key] || []).find((x) => x.id === rowId);
+        if (row) row[fieldName] = value || null;
+      });
+    });
 
     list.querySelectorAll("[data-delete-id]").forEach((btn) => {
       btn.addEventListener("click", () => deleteListRow(cfg, btn.dataset.deleteId));
