@@ -108,6 +108,28 @@
   footer .footer-right { display: flex; gap: 20px; text-transform: uppercase; letter-spacing: 0.3px; font-size: 10.5px; }
   footer .footer-right div div:first-child { color: #7d93aa; }
   footer .footer-right div div:last-child { color: #fff; font-weight: 700; margin-top: 2px; }
+
+  .archive-badge {
+    display: inline-block; background: var(--accent); color: #fff; font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px; padding: 3px 10px; border-radius: 999px; margin-top: 4px;
+  }
+  #print-btn {
+    font-family: inherit; cursor: pointer; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.08);
+    color: #fff; border-radius: 6px; padding: 8px 14px; font-size: 12.5px; font-weight: 700; flex-shrink: 0;
+  }
+  #print-btn:hover { background: rgba(255,255,255,0.18); }
+
+  /* This page doubles as the client's downloadable/printable leave-behind
+     record — printing (or "Save as PDF") should show every section fully
+     expanded, with none of the click-to-open chrome. */
+  @media print {
+    body { background: #fff; }
+    #print-btn, .stat-pill .count, .ab-chevron { display: none !important; }
+    .action-bar { cursor: default; }
+    .action-body { display: block !important; }
+    .card, .research-card, .action-bar, .action-body { break-inside: avoid; }
+    a { text-decoration: none; }
+  }
 </style>
 </head>
 <body>
@@ -127,9 +149,13 @@
       <div class="brand-badge"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></div>
       <h1 id="brand-title">Economic Gardening Dashboard</h1>
     </div>
-    <div class="header-right">
-      Client: <strong id="client-name"></strong><br />
-      <span id="status-line"></span>
+    <div style="display:flex; align-items:center; gap:18px;">
+      <div class="header-right">
+        Client: <strong id="client-name"></strong><br />
+        <span id="status-line"></span><br />
+        <span id="archive-badge-wrap" class="hidden"><span class="archive-badge" id="archive-badge">Final Engagement Archive</span></span>
+      </div>
+      <button type="button" id="print-btn">&#128190; Download / Print</button>
     </div>
   </header>
 
@@ -182,7 +208,7 @@
   const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  const STATUS_LABELS = { active: "Active Engagement", finalized: "Completed Engagement", archived: "Archived" };
+  const STATUS_LABELS = { active: "Active Engagement", finalized: "Final Engagement Archive", archived: "Archived" };
 
   const RESEARCH_AREAS = [
     ["market_dynamics", "Market Dynamics Research", "&#128200;"],
@@ -342,16 +368,16 @@
     { key: "next_steps", icon: "&#9989;", label: () => "Project Next Steps" },
   ];
 
-  function renderActionBars(row) {
+  function renderActionBars(row, expandAll) {
     const container = $("action-bars");
     container.innerHTML = ACTION_BAR_DEFS.map((def) => {
       const rows = row[def.key] || [];
       return `
-        <div class="action-bar" id="bar-${def.key}" data-target="${def.key}">
+        <div class="action-bar ${expandAll ? "open" : ""}" id="bar-${def.key}" data-target="${def.key}">
           <span>${def.icon} ${escapeHtml(def.label(rows.length))}</span>
           <span class="ab-chevron">&#9656;</span>
         </div>
-        <div class="action-body" id="bar-${def.key}-body">${renderActionBody(def.key, rows)}</div>
+        <div class="action-body ${expandAll ? "open" : ""}" id="bar-${def.key}-body">${renderActionBody(def.key, rows)}</div>
       `;
     }).join("");
 
@@ -506,14 +532,22 @@
     }
 
     const row = data[0];
+    const isFinalized = row.client_status === "finalized";
+
     document.title = `${row.client_name} — Economic Gardening Dashboard`;
     $("client-name").textContent = row.client_name;
     $("status-line").textContent = STATUS_LABELS[row.client_status] || row.client_status;
 
+    // Once an engagement is finalized, this page IS the leave-behind — the
+    // permanent record the client keeps. Everything renders fully expanded
+    // (no clicking through accordions to see the whole archive) and gets a
+    // visible "Final Engagement Archive" badge next to the status line.
+    if (isFinalized) $("archive-badge-wrap").classList.remove("hidden");
+
     renderBrandHeader(row);
     renderCompany(row);
     renderStatPills(row);
-    renderActionBars(row);
+    renderActionBars(row, isFinalized);
     renderWorkflow(row.workflow);
     renderResearchGrid(row.research_areas);
     renderGeneralDocs(row.documents);
@@ -521,6 +555,8 @@
     $("loading-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
   }
+
+  $("print-btn").addEventListener("click", () => window.print());
 
   init();
 </script>
