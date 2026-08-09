@@ -607,10 +607,20 @@
       </div>
     `).join("");
 
+    // True accordion behavior — opening one section closes any other
+    // section that was open, so the page doesn't end up with every list
+    // expanded at once as resources/contacts/etc. pile up.
     document.querySelectorAll("[data-accordion]").forEach((hdr) => {
       hdr.addEventListener("click", () => {
-        hdr.classList.toggle("open");
-        $(`${hdr.dataset.accordion}-body`).classList.toggle("open");
+        const wasOpen = hdr.classList.contains("open");
+        document.querySelectorAll("[data-accordion]").forEach((h) => {
+          h.classList.remove("open");
+          $(`${h.dataset.accordion}-body`).classList.remove("open");
+        });
+        if (!wasOpen) {
+          hdr.classList.add("open");
+          $(`${hdr.dataset.accordion}-body`).classList.add("open");
+        }
       });
     });
 
