@@ -305,16 +305,6 @@
         <div id="research-areas-sections"></div>
       </div>
 
-      <!-- ===== Documents (General) ===== -->
-      <div class="card">
-        <h2>General Documents</h2>
-        <div class="meta-line" style="margin-bottom:6px;">Anything that isn't tied to a specific research question above. Drop it in, same as attaching a file in Podio, and mark it "Client-facing" if it should show on the client's public dashboard.</div>
-        <label class="btn-primary btn-sm upload-btn-wrap" style="display:inline-block; margin-bottom:14px;">
-          + Upload file(s)
-          <input type="file" multiple id="doc-upload-input" />
-        </label>
-        <div id="doc-list"></div>
-      </div>
     </div>
   </main>
 </div>
@@ -1165,8 +1155,11 @@
   }
 
   // ---------- General Documents: one upload box, no research-area tagging ----------
-  // (Research-area-specific files now live under a Question in the
-  // Economic Gardening Research Reports section below, not here.)
+  // Every upload now happens inside its own section — Resource Vault
+  // items, Workflow Documents, and (below) a research Question — so there's
+  // no more standalone "General Documents" upload box. allDocuments still
+  // loads every document row for the client; the Research Reports section
+  // below filters it down by question_id/research_area as needed.
   const RESEARCH_AREAS = [
     ["market_dynamics", "Market Dynamics Research"],
     ["outbound", "Outbound Marketing"],
@@ -1175,88 +1168,10 @@
   ];
   let allDocuments = [];
 
-  $("doc-upload-input").addEventListener("change", async () => {
-    const input = $("doc-upload-input");
-    if (!input.files.length) return;
-    input.disabled = true;
-    const errors = await uploadDocuments(input.files);
-    input.disabled = false;
-    input.value = "";
-    if (errors.length) showBanner("Some files didn't upload: " + errors.join("; "), "error");
-    else showBanner("File(s) uploaded.", "success");
-    await loadDocuments();
-  });
-
   async function loadDocuments() {
     const { data, error } = await sb.from("documents").select("*").eq("client_id", currentClient.id).order("uploaded_at", { ascending: false });
     if (error) { showBanner("Couldn't load documents: " + error.message, "error"); return; }
     allDocuments = data;
-    renderDocList();
-  }
-
-  function renderDocList() {
-    const el = $("doc-list");
-    // General Documents only shows truly untagged files — anything tied to
-    // a research question (or even just an area, the old way) renders in
-    // the Research Reports section instead.
-    const generalDocs = allDocuments.filter((d) => !d.question_id && !d.research_area);
-    if (!generalDocs.length) { el.innerHTML = `<div class="list-empty">No files yet — use "+ Upload file(s)" above.</div>`; return; }
-    el.innerHTML = generalDocs.map((d) => `
-      <div class="list-row">
-        <div class="list-row-main">
-          <div class="lr-title doc-download" data-path="${escapeHtml(d.storage_path)}" data-name="${escapeHtml(d.file_name)}" style="cursor:pointer; color:var(--navy-light);">${escapeHtml(d.file_name)}</div>
-        </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <button type="button" class="btn-secondary icon-btn doc-visibility-toggle" data-id="${d.id}" data-visibility="${d.visibility}">
-            ${d.visibility === "client_facing" ? "Client-facing" : "Internal"}
-          </button>
-          <button type="button" class="btn-danger icon-btn" data-delete-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}" title="Delete">&times;</button>
-        </div>
-      </div>
-    `).join("");
-
-    el.querySelectorAll(".doc-download").forEach((div) => {
-      div.addEventListener("click", async () => {
-        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(div.dataset.path, 60);
-        if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
-        window.open(data.signedUrl, "_blank");
-      });
-    });
-    el.querySelectorAll(".doc-visibility-toggle").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const next = btn.dataset.visibility === "client_facing" ? "internal" : "client_facing";
-        const { error } = await sb.from("documents").update({ visibility: next }).eq("id", btn.dataset.id);
-        if (error) { showBanner("Couldn't update visibility: " + error.message, "error"); return; }
-        await loadDocuments();
-      });
-    });
-    el.querySelectorAll("[data-delete-doc]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        await sb.storage.from("client-documents").remove([btn.dataset.path]);
-        const { error } = await sb.from("documents").delete().eq("id", btn.dataset.deleteDoc);
-        if (error) { showBanner("Couldn't delete file: " + error.message, "error"); return; }
-        await loadDocuments();
-      });
-    });
-  }
-
-  async function uploadDocuments(fileList) {
-    const errors = [];
-    for (const file of Array.from(fileList)) {
-      const path = `clients/${currentClient.id}/${Date.now()}-${sanitizeFilename(file.name)}`;
-      const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
-      if (uploadErr) { errors.push(`${file.name}: ${uploadErr.message}`); continue; }
-      const { error: rowErr } = await sb.from("documents").insert({
-        client_id: currentClient.id,
-        file_name: file.name,
-        storage_path: path,
-        visibility: "internal",
-        research_area: null,
-        uploaded_by: currentUser.id,
-      });
-      if (rowErr) errors.push(`${file.name}: ${rowErr.message}`);
-    }
-    return errors;
   }
 
   // ---------- Economic Gardening Research Reports (Questions + Documents, per area) ----------
