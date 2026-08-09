@@ -533,11 +533,19 @@
   };
   const RESOURCE_VAULT_CONFIG = {
     key: "resource_vault", table: "client_resource_vault_items", title: "Resource Vault",
+    hint: "Links to files, folders, docs, slides, OPML, etc.",
     fields: [
       { name: "title", label: "Title", type: "text", required: true },
-      { name: "url", label: "URL", type: "url", required: true },
+      { name: "description", label: "Description (shows below icon)", type: "text" },
+      { name: "url", label: "URL / Path", type: "url", required: true },
     ],
-    render: (r) => ({ title: r.title, subHtml: `<a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.url)}</a>` }),
+    render: (r) => ({
+      title: r.title,
+      subHtml: [
+        r.description ? escapeHtml(r.description) : "",
+        `<a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.url)}</a>`,
+      ].filter(Boolean).join(" · "),
+    }),
   };
   const NEXT_STEPS_CONFIG = {
     key: "next_steps", table: "client_next_steps", title: "Project Next Steps",
@@ -582,6 +590,7 @@
           <h2><span class="accordion-chevron">&#9656;</span> ${escapeHtml(cfg.title)} <span class="meta-line" id="${cfg.key}-count" style="margin:0;"></span></h2>
         </div>
         <div class="accordion-body" id="${cfg.key}-body">
+          ${cfg.hint ? `<div class="field-hint" style="margin-bottom:10px;">${escapeHtml(cfg.hint)}</div>` : ""}
           <div id="${cfg.key}-list"></div>
           ${cfg.readOnly ? `<div class="field-hint" style="margin-top:8px;">Managed from Assignments &amp; Hours on the Client Workspace page.</div>` : `
           <form class="add-row-form" id="${cfg.key}-add-form">
