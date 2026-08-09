@@ -117,6 +117,9 @@
   .lre-fields label { font-size: 11px; }
   .list-row-edit .icon-btn { flex-shrink: 0; }
   .rv-readonly { font-size: 13.5px; padding: 8px 0 4px; color: var(--text); }
+  .rv-shared-badge { display: inline-block; background: #eef1f4; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; padding: 2px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
+  .rv-tpl-delete-all { background: none; border: none; color: var(--danger); font-size: 11.5px; text-decoration: underline; cursor: pointer; padding: 2px 0; font-weight: 600; }
+  .rv-tpl-delete-all:hover { color: var(--danger-dark); }
   .rv-file-link { cursor: pointer; color: var(--navy-light, #2f6690); font-weight: 600; font-size: 13px; }
   .rv-file-link:hover { text-decoration: underline; }
 
@@ -684,17 +687,19 @@
     render: COMPETITORS_CONFIG.render,
   };
   // Resource Vault is a hybrid: the 8 standard EG resources are shared
-  // "templates" (managed once, org-wide, from resource_templates.html —
-  // Super-Admin only) linked into every client; title/description/file
-  // always resolve live from the template, so they show read-only here.
-  // A client can ALSO have its own custom resources on top of those 8,
-  // which stay fully editable (including their own uploaded file) right
-  // on this page. custom: "resourceVault" tells the generic accordion
-  // renderer to use the bespoke markup/handlers below instead of the
-  // plain text-field add-form / inline-edit-row machinery.
+  // "templates" (one row in resource_vault_templates, org-wide) linked into
+  // every client; title/description/file always resolve live from the
+  // template. Super Admins can edit those templates right here — inline,
+  // per any client's Resource Vault — and the change applies everywhere,
+  // rather than needing a separate standalone admin page. A client can ALSO
+  // have its own custom resources on top of those 8, which stay fully
+  // editable (including their own uploaded file) right on this page.
+  // custom: "resourceVault" tells the generic accordion renderer to use the
+  // bespoke markup/handlers below instead of the plain text-field
+  // add-form / inline-edit-row machinery.
   const RESOURCE_VAULT_CONFIG = {
     key: "resource_vault", title: "Resource Vault", custom: "resourceVault",
-    hint: "Links to files, folders, docs, slides, etc. The 8 standard EG resources are shared across every client — manage those from Resource Templates. Add anything client-specific below.",
+    hint: "Links to files, folders, docs, slides, etc. Rows marked \"Shared\" show for every client — Super Admins can edit those right here and the change applies everywhere. Add anything client-specific below.",
     customLoad: async (clientId) => {
       const { data, error } = await sb
         .from("client_resource_vault_items")
@@ -706,6 +711,7 @@
       return data.map((r) => ({
         id: r.id,
         isTemplate: !!r.template_id,
+        templateId: r.template_id,
         title: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.title) || "") : (r.title || ""),
         description: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.description) || "") : (r.description || ""),
         storagePath: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.storage_path) || null) : (r.storage_path || null),
@@ -762,6 +768,26 @@
           ${cfg.hint ? `<div class="field-hint" style="margin-bottom:10px;">${escapeHtml(cfg.hint)}</div>` : ""}
           <div id="${cfg.key}-list"></div>
           ${cfg.readOnly ? `<div class="field-hint" style="margin-top:8px;">Managed from Assignments &amp; Hours on the Client Workspace page.</div>` : cfg.custom === "resourceVault" ? `
+          ${isSuperAdmin ? `
+          <div style="margin-bottom:14px; padding:12px; background:#f8fafb; border:1px dashed var(--border); border-radius:8px;">
+            <div class="field-hint" style="margin-bottom:8px;"><strong>Shared resource</strong> — appears in every client's Resource Vault right away.</div>
+            <form class="add-row-form" id="rv-template-add-form">
+              <div class="field">
+                <label for="rv-tpl-new-title">Title</label>
+                <input type="text" id="rv-tpl-new-title" required />
+              </div>
+              <div class="field">
+                <label for="rv-tpl-new-description">Description (shows below icon)</label>
+                <input type="text" id="rv-tpl-new-description" />
+              </div>
+              <div class="field">
+                <label for="rv-tpl-new-file">File (optional)</label>
+                <input type="file" id="rv-tpl-new-file" />
+              </div>
+              <button type="submit" class="btn-secondary btn-sm">+ Add Shared Resource</button>
+            </form>
+          </div>
+          ` : ""}
           <form class="add-row-form" id="resource-vault-add-form">
             <div class="field">
               <label for="rv-new-title">Title</label>
@@ -775,7 +801,7 @@
               <label for="rv-new-file">File (optional)</label>
               <input type="file" id="rv-new-file" />
             </div>
-            <button type="submit" class="btn-secondary btn-sm">+ Add Resource</button>
+            <button type="submit" class="btn-secondary btn-sm">+ Add Resource (this client only)</button>
           </form>
           ` : `
           <form class="add-row-form" id="${cfg.key}-add-form">
@@ -818,6 +844,9 @@
       if (cfg.readOnly) continue;
       if (cfg.custom === "resourceVault") {
         $("resource-vault-add-form").addEventListener("submit", (e) => { e.preventDefault(); addCustomResourceVaultItem(); });
+        if (isSuperAdmin) {
+          $("rv-template-add-form").addEventListener("submit", (e) => { e.preventDefault(); addSharedTemplate(); });
+        }
         continue;
       }
       $(`${cfg.key}-add-form`).addEventListener("submit", (e) => { e.preventDefault(); addListRow(cfg); });
@@ -1034,11 +1063,38 @@
         ? `<span class="rv-file-link" data-path="${escapeHtml(r.storagePath)}">&#128196; ${escapeHtml(fileNameFromPath(r.storagePath))}</span>`
         : `<span class="field-hint">No file uploaded yet${r.isTemplate ? " — add one from Resource Templates." : "."}</span>`;
 
+      if (r.isTemplate && isSuperAdmin) {
+        return `
+          <div class="list-row-edit">
+            <div class="lre-fields">
+              <div class="field">
+                <label>Title <span class="rv-shared-badge">Shared</span></label>
+                <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="title" value="${escapeHtml(r.title)}" required />
+              </div>
+              <div class="field">
+                <label>Description (shows below icon)</label>
+                <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="description" value="${escapeHtml(r.description || "")}" />
+              </div>
+              <div class="field">
+                <label>File</label>
+                ${r.storagePath
+                  ? `<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">${fileHtml}<button type="button" class="btn-secondary btn-sm" data-rv-tpl-replace="${r.templateId}">Replace</button></div>`
+                  : `<label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload file<input type="file" class="rv-tpl-upload-input" data-tpl-id="${r.templateId}" style="display:none;" /></label>`}
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
+              <button type="button" class="btn-danger icon-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
+              <button type="button" class="rv-tpl-delete-all" data-rv-tpl-delete="${r.templateId}" data-rv-tpl-title="${escapeHtml(r.title)}">Delete for all clients</button>
+            </div>
+          </div>
+        `;
+      }
+
       if (r.isTemplate) {
         return `
           <div class="list-row-edit">
             <div class="lre-fields">
-              <div class="field"><label>Title</label><div class="rv-readonly">${escapeHtml(r.title)}</div></div>
+              <div class="field"><label>Title <span class="rv-shared-badge">Shared</span></label><div class="rv-readonly">${escapeHtml(r.title)}</div></div>
               <div class="field"><label>Description (shows below icon)</label><div class="rv-readonly">${escapeHtml(r.description || "—")}</div></div>
               <div class="field"><label>File</label>${fileHtml}</div>
             </div>
@@ -1146,6 +1202,71 @@
         await loadListSection(RESOURCE_VAULT_CONFIG);
       });
     });
+
+    // ---- Shared-template editing (Super Admin only) — writes to
+    // resource_vault_templates, not client_resource_vault_items, so the
+    // change is visible from every client's Resource Vault, not just this one.
+    list.querySelectorAll(".row-input-edit[data-rv-tpl-field]").forEach((inp) => {
+      const original = inp.value;
+      inp.addEventListener("blur", async () => {
+        const value = inp.value.trim();
+        const templateId = inp.dataset.rvTplId;
+        const fieldName = inp.dataset.rvTplField;
+        if (value === original) return;
+        if (fieldName === "title" && !value) {
+          showBanner("Title can't be empty.", "error");
+          inp.value = original;
+          return;
+        }
+        const { error } = await sb.from("resource_vault_templates").update({ [fieldName]: value || null }).eq("id", templateId);
+        if (error) {
+          showBanner("Couldn't save: " + error.message, "error");
+          inp.value = original;
+          return;
+        }
+        showBanner("Saved — updated for every client.", "success");
+      });
+    });
+
+    list.querySelectorAll(".rv-tpl-upload-input").forEach((input) => {
+      input.addEventListener("change", () => handleTemplateFileUpload(input.dataset.tplId, input.files[0]));
+    });
+
+    list.querySelectorAll("[data-rv-tpl-replace]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const picker = document.createElement("input");
+        picker.type = "file";
+        picker.addEventListener("change", () => handleTemplateFileUpload(btn.dataset.rvTplReplace, picker.files[0]));
+        picker.click();
+      });
+    });
+
+    list.querySelectorAll("[data-rv-tpl-delete]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const templateId = btn.dataset.rvTplDelete;
+        if (!confirm(`Delete "${btn.dataset.rvTplTitle}"? This removes it from every client's Resource Vault, not just this one.`)) return;
+        const row = (listData.resource_vault || []).find((x) => x.templateId === templateId);
+        if (row && row.storagePath) await sb.storage.from("client-documents").remove([row.storagePath]);
+        const { error } = await sb.from("resource_vault_templates").delete().eq("id", templateId);
+        if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
+        showBanner("Shared resource deleted for every client.", "success");
+        await loadListSection(RESOURCE_VAULT_CONFIG);
+      });
+    });
+  }
+
+  async function handleTemplateFileUpload(templateId, file) {
+    if (!file) return;
+    const row = (listData.resource_vault || []).find((x) => x.templateId === templateId);
+    const oldPath = row ? row.storagePath : null;
+    const path = `resource-templates/${currentClient.organization_id}/${Date.now()}-${sanitizeFilename(file.name)}`;
+    const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+    if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    const { error } = await sb.from("resource_vault_templates").update({ storage_path: path }).eq("id", templateId);
+    if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
+    if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
+    showBanner("File uploaded — updated for every client.", "success");
+    await loadListSection(RESOURCE_VAULT_CONFIG);
   }
 
   async function addCustomResourceVaultItem() {
@@ -1173,6 +1294,35 @@
     if (error) { showBanner("Couldn't add resource: " + error.message, "error"); return; }
     $("resource-vault-add-form").reset();
     showBanner("Resource added.", "success");
+    await loadListSection(RESOURCE_VAULT_CONFIG);
+  }
+
+  // A "Shared resource" — one row in resource_vault_templates, org-wide.
+  // An existing DB trigger auto-links it into every client's Resource
+  // Vault as soon as it's inserted, so nothing else needs to happen here.
+  async function addSharedTemplate() {
+    const title = $("rv-tpl-new-title").value.trim();
+    const description = $("rv-tpl-new-description").value.trim();
+    const fileInput = $("rv-tpl-new-file");
+    if (!title) { showBanner("Title is required.", "error"); return; }
+
+    let storagePath = null;
+    if (fileInput.files.length) {
+      const file = fileInput.files[0];
+      storagePath = `resource-templates/${currentClient.organization_id}/${Date.now()}-${sanitizeFilename(file.name)}`;
+      const { error: uploadErr } = await sb.storage.from("client-documents").upload(storagePath, file);
+      if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    }
+
+    const { error } = await sb.from("resource_vault_templates").insert({
+      organization_id: currentClient.organization_id,
+      title,
+      description: description || null,
+      storage_path: storagePath,
+    });
+    if (error) { showBanner("Couldn't add shared resource: " + error.message, "error"); return; }
+    $("rv-template-add-form").reset();
+    showBanner("Shared resource added — now shows for every client.", "success");
     await loadListSection(RESOURCE_VAULT_CONFIG);
   }
 
