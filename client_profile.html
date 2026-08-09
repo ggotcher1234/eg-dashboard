@@ -185,6 +185,11 @@
       <!-- ===== Company Information ===== -->
       <div class="card">
         <h2>Company Information</h2>
+        <div class="field">
+          <label>Client Status</label>
+          <div class="status-pill-bar" id="p-status-toggle"></div>
+          <div class="field-hint">Status determines whether the client appears in the active list (does not show on the exported dashboard).</div>
+        </div>
         <form id="company-form">
           <div class="field-grid">
             <div>
@@ -242,17 +247,15 @@
             </div>
           </div>
           <div class="field">
-            <label>Client Status</label>
-            <div class="status-pill-bar" id="p-status-toggle"></div>
-            <div class="field-hint">Status determines whether the client appears in the active list (does not show on the exported dashboard).</div>
-          </div>
-          <div class="field">
             <label for="co-description">Company Description <span class="field-hint">(supports **bold** and "- " bullet lines)</span></label>
             <textarea id="co-description" rows="6"></textarea>
           </div>
           <button type="submit" class="btn-primary btn-sm" id="company-save-btn">Save Company Info</button>
         </form>
       </div>
+
+      <!-- ===== Accordion list sections (Resource Vault, Next Steps, Contacts, Team, Competitors, Top Customers) ===== -->
+      <div id="list-sections"></div>
 
       <!-- ===== EG Workflow Documents ===== -->
       <div class="card">
@@ -283,9 +286,6 @@
           <button type="submit" class="btn-primary btn-sm" id="workflow-save-btn">Save Workflow Links</button>
         </form>
       </div>
-
-      <!-- ===== Accordion list sections (Contacts, Competitors, Top Customers, Resource Vault, Next Steps) ===== -->
-      <div id="list-sections"></div>
 
       <!-- ===== Documents ===== -->
       <div class="card">
@@ -426,13 +426,7 @@
     fillCompanyForm(client);
     await loadWorkflowLinks(client.id);
     renderListSections();
-    await Promise.all([
-      loadListSection(CONTACTS_CONFIG),
-      loadListSection(COMPETITORS_CONFIG),
-      loadListSection(TOP_CUSTOMERS_CONFIG),
-      loadListSection(RESOURCE_VAULT_CONFIG),
-      loadListSection(NEXT_STEPS_CONFIG),
-    ]);
+    await Promise.all(LIST_CONFIGS.map((cfg) => loadListSection(cfg)));
     await loadDocuments();
   }
 
@@ -567,7 +561,33 @@
     isChecklist: true,
     render: (r) => ({ title: r.description }),
   };
-  const LIST_CONFIGS = [CONTACTS_CONFIG, COMPETITORS_CONFIG, TOP_CUSTOMERS_CONFIG, RESOURCE_VAULT_CONFIG, NEXT_STEPS_CONFIG];
+  // Team Members isn't its own table — it's whoever's actually assigned on
+  // the Client Workspace page (Section 4.3, "pull from real assignments").
+  // Read-only here on purpose: adding/removing a team member is an
+  // Assignments & Hours action, so it stays on the Workspace page and this
+  // accordion just reflects it.
+  const SPECIALTY_LABELS = {
+    team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
+    gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
+  };
+  const TEAM_CONFIG = {
+    key: "team", title: "Team Members", readOnly: true,
+    customLoad: async (clientId) => {
+      const { data, error } = await sb
+        .from("client_assignments")
+        .select("id, specialty_type, is_team_lead, users(full_name)")
+        .eq("client_id", clientId)
+        .not("user_id", "is", null)
+        .order("is_team_lead", { ascending: false });
+      if (error) return [];
+      return data;
+    },
+    render: (r) => ({
+      title: (r.users && r.users.full_name) || "Unassigned",
+      sub: [SPECIALTY_LABELS[r.specialty_type] || r.specialty_type, r.is_team_lead && r.specialty_type !== "team_lead" ? "Team Lead" : null].filter(Boolean).join(" · "),
+    }),
+  };
+  const LIST_CONFIGS = [RESOURCE_VAULT_CONFIG, NEXT_STEPS_CONFIG, CONTACTS_CONFIG, TEAM_CONFIG, COMPETITORS_CONFIG, TOP_CUSTOMERS_CONFIG];
   const listData = {}; // key -> rows
 
   function renderListSections() {
@@ -579,6 +599,7 @@
         </div>
         <div class="accordion-body" id="${cfg.key}-body">
           <div id="${cfg.key}-list"></div>
+          ${cfg.readOnly ? `<div class="field-hint" style="margin-top:8px;">Managed from Assignments &amp; Hours on the Client Workspace page.</div>` : `
           <form class="add-row-form" id="${cfg.key}-add-form">
             ${cfg.fields.map((f) => `
               <div class="field">
@@ -588,6 +609,7 @@
             `).join("")}
             <button type="submit" class="btn-secondary btn-sm">+ Add</button>
           </form>
+          `}
         </div>
       </div>
     `).join("");
@@ -600,11 +622,17 @@
     });
 
     for (const cfg of LIST_CONFIGS) {
+      if (cfg.readOnly) continue;
       $(`${cfg.key}-add-form`).addEventListener("submit", (e) => { e.preventDefault(); addListRow(cfg); });
     }
   }
 
   async function loadListSection(cfg) {
+    if (cfg.customLoad) {
+      listData[cfg.key] = await cfg.customLoad(currentClient.id);
+      renderListRows(cfg);
+      return;
+    }
     const { data, error } = await sb.from(cfg.table).select("*").eq("client_id", currentClient.id).order("sort_order").order("created_at");
     if (error) { showBanner(`Couldn't load ${cfg.title}: ` + error.message, "error"); return; }
     listData[cfg.key] = data;
@@ -630,7 +658,7 @@
             <div class="lr-title" style="${cfg.isChecklist && r.completed ? "text-decoration:line-through; color:var(--muted);" : ""}">${checklistPrefix}${escapeHtml(rendered.title)}</div>
             ${rendered.sub || rendered.subHtml ? `<div class="lr-sub">${rendered.subHtml || escapeHtml(rendered.sub)}</div>` : ""}
           </div>
-          <button type="button" class="btn-danger icon-btn" data-delete-id="${r.id}" title="Delete">&times;</button>
+          ${cfg.readOnly ? "" : `<button type="button" class="btn-danger icon-btn" data-delete-id="${r.id}" title="Delete">&times;</button>`}
         </div>
       `;
     }).join("");
