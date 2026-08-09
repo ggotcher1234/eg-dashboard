@@ -1304,7 +1304,7 @@
     // add/delete question — can restore whichever area was open instead of
     // visually collapsing it.
     container.querySelectorAll("[data-ra-accordion]").forEach((hdr) => {
-      hdr.addEventListener("click", () => {
+      hdr.addEventListener("click", async () => {
         const wasOpen = hdr.classList.contains("open");
         container.querySelectorAll("[data-ra-accordion]").forEach((h) => {
           h.classList.remove("open");
@@ -1314,6 +1314,11 @@
           hdr.classList.add("open");
           $(`ra-${hdr.dataset.raAccordion}-body`).classList.add("open");
           openResearchArea = hdr.dataset.raAccordion;
+          // Opening a totally empty area (no questions, nothing uploaded
+          // the old flat way either) should land on a ready-to-type
+          // Question 1 immediately — not an empty state that makes the
+          // consultant click "+ Add Question" before they can do anything.
+          await ensureFirstQuestion(hdr.dataset.raAccordion);
         } else {
           openResearchArea = null;
         }
@@ -1453,6 +1458,20 @@
     });
     if (error) { showBanner("Couldn't add question: " + error.message, "error"); return; }
     await loadResearchQuestions();
+  }
+
+  // Runs once, right when an area's accordion is first opened. If it's
+  // completely empty — no questions, and nothing left over from the old
+  // flat-upload days either — silently create a blank Question 1 so it's
+  // already there to type into. Once it exists (even blank), this is a
+  // no-op on every later open — it never adds a second one on its own,
+  // and a blank one left untouched never shows on the client dashboard
+  // (see 034_hide_blank_research_questions.sql).
+  async function ensureFirstQuestion(area) {
+    const hasQuestions = researchQuestions.some((q) => q.research_area === area);
+    const hasUnsorted = allDocuments.some((d) => d.research_area === area && !d.question_id);
+    if (hasQuestions || hasUnsorted) return;
+    await addResearchQuestion(area);
   }
 
   async function deleteResearchQuestion(id) {
