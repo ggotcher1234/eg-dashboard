@@ -1357,10 +1357,7 @@
         <input type="text" data-question-input="${q.id}" placeholder="Enter the research question…" value="${escapeHtml(q.question || "")}" />
         <div class="rq-docs-label">Documents</div>
         <div id="rq-docs-${q.id}">${renderQuestionDocs(docs)}</div>
-        <label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer; margin-top:6px;">
-          + Add Document
-          <input type="file" multiple data-question-upload="${q.id}" style="display:none;" />
-        </label>
+        <button type="button" class="btn-secondary btn-sm" data-question-add-doc="${q.id}" style="margin-top:6px;">+ Add Document</button>
       </div>
     `;
   }
@@ -1401,9 +1398,15 @@
 
     card.querySelector(`[data-delete-question="${q.id}"]`).addEventListener("click", () => deleteResearchQuestion(q.id));
 
-    card.querySelector(`[data-question-upload="${q.id}"]`).addEventListener("change", (e) => {
-      if (e.target.files.length) uploadQuestionDocuments(q.id, e.target.files);
-    });
+    // Built fresh each click, same pattern as the Workflow Documents
+    // "Replace" button — clicking the visible button spawns a real
+    // <input type="file"> in JS and clicks it immediately, rather than
+    // relying on a hidden <input> tucked inside a <label> that gets
+    // torn down and rebuilt every time this card re-renders (after every
+    // upload, delete, etc.). This is always usable — every click opens a
+    // fresh file picker, so a question can end up with any number of
+    // documents, one upload (or one multi-select) at a time.
+    card.querySelector(`[data-question-add-doc="${q.id}"]`).addEventListener("click", () => pickQuestionDocuments(q.id));
 
     wireDocRowHandlers(card);
   }
@@ -1460,6 +1463,14 @@
     if (error) { showBanner("Couldn't delete question: " + error.message, "error"); return; }
     await loadDocuments();
     await loadResearchQuestions();
+  }
+
+  function pickQuestionDocuments(questionId) {
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.multiple = true;
+    picker.addEventListener("change", () => { if (picker.files.length) uploadQuestionDocuments(questionId, picker.files); });
+    picker.click();
   }
 
   // A question can have any number of documents attached — this always
