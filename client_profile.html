@@ -1261,6 +1261,11 @@
 
   // ---------- Economic Gardening Research Reports (Questions + Documents, per area) ----------
   let researchQuestions = [];
+  // renderResearchAreaSections() rebuilds the whole accordion group from
+  // scratch every time a question is added/deleted (simplest way to keep
+  // sort order/render logic in one place) — track which area was open so
+  // that rebuild doesn't visually collapse it out from under the consultant.
+  let openResearchArea = null;
 
   async function loadResearchQuestions() {
     const { data, error } = await sb
@@ -1276,21 +1281,28 @@
 
   function renderResearchAreaSections() {
     const container = $("research-areas-sections");
-    container.innerHTML = RESEARCH_AREAS.map(([key, label]) => `
+    container.innerHTML = RESEARCH_AREAS.map(([key, label]) => {
+      const isOpen = openResearchArea === key;
+      return `
       <div class="card" style="margin-bottom:12px;">
-        <div class="accordion-header" data-ra-accordion="${key}">
+        <div class="accordion-header ${isOpen ? "open" : ""}" data-ra-accordion="${key}">
           <h2><span class="accordion-chevron">&#9656;</span> ${escapeHtml(label)}</h2>
         </div>
-        <div class="accordion-body" id="ra-${key}-body">
+        <div class="accordion-body ${isOpen ? "open" : ""}" id="ra-${key}-body">
           <div id="ra-${key}-questions"></div>
           <button type="button" class="btn-secondary btn-sm" data-add-question="${key}">+ Add Question</button>
         </div>
       </div>
-    `).join("");
+    `;
+    }).join("");
 
     // Independent single-open group from the other accordions on the page
     // (Resource Vault, Next Steps, etc.) — opening one research area
     // shouldn't collapse an unrelated section a consultant has open.
+    // openResearchArea is tracked at module scope (not just via classList)
+    // so that re-rendering this whole block — which happens after every
+    // add/delete question — can restore whichever area was open instead of
+    // visually collapsing it.
     container.querySelectorAll("[data-ra-accordion]").forEach((hdr) => {
       hdr.addEventListener("click", () => {
         const wasOpen = hdr.classList.contains("open");
@@ -1301,6 +1313,9 @@
         if (!wasOpen) {
           hdr.classList.add("open");
           $(`ra-${hdr.dataset.raAccordion}-body`).classList.add("open");
+          openResearchArea = hdr.dataset.raAccordion;
+        } else {
+          openResearchArea = null;
         }
       });
     });
@@ -1344,7 +1359,7 @@
         <div id="rq-docs-${q.id}">${renderQuestionDocs(docs)}</div>
         <label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer; margin-top:6px;">
           + Add Document
-          <input type="file" data-question-upload="${q.id}" style="display:none;" />
+          <input type="file" multiple data-question-upload="${q.id}" style="display:none;" />
         </label>
       </div>
     `;
@@ -1387,7 +1402,7 @@
     card.querySelector(`[data-delete-question="${q.id}"]`).addEventListener("click", () => deleteResearchQuestion(q.id));
 
     card.querySelector(`[data-question-upload="${q.id}"]`).addEventListener("change", (e) => {
-      if (e.target.files.length) uploadQuestionDocument(q.id, e.target.files[0]);
+      if (e.target.files.length) uploadQuestionDocuments(q.id, e.target.files);
     });
 
     wireDocRowHandlers(card);
@@ -1447,21 +1462,28 @@
     await loadResearchQuestions();
   }
 
-  async function uploadQuestionDocument(questionId, file) {
-    const path = `clients/${currentClient.id}/questions/${questionId}/${Date.now()}-${sanitizeFilename(file.name)}`;
-    const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
-    if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+  // A question can have any number of documents attached — this always
+  // takes a FileList (even a single-file selection is a FileList of 1) so
+  // one trip through the file picker can attach several at once.
+  async function uploadQuestionDocuments(questionId, fileList) {
     const q = researchQuestions.find((x) => x.id === questionId);
-    const { error } = await sb.from("documents").insert({
-      client_id: currentClient.id,
-      question_id: questionId,
-      research_area: q ? q.research_area : null,
-      file_name: file.name,
-      storage_path: path,
-      visibility: "internal",
-      uploaded_by: currentUser.id,
-    });
-    if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
+    const errors = [];
+    for (const file of Array.from(fileList)) {
+      const path = `clients/${currentClient.id}/questions/${questionId}/${Date.now()}-${sanitizeFilename(file.name)}`;
+      const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+      if (uploadErr) { errors.push(`${file.name}: ${uploadErr.message}`); continue; }
+      const { error: rowErr } = await sb.from("documents").insert({
+        client_id: currentClient.id,
+        question_id: questionId,
+        research_area: q ? q.research_area : null,
+        file_name: file.name,
+        storage_path: path,
+        visibility: "internal",
+        uploaded_by: currentUser.id,
+      });
+      if (rowErr) errors.push(`${file.name}: ${rowErr.message}`);
+    }
+    if (errors.length) showBanner("Some files didn't upload: " + errors.join("; "), "error");
     await loadDocuments();
     if (q) renderQuestionsForArea(q.research_area);
   }
