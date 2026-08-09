@@ -116,9 +116,20 @@
   .lre-fields .field { margin-bottom: 0; flex: 1; min-width: 140px; }
   .lre-fields label { font-size: 11px; }
   .list-row-edit .icon-btn { flex-shrink: 0; }
-  .rv-readonly { font-size: 13.5px; padding: 8px 0 4px; color: var(--ink); }
+  .rv-readonly { font-size: 13.5px; padding: 8px 0 4px; color: var(--text); }
   .rv-file-link { cursor: pointer; color: var(--navy-light, #2f6690); font-weight: 600; font-size: 13px; }
   .rv-file-link:hover { text-decoration: underline; }
+
+  /* Research Questions (nested under each research area) */
+  .rq-question { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; background: #fafbfc; }
+  .rq-question-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 10px; }
+  .rq-question-header .rq-label { font-weight: 700; font-size: 13px; color: var(--text); }
+  .rq-question input[type="text"] { width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; margin-bottom: 12px; font-family: inherit; }
+  .rq-docs-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; }
+  .rq-doc-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .rq-doc-row .rq-doc-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; flex: 1; }
+  .rq-doc-row .rq-doc-link:hover { text-decoration: underline; }
+  .rq-area-empty { color: var(--muted); font-size: 13px; padding: 6px 0 14px; }
 
   .add-row-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); align-items: flex-end; }
   .add-row-form .field { margin-bottom: 0; flex: 1; min-width: 140px; }
@@ -287,10 +298,17 @@
         </form>
       </div>
 
-      <!-- ===== Documents ===== -->
+      <!-- ===== Economic Gardening Research Reports ===== -->
       <div class="card">
-        <h2>Documents</h2>
-        <div class="meta-line" style="margin-bottom:6px;">Drop your file in, same as attaching a file in Podio. Then use the dropdown on each file to say which research area it belongs to (or leave it General), and mark it "Client-facing" if it should show on the client's public dashboard.</div>
+        <h2>Economic Gardening Research Reports</h2>
+        <div class="field-hint" style="margin-bottom:10px;">Each item becomes a link in the Preview Dashboard.</div>
+        <div id="research-areas-sections"></div>
+      </div>
+
+      <!-- ===== Documents (General) ===== -->
+      <div class="card">
+        <h2>General Documents</h2>
+        <div class="meta-line" style="margin-bottom:6px;">Anything that isn't tied to a specific research question above. Drop it in, same as attaching a file in Podio, and mark it "Client-facing" if it should show on the client's public dashboard.</div>
         <label class="btn-primary btn-sm upload-btn-wrap" style="display:inline-block; margin-bottom:14px;">
           + Upload file(s)
           <input type="file" multiple id="doc-upload-input" />
@@ -428,6 +446,7 @@
     renderListSections();
     await Promise.all(LIST_CONFIGS.map((cfg) => loadListSection(cfg)));
     await loadDocuments();
+    await loadResearchQuestions();
   }
 
   // ---------- Client Status ----------
@@ -1145,14 +1164,15 @@
     await loadListSection(NEXT_STEPS_CONFIG);
   }
 
-  // ---------- Documents: one upload box, assign area afterward ----------
+  // ---------- General Documents: one upload box, no research-area tagging ----------
+  // (Research-area-specific files now live under a Question in the
+  // Economic Gardening Research Reports section below, not here.)
   const RESEARCH_AREAS = [
     ["market_dynamics", "Market Dynamics Research"],
     ["outbound", "Outbound Marketing"],
     ["inbound", "Inbound Marketing"],
     ["watering_holes", "Watering Holes"],
   ];
-  const AREA_OPTIONS_HTML = '<option value="">General</option>' + RESEARCH_AREAS.map(([k, l]) => `<option value="${k}">${escapeHtml(l)}</option>`).join("");
   let allDocuments = [];
 
   $("doc-upload-input").addEventListener("change", async () => {
@@ -1163,7 +1183,7 @@
     input.disabled = false;
     input.value = "";
     if (errors.length) showBanner("Some files didn't upload: " + errors.join("; "), "error");
-    else showBanner("File(s) uploaded — use the dropdown on each to assign it to a research area.", "success");
+    else showBanner("File(s) uploaded.", "success");
     await loadDocuments();
   });
 
@@ -1176,14 +1196,17 @@
 
   function renderDocList() {
     const el = $("doc-list");
-    if (!allDocuments.length) { el.innerHTML = `<div class="list-empty">No files yet — use "+ Upload file(s)" above.</div>`; return; }
-    el.innerHTML = allDocuments.map((d) => `
+    // General Documents only shows truly untagged files — anything tied to
+    // a research question (or even just an area, the old way) renders in
+    // the Research Reports section instead.
+    const generalDocs = allDocuments.filter((d) => !d.question_id && !d.research_area);
+    if (!generalDocs.length) { el.innerHTML = `<div class="list-empty">No files yet — use "+ Upload file(s)" above.</div>`; return; }
+    el.innerHTML = generalDocs.map((d) => `
       <div class="list-row">
         <div class="list-row-main">
           <div class="lr-title doc-download" data-path="${escapeHtml(d.storage_path)}" data-name="${escapeHtml(d.file_name)}" style="cursor:pointer; color:var(--navy-light);">${escapeHtml(d.file_name)}</div>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
-          <select class="row-select doc-area-select" data-id="${d.id}" style="width:auto; padding:4px 6px; font-size:12.5px;">${AREA_OPTIONS_HTML}</select>
           <button type="button" class="btn-secondary icon-btn doc-visibility-toggle" data-id="${d.id}" data-visibility="${d.visibility}">
             ${d.visibility === "client_facing" ? "Client-facing" : "Internal"}
           </button>
@@ -1192,27 +1215,11 @@
       </div>
     `).join("");
 
-    // Set each select to the document's current area (can't do this via the
-    // template string above without fighting HTML-escaping the "selected"
-    // attribute placement, so it's set directly here instead).
-    el.querySelectorAll(".doc-area-select").forEach((sel) => {
-      const doc = allDocuments.find((d) => d.id === sel.dataset.id);
-      sel.value = doc && doc.research_area ? doc.research_area : "";
-    });
-
     el.querySelectorAll(".doc-download").forEach((div) => {
       div.addEventListener("click", async () => {
         const { data, error } = await sb.storage.from("client-documents").createSignedUrl(div.dataset.path, 60);
         if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
         window.open(data.signedUrl, "_blank");
-      });
-    });
-    el.querySelectorAll(".doc-area-select").forEach((sel) => {
-      sel.addEventListener("change", async () => {
-        const { error } = await sb.from("documents").update({ research_area: sel.value || null }).eq("id", sel.dataset.id);
-        if (error) { showBanner("Couldn't assign area: " + error.message, "error"); return; }
-        showBanner("Assigned.", "success");
-        await loadDocuments();
       });
     });
     el.querySelectorAll(".doc-visibility-toggle").forEach((btn) => {
@@ -1250,6 +1257,213 @@
       if (rowErr) errors.push(`${file.name}: ${rowErr.message}`);
     }
     return errors;
+  }
+
+  // ---------- Economic Gardening Research Reports (Questions + Documents, per area) ----------
+  let researchQuestions = [];
+
+  async function loadResearchQuestions() {
+    const { data, error } = await sb
+      .from("client_research_questions")
+      .select("*")
+      .eq("client_id", currentClient.id)
+      .order("sort_order")
+      .order("created_at");
+    if (error) { showBanner("Couldn't load research questions: " + error.message, "error"); return; }
+    researchQuestions = data;
+    renderResearchAreaSections();
+  }
+
+  function renderResearchAreaSections() {
+    const container = $("research-areas-sections");
+    container.innerHTML = RESEARCH_AREAS.map(([key, label]) => `
+      <div class="card" style="margin-bottom:12px;">
+        <div class="accordion-header" data-ra-accordion="${key}">
+          <h2><span class="accordion-chevron">&#9656;</span> ${escapeHtml(label)}</h2>
+        </div>
+        <div class="accordion-body" id="ra-${key}-body">
+          <div id="ra-${key}-questions"></div>
+          <button type="button" class="btn-secondary btn-sm" data-add-question="${key}">+ Add Question</button>
+        </div>
+      </div>
+    `).join("");
+
+    // Independent single-open group from the other accordions on the page
+    // (Resource Vault, Next Steps, etc.) — opening one research area
+    // shouldn't collapse an unrelated section a consultant has open.
+    container.querySelectorAll("[data-ra-accordion]").forEach((hdr) => {
+      hdr.addEventListener("click", () => {
+        const wasOpen = hdr.classList.contains("open");
+        container.querySelectorAll("[data-ra-accordion]").forEach((h) => {
+          h.classList.remove("open");
+          $(`ra-${h.dataset.raAccordion}-body`).classList.remove("open");
+        });
+        if (!wasOpen) {
+          hdr.classList.add("open");
+          $(`ra-${hdr.dataset.raAccordion}-body`).classList.add("open");
+        }
+      });
+    });
+
+    container.querySelectorAll("[data-add-question]").forEach((btn) => {
+      btn.addEventListener("click", () => addResearchQuestion(btn.dataset.addQuestion));
+    });
+
+    RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
+  }
+
+  function renderQuestionsForArea(area) {
+    const el = $(`ra-${area}-questions`);
+    const questions = researchQuestions.filter((q) => q.research_area === area);
+    // Docs uploaded the old way (tagged with an area, no question) still
+    // show, in an "(Unsorted)" bucket at the end, rather than disappearing.
+    const unsorted = allDocuments.filter((d) => d.research_area === area && !d.question_id);
+
+    if (!questions.length && !unsorted.length) {
+      el.innerHTML = `<div class="rq-area-empty">No questions yet — use "+ Add Question" below.</div>`;
+      return;
+    }
+
+    el.innerHTML = questions.map((q, i) => renderQuestionCard(q, i + 1)).join("")
+      + (unsorted.length ? renderUnsortedCard(area, unsorted) : "");
+
+    questions.forEach((q) => wireQuestionCard(q));
+    if (unsorted.length) wireUnsortedCard(area);
+  }
+
+  function renderQuestionCard(q, num) {
+    const docs = allDocuments.filter((d) => d.question_id === q.id);
+    return `
+      <div class="rq-question" data-question-card="${q.id}">
+        <div class="rq-question-header">
+          <span class="rq-label">Question ${num}</span>
+          <button type="button" class="btn-danger icon-btn" data-delete-question="${q.id}" title="Delete question">&times;</button>
+        </div>
+        <input type="text" data-question-input="${q.id}" placeholder="Enter the research question…" value="${escapeHtml(q.question || "")}" />
+        <div class="rq-docs-label">Documents</div>
+        <div id="rq-docs-${q.id}">${renderQuestionDocs(docs)}</div>
+        <label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer; margin-top:6px;">
+          + Add Document
+          <input type="file" data-question-upload="${q.id}" style="display:none;" />
+        </label>
+      </div>
+    `;
+  }
+
+  function renderQuestionDocs(docs) {
+    if (!docs.length) return `<div class="field-hint" style="margin-bottom:6px;">No files uploaded yet.</div>`;
+    return docs.map((d) => `
+      <div class="rq-doc-row">
+        <span class="rq-doc-link" data-path="${escapeHtml(d.storage_path)}">&#128196; ${escapeHtml(d.file_name)}</span>
+        <button type="button" class="btn-secondary icon-btn rq-visibility-toggle" data-id="${d.id}" data-visibility="${d.visibility}">
+          ${d.visibility === "client_facing" ? "Client-facing" : "Internal"}
+        </button>
+        <button type="button" class="btn-danger icon-btn" data-delete-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}" title="Delete">&times;</button>
+      </div>
+    `).join("");
+  }
+
+  function renderUnsortedCard(area, docs) {
+    return `
+      <div class="rq-question" data-unsorted-card="${area}">
+        <div class="rq-question-header"><span class="rq-label">(Unsorted — uploaded before Questions existed)</span></div>
+        <div class="rq-docs-label">Documents</div>
+        <div>${renderQuestionDocs(docs)}</div>
+      </div>
+    `;
+  }
+
+  function wireQuestionCard(q) {
+    const card = document.querySelector(`[data-question-card="${q.id}"]`);
+    const input = card.querySelector(`[data-question-input="${q.id}"]`);
+    const original = input.value;
+    input.addEventListener("blur", async () => {
+      const value = input.value.trim();
+      if (value === original) return;
+      const { error } = await sb.from("client_research_questions").update({ question: value || null }).eq("id", q.id);
+      if (error) { showBanner("Couldn't save the question: " + error.message, "error"); input.value = original; return; }
+    });
+
+    card.querySelector(`[data-delete-question="${q.id}"]`).addEventListener("click", () => deleteResearchQuestion(q.id));
+
+    card.querySelector(`[data-question-upload="${q.id}"]`).addEventListener("change", (e) => {
+      if (e.target.files.length) uploadQuestionDocument(q.id, e.target.files[0]);
+    });
+
+    wireDocRowHandlers(card);
+  }
+
+  function wireUnsortedCard(area) {
+    const card = document.querySelector(`[data-unsorted-card="${area}"]`);
+    wireDocRowHandlers(card);
+  }
+
+  function wireDocRowHandlers(scopeEl) {
+    scopeEl.querySelectorAll(".rq-doc-link").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(el.dataset.path, 60);
+        if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+        window.open(data.signedUrl, "_blank");
+      });
+    });
+    scopeEl.querySelectorAll(".rq-visibility-toggle").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const next = btn.dataset.visibility === "client_facing" ? "internal" : "client_facing";
+        const { error } = await sb.from("documents").update({ visibility: next }).eq("id", btn.dataset.id);
+        if (error) { showBanner("Couldn't update visibility: " + error.message, "error"); return; }
+        await loadDocuments();
+        RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
+      });
+    });
+    scopeEl.querySelectorAll("[data-delete-doc]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await sb.storage.from("client-documents").remove([btn.dataset.path]);
+        const { error } = await sb.from("documents").delete().eq("id", btn.dataset.deleteDoc);
+        if (error) { showBanner("Couldn't delete file: " + error.message, "error"); return; }
+        await loadDocuments();
+        RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
+      });
+    });
+  }
+
+  async function addResearchQuestion(area) {
+    const existing = researchQuestions.filter((q) => q.research_area === area);
+    const { error } = await sb.from("client_research_questions").insert({
+      client_id: currentClient.id,
+      research_area: area,
+      sort_order: existing.length + 1,
+    });
+    if (error) { showBanner("Couldn't add question: " + error.message, "error"); return; }
+    await loadResearchQuestions();
+  }
+
+  async function deleteResearchQuestion(id) {
+    if (!confirm("Delete this question? Any documents uploaded under it will be deleted too.")) return;
+    const docsToRemove = allDocuments.filter((d) => d.question_id === id).map((d) => d.storage_path);
+    if (docsToRemove.length) await sb.storage.from("client-documents").remove(docsToRemove);
+    const { error } = await sb.from("client_research_questions").delete().eq("id", id);
+    if (error) { showBanner("Couldn't delete question: " + error.message, "error"); return; }
+    await loadDocuments();
+    await loadResearchQuestions();
+  }
+
+  async function uploadQuestionDocument(questionId, file) {
+    const path = `clients/${currentClient.id}/questions/${questionId}/${Date.now()}-${sanitizeFilename(file.name)}`;
+    const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+    if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    const q = researchQuestions.find((x) => x.id === questionId);
+    const { error } = await sb.from("documents").insert({
+      client_id: currentClient.id,
+      question_id: questionId,
+      research_area: q ? q.research_area : null,
+      file_name: file.name,
+      storage_path: path,
+      visibility: "internal",
+      uploaded_by: currentUser.id,
+    });
+    if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
+    await loadDocuments();
+    if (q) renderQuestionsForArea(q.research_area);
   }
 </script>
 </body>

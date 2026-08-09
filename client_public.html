@@ -97,6 +97,9 @@
   .research-card .rc-header { background: var(--accent); color: #fff; padding: 11px 14px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
   .research-card .rc-body { padding: 12px 14px; }
   .research-card .rc-empty { color: var(--muted); font-size: 12.5px; font-style: italic; }
+  .rc-question-block { margin-bottom: 12px; }
+  .rc-question-block:last-child { margin-bottom: 0; }
+  .rc-question-title { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
   .doc-link { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--accent-dark); margin-bottom: 6px; cursor: pointer; text-decoration: none; }
   .doc-link:hover { text-decoration: underline; }
   .doc-link:last-child { margin-bottom: 0; }
@@ -449,12 +452,27 @@
     });
   }
 
+  // Each area is now a list of { question, documents } entries (a
+  // question consultants are researching, and the files that answer it) —
+  // rather than a flat file list. A legacy entry with question: null
+  // (files tagged with an area before Questions existed) renders as a
+  // plain file list with no heading above it.
+  function renderResearchAreaBody(entries) {
+    if (!entries || !entries.length) return `<div class="rc-empty">Nothing here yet.</div>`;
+    return entries.map((entry) => `
+      <div class="rc-question-block">
+        ${entry.question ? `<div class="rc-question-title">${escapeHtml(entry.question)}</div>` : ""}
+        ${renderDocLinks(entry.documents)}
+      </div>
+    `).join("");
+  }
+
   function renderResearchGrid(researchAreas) {
     const data = researchAreas || {};
     $("research-grid").innerHTML = RESEARCH_AREAS.map(([key, label, icon]) => `
       <div class="research-card">
         <div class="rc-header"><span>${icon}</span> ${escapeHtml(label)}</div>
-        <div class="rc-body">${renderDocLinks(data[key])}</div>
+        <div class="rc-body">${renderResearchAreaBody(data[key])}</div>
       </div>
     `).join("");
     wireDocLinks($("research-grid"));
