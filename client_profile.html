@@ -276,7 +276,7 @@
             <label for="co-description">Company Description <span class="field-hint">(supports **bold** and "- " bullet lines)</span></label>
             <textarea id="co-description" rows="6"></textarea>
           </div>
-          <button type="submit" class="btn-primary btn-sm" id="company-save-btn">Save Company Info</button>
+          <div class="field-hint">Saves automatically as you edit each field.</div>
         </form>
       </div>
 
@@ -539,27 +539,44 @@
     renderLogoField();
   }
 
-  $("company-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const btn = $("company-save-btn");
-    btn.disabled = true;
-    btn.textContent = "Saving…";
-    const { error } = await sb.from("clients").update({
-      website_url: $("co-website").value.trim() || null,
-      address: $("co-address").value.trim() || null,
-      naics_codes: $("co-naics").value.trim() || null,
-      linkedin_url: $("co-linkedin").value.trim() || null,
-      facebook_url: $("co-facebook").value.trim() || null,
-      instagram_url: $("co-instagram").value.trim() || null,
-      twitter_url: $("co-twitter").value.trim() || null,
-      youtube_url: $("co-youtube").value.trim() || null,
-      description: $("co-description").value.trim() || null,
-    }).eq("id", currentClient.id);
-    btn.disabled = false;
-    btn.textContent = "Save Company Info";
-    if (error) { showBanner("Couldn't save company info: " + error.message, "error"); return; }
-    showBanner("Company info saved.", "success");
-  });
+  // Autosaves field-by-field on blur (same pattern as the Resource Vault
+  // inline rows) instead of one "Save Company Info" button for the whole
+  // card -- a field you fill in and tab away from is saved right then,
+  // nothing to remember to click.
+  $("company-form").addEventListener("submit", (e) => e.preventDefault());
+
+  const COMPANY_FIELD_COLUMNS = {
+    "co-address": "address",
+    "co-website": "website_url",
+    "co-naics": "naics_codes",
+    "co-linkedin": "linkedin_url",
+    "co-facebook": "facebook_url",
+    "co-instagram": "instagram_url",
+    "co-twitter": "twitter_url",
+    "co-youtube": "youtube_url",
+    "co-description": "description",
+  };
+
+  function wireCompanyAutosave() {
+    Object.entries(COMPANY_FIELD_COLUMNS).forEach(([id, column]) => {
+      const el = $(id);
+      let original = el.value;
+      el.addEventListener("focus", () => { original = el.value; });
+      el.addEventListener("blur", async () => {
+        const value = el.value.trim();
+        if (value === original.trim()) return;
+        const { error } = await sb.from("clients").update({ [column]: value || null }).eq("id", currentClient.id);
+        if (error) {
+          showBanner("Couldn't save: " + error.message, "error");
+          el.value = original;
+          return;
+        }
+        original = value;
+        currentClient[column] = value || null;
+      });
+    });
+  }
+  wireCompanyAutosave();
 
   // ---------- Logo upload ----------
   // Logos go to a dedicated PUBLIC bucket (client-logos), not the private
