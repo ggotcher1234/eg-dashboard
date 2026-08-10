@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Client Control Center</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+
+  header { background: var(--navy); color: #fff; padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 12.5px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  header .brand-row { display: flex; align-items: center; gap: 14px; }
+  .brand-badge { background: #fff; border-radius: 8px; padding: 5px 10px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 26px; display: block; }
+  #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  button, a.btn { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 9px 16px; font-weight: 600; transition: background 0.15s ease; text-decoration: none; display: inline-block; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+
+  main { max-width: 780px; margin: 0 auto; padding: 28px 20px 80px; }
+  .hidden { display: none !important; }
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+
+  #login-view { max-width: 380px; margin: 90px auto; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  #login-view h2 { margin-top: 0; font-size: 18px; }
+  #login-view label { display: block; font-size: 12.5px; font-weight: 600; margin: 14px 0 5px; color: var(--muted); }
+  #login-view input { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+  #login-view button { width: 100%; margin-top: 20px; padding: 10px; }
+  #login-error { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; }
+
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 20px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+
+  .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+  .empty-note a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
+  .empty-note a:hover { text-decoration: underline; }
+
+  .badge { font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; padding: 3px 9px; border-radius: 999px; }
+  .badge-active { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-finalized { background: #e7eef7; color: var(--navy-light); }
+  .badge-archived { background: #eef1f4; color: var(--muted); }
+  .badge-accepted { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-in_progress { background: #e7eef7; color: var(--navy-light); }
+  .badge-on_hold { background: #fdf1dc; color: var(--amber); }
+  .badge-closed { background: #eef1f4; color: var(--muted); }
+
+  /* Client header card */
+  .ccc-header-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 26px 28px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(20,48,77,0.05);
+  }
+  #cm-name { margin: 0 0 6px; font-size: 23px; color: var(--navy); }
+  #cm-meta { font-size: 13.5px; color: var(--muted); margin-bottom: 4px; }
+  #cm-team { font-size: 12.5px; color: var(--muted); }
+
+  .modal-status-strip {
+    font-size: 12.5px; color: var(--muted); background: #f8fafb; border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 13px; margin: 16px 0 0;
+  }
+  .modal-status-strip strong { color: var(--text); font-weight: 700; }
+
+  .modal-action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .modal-action-card {
+    display: flex; gap: 12px; align-items: flex-start; text-align: left; text-decoration: none; color: var(--text);
+    border: 1px solid var(--border); border-radius: 12px; padding: 17px 18px; background: #fff; cursor: pointer;
+    box-shadow: 0 1px 3px rgba(20,48,77,0.05); transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .modal-action-card:hover { border-color: var(--navy-light); box-shadow: 0 4px 12px rgba(20,48,77,0.09); }
+  .modal-action-card .mac-icon {
+    width: 36px; height: 36px; border-radius: 9px; background: #eef3ef; color: var(--accent-dark);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .modal-action-card .mac-icon svg { width: 19px; height: 19px; }
+  .modal-action-card .mac-body { flex: 1; min-width: 0; }
+  .modal-action-card .mac-title-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .modal-action-card .mac-title { font-weight: 700; font-size: 14px; color: var(--navy); }
+  .modal-action-card .mac-arrow { color: var(--muted); font-size: 14px; flex-shrink: 0; }
+  .modal-action-card .mac-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+
+  .modal-action-external { border-color: #cfe0d2; background: #f7faf7; }
+  .modal-action-external .mac-icon { background: #e2ede2; color: var(--accent-dark); }
+  .modal-action-external:hover { border-color: var(--accent); }
+
+  .modal-action-card.disabled-link { opacity: 0.5; pointer-events: none; }
+
+  /* Draft Update Email popup */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.4); align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+  .overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 14px; width: 560px; max-width: 100%; max-height: 88vh; overflow-y: auto; padding: 28px; box-shadow: 0 16px 40px rgba(0,0,0,0.2); }
+  .modal h3 { margin: 0 0 4px; font-size: 20px; color: var(--navy); }
+  .modal .modal-meta { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .modal-header { display: flex; align-items: flex-start; justify-content: space-between; }
+
+  #email-draft-body .field { margin-bottom: 14px; }
+  #email-draft-body label { display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 5px; }
+  #email-draft-body input, #email-draft-body textarea {
+    width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13.5px; font-family: inherit; color: var(--text); background: #fff;
+  }
+  #email-draft-body input:focus, #email-draft-body textarea:focus { outline: none; border-color: var(--navy-light); }
+  #email-draft-body input[readonly] { background: #f8fafb; color: var(--muted); }
+  #email-draft-body textarea { resize: vertical; line-height: 1.5; }
+  #ed-mailto-btn {
+    display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
+    font-family: inherit; font-size: 13.5px; font-weight: 600; border-radius: 6px; padding: 9px 16px;
+  }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="login-view" class="hidden">
+  <h2>EG Dashboard</h2>
+  <div style="font-size:13px; color:var(--muted); margin-top:-8px;">Client Control Center — sign in</div>
+  <form id="login-form">
+    <label for="login-email">Email</label>
+    <input type="text" id="login-email" autocomplete="username" required />
+    <label for="login-password">Password</label>
+    <input type="password" id="login-password" autocomplete="current-password" required />
+    <button type="submit" class="btn-primary">Sign in</button>
+    <div id="login-error"></div>
+  </form>
+</div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <div class="brand-row">
+      <div class="brand-badge"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></div>
+      <div>
+        <h1>Client Control Center</h1>
+        <div class="sub">EG Group &nbsp;·&nbsp; <a class="back-link" href="index.html">← Home</a></div>
+      </div>
+    </div>
+    <div id="userbox">
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span>
+      <button class="btn-ghost" id="signout-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="banner"></div>
+
+    <div id="no-client-note" class="empty-note hidden">
+      No client was specified. <a href="index.html">Go back home</a> and pick one from the client list.
+    </div>
+
+    <div id="ccc-content" class="hidden">
+      <div class="ccc-header-card">
+        <h1 id="cm-name"></h1>
+        <div id="cm-meta"></div>
+        <div id="cm-team"></div>
+        <div class="modal-status-strip" id="cm-status-strip">Loading status…</div>
+      </div>
+
+      <div class="modal-action-grid">
+        <a class="modal-action-card" id="cm-hours-link" href="#">
+          <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+          <div class="mac-body">
+            <div class="mac-title-row"><span class="mac-title">Engagement</span><span class="mac-arrow">&rarr;</span></div>
+            <div class="mac-sub">Hours, assignments, budget, and project status</div>
+          </div>
+        </a>
+        <a class="modal-action-card" id="cm-profile-link" href="#">
+          <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+          <div class="mac-body">
+            <div class="mac-title-row"><span class="mac-title">Dashboard Edit</span><span class="mac-arrow">&rarr;</span></div>
+            <div class="mac-sub">Company info, contacts, competitors, and files</div>
+          </div>
+        </a>
+        <button type="button" class="modal-action-card" id="cm-email-btn">
+          <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 6 10-6"/></svg></div>
+          <div class="mac-body">
+            <div class="mac-title-row"><span class="mac-title">Draft Update Email</span><span class="mac-arrow">&rarr;</span></div>
+            <div class="mac-sub">Compose a client update to review and send yourself</div>
+          </div>
+        </button>
+        <a class="modal-action-card modal-action-external" id="cm-dashboard-btn" href="#" target="_blank" rel="noopener">
+          <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg></div>
+          <div class="mac-body">
+            <div class="mac-title-row"><span class="mac-title">Dashboard View</span><span class="mac-arrow">&#8599;</span></div>
+            <div class="mac-sub">View exactly what the client sees</div>
+          </div>
+        </a>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Draft Update Email popup -->
+<div class="overlay" id="email-draft-overlay">
+  <div class="modal" style="width:560px;">
+    <div class="modal-header">
+      <div>
+        <h3>Draft Update Email</h3>
+        <div class="modal-meta">Review and edit, then copy or open in your email app — nothing is sent from here.</div>
+      </div>
+      <button class="btn-ghost" id="email-draft-close">&times;</button>
+    </div>
+    <div id="email-draft-body">
+      <div class="field">
+        <label>To</label>
+        <input type="text" id="ed-to" readonly />
+      </div>
+      <div class="field">
+        <label>Subject</label>
+        <input type="text" id="ed-subject" />
+      </div>
+      <div class="field">
+        <label>Body</label>
+        <textarea id="ed-body" rows="12"></textarea>
+      </div>
+      <div id="ed-no-contacts" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
+        This client has no contact emails on file yet — add one in Dashboard Edit &rarr; Contacts before sending.
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button type="button" class="btn-primary" id="ed-copy-btn">Copy Email Text</button>
+        <a class="btn-secondary" id="ed-mailto-btn" href="#">Open in Email App &rarr;</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // Always build client-facing links against the real hosted site, never
+  // against wherever this internal tool happens to be opened from.
+  const PUBLIC_SITE_BASE = "https://egdb.netlify.app/";
+  const RECENTS_KEY = "eg_recent_clients"; // shared with index.html
+
+  let currentUser = null;
+  let activeClient = null;
+
+  const $ = (id) => document.getElementById(id);
+  const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
+  const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 4000);
+  }
+
+  function formatLastActivity(iso) {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  function recordRecent(client) {
+    let recents = [];
+    try { recents = JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]"); } catch { recents = []; }
+    recents = recents.filter((r) => r.id !== client.id);
+    recents.unshift({ id: client.id, name: client.name, slug: client.slug, viewedAt: Date.now() });
+    localStorage.setItem(RECENTS_KEY, JSON.stringify(recents.slice(0, 8)));
+  }
+
+  // ---------- Auth ----------
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("login-email").value.trim();
+    const password = $("login-password").value;
+    $("login-error").style.display = "none";
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      $("login-error").textContent = error.message;
+      $("login-error").style.display = "block";
+      return;
+    }
+    await afterSignIn();
+  });
+
+  $("signout-btn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    $("login-view").classList.remove("hidden");
+  });
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users")
+      .select("id, full_name, role, organization_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      $("loading-view").classList.add("hidden");
+      $("login-view").classList.remove("hidden");
+      $("login-error").textContent = "Signed in, but no matching staff profile was found for this account.";
+      $("login-error").style.display = "block";
+      await sb.auth.signOut();
+      return;
+    }
+
+    currentUser = profile;
+    $("loading-view").classList.add("hidden");
+    $("login-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = profile.role.replace("_", " ");
+
+    const clientId = new URLSearchParams(location.search).get("client");
+    if (!clientId) {
+      $("no-client-note").classList.remove("hidden");
+      return;
+    }
+    await loadClient(clientId);
+  }
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      afterSignIn();
+    } else {
+      $("loading-view").classList.add("hidden");
+      $("login-view").classList.remove("hidden");
+    }
+  });
+
+  // ---------- Client ----------
+  async function loadClient(clientId) {
+    const { data: client, error } = await sb
+      .from("clients")
+      .select("*, econ_dev_companies(code, name)")
+      .eq("id", clientId)
+      .single();
+
+    if (error || !client) {
+      showBanner("Couldn't load that client.", "error");
+      $("no-client-note").classList.remove("hidden");
+      return;
+    }
+
+    activeClient = client;
+    recordRecent(client);
+    document.title = `EG Dashboard — ${client.name}`;
+    $("ccc-content").classList.remove("hidden");
+
+    const partner = client.econ_dev_companies;
+    $("cm-name").textContent = client.name;
+    $("cm-meta").innerHTML = `${partner ? escapeHtml(partner.code) + " — " + escapeHtml(partner.name) : "—"} &middot; <span class="badge badge-${client.status}">${client.status}</span> <span class="badge badge-${client.project_status}">${PROJECT_STATUS_LABELS[client.project_status] || client.project_status}</span>`;
+
+    const { data: assignRows } = await sb
+      .from("client_assignments")
+      .select("is_team_lead, users(full_name)")
+      .eq("client_id", client.id)
+      .not("user_id", "is", null);
+    let teamLead = null;
+    const consultants = [];
+    for (const r of assignRows || []) {
+      const name = r.users && r.users.full_name;
+      if (!name) continue;
+      if (r.is_team_lead) teamLead = name; else consultants.push(name);
+    }
+    const teamParts = [`Team Lead: ${teamLead ? escapeHtml(teamLead) : "—"}`];
+    if (consultants.length) teamParts.push(`Consultant${consultants.length > 1 ? "s" : ""}: ${escapeHtml(consultants.join(", "))}`);
+    $("cm-team").textContent = teamParts.join(" · ");
+
+    $("cm-hours-link").href = `client_workspace.html?client=${client.id}`;
+    $("cm-profile-link").href = `client_profile.html?client=${client.id}`;
+    if (client.slug) {
+      $("cm-dashboard-btn").href = new URL(`client_public.html?slug=${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href;
+      $("cm-dashboard-btn").classList.remove("disabled-link");
+    } else {
+      $("cm-dashboard-btn").href = "#";
+      $("cm-dashboard-btn").classList.add("disabled-link");
+    }
+
+    loadStatusStrip(client);
+  }
+
+  // A thin, real-data status line: hours logged vs. budget, the next
+  // incomplete Project Next Step (standing in for "next deliverable" — there's
+  // no separate due-date field in the data model), and when the client record
+  // last changed.
+  async function loadStatusStrip(client) {
+    const strip = $("cm-status-strip");
+    strip.textContent = "Loading status…";
+
+    const [{ data: assignments }, { data: nextSteps }] = await Promise.all([
+      sb.from("client_assignments").select("id").eq("client_id", client.id),
+      sb.from("client_next_steps").select("description").eq("client_id", client.id).eq("completed", false).order("sort_order").limit(1),
+    ]);
+
+    let hoursUsed = 0;
+    const assignmentIds = (assignments || []).map((a) => a.id);
+    if (assignmentIds.length) {
+      const { data: entries } = await sb.from("time_entries").select("hours").in("assignment_id", assignmentIds);
+      hoursUsed = (entries || []).reduce((sum, e) => sum + Number(e.hours || 0), 0);
+    }
+
+    if (!activeClient || activeClient.id !== client.id) return;
+
+    const budget = client.budget_hours_available;
+    const hoursPart = budget != null ? `<strong>${hoursUsed} of ${budget}</strong> hours used` : `<strong>${hoursUsed}</strong> hours used`;
+    const nextStepText = nextSteps && nextSteps[0] ? nextSteps[0].description : "—";
+    const updatedPart = client.updated_at ? formatLastActivity(client.updated_at) : "—";
+
+    strip.innerHTML = `${hoursPart} &middot; Next step: ${escapeHtml(nextStepText)} &middot; Updated ${updatedPart}`;
+  }
+
+  // ---------- Draft Update Email ----------
+  // Composes an update email — recipients from Contacts, recently added
+  // client-facing files, and the Dashboard View link — for the consultant to
+  // review, edit, and send from their OWN email client. Nothing is sent from
+  // here; there's no email-sending service wired into this app, and this
+  // keeps the message coming from a real person's inbox rather than a
+  // generic system address.
+  $("cm-email-btn").addEventListener("click", () => {
+    if (activeClient) openEmailDraftModal(activeClient);
+  });
+  $("email-draft-close").addEventListener("click", () => $("email-draft-overlay").classList.remove("open"));
+  $("email-draft-overlay").addEventListener("click", (e) => {
+    if (e.target === $("email-draft-overlay")) $("email-draft-overlay").classList.remove("open");
+  });
+
+  function updateMailtoHref() {
+    const toParam = $("ed-to").value.split(",").map((s) => s.trim()).filter(Boolean).map(encodeURIComponent).join(",");
+    $("ed-mailto-btn").href = `mailto:${toParam}?subject=${encodeURIComponent($("ed-subject").value)}&body=${encodeURIComponent($("ed-body").value)}`;
+  }
+  $("ed-subject").addEventListener("input", updateMailtoHref);
+  $("ed-body").addEventListener("input", updateMailtoHref);
+
+  $("ed-copy-btn").addEventListener("click", async () => {
+    const text = `To: ${$("ed-to").value}\nSubject: ${$("ed-subject").value}\n\n${$("ed-body").value}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      showBanner("Email text copied — paste it into your email client.", "success");
+    } catch (e) {
+      showBanner("Couldn't copy automatically — select the text below and copy manually.", "error");
+    }
+  });
+
+  async function openEmailDraftModal(client) {
+    $("ed-to").value = "Loading…";
+    $("ed-subject").value = "";
+    $("ed-body").value = "";
+    $("ed-no-contacts").classList.add("hidden");
+    $("email-draft-overlay").classList.add("open");
+
+    const [{ data: contacts }, { data: docs }] = await Promise.all([
+      sb.from("client_contacts").select("name, email").eq("client_id", client.id),
+      sb.from("documents")
+        .select("file_name, uploaded_at")
+        .eq("client_id", client.id)
+        .eq("visibility", "client_facing")
+        .order("uploaded_at", { ascending: false })
+        .limit(10),
+    ]);
+
+    const emails = (contacts || []).map((c) => c.email).filter(Boolean);
+    $("ed-to").value = emails.join(", ");
+    $("ed-no-contacts").classList.toggle("hidden", emails.length > 0);
+
+    const dashboardLink = client.slug
+      ? new URL(`client_public.html?slug=${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href
+      : "(this client doesn't have a dashboard link set up yet)";
+    const firstContactName = contacts && contacts[0] && contacts[0].name ? contacts[0].name.split(" ")[0] : "there";
+    const fileLines = (docs || []).length
+      ? docs.map((d) => `- ${d.file_name}`).join("\n")
+      : "- (no client-facing files uploaded yet — add some in Dashboard Edit first)";
+
+    $("ed-subject").value = `Update on your Economic Gardening research — ${client.name}`;
+    $("ed-body").value = `Hi ${firstContactName},
+
+Wanted to share a quick update on your Economic Gardening engagement. We've recently added the following to your dashboard:
+
+${fileLines}
+
+You can view everything anytime here:
+${dashboardLink}
+
+Let us know if you have any questions.
+
+Best,
+${currentUser ? currentUser.full_name : ""}`;
+
+    updateMailtoHref();
+  }
+</script>
+</body>
+</html>
