@@ -460,6 +460,7 @@
     await loadWorkflowLinks(client.id);
     renderListSections();
     await Promise.all(LIST_CONFIGS.map((cfg) => loadListSection(cfg)));
+    await loadPartnerContactsSection();
     await loadDocuments();
     await loadResearchQuestions();
 
@@ -861,7 +862,13 @@
         <div class="accordion-body" id="${cfg.key}-body">
           ${cfg.hint ? `<div class="field-hint" style="margin-bottom:10px;">${escapeHtml(cfg.hint)}</div>` : ""}
           <div id="${cfg.key}-list"></div>
-          ${cfg.readOnly ? `<div class="field-hint" style="margin-top:8px;">Managed from Assignments &amp; Hours on the Client Workspace page.</div>` : cfg.custom === "resourceVault" ? `
+          ${cfg.readOnly ? `<div class="field-hint" style="margin-top:8px;">Managed from Assignments &amp; Hours on the Client Workspace page.</div>${cfg.key === "team" ? `
+          <div style="margin-top:18px; padding-top:14px; border-top:1px solid #f0f2f4;">
+            <div style="font-size:13.5px; font-weight:600; margin-bottom:4px;">Economic Development Partner Contacts</div>
+            <div class="field-hint" style="margin-bottom:10px;">Select which of this client's partner-org contacts also show on the public Economic Gardening Team list. Manage the partner's contact list itself from the Econ Dev Partners page.</div>
+            <div id="partner-contacts-section"><div class="field-hint">Loading…</div></div>
+          </div>
+          ` : ""}` : cfg.custom === "resourceVault" ? `
           ${isSuperAdmin ? `
           <div style="margin-bottom:14px; padding:12px; background:#f8fafb; border:1px dashed var(--border); border-radius:8px;">
             <div class="field-hint" style="margin-bottom:8px;"><strong>Shared resource</strong> — appears in every client's Resource Vault right away.</div>
@@ -1056,6 +1063,66 @@
     if (error) { showBanner(`Couldn't load ${cfg.title}: ` + error.message, "error"); return; }
     listData[cfg.key] = data;
     renderListRows(cfg);
+  }
+
+  // ---------- Economic Development Partner Contacts (Team Members section) ----------
+  // Greg: consultants and staff show as "Team Members" via client_assignments
+  // (above, read-only). Non-consultants -- reps from the client's assigned
+  // Economic Development Partner org -- live in econ_dev_partner_contacts,
+  // managed on the Econ Dev Partners page, and get selected in per client
+  // via client_team_partner_contacts. Only the ones checked here show on the
+  // public dashboard's combined Economic Gardening Team list (Section 041).
+  async function loadPartnerContactsSection() {
+    const container = $("partner-contacts-section");
+    if (!container) return;
+
+    if (!currentClient.econ_dev_company_id) {
+      container.innerHTML = `<div class="field-hint">No Economic Development Partner is assigned to this client. Assign one from the Client Application record to select partner contacts here.</div>`;
+      return;
+    }
+
+    const [{ data: partner }, { data: contacts, error: contactsErr }, { data: selections, error: selErr }] = await Promise.all([
+      sb.from("econ_dev_companies").select("name").eq("id", currentClient.econ_dev_company_id).single(),
+      sb.from("econ_dev_partner_contacts").select("*").eq("partner_id", currentClient.econ_dev_company_id).eq("active", true).order("sort_order").order("created_at"),
+      sb.from("client_team_partner_contacts").select("partner_contact_id").eq("client_id", currentClient.id),
+    ]);
+
+    if (contactsErr || selErr) {
+      container.innerHTML = `<div class="field-hint">Couldn't load partner contacts: ${escapeHtml((contactsErr || selErr).message)}</div>`;
+      return;
+    }
+
+    const selectedIds = new Set((selections || []).map((s) => s.partner_contact_id));
+
+    if (!contacts || !contacts.length) {
+      container.innerHTML = `<div class="field-hint">No contacts on file for ${escapeHtml(partner ? partner.name : "this partner")} yet. Add them from the <a href="econ_dev_partners_admin.html" target="_blank">Econ Dev Partners</a> page.</div>`;
+      return;
+    }
+
+    container.innerHTML = contacts.map((c) => `
+      <div class="list-row">
+        <input type="checkbox" class="list-checkbox" data-partner-contact-id="${c.id}" ${selectedIds.has(c.id) ? "checked" : ""} />
+        <div class="list-row-main" style="margin-left:10px; flex:1;">
+          <div class="lr-title">${escapeHtml(c.name)}</div>
+          <div class="lr-sub">${[c.title, c.email, c.phone].filter(Boolean).map(escapeHtml).join(" · ")}</div>
+        </div>
+      </div>
+    `).join("");
+
+    container.querySelectorAll("[data-partner-contact-id]").forEach((cb) => {
+      cb.addEventListener("change", async () => {
+        const partnerContactId = cb.dataset.partnerContactId;
+        cb.disabled = true;
+        if (cb.checked) {
+          const { error } = await sb.from("client_team_partner_contacts").insert({ client_id: currentClient.id, partner_contact_id: partnerContactId });
+          if (error) { showBanner("Couldn't add to team list: " + error.message, "error"); cb.checked = false; }
+        } else {
+          const { error } = await sb.from("client_team_partner_contacts").delete().eq("client_id", currentClient.id).eq("partner_contact_id", partnerContactId);
+          if (error) { showBanner("Couldn't remove from team list: " + error.message, "error"); cb.checked = true; }
+        }
+        cb.disabled = false;
+      });
+    });
   }
 
   function renderListRows(cfg) {
