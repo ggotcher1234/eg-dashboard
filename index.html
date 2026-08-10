@@ -146,21 +146,44 @@
   .badge-on_hold { background: #fdf1dc; color: var(--amber); }
   .badge-closed { background: #eef1f4; color: var(--muted); }
 
-  /* Client detail / destination panel */
+  /* Client detail / workspace launcher modal */
   .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.4); align-items: center; justify-content: center; z-index: 50; padding: 20px; }
   .overlay.open { display: flex; }
-  .modal { background: #fff; border-radius: 12px; width: 560px; max-width: 100%; max-height: 85vh; overflow-y: auto; padding: 30px; box-shadow: 0 16px 40px rgba(0,0,0,0.2); }
-  .modal h3 { margin: 0 0 4px; font-size: 19px; }
+  .modal { background: #fff; border-radius: 14px; width: 640px; max-width: 100%; max-height: 88vh; overflow-y: auto; padding: 28px; box-shadow: 0 16px 40px rgba(0,0,0,0.2); }
+  .modal h3 { margin: 0 0 4px; font-size: 20px; color: var(--navy); }
   .modal .modal-meta { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-  .modal .close-btn { position: absolute; }
+  .modal .modal-team { font-size: 12.5px; color: var(--muted); }
   .modal-header { display: flex; align-items: flex-start; justify-content: space-between; }
-  .destination-row { display: flex; gap: 12px; margin-top: 22px; flex-wrap: wrap; }
-  .destination-card { flex: 1; min-width: 200px; border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: left; background: #fff; cursor: pointer; }
-  .destination-card:hover { border-color: var(--navy-light); }
-  .destination-card .dc-title { font-weight: 700; font-size: 14px; color: var(--navy); }
-  .destination-card .dc-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
-  .destination-card.disabled-link { opacity: 0.5; pointer-events: none; }
+  .modal-status-strip {
+    font-size: 12.5px; color: var(--muted); background: #f8fafb; border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 13px; margin: 16px 0 4px;
+  }
+  .modal-status-strip strong { color: var(--text); font-weight: 700; }
+
+  .modal-action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+  .modal-action-card {
+    display: flex; gap: 12px; align-items: flex-start; text-align: left; text-decoration: none; color: var(--text);
+    border: 1px solid var(--border); border-radius: 12px; padding: 15px 16px; background: #fff; cursor: pointer;
+    box-shadow: 0 1px 3px rgba(20,48,77,0.05); transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .modal-action-card:hover { border-color: var(--navy-light); box-shadow: 0 4px 12px rgba(20,48,77,0.09); }
+  .modal-action-card .mac-icon {
+    width: 34px; height: 34px; border-radius: 9px; background: #eef3ef; color: var(--accent-dark);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .modal-action-card .mac-icon svg { width: 18px; height: 18px; }
+  .modal-action-card .mac-body { flex: 1; min-width: 0; }
+  .modal-action-card .mac-title-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .modal-action-card .mac-title { font-weight: 700; font-size: 13.5px; color: var(--navy); }
+  .modal-action-card .mac-arrow { color: var(--muted); font-size: 14px; flex-shrink: 0; }
+  .modal-action-card .mac-sub { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+
+  .modal-action-external { border-color: #cfe0d2; background: #f7faf7; }
+  .modal-action-external .mac-icon { background: #e2ede2; color: var(--accent-dark); }
+  .modal-action-external:hover { border-color: var(--accent); }
+
+  .modal-action-card.disabled-link { opacity: 0.5; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -268,28 +291,46 @@
   </main>
 </div>
 
-<!-- Client destination modal -->
+<!-- Client workspace launcher modal -->
 <div class="overlay" id="client-overlay">
   <div class="modal">
     <div class="modal-header">
       <div>
         <h3 id="cm-name"></h3>
         <div class="modal-meta" id="cm-meta"></div>
+        <div class="modal-team" id="cm-team"></div>
       </div>
       <button class="btn-ghost" id="cm-close">&times;</button>
     </div>
-    <div class="destination-row">
-      <a class="destination-card" id="cm-hours-link" href="#">
-        <div class="dc-title">Hours &amp; Assignments</div>
-        <div class="dc-sub">Team Lead / consultant hours, budget, project status</div>
+    <div class="modal-status-strip" id="cm-status-strip">Loading status…</div>
+    <div class="modal-action-grid">
+      <a class="modal-action-card" id="cm-hours-link" href="#">
+        <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+        <div class="mac-body">
+          <div class="mac-title-row"><span class="mac-title">Engagement</span><span class="mac-arrow">&rarr;</span></div>
+          <div class="mac-sub">Hours, assignments, budget, and project status</div>
+        </div>
       </a>
-      <a class="destination-card" id="cm-profile-link" href="#">
-        <div class="dc-title">Profile &amp; Documents</div>
-        <div class="dc-sub">Company info, contacts, competitors, research files</div>
+      <a class="modal-action-card" id="cm-profile-link" href="#">
+        <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        <div class="mac-body">
+          <div class="mac-title-row"><span class="mac-title">Client Profile</span><span class="mac-arrow">&rarr;</span></div>
+          <div class="mac-sub">Company info, contacts, competitors, and files</div>
+        </div>
       </a>
-      <a class="destination-card" id="cm-dashboard-btn" href="#" target="_blank" rel="noopener">
-        <div class="dc-title">Client-Facing Dashboard</div>
-        <div class="dc-sub">Open the live page the client sees</div>
+      <a class="modal-action-card" id="cm-research-link" href="#">
+        <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+        <div class="mac-body">
+          <div class="mac-title-row"><span class="mac-title">Research Workspace</span><span class="mac-arrow">&rarr;</span></div>
+          <div class="mac-sub">Market dynamics, outbound/inbound, watering holes</div>
+        </div>
+      </a>
+      <a class="modal-action-card modal-action-external" id="cm-dashboard-btn" href="#" target="_blank" rel="noopener">
+        <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg></div>
+        <div class="mac-body">
+          <div class="mac-title-row"><span class="mac-title">Client Dashboard</span><span class="mac-arrow">&#8599;</span></div>
+          <div class="mac-sub">View exactly what the client sees</div>
+        </div>
       </a>
     </div>
   </div>
@@ -486,18 +527,28 @@
     allClients = data;
   }
 
-  // One row per client's Team Lead, for the "Team Lead: ..." line on each
-  // client card. Best-effort — a client with no Team Lead assigned yet just
-  // shows a dash rather than blocking the row.
+  // Team Lead (for the "Team Lead: ..." line on each client card) plus
+  // everyone else assigned (for the modal's "Consultant(s): ..." line).
+  // Best-effort — a client with nobody assigned yet just shows a dash
+  // rather than blocking the row.
+  let consultantsByClient = {};
   async function loadTeamLeads() {
     const { data, error } = await sb
       .from("client_assignments")
-      .select("client_id, users(full_name)")
-      .eq("is_team_lead", true);
+      .select("client_id, is_team_lead, users(full_name)")
+      .not("user_id", "is", null);
     if (error) return;
-    teamLeadByClient = Object.fromEntries(
-      (data || []).map((r) => [r.client_id, (r.users && r.users.full_name) || null])
-    );
+    teamLeadByClient = {};
+    consultantsByClient = {};
+    for (const r of data || []) {
+      const name = r.users && r.users.full_name;
+      if (!name) continue;
+      if (r.is_team_lead) {
+        teamLeadByClient[r.client_id] = name;
+      } else {
+        (consultantsByClient[r.client_id] = consultantsByClient[r.client_id] || []).push(name);
+      }
+    }
   }
 
   function formatLastActivity(iso) {
@@ -657,7 +708,7 @@
     wireClientRows(list);
   });
 
-  // ---------- Client destination modal ----------
+  // ---------- Client workspace launcher modal ----------
   function openClientModal(clientId) {
     const client = allClients.find((c) => c.id === clientId);
     if (!client) return;
@@ -667,8 +718,16 @@
     const partner = client.econ_dev_companies;
     $("cm-name").textContent = client.name;
     $("cm-meta").innerHTML = `${partner ? escapeHtml(partner.code) + " — " + escapeHtml(partner.name) : "—"} &middot; <span class="badge badge-${client.status}">${client.status}</span> <span class="badge badge-${client.project_status}">${PROJECT_STATUS_LABELS[client.project_status] || client.project_status}</span>`;
+
+    const teamLead = teamLeadByClient[client.id];
+    const consultants = consultantsByClient[client.id] || [];
+    const teamParts = [`Team Lead: ${teamLead ? escapeHtml(teamLead) : "—"}`];
+    if (consultants.length) teamParts.push(`Consultant${consultants.length > 1 ? "s" : ""}: ${escapeHtml(consultants.join(", "))}`);
+    $("cm-team").textContent = teamParts.join(" · ");
+
     $("cm-hours-link").href = `client_workspace.html?client=${client.id}`;
     $("cm-profile-link").href = `client_profile.html?client=${client.id}`;
+    $("cm-research-link").href = `client_profile.html?client=${client.id}&section=research`;
     if (client.slug) {
       $("cm-dashboard-btn").href = new URL(`client_public.html?slug=${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href;
       $("cm-dashboard-btn").classList.remove("disabled-link");
@@ -677,6 +736,40 @@
       $("cm-dashboard-btn").classList.add("disabled-link");
     }
     $("client-overlay").classList.add("open");
+    loadModalStatusStrip(client);
+  }
+
+  // A thin, real-data status line: hours logged vs. budget, the next
+  // incomplete Project Next Step (standing in for "next deliverable" — there's
+  // no separate due-date field in the data model), and when the client record
+  // last changed. Loads after the modal is already open since it's a couple
+  // of extra queries; shows a loading state briefly rather than blocking.
+  async function loadModalStatusStrip(client) {
+    const strip = $("cm-status-strip");
+    strip.textContent = "Loading status…";
+
+    const [{ data: assignments }, { data: nextSteps }] = await Promise.all([
+      sb.from("client_assignments").select("id").eq("client_id", client.id),
+      sb.from("client_next_steps").select("description").eq("client_id", client.id).eq("completed", false).order("sort_order").limit(1),
+    ]);
+
+    let hoursUsed = 0;
+    const assignmentIds = (assignments || []).map((a) => a.id);
+    if (assignmentIds.length) {
+      const { data: entries } = await sb.from("time_entries").select("hours").in("assignment_id", assignmentIds);
+      hoursUsed = (entries || []).reduce((sum, e) => sum + Number(e.hours || 0), 0);
+    }
+
+    // Bail out quietly if the modal moved on to a different client while
+    // these queries were in flight.
+    if (!activeClient || activeClient.id !== client.id) return;
+
+    const budget = client.budget_hours_available;
+    const hoursPart = budget != null ? `<strong>${hoursUsed} of ${budget}</strong> hours used` : `<strong>${hoursUsed}</strong> hours used`;
+    const nextStepText = nextSteps && nextSteps[0] ? nextSteps[0].description : "—";
+    const updatedPart = client.updated_at ? formatLastActivity(client.updated_at) : "—";
+
+    strip.innerHTML = `${hoursPart} &middot; Next step: ${escapeHtml(nextStepText)} &middot; Updated ${updatedPart}`;
   }
 
   $("cm-close").addEventListener("click", () => $("client-overlay").classList.remove("open"));
@@ -684,6 +777,7 @@
 
   $("cm-hours-link").addEventListener("click", () => renderRecents()); // refresh recents order after visiting
   $("cm-profile-link").addEventListener("click", () => renderRecents());
+  $("cm-research-link").addEventListener("click", () => renderRecents());
   $("cm-dashboard-btn").addEventListener("click", () => renderRecents());
 </script>
 </body>
