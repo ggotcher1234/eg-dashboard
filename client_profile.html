@@ -837,7 +837,7 @@
     customLoad: async (clientId) => {
       const { data, error } = await sb
         .from("client_assignments")
-        .select("id, specialty_type, is_team_lead, users(full_name)")
+        .select("id, specialty_type, is_team_lead, users(full_name, email, phone)")
         .eq("client_id", clientId)
         .not("user_id", "is", null)
         .order("is_team_lead", { ascending: false });
@@ -846,7 +846,12 @@
     },
     render: (r) => ({
       title: (r.users && r.users.full_name) || "Unassigned",
-      sub: [SPECIALTY_LABELS[r.specialty_type] || r.specialty_type, r.is_team_lead && r.specialty_type !== "team_lead" ? "Team Lead" : null].filter(Boolean).join(" · "),
+      sub: [
+        SPECIALTY_LABELS[r.specialty_type] || r.specialty_type,
+        r.is_team_lead && r.specialty_type !== "team_lead" ? "Team Lead" : null,
+        r.users && r.users.email,
+        r.users && r.users.phone,
+      ].filter(Boolean).join(" · "),
     }),
   };
   const LIST_CONFIGS = [RESOURCE_VAULT_CONFIG, NEXT_STEPS_CONFIG, CONTACTS_CONFIG, TEAM_CONFIG, COMPETITORS_CONFIG, TOP_CUSTOMERS_CONFIG];
@@ -1099,30 +1104,58 @@
       return;
     }
 
-    container.innerHTML = contacts.map((c) => `
-      <div class="list-row">
-        <input type="checkbox" class="list-checkbox" data-partner-contact-id="${c.id}" ${selectedIds.has(c.id) ? "checked" : ""} />
-        <div class="list-row-main" style="margin-left:10px; flex:1;">
-          <div class="lr-title">${escapeHtml(c.name)}</div>
-          <div class="lr-sub">${[c.title, c.email, c.phone].filter(Boolean).map(escapeHtml).join(" · ")}</div>
-        </div>
-      </div>
-    `).join("");
+    const selectedContacts = contacts.filter((c) => selectedIds.has(c.id));
+    const availableContacts = contacts.filter((c) => !selectedIds.has(c.id));
 
-    container.querySelectorAll("[data-partner-contact-id]").forEach((cb) => {
-      cb.addEventListener("change", async () => {
-        const partnerContactId = cb.dataset.partnerContactId;
-        cb.disabled = true;
-        if (cb.checked) {
-          const { error } = await sb.from("client_team_partner_contacts").insert({ client_id: currentClient.id, partner_contact_id: partnerContactId });
-          if (error) { showBanner("Couldn't add to team list: " + error.message, "error"); cb.checked = false; }
-        } else {
-          const { error } = await sb.from("client_team_partner_contacts").delete().eq("client_id", currentClient.id).eq("partner_contact_id", partnerContactId);
-          if (error) { showBanner("Couldn't remove from team list: " + error.message, "error"); cb.checked = true; }
-        }
-        cb.disabled = false;
+    // Selected contacts show as a real list (matching Team Members/Contacts
+    // styling) with a way to remove them. Everyone else is tucked into the
+    // "+ Add" picker below instead of staying visible as a full checklist --
+    // once picked, a contact moves into the list and drops out of the picker.
+    const selectedHtml = selectedContacts.length
+      ? selectedContacts.map((c) => `
+          <div class="list-row">
+            <div class="list-row-main">
+              <div class="lr-title">${escapeHtml(c.name)}</div>
+              <div class="lr-sub">${[c.title, c.email, c.phone].filter(Boolean).map(escapeHtml).join(" · ")}</div>
+            </div>
+            <button type="button" class="btn-danger icon-btn" data-remove-partner-contact-id="${c.id}" title="Remove from team list">&times;</button>
+          </div>
+        `).join("")
+      : `<div class="list-empty">None selected yet.</div>`;
+
+    const addHtml = availableContacts.length ? `
+      <div class="contacts-add-row" style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); display:flex; align-items:center; gap:8px;">
+        <select id="partner-contact-picker" style="flex:1; padding:7px 9px; border:1px solid var(--border); border-radius:6px; font-size:13.5px;">
+          ${availableContacts.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}${c.title ? " — " + escapeHtml(c.title) : ""}</option>`).join("")}
+        </select>
+        <button type="button" class="btn-secondary btn-sm" id="partner-contact-add-btn">+ Add</button>
+      </div>
+    ` : `<div class="field-hint" style="margin-top:10px;">All of ${escapeHtml(partner ? partner.name : "this partner")}'s contacts are already on the team list.</div>`;
+
+    container.innerHTML = selectedHtml + addHtml;
+
+    container.querySelectorAll("[data-remove-partner-contact-id]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const partnerContactId = btn.dataset.removePartnerContactId;
+        btn.disabled = true;
+        const { error } = await sb.from("client_team_partner_contacts").delete().eq("client_id", currentClient.id).eq("partner_contact_id", partnerContactId);
+        if (error) { showBanner("Couldn't remove from team list: " + error.message, "error"); btn.disabled = false; return; }
+        await loadPartnerContactsSection();
       });
     });
+
+    const addBtn = container.querySelector("#partner-contact-add-btn");
+    if (addBtn) {
+      addBtn.addEventListener("click", async () => {
+        const picker = container.querySelector("#partner-contact-picker");
+        const partnerContactId = picker.value;
+        if (!partnerContactId) return;
+        addBtn.disabled = true;
+        const { error } = await sb.from("client_team_partner_contacts").insert({ client_id: currentClient.id, partner_contact_id: partnerContactId });
+        if (error) { showBanner("Couldn't add to team list: " + error.message, "error"); addBtn.disabled = false; return; }
+        await loadPartnerContactsSection();
+      });
+    }
   }
 
   function renderListRows(cfg) {
