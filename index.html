@@ -582,7 +582,7 @@
   // On Hold stands in for now as a similarly "needs attention" metric drawn
   // from real data; happy to wire up real due dates later if that's wanted.
   async function renderStatCards() {
-    const activeCount = allClients.filter((c) => c.status === "active").length;
+    const acceptedCount = allClients.filter((c) => c.project_status === "accepted").length;
     const inProgressCount = allClients.filter((c) => c.project_status === "in_progress").length;
     const onHoldCount = allClients.filter((c) => c.project_status === "on_hold").length;
     const closedCount = allClients.filter((c) => c.project_status === "closed").length;
@@ -592,12 +592,19 @@
       .select("id", { count: "exact", head: true })
       .eq("status", "pending");
 
+    // These five track one pipeline end to end — an application comes in
+    // (Pending), gets accepted (Accepted), work starts (In Progress), and
+    // it either stalls (On Hold) or wraps up (Closed). No separate "Active
+    // Clients" card — that would have counted status='active' (the engagement
+    // lifecycle flag: active vs. finalized vs. archived), a different axis
+    // from project_status that, in practice, just duplicated In Progress
+    // for almost every client and hid "Accepted but not started yet" instead.
     const stats = [
-      { key: "active", value: activeCount, label: "Active Clients", action: "View active →" },
-      { key: "in_progress", value: inProgressCount, label: "In Progress", action: "View work →" },
       { key: "pending_apps", value: pendingAppCount || 0, label: "Pending Applications", action: "Review →" },
+      { key: "accepted", value: acceptedCount, label: "Accepted", action: "View →" },
+      { key: "in_progress", value: inProgressCount, label: "In Progress", action: "View work →" },
       { key: "on_hold", value: onHoldCount, label: "On Hold", action: "View →" },
-      { key: "closed", value: closedCount, label: "Closed Applications", action: "View →" },
+      { key: "closed", value: closedCount, label: "Closed", action: "View →" },
     ];
     $("stat-grid").innerHTML = stats.map((s) => `
       <div class="stat-card" data-stat="${s.key}">
@@ -611,10 +618,10 @@
     // Pending Applications is a different record type (not in that list),
     // so it deep-links straight into the filtered Applications tab instead.
     const filterMap = {
-      active: { predicate: (c) => c.status === "active", label: "Active Clients" },
+      accepted: { predicate: (c) => c.project_status === "accepted", label: "Accepted" },
       in_progress: { predicate: (c) => c.project_status === "in_progress", label: "In Progress" },
       on_hold: { predicate: (c) => c.project_status === "on_hold", label: "On Hold" },
-      closed: { predicate: (c) => c.project_status === "closed", label: "Closed Applications" },
+      closed: { predicate: (c) => c.project_status === "closed", label: "Closed" },
     };
     $("stat-grid").querySelectorAll("[data-stat]").forEach((card) => {
       card.addEventListener("click", () => {
