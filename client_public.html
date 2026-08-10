@@ -85,6 +85,17 @@
   .action-row .ar-sub a { color: var(--accent-dark); text-decoration: none; }
   .action-row.done .ar-title { text-decoration: line-through; color: var(--muted); }
 
+  .mini-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .mini-table th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px;
+    color: var(--muted); font-weight: 700; padding: 0 14px 7px 0; border-bottom: 1px solid var(--border);
+  }
+  .mini-table td { padding: 9px 14px 9px 0; border-bottom: 1px solid #f0f2f4; vertical-align: top; }
+  .mini-table tr:last-child td { border-bottom: none; }
+  .mini-table td.mt-name { font-weight: 600; }
+  .mini-table a { color: var(--accent-dark); text-decoration: none; }
+  .mini-table a:hover { text-decoration: underline; }
+
   .workflow-tracker { display: flex; margin: 4px 0; }
   .wf-step {
     flex: 1; padding: 12px 20px 12px 32px; color: #fff; font-size: 12px; font-weight: 700;
@@ -486,12 +497,21 @@
       }).join("");
     }
     if (key === "competitors" || key === "top_customers") {
-      return rows.map((r) => `
-        <div class="action-row">
-          <div class="ar-title">${escapeHtml(r.name)}</div>
-          <div class="ar-sub">${[r.website_url ? `<a href="${escapeHtml(r.website_url)}" target="_blank" rel="noopener">${escapeHtml(r.website_url)}</a>` : "", escapeHtml(r.location || ""), escapeHtml(r.notes || "")].filter(Boolean).join(" · ")}</div>
-        </div>
-      `).join("");
+      return `
+        <table class="mini-table">
+          <thead><tr><th>Name</th><th>Website</th><th>Location</th><th>NAICS</th></tr></thead>
+          <tbody>
+            ${rows.map((r) => `
+              <tr>
+                <td class="mt-name">${escapeHtml(r.name)}</td>
+                <td>${r.website_url ? `<a href="${escapeHtml(r.website_url)}" target="_blank" rel="noopener">${escapeHtml(r.website_url)}</a>` : "—"}</td>
+                <td>${escapeHtml(r.location || "—")}</td>
+                <td>${escapeHtml(r.notes || "—")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
     }
     if (key === "next_steps") {
       return rows.map((r) => `
