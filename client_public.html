@@ -65,7 +65,11 @@
   .stat-pills { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
   .stat-pill { display: inline-flex; align-items: center; gap: 9px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 9px 16px; font-size: 13px; font-weight: 700; color: var(--navy); cursor: pointer; }
   .stat-pill:hover { border-color: var(--accent); }
+  .stat-pill.open { border-color: var(--accent); background: #f3f6f1; }
   .stat-pill .count { background: #eef1f4; color: var(--muted); border-radius: 999px; padding: 2px 9px; font-size: 11.5px; }
+  .stat-pill .pill-chevron { color: var(--muted); font-size: 11px; transition: transform 0.15s ease; }
+  .stat-pill.open .pill-chevron { transform: rotate(90deg); }
+  #stat-pill-details .action-body { margin: 10px 0 0; }
 
   .action-bar { background: var(--accent); color: #fff; border-radius: 8px; padding: 13px 20px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; cursor: pointer; font-weight: 700; font-size: 14px; }
   .action-bar:hover { background: var(--accent-dark); }
@@ -124,7 +128,7 @@
      expanded, with none of the click-to-open chrome. */
   @media print {
     body { background: #fff; }
-    #print-btn, .stat-pill .count, .ab-chevron { display: none !important; }
+    #print-btn, .stat-pill .count, .ab-chevron, .pill-chevron { display: none !important; }
     .action-bar { cursor: default; }
     .action-body { display: block !important; }
     .card, .research-card, .action-bar, .action-body { break-inside: avoid; }
@@ -173,6 +177,11 @@
       <a class="company-website hidden" id="company-website" target="_blank" rel="noopener"></a>
       <div class="company-socials" id="company-socials"></div>
       <div class="stat-pills" id="stat-pills"></div>
+      <div id="stat-pill-details">
+        <div class="action-body" id="detail-competitors"></div>
+        <div class="action-body" id="detail-top_customers"></div>
+        <div class="action-body" id="detail-next_steps"></div>
+      </div>
     </div>
 
     <div id="action-bars"></div>
@@ -332,40 +341,48 @@
       .join("");
   }
 
+  // Competitors / Top Customers / Next Steps used to also get their own
+  // full-width accordion bars below, which just duplicated these pill
+  // counts. The pills are now the only place to see them — clicking one
+  // expands the same list content right underneath instead.
   function renderStatPills(row) {
     const competitorsCount = (row.competitors || []).length;
     const customersCount = (row.top_customers || []).length;
     const steps = row.next_steps || [];
     const stepsDone = steps.filter((s) => s.completed).length;
     $("stat-pills").innerHTML = `
-      <div class="stat-pill" data-scroll="bar-competitors">&#127970; Competitors <span class="count">${competitorsCount}</span></div>
-      <div class="stat-pill" data-scroll="bar-top_customers">&#127991; Top Customers <span class="count">${customersCount}</span></div>
-      <div class="stat-pill" data-scroll="bar-next_steps">&#9989; Next Steps <span class="count">${stepsDone}/${steps.length}</span></div>
+      <div class="stat-pill" data-pill="competitors">&#127970; Competitors <span class="count">${competitorsCount}</span> <span class="pill-chevron">&#9656;</span></div>
+      <div class="stat-pill" data-pill="top_customers">&#127991; Top Customers <span class="count">${customersCount}</span> <span class="pill-chevron">&#9656;</span></div>
+      <div class="stat-pill" data-pill="next_steps">&#9989; Next Steps <span class="count">${stepsDone}/${steps.length}</span> <span class="pill-chevron">&#9656;</span></div>
     `;
-    $("stat-pills").querySelectorAll("[data-scroll]").forEach((el) => {
-      el.addEventListener("click", () => {
-        const target = $(el.dataset.scroll);
-        if (target) { target.scrollIntoView({ behavior: "smooth", block: "center" }); openBar(el.dataset.scroll); }
+
+    $("detail-competitors").innerHTML = renderActionBody("competitors", row.competitors || []);
+    $("detail-top_customers").innerHTML = renderActionBody("top_customers", row.top_customers || []);
+    $("detail-next_steps").innerHTML = renderActionBody("next_steps", steps);
+
+    $("stat-pills").querySelectorAll("[data-pill]").forEach((pill) => {
+      pill.addEventListener("click", () => {
+        const key = pill.dataset.pill;
+        const detail = $(`detail-${key}`);
+        const wasOpen = detail.classList.contains("open");
+        // Only one pill's detail shows at a time.
+        $("stat-pills").querySelectorAll(".stat-pill").forEach((p) => p.classList.remove("open"));
+        document.querySelectorAll("#stat-pill-details .action-body").forEach((el) => el.classList.remove("open"));
+        if (!wasOpen) {
+          pill.classList.add("open");
+          detail.classList.add("open");
+        }
       });
     });
   }
 
-  function openBar(id) {
-    const bar = $(id);
-    const body = $(id + "-body");
-    if (bar && body && !bar.classList.contains("open")) {
-      bar.classList.add("open");
-      body.classList.add("open");
-    }
-  }
-
+  // Competitors, Top Customers, and Next Steps used to be here too — they
+  // now live only under the stat pills above (see renderStatPills), since a
+  // full-width accordion bar down here just duplicated that count.
   const ACTION_BAR_DEFS = [
     { key: "contacts", icon: "&#128100;", label: (n) => `${n} Contacts` },
     { key: "team", icon: "&#128101;", label: () => "Economic Gardening Team" },
     { key: "resource_vault", icon: "&#128193;", label: () => "Resource Vault" },
-    { key: "competitors", icon: "&#127970;", label: (n) => `${n} Competitors` },
-    { key: "top_customers", icon: "&#127991;", label: (n) => `${n} Top Customers` },
-    { key: "next_steps", icon: "&#9989;", label: () => "Project Next Steps" },
   ];
 
   function renderActionBars(row, expandAll) {
