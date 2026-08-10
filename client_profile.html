@@ -236,9 +236,9 @@
           <div class="field-grid">
             <div>
               <div class="field">
-                <label for="co-logo">Logo URL</label>
-                <input type="url" id="co-logo" placeholder="https://…" />
-                <div class="field-hint">Tip: use a direct image link (PNG/JPG/SVG). Leave blank to hide.</div>
+                <label>Logo</label>
+                <div id="co-logo-file"></div>
+                <div class="field-hint">Shows on the client dashboard header. Leave unset to hide.</div>
               </div>
               <div class="field">
                 <label for="co-website">Website</label>
@@ -527,7 +527,6 @@
 
   // ---------- Company Information ----------
   function fillCompanyForm(c) {
-    $("co-logo").value = c.logo_url || "";
     $("co-website").value = c.website_url || "";
     $("co-address").value = c.address || "";
     $("co-naics").value = c.naics_codes || "";
@@ -537,6 +536,7 @@
     $("co-twitter").value = c.twitter_url || "";
     $("co-youtube").value = c.youtube_url || "";
     $("co-description").value = c.description || "";
+    renderLogoField();
   }
 
   $("company-form").addEventListener("submit", async (e) => {
@@ -545,7 +545,6 @@
     btn.disabled = true;
     btn.textContent = "Saving…";
     const { error } = await sb.from("clients").update({
-      logo_url: $("co-logo").value.trim() || null,
       website_url: $("co-website").value.trim() || null,
       address: $("co-address").value.trim() || null,
       naics_codes: $("co-naics").value.trim() || null,
@@ -561,6 +560,72 @@
     if (error) { showBanner("Couldn't save company info: " + error.message, "error"); return; }
     showBanner("Company info saved.", "success");
   });
+
+  // ---------- Logo upload ----------
+  // Logos go to a dedicated PUBLIC bucket (client-logos), not the private
+  // client-documents bucket everything else uses -- a logo isn't sensitive,
+  // and this way clients.logo_url just gets a normal public image URL, no
+  // signed-URL machinery needed to display it. Saves immediately on
+  // upload/remove, same as the Workflow Documents fields above.
+  function logoPathFromUrl(url) {
+    if (!url) return null;
+    const marker = "/object/public/client-logos/";
+    const idx = url.indexOf(marker);
+    return idx === -1 ? null : url.slice(idx + marker.length);
+  }
+
+  function renderLogoField() {
+    const container = $("co-logo-file");
+    const url = currentClient && currentClient.logo_url;
+    if (url) {
+      container.innerHTML = `
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <img src="${escapeHtml(url)}" alt="Logo preview" style="height:40px; max-width:160px; object-fit:contain; border:1px solid var(--border); border-radius:6px; background:#fff; padding:4px;" />
+          <button type="button" class="btn-secondary btn-sm" data-logo-replace>Replace</button>
+          <button type="button" class="btn-secondary btn-sm" data-logo-remove>Remove</button>
+        </div>
+      `;
+      container.querySelector("[data-logo-replace]").addEventListener("click", pickLogoFile);
+      container.querySelector("[data-logo-remove]").addEventListener("click", removeLogoFile);
+    } else {
+      container.innerHTML = `<label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload logo<input type="file" accept="image/*" class="logo-upload-input" style="display:none;" /></label>`;
+      container.querySelector(".logo-upload-input").addEventListener("change", (e) => {
+        if (e.target.files.length) uploadLogoFile(e.target.files[0]);
+      });
+    }
+  }
+
+  function pickLogoFile() {
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.accept = "image/*";
+    picker.addEventListener("change", () => { if (picker.files.length) uploadLogoFile(picker.files[0]); });
+    picker.click();
+  }
+
+  async function uploadLogoFile(file) {
+    const oldPath = logoPathFromUrl(currentClient.logo_url);
+    const path = `clients/${currentClient.id}/logo/${Date.now()}-${sanitizeFilename(file.name)}`;
+    const { error: uploadErr } = await sb.storage.from("client-logos").upload(path, file);
+    if (uploadErr) { showBanner("Couldn't upload logo: " + uploadErr.message, "error"); return; }
+    const { data } = sb.storage.from("client-logos").getPublicUrl(path);
+    const { error } = await sb.from("clients").update({ logo_url: data.publicUrl }).eq("id", currentClient.id);
+    if (error) { showBanner("Couldn't save logo: " + error.message, "error"); return; }
+    if (oldPath) await sb.storage.from("client-logos").remove([oldPath]);
+    currentClient.logo_url = data.publicUrl;
+    renderLogoField();
+    showBanner("Logo uploaded.", "success");
+  }
+
+  async function removeLogoFile() {
+    const oldPath = logoPathFromUrl(currentClient.logo_url);
+    const { error } = await sb.from("clients").update({ logo_url: null }).eq("id", currentClient.id);
+    if (error) { showBanner("Couldn't remove logo: " + error.message, "error"); return; }
+    if (oldPath) await sb.storage.from("client-logos").remove([oldPath]);
+    currentClient.logo_url = null;
+    renderLogoField();
+    showBanner("Logo removed.", "success");
+  }
 
   // ---------- EG Workflow Documents ----------
   // Discovery/Controlling/Close-Out are client-unique files the Team Lead
