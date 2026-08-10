@@ -107,7 +107,7 @@
   }
   .avatar-sm img, .avatar img { width: 100%; height: 100%; object-fit: cover; }
   .photo-actions { display: flex; align-items: center; gap: 8px; margin: 2px 0 10px; }
-  .photo-actions .field-hint { font-size: 11.5px; color: var(--muted); }
+  .field-hint { font-size: 11.5px; color: var(--muted); }
   .role-badge {
     font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.3px; padding: 2px 8px; border-radius: 999px;
     font-weight: 700; margin-left: 8px;
@@ -356,6 +356,19 @@
         <button type="submit" class="btn-primary hidden" id="profile-save">Save</button>
       </div>
     </form>
+
+    <div id="relink-section" class="hidden" style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border);">
+      <label style="margin-top:0;">Relink Login <span style="font-weight:400; text-transform:none;">(Super Admin only)</span></label>
+      <div class="field-hint" style="margin-bottom:8px;">
+        If this person's Supabase Auth account was deleted and recreated (locked out, typo'd email, etc.), paste
+        the new login's User UID here to reattach their existing profile, role, and client assignments to it.
+      </div>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="relink-new-id" placeholder="New login's User UID" style="flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13.5px;" />
+        <button type="button" class="btn-secondary btn-sm" id="relink-btn">Relink</button>
+      </div>
+      <div id="relink-error" style="color:var(--danger); font-size:12.5px; margin-top:8px; display:none;"></div>
+    </div>
   </div>
 </div>
 
@@ -861,6 +874,10 @@
 
     $("profile-save").classList.toggle("hidden", !canEdit);
 
+    $("relink-section").classList.toggle("hidden", !isSuperAdmin);
+    $("relink-new-id").value = "";
+    $("relink-error").style.display = "none";
+
     $("profile-overlay").classList.add("open");
   }
 
@@ -869,6 +886,44 @@
     $("profile-overlay").classList.remove("open");
     openProfileId = null;
   }
+
+  // ---------- Relink Login (Super Admin) ----------
+  // Fixes the "account got deleted & recreated, profile no longer matches"
+  // problem without needing a hand-written migration each time. The person
+  // whose login broke can't do this themselves -- until it's relinked, their
+  // new account has no recognized staff profile, so a working Super Admin
+  // has to do it from here.
+  $("relink-btn").addEventListener("click", async () => {
+    const u = allUsers.find((x) => x.id === openProfileId);
+    if (!u) return;
+
+    const newId = $("relink-new-id").value.trim();
+    $("relink-error").style.display = "none";
+    if (!newId) {
+      $("relink-error").textContent = "Paste the new login's User UID first.";
+      $("relink-error").style.display = "block";
+      return;
+    }
+
+    const btn = $("relink-btn");
+    btn.disabled = true;
+    btn.textContent = "Relinking…";
+
+    const { error } = await sb.rpc("relink_user_account", { p_email: u.email, p_new_auth_id: newId });
+
+    btn.disabled = false;
+    btn.textContent = "Relink";
+
+    if (error) {
+      $("relink-error").textContent = error.message;
+      $("relink-error").style.display = "block";
+      return;
+    }
+
+    closeProfile();
+    showBanner(`Relinked ${u.full_name}'s profile to the new login.`, "success");
+    await loadUsers();
+  });
 
   $("profile-form").addEventListener("submit", async (e) => {
     e.preventDefault();
