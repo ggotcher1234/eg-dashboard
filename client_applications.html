@@ -513,6 +513,16 @@
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = profile.role.replace("_", " ");
 
+    // Deep link from the home page's "Pending Applications" stat card
+    // (?status=pending) — lets that card take you straight to the filtered
+    // list instead of just the page in general.
+    const statusParam = new URLSearchParams(location.search).get("status");
+    const validTabs = ["pending", "accepted", "in_progress", "on_hold", "closed", "rejected", "all"];
+    if (statusParam && validTabs.includes(statusParam)) {
+      activeTab = statusParam;
+      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.status === statusParam));
+    }
+
     await Promise.all([loadPartners(), loadUsers()]);
     await loadApplications();
 
