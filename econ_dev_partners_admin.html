@@ -776,13 +776,26 @@
     return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
   }
 
-  const CONTACTS_CSV_HEADERS = ["Partner Code", "Name", "Title", "Email", "Phone"];
+  const CONTACTS_CSV_HEADERS = ["Partner Code", "Partner Name", "Name", "Title", "Email", "Phone"];
+
+  // Loose match for Partner Name: lowercase, drop parenthetical suffixes like
+  // "(West Virginia)", strip punctuation, collapse whitespace. Lets a CSV
+  // sourced from an external doc (different capitalization/punctuation than
+  // our own partner names) still match without needing exact codes.
+  function normalizePartnerName(name) {
+    return (name || "")
+      .toLowerCase()
+      .replace(/\([^)]*\)/g, " ")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  }
 
   $("contacts-csv-export-btn").addEventListener("click", () => {
-    const codeById = Object.fromEntries(allPartners.map((p) => [p.id, p.code]));
+    const partnerById = Object.fromEntries(allPartners.map((p) => [p.id, p]));
     const lines = [CONTACTS_CSV_HEADERS.map(csvField).join(",")];
     for (const c of allContacts) {
-      lines.push([codeById[c.partner_id] || "", c.name, c.title, c.email, c.phone].map(csvField).join(","));
+      const p = partnerById[c.partner_id];
+      lines.push([p ? p.code : "", p ? p.name : "", c.name, c.title, c.email, c.phone].map(csvField).join(","));
     }
     const blob = new Blob([lines.join("\r\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -810,19 +823,28 @@
     }
 
     const partnerByCode = {};
-    for (const p of allPartners) partnerByCode[p.code.trim().toLowerCase()] = p;
+    const partnerByNormName = {};
+    for (const p of allPartners) {
+      partnerByCode[p.code.trim().toLowerCase()] = p;
+      partnerByNormName[normalizePartnerName(p.name)] = p;
+    }
 
     const toInsert = [];
-    const unmatchedCodes = new Set();
+    const unmatchedLabels = new Set();
     let skippedBlank = 0;
 
-    allRows.forEach((r, i) => {
-      const [codeRaw, nameRaw, titleRaw, emailRaw, phoneRaw] = r;
+    allRows.forEach((r) => {
+      const [codeRaw, partnerNameRaw, nameRaw, titleRaw, emailRaw, phoneRaw] = r;
       const code = (codeRaw || "").trim();
+      const partnerNameCsv = (partnerNameRaw || "").trim();
       const name = (nameRaw || "").trim();
-      if (!code && !name) { skippedBlank++; return; }
-      const partner = partnerByCode[code.toLowerCase()];
-      if (!partner) { unmatchedCodes.add(code || "(blank)"); return; }
+      if (!code && !partnerNameCsv && !name) { skippedBlank++; return; }
+
+      // Match by code first, fall back to normalized partner name.
+      let partner = code ? partnerByCode[code.toLowerCase()] : null;
+      if (!partner && partnerNameCsv) partner = partnerByNormName[normalizePartnerName(partnerNameCsv)];
+
+      if (!partner) { unmatchedLabels.add(code || partnerNameCsv || "(blank)"); return; }
       if (!name) { skippedBlank++; return; }
       toInsert.push({
         organization_id: currentUser.organization_id,
@@ -839,8 +861,8 @@
 
     if (!toInsert.length) {
       showBanner(
-        unmatchedCodes.size
-          ? `No rows imported — none of the Partner Codes matched an existing partner (${[...unmatchedCodes].slice(0, 5).join(", ")}).`
+        unmatchedLabels.size
+          ? `No rows imported — none of the partners matched an existing partner (${[...unmatchedLabels].slice(0, 5).join(", ")}).`
           : "No rows found in that CSV to import.",
         "error"
       );
@@ -854,7 +876,7 @@
     }
 
     let msg = `Imported ${toInsert.length} contact${toInsert.length === 1 ? "" : "s"}.`;
-    if (unmatchedCodes.size) msg += ` Skipped ${unmatchedCodes.size} row(s) with an unrecognized Partner Code (${[...unmatchedCodes].slice(0, 5).join(", ")}).`;
+    if (unmatchedLabels.size) msg += ` Skipped ${unmatchedLabels.size} row(s) that didn't match an existing partner (${[...unmatchedLabels].slice(0, 5).join(", ")}).`;
     showBanner(msg, "success");
     await loadPartners();
   });
