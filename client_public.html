@@ -87,14 +87,30 @@
 
   .workflow-tracker { display: flex; margin: 4px 0; }
   .wf-step {
-    flex: 1; padding: 12px 20px 12px 32px; background: #cfd6dc; color: #fff; font-size: 12px; font-weight: 700;
+    flex: 1; padding: 12px 20px 12px 32px; color: #fff; font-size: 12px; font-weight: 700;
     text-align: center; text-transform: uppercase; letter-spacing: 0.3px; position: relative;
     clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%, 16px 50%);
     margin-left: -16px; text-decoration: none; display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s ease;
   }
   .wf-step:first-child { margin-left: 0; clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%); }
-  .wf-step.filled { background: var(--accent); cursor: pointer; }
-  .wf-step.filled:hover { background: var(--accent-dark); }
+  .wf-step.filled { cursor: pointer; }
+
+  /* Each step gets its own color, dimmed until its document/link is set,
+     bright (and clickable) once it is -- Discovery blue, Controlling tan,
+     Research Review sage, Close-Out slate. */
+  .wf-step-0 { background: #7fa4c4; }
+  .wf-step-0.filled { background: #2f6fb0; }
+  .wf-step-0.filled:hover { background: #255a8f; }
+  .wf-step-1 { background: #c9ac74; }
+  .wf-step-1.filled { background: var(--amber); }
+  .wf-step-1.filled:hover { background: #8a5f0c; }
+  .wf-step-2 { background: #96ab84; }
+  .wf-step-2.filled { background: var(--accent); }
+  .wf-step-2.filled:hover { background: var(--accent-dark); }
+  .wf-step-3 { background: #8998a6; }
+  .wf-step-3.filled { background: #4a5a68; }
+  .wf-step-3.filled:hover { background: #37434e; }
 
   .research-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 4px; }
   .research-card { border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #fff; }
@@ -278,10 +294,28 @@
     return html;
   }
 
+  // Word/Excel/PowerPoint files have no native in-browser viewer -- opening
+  // the raw signed URL just makes the browser prompt to save them instead
+  // of showing them. Route those through Microsoft's Office Online Viewer
+  // so they actually open; everything else (PDFs, images) the browser can
+  // already display inline, so those still open directly.
+  const OFFICE_VIEWER_EXTENSIONS = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
+  function fileExtension(path) {
+    const name = (path.split("/").pop() || "").toLowerCase();
+    const dot = name.lastIndexOf(".");
+    return dot === -1 ? "" : name.slice(dot + 1);
+  }
+
   function openSignedDoc(path) {
     return async () => {
-      const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, 60);
+      // 300s (not 60s) so the Office viewer has time to fetch the file
+      // itself before the link expires.
+      const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, 300);
       if (error) { alert("Couldn't open this file: " + error.message); return; }
+      if (OFFICE_VIEWER_EXTENSIONS.includes(fileExtension(path))) {
+        window.open(`https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(data.signedUrl)}`, "_blank");
+        return;
+      }
       window.open(data.signedUrl, "_blank");
     };
   }
@@ -479,16 +513,17 @@
 
   function renderWorkflow(workflow) {
     const w = workflow || {};
-    $("workflow-tracker").innerHTML = WORKFLOW_STEPS.map((step) => {
+    $("workflow-tracker").innerHTML = WORKFLOW_STEPS.map((step, i) => {
       const path = step.pathKey ? w[step.pathKey] : null;
       const url = w[step.urlKey];
+      const colorClass = `wf-step-${i}`;
       if (path) {
-        return `<a class="wf-step filled wf-doc-link" data-path="${escapeHtml(path)}" href="#">${escapeHtml(step.label)}</a>`;
+        return `<a class="wf-step ${colorClass} filled wf-doc-link" data-path="${escapeHtml(path)}" href="#">${escapeHtml(step.label)}</a>`;
       }
       if (url) {
-        return `<a class="wf-step filled" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(step.label)}</a>`;
+        return `<a class="wf-step ${colorClass} filled" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(step.label)}</a>`;
       }
-      return `<div class="wf-step">${escapeHtml(step.label)}</div>`;
+      return `<div class="wf-step ${colorClass}">${escapeHtml(step.label)}</div>`;
     }).join("");
     $("workflow-tracker").querySelectorAll(".wf-doc-link").forEach((el) => {
       el.addEventListener("click", (e) => { e.preventDefault(); openSignedDoc(el.dataset.path)(); });
