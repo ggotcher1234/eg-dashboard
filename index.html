@@ -35,6 +35,20 @@
   #userbox { display: flex; align-items: center; gap: 12px; font-size: 13px; }
   #userbox .role-pill { color: #c9d6e3; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; opacity: 0.75; }
 
+  #profile-wrap { position: relative; }
+  #profile-btn { display: flex; align-items: center; gap: 4px; padding: 4px 6px; }
+  #profile-btn .avatar-icon {
+    width: 24px; height: 24px; border-radius: 999px; background: rgba(255,255,255,0.14);
+    display: flex; align-items: center; justify-content: center; color: #c9d6e3;
+  }
+  #profile-btn .avatar-icon svg { width: 14px; height: 14px; }
+  #profile-btn .chevron { font-size: 9px; color: #c9d6e3; }
+  .profile-dropdown { width: 150px; padding: 6px; }
+  .profile-dropdown button, header .profile-dropdown button {
+    width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--text);
+  }
+  .profile-dropdown button:hover, header .profile-dropdown button:hover { background: #eef1f4; color: var(--text); }
+
   #notif-wrap { position: relative; }
   #notif-bell { position: relative; font-size: 15px; line-height: 1; }
   .notif-count { position: absolute; top: -3px; right: -3px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; min-width: 16px; height: 16px; border-radius: 999px; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
@@ -83,38 +97,62 @@
   .page-header h1 { margin: 0; font-size: 25px; font-weight: 700; color: var(--navy); letter-spacing: -0.2px; }
   .page-header p { margin: 5px 0 0; font-size: 14px; color: var(--muted); }
 
-  .toolbar-row { display: flex; gap: 12px; margin-bottom: 24px; align-items: center; }
+  /* Search + Add Client sit inside one bordered panel so the toolbar reads
+     as a single "control panel" row instead of a search bar floating on
+     its own above the page. */
+  .toolbar-row {
+    display: flex; gap: 8px; margin-bottom: 22px; align-items: center;
+    background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 8px;
+    box-shadow: 0 1px 3px rgba(20,48,77,0.05);
+  }
   .search-box { position: relative; flex: 1; max-width: 640px; }
   .search-box input {
-    width: 100%; height: 44px; padding: 0 16px 0 42px; border: 1px solid var(--border); border-radius: 10px;
-    font-size: 14.5px; background: #fff; box-shadow: 0 1px 2px rgba(20,48,77,0.04);
+    width: 100%; height: 40px; padding: 0 16px 0 42px; border: 1px solid transparent; border-radius: 8px;
+    font-size: 14.5px; background: #f6f8fa;
   }
-  .search-box input:focus { outline: none; border-color: var(--navy-light); }
+  .search-box input:focus { outline: none; border-color: var(--navy-light); background: #fff; }
   .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 15px; }
   #add-client-btn {
     flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
-    height: 44px; padding: 0 20px; border-radius: 10px; font-size: 14px; font-weight: 700;
-    background: var(--accent); color: #fff; box-shadow: 0 1px 2px rgba(20,48,77,0.06);
+    height: 40px; padding: 0 18px; border-radius: 8px; font-size: 14px; font-weight: 700;
+    background: var(--accent); color: #fff;
   }
   #add-client-btn:hover { background: var(--accent-dark); }
 
-  .stat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 28px; }
-  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 13px 18px; box-shadow: 0 1px 3px rgba(20,48,77,0.05); cursor: pointer; transition: box-shadow 0.15s ease, border-color 0.15s ease; }
+  /* KPI cards: compact and mostly quiet -- number, label, nothing else.
+     In Progress (the one metric a specialist/admin actually watches day to
+     day) gets the one accent treatment so the row has a clear focal point
+     instead of five equal-weight boxes. */
+  .stat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 26px; }
+  .stat-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px;
+    cursor: pointer; transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
   .stat-card:hover { border-color: var(--navy-light); box-shadow: 0 4px 12px rgba(20,48,77,0.09); }
-  .stat-card .stat-value { font-size: 23px; font-weight: 700; color: var(--navy); line-height: 1.1; }
-  .stat-card .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; font-weight: 600; }
-  .stat-card .stat-action { font-size: 11px; color: var(--navy-light); margin-top: 7px; font-weight: 700; }
-  .stat-card.stat-accent .stat-value { color: var(--accent-dark); }
+  .stat-card .stat-value { font-size: 19px; font-weight: 700; color: var(--navy); line-height: 1.1; }
+  .stat-card .stat-label { font-size: 11px; color: var(--muted); margin-top: 3px; font-weight: 600; }
+  .stat-card.stat-accent {
+    background: #eef3ea; border-color: var(--accent); box-shadow: 0 2px 8px rgba(92,114,72,0.16);
+  }
+  .stat-card.stat-accent .stat-value { color: var(--accent-dark); font-size: 21px; }
+  .stat-card.stat-accent .stat-label { color: var(--accent-dark); }
+  .stat-card.stat-accent:hover { box-shadow: 0 6px 16px rgba(92,114,72,0.24); }
 
   h2.section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--navy); font-weight: 700; margin: 0; }
   .section-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
   .section-header a { font-size: 12.5px; color: var(--navy-light); text-decoration: none; font-weight: 600; }
   .section-header a:hover { text-decoration: underline; }
+  .subsection-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700;
+    margin: 0 0 10px;
+  }
 
+  /* Tool cards stay visually larger/richer than the flat KPI cards above so
+     the eye can tell "metrics" and "tools" apart without reading either. */
   .admin-grid { display: flex; gap: 14px; margin-bottom: 28px; flex-wrap: wrap; }
   .quicklink {
     flex: 1; min-width: 220px; background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-    padding: 20px; text-decoration: none; color: var(--text); display: flex; gap: 14px; align-items: flex-start;
+    padding: 18px 20px; text-decoration: none; color: var(--text); display: flex; gap: 14px; align-items: flex-start;
     box-shadow: 0 1px 3px rgba(20,48,77,0.05); transition: box-shadow 0.15s ease, border-color 0.15s ease;
   }
   .quicklink:hover { border-color: var(--navy-light); box-shadow: 0 4px 12px rgba(20,48,77,0.09); }
@@ -126,24 +164,25 @@
   .quicklink .ql-title { font-weight: 700; font-size: 14.5px; color: var(--navy); }
   .quicklink .ql-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
 
-  .client-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+  /* Recent Clients as one bordered panel with divided rows -- a table/list
+     hybrid rather than a stack of separate floating cards -- so it reads
+     denser and more like a working list. */
+  .client-list {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    margin-bottom: 24px; box-shadow: 0 1px 3px rgba(20,48,77,0.05);
+  }
   .client-row {
     display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-    padding: 14px 18px; cursor: pointer; box-shadow: 0 1px 3px rgba(20,48,77,0.05);
-    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+    padding: 13px 18px; cursor: pointer; border-bottom: 1px solid var(--border);
+    transition: background 0.15s ease;
   }
-  .client-row:hover { border-color: var(--navy-light); box-shadow: 0 4px 12px rgba(20,48,77,0.09); }
-  .client-row .cr-name { font-weight: 700; font-size: 15px; color: var(--navy); }
-  .client-row .cr-meta { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .client-row:last-child { border-bottom: none; }
+  .client-row:hover { background: #f8fafb; }
+  .client-row .cr-name { font-weight: 700; font-size: 14.5px; color: var(--navy); }
+  .client-row .cr-meta { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
   .client-row .cr-right { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
   .client-row .cr-badges { display: flex; gap: 6px; align-items: center; }
-  .client-row .cr-open {
-    font-size: 12px; font-weight: 700; color: var(--navy-light); white-space: nowrap;
-    padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-  }
-  .client-row:hover .cr-open { border-color: var(--navy-light); background: #eef3f9; }
+  .client-row .cr-open { font-size: 12.5px; font-weight: 700; color: var(--navy-light); white-space: nowrap; }
   .empty-note { padding: 26px; text-align: center; color: var(--muted); font-size: 13.5px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
 
   .badge { font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; padding: 3px 9px; border-radius: 999px; }
@@ -190,8 +229,8 @@
     <div class="brand-row">
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
-        <h1>EG Dashboard</h1>
-        <div class="sub">EG Group</div>
+        <h1>EG Group</h1>
+        <div class="sub">Dashboard</div>
       </div>
     </div>
     <div id="userbox">
@@ -210,7 +249,15 @@
       </div>
       <span id="user-name"></span>
       <span class="role-pill" id="user-role"></span>
-      <button class="btn-ghost" id="signout-btn">Sign out</button>
+      <div id="profile-wrap">
+        <button class="btn-ghost" id="profile-btn" title="Account menu">
+          <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="chevron">&#9662;</span>
+        </button>
+        <div id="profile-dropdown" class="notif-dropdown profile-dropdown hidden">
+          <button class="btn-ghost" id="signout-btn">Sign out</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -218,8 +265,8 @@
     <div id="banner"></div>
 
     <div class="page-header">
-      <h1>Client Dashboard</h1>
-      <p>Manage EG clients, applications, partners, and team resources.</p>
+      <h1>Clients</h1>
+      <p>Manage clients, applications, and team resources.</p>
     </div>
 
     <div class="toolbar-row">
@@ -232,35 +279,38 @@
 
     <div class="stat-grid hidden" id="stat-grid"></div>
 
-    <div class="admin-grid hidden" id="quicklinks-section">
-      <a class="quicklink" href="client_applications.html">
-        <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.7 0 3.29.47 4.65 1.28"/><path d="M21 3v6h-6"/></svg></div>
-        <div>
-          <div class="ql-title">Client Applications</div>
-          <div class="ql-sub">Intake, review, accept or reject</div>
-        </div>
-      </a>
-      <a class="quicklink" href="econ_dev_partners_admin.html">
-        <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h1M9 13h1M9 17h1M14 9h1M14 13h1M14 17h1"/></svg></div>
-        <div>
-          <div class="ql-title">Program Managers</div>
-          <div class="ql-sub">Manage the Program Directory</div>
-        </div>
-      </a>
-      <a class="quicklink" href="team_directory.html">
-        <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-        <div>
-          <div class="ql-title">Team Directory</div>
-          <div class="ql-sub">Team Lead &amp; Specialist contacts</div>
-        </div>
-      </a>
-      <a class="quicklink" href="invoicing_report.html">
-        <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-        <div>
-          <div class="ql-title">Invoicing Report</div>
-          <div class="ql-sub">Monthly hours by specialist, over-budget flags</div>
-        </div>
-      </a>
+    <div id="admin-tools-wrap" class="hidden">
+      <div class="subsection-label">Admin Tools</div>
+      <div class="admin-grid" id="quicklinks-section">
+        <a class="quicklink" href="client_applications.html">
+          <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.7 0 3.29.47 4.65 1.28"/><path d="M21 3v6h-6"/></svg></div>
+          <div>
+            <div class="ql-title">Client Applications</div>
+            <div class="ql-sub">Review and manage applications</div>
+          </div>
+        </a>
+        <a class="quicklink" href="econ_dev_partners_admin.html">
+          <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h1M9 13h1M9 17h1M14 9h1M14 13h1M14 17h1"/></svg></div>
+          <div>
+            <div class="ql-title">Program Managers</div>
+            <div class="ql-sub">Manage program managers</div>
+          </div>
+        </a>
+        <a class="quicklink" href="team_directory.html">
+          <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <div>
+            <div class="ql-title">Team Directory</div>
+            <div class="ql-sub">Team leads and specialist contacts</div>
+          </div>
+        </a>
+        <a class="quicklink" href="invoicing_report.html">
+          <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <div>
+            <div class="ql-title">Invoicing Report</div>
+            <div class="ql-sub">Hours, budgets, and billing flags</div>
+          </div>
+        </a>
+      </div>
     </div>
 
     <div id="recents-section">
@@ -412,7 +462,7 @@
     // Admin-only links (Partners, Applications, Team Directory) are only useful to a
     // Super Admin day-to-day — Team Leads/Consultants get a clean client-picker-only view.
     isSuperAdminUser = profile.role === "super_admin";
-    $("quicklinks-section").classList.toggle("hidden", !isSuperAdminUser);
+    $("admin-tools-wrap").classList.toggle("hidden", !isSuperAdminUser);
     $("stat-grid").classList.toggle("hidden", !isSuperAdminUser);
     // Creating a client (and assigning who works it) is Super-Admin-only —
     // accept_client_application() already enforces this server-side, this
@@ -493,6 +543,7 @@
 
   $("notif-bell").addEventListener("click", (e) => {
     e.stopPropagation();
+    $("profile-dropdown").classList.add("hidden");
     $("notif-dropdown").classList.toggle("hidden");
   });
 
@@ -504,8 +555,17 @@
     renderNotifications();
   });
 
+  // Sign out now lives in this small account menu instead of sitting in the
+  // top bar as its own button, per Greg's "clean up the top nav" request.
+  $("profile-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("notif-dropdown").classList.add("hidden");
+    $("profile-dropdown").classList.toggle("hidden");
+  });
+
   document.addEventListener("click", (e) => {
     if (!$("notif-wrap").contains(e.target)) $("notif-dropdown").classList.add("hidden");
+    if (!$("profile-wrap").contains(e.target)) $("profile-dropdown").classList.add("hidden");
   });
 
   sb.auth.getSession().then(({ data: { session } }) => {
@@ -682,18 +742,22 @@
     // lifecycle flag: active vs. finalized vs. archived), a different axis
     // from project_status that, in practice, just duplicated In Progress
     // for almost every client and hid "Accepted but not started yet" instead.
+    // In Progress is the one KPI worth glancing at every day -- it gets the
+    // single accent treatment (stat-accent) so the row has one clear focal
+    // point instead of five equal-weight boxes. The rest stay flat; the
+    // whole card is the click target now, so no more "Review →" / "View →"
+    // link text repeated five times.
     const stats = [
-      { key: "pending_apps", value: pendingAppCount || 0, label: "Pending Applications", action: "Review →" },
-      { key: "accepted", value: acceptedCount, label: "Accepted", action: "View →" },
-      { key: "in_progress", value: inProgressCount, label: "In Progress", action: "View work →" },
-      { key: "on_hold", value: onHoldCount, label: "On Hold", action: "View →" },
-      { key: "closed", value: closedCount, label: "Closed", action: "View →" },
+      { key: "pending_apps", value: pendingAppCount || 0, label: "Pending Applications" },
+      { key: "accepted", value: acceptedCount, label: "Accepted" },
+      { key: "in_progress", value: inProgressCount, label: "In Progress" },
+      { key: "on_hold", value: onHoldCount, label: "On Hold" },
+      { key: "closed", value: closedCount, label: "Closed" },
     ];
     $("stat-grid").innerHTML = stats.map((s) => `
-      <div class="stat-card" data-stat="${s.key}">
+      <div class="stat-card${s.key === "in_progress" ? " stat-accent" : ""}" data-stat="${s.key}">
         <div class="stat-value">${s.value}</div>
         <div class="stat-label">${escapeHtml(s.label)}</div>
-        <div class="stat-action">${escapeHtml(s.action)}</div>
       </div>
     `).join("");
 
