@@ -92,7 +92,8 @@
   }
   tbody td { padding: 8px 10px; border-bottom: 1px solid #f0f2f4; font-size: 13.5px; vertical-align: middle; }
   tbody tr:last-child td { border-bottom: none; }
-  td.num { text-align: right; white-space: nowrap; }
+  th.num, td.num { text-align: center; white-space: nowrap; }
+  td.num.negative { color: var(--danger-dark); font-weight: 700; }
   .over-flag {
     display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
     color: var(--danger-dark); background: #fbe9e9; padding: 2px 8px; border-radius: 999px; margin-left: 6px;
@@ -404,14 +405,20 @@
     container.innerHTML = names.map((name) => {
       const group = bySpecialist[name];
       const subtotal = round2(group.reduce((sum, r) => sum + r.hoursThisMonth, 0));
-      const rowsHtml = group.map((r) => `
+      const rowsHtml = group.map((r) => {
+        const remaining = round2(r.hoursAllotted - r.cumulativeThroughMonth);
+        return `
         <tr>
           <td>${escapeHtml(r.program)}</td>
           <td>${escapeHtml(r.client)}</td>
           <td>${escapeHtml(r.role)}</td>
           <td class="num">${r.hoursThisMonth}${r.isOver ? '<span class="over-flag">Over</span>' : ""}</td>
+          <td class="num">${r.cumulativeThroughMonth}</td>
+          <td class="num">${r.hoursAllotted}</td>
+          <td class="num${remaining < 0 ? " negative" : ""}">${remaining}</td>
         </tr>
-      `).join("");
+      `;
+      }).join("");
       return `
         <div class="specialist-group">
           <div class="specialist-header">
@@ -420,7 +427,10 @@
           </div>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>Program</th><th>Engagement Name</th><th>Role</th><th class="num">Hours</th></tr></thead>
+              <thead><tr>
+                <th>Program</th><th>Engagement Name</th><th>Role</th>
+                <th class="num">Hours (Month)</th><th class="num">Cumulative</th><th class="num">Allotted</th><th class="num">Remaining</th>
+              </tr></thead>
               <tbody>${rowsHtml}</tbody>
             </table>
           </div>
