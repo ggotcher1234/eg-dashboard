@@ -380,21 +380,31 @@
   // incomplete Project Next Step (standing in for "next deliverable" — there's
   // no separate due-date field in the data model), and when the client record
   // last changed.
+  // Admin and Quality Control are sunk costs on the Assignments & Hours page
+  // (client_workspace.html) — spent equals allotted the moment hours are
+  // assigned, with no time_entries logging. Mirror that rule here so this
+  // strip's total matches the workspace's total instead of only summing
+  // logged time_entries.
+  const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+
   async function loadStatusStrip(client) {
     const strip = $("cm-status-strip");
     strip.textContent = "Loading status…";
 
     const [{ data: assignments }, { data: nextSteps }] = await Promise.all([
-      sb.from("client_assignments").select("id").eq("client_id", client.id),
+      sb.from("client_assignments").select("id, specialty_type, hours_allotted").eq("client_id", client.id),
       sb.from("client_next_steps").select("description").eq("client_id", client.id).eq("completed", false).order("sort_order").limit(1),
     ]);
 
     let hoursUsed = 0;
-    const assignmentIds = (assignments || []).map((a) => a.id);
-    if (assignmentIds.length) {
-      const { data: entries } = await sb.from("time_entries").select("hours").in("assignment_id", assignmentIds);
-      hoursUsed = (entries || []).reduce((sum, e) => sum + Number(e.hours || 0), 0);
+    const rows = assignments || [];
+    const loggedIds = rows.filter((a) => !SUNK_COST_SPECIALTIES.includes(a.specialty_type)).map((a) => a.id);
+    let hoursByAssignment = {};
+    if (loggedIds.length) {
+      const { data: entries } = await sb.from("time_entries").select("assignment_id, hours").in("assignment_id", loggedIds);
+      for (const e of entries || []) hoursByAssignment[e.assignment_id] = (hoursByAssignment[e.assignment_id] || 0) + Number(e.hours || 0);
     }
+    hoursUsed = rows.reduce((sum, a) => sum + (SUNK_COST_SPECIALTIES.includes(a.specialty_type) ? Number(a.hours_allotted || 0) : (hoursByAssignment[a.id] || 0)), 0);
 
     if (!activeClient || activeClient.id !== client.id) return;
 
