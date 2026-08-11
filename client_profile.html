@@ -27,13 +27,21 @@
   body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
   .hidden { display: none !important; }
 
-  header { background: var(--navy); color: #fff; padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
-  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
-  header .sub { font-size: 12.5px; color: #c9d6e3; margin-top: 2px; }
-  header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
+  header { background: var(--navy); color: #fff; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 16.5px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 12px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12px; text-decoration: none; }
   header a.back-link:hover { color: #fff; text-decoration: underline; }
-  #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  #userbox { display: flex; align-items: center; gap: 14px; font-size: 13.5px; }
   #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  /* Autosave status -- a small persistent indicator instead of static
+     "saves automatically" copy buried in a field hint. */
+  #save-status { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #bcd6c6; }
+  #save-status .dot { width: 6px; height: 6px; border-radius: 999px; background: #6b9a7a; flex-shrink: 0; }
+  #save-status.saving { color: #e3d3a8; }
+  #save-status.saving .dot { background: #d1ab53; animation: save-pulse 1s ease-in-out infinite; }
+  @keyframes save-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
   button { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; }
   .btn-primary { background: var(--accent); color: #fff; }
@@ -49,8 +57,28 @@
   .btn-sm { padding: 5px 10px; font-size: 12.5px; }
   button:disabled { opacity: 0.55; cursor: default; }
 
-  main { max-width: 900px; margin: 28px auto; padding: 0 20px 70px; }
+  /* Left section rail + content column, instead of one long scrolling form.
+     The rail is sticky so it stays in view as the page scrolls; the active
+     link highlights via a lightweight scroll-position check. */
+  .editor-shell { max-width: 1180px; margin: 24px auto; padding: 0 20px 80px; display: flex; gap: 26px; align-items: flex-start; }
+  .editor-nav {
+    width: 210px; flex-shrink: 0; position: sticky; top: 20px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+  }
+  .editor-nav-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin: 0 0 10px 4px; }
+  .editor-nav a {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 10px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--text);
+    text-decoration: none; margin-bottom: 2px; transition: background 0.15s ease, color 0.15s ease;
+  }
+  .editor-nav a:hover { background: #f2f4f6; }
+  .editor-nav a.active { background: #eef3ea; color: var(--accent-dark); }
+  .editor-nav a .nav-count { font-size: 11px; font-weight: 700; color: var(--muted); }
+  .editor-nav a.active .nav-count { color: var(--accent-dark); }
+  .editor-help-box { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted); }
+  .editor-help-box strong { display: block; color: var(--text); font-size: 13px; margin-bottom: 4px; }
 
+  main { flex: 1; min-width: 0; max-width: 860px; }
 
   #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
   #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
@@ -66,19 +94,73 @@
   .badge-on_hold { background: #fdf1dc; color: var(--amber); }
   .badge-closed { background: #eef1f4; color: var(--muted); }
 
-  .status-pill-bar { display: flex; gap: 8px; margin: 6px 0 4px; flex-wrap: wrap; }
-  .status-pill { border: 2px solid transparent; border-radius: 999px; padding: 7px 16px; font-size: 11.5px; opacity: 0.45; transition: opacity .15s ease, box-shadow .15s ease; }
-  .status-pill:hover:not(:disabled) { opacity: 0.8; }
-  .status-pill.active { opacity: 1; border-color: currentColor; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
-  .status-pill:disabled { cursor: default; }
+  /* True segmented control -- one joined pill-shaped bar with a single
+     solid "on" segment, instead of four separate translucent buttons. */
+  .segmented-control {
+    display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden;
+    background: #f6f8fa;
+  }
+  .segmented-control .status-pill {
+    border: none; border-right: 1px solid var(--border); border-radius: 0; padding: 9px 18px;
+    font-size: 12.5px; font-weight: 700; background: transparent; color: var(--muted);
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .segmented-control .status-pill:last-child { border-right: none; }
+  .segmented-control .status-pill:hover:not(:disabled):not(.active) { background: #eceff2; color: var(--text); }
+  .segmented-control .status-pill.active { background: var(--navy); color: #fff; }
+  .segmented-control .status-pill:disabled { cursor: default; }
   .badge-internal { background: #eef1f4; color: var(--muted); }
 
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 24px 28px; margin-bottom: 16px; }
-  .card h2 { margin-top: 0; font-size: 17px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 22px 26px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
+  .card h2 { margin-top: 0; font-size: 16px; color: var(--navy); }
   .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  .card-hint { font-size: 12.5px; color: var(--muted); margin: -4px 0 16px; }
   .meta-line { font-size: 13.5px; color: var(--muted); margin: 4px 0; }
   .meta-line a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
   .meta-line a:hover { text-decoration: underline; }
+
+  /* Overview card header row: name + status badge left, primary actions right. */
+  .overview-top-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .overview-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+  .subcard-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--muted); margin: 0 0 12px;
+  }
+  .field-col + .field-col { margin-top: 0; }
+
+  /* URL fields styled to read as links, not raw text boxes -- muted
+     monospace-ish tone, with a small "open" icon button beside each one. */
+  .url-field-row { display: flex; align-items: center; gap: 6px; }
+  .url-field-row input[type="url"] {
+    color: var(--navy-light); font-size: 13px; background: #f8fafb; border-color: var(--border);
+  }
+  .url-field-row input[type="url"]:focus { background: #fff; color: var(--text); }
+  .url-open-btn {
+    flex-shrink: 0; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+    border-radius: 6px; background: #eef1f4; color: var(--navy-light); font-size: 13px; text-decoration: none;
+  }
+  .url-open-btn:hover { background: #e2e6ea; }
+
+  /* Logo shown as its own small visual card rather than a bare inline field. */
+  .logo-card {
+    display: flex; align-items: center; gap: 14px; padding: 12px; background: #f8fafb;
+    border: 1px solid var(--border); border-radius: 10px; flex-wrap: wrap;
+  }
+  .logo-card img { height: 44px; max-width: 170px; object-fit: contain; background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 5px; }
+  .logo-card-actions { display: flex; gap: 8px; }
+  .logo-card-empty { display: flex; align-items: center; gap: 10px; }
+
+  /* Lightweight rich-text toolbar above Description / Business Issues --
+     inserts the same markdown syntax (**bold**, "- " bullets) the field
+     already supports, just without needing to remember the shorthand. */
+  .rt-toolbar { display: flex; gap: 4px; margin-bottom: 6px; }
+  .rt-toolbar button {
+    width: 30px; height: 28px; border-radius: 6px; background: #eef1f4; color: var(--text);
+    font-size: 12.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  }
+  .rt-toolbar button:hover { background: #e2e6ea; }
+  .rt-toolbar button:active { background: #d7dce1; }
 
   .field { margin-bottom: 12px; }
   .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
@@ -89,10 +171,17 @@
   .field-hint { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
   .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
 
-  /* Accordion sections */
-  .accordion-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
-  .accordion-header h2 { display: flex; align-items: center; gap: 8px; }
-  .accordion-chevron { font-size: 12px; color: var(--muted); transition: transform 0.15s ease; }
+  /* Accordion sections -- larger, bolder header row so Resource Vault /
+     Next Steps / etc. read as substantial cards rather than easy-to-miss
+     collapsed rows. */
+  .accordion-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; gap: 12px; }
+  .accordion-header h2 { display: flex; align-items: center; gap: 10px; font-size: 16px; }
+  .accordion-count {
+    font-size: 11.5px; font-weight: 700; color: var(--navy-light); background: #eef3f9;
+    padding: 3px 10px; border-radius: 999px; flex-shrink: 0;
+  }
+  .accordion-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .accordion-chevron { font-size: 13px; color: var(--muted); transition: transform 0.15s ease; flex-shrink: 0; }
   .accordion-header.open .accordion-chevron { transform: rotate(90deg); }
   .accordion-body { display: none; margin-top: 14px; }
   .accordion-body.open { display: block; }
@@ -144,9 +233,9 @@
 
   #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
   .no-client-note { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 14px; }
-  header .brand-row { display: flex; align-items: center; gap: 14px; }
-  .brand-badge { background: #fff; border-radius: 8px; padding: 5px 10px; display: flex; align-items: center; flex-shrink: 0; }
-  .brand-badge img { height: 26px; display: block; }
+  header .brand-row { display: flex; align-items: center; gap: 12px; }
+  .brand-badge { background: #fff; border-radius: 7px; padding: 4px 8px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 20px; display: block; }
   .share-link-row { margin-top: 12px; }
   .share-link-row label { display: block; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 4px; }
   .share-link-bar { display: flex; gap: 8px; align-items: center; }
@@ -155,6 +244,12 @@
 
   @media (max-width: 640px) {
     .field-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 860px) {
+    .editor-shell { flex-direction: column; }
+    .editor-nav { width: 100%; position: static; }
+    .editor-nav a { display: inline-flex; margin-right: 6px; }
+    .editor-nav-title, .editor-help-box { display: none; }
   }
 </style>
 </head>
@@ -168,17 +263,38 @@
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
       <h1>Dashboard Edit</h1>
-      <div class="sub">Client Profile &amp; Documents &nbsp;·&nbsp; <a class="back-link" id="header-back-link" href="index.html">Home</a></div>
+      <div class="sub"><a class="back-link" id="header-back-link" href="index.html">← Client Control Center</a></div>
     </div>
     </div>
     <div id="userbox">
+      <div id="save-status"><span class="dot"></span><span id="save-status-text">All changes saved</span></div>
       <span id="user-name"></span>
       <span class="role-pill" id="user-role"></span>
       <button class="btn-ghost" id="signout-btn">Sign out</button>
     </div>
   </header>
 
-  <main>
+  <div class="editor-shell">
+    <aside class="editor-nav">
+      <div class="editor-nav-title">Edit Sections</div>
+      <nav id="editor-nav-links">
+        <a href="#sec-overview" data-section="sec-overview">Overview</a>
+        <a href="#sec-status" data-section="sec-status">Status &amp; Engagement</a>
+        <a href="#sec-company" data-section="sec-company">Company Information</a>
+        <a href="#sec-description" data-section="sec-description">Description</a>
+        <a href="#sec-issues" data-section="sec-issues">Business Issues</a>
+        <a href="#editor-anchor-resource_vault" data-section="editor-anchor-resource_vault">Resource Vault <span class="nav-count" id="nav-count-resource_vault"></span></a>
+        <a href="#editor-anchor-next_steps" data-section="editor-anchor-next_steps">Next Steps <span class="nav-count" id="nav-count-next_steps"></span></a>
+        <a href="#sec-workflow" data-section="sec-workflow">Workflow Documents</a>
+        <a href="#sec-research" data-section="sec-research">Research Reports</a>
+      </nav>
+      <div class="editor-help-box">
+        <strong>Need help?</strong>
+        Learn how each section appears on the client dashboard.
+      </div>
+    </aside>
+
+    <main>
     <div id="banner"></div>
 
     <div id="no-client-view" class="no-client-note hidden">
@@ -186,97 +302,138 @@
     </div>
 
     <div id="profile-view" class="hidden">
-      <div class="card">
-        <div class="card-header">
+      <div class="card" id="sec-overview">
+        <div class="overview-top-row">
           <div>
-            <h2 id="p-name" style="margin:0;"></h2>
+            <div class="card-header" style="margin-bottom:2px;">
+              <h2 id="p-name" style="margin:0;"></h2>
+              <span class="badge" id="p-lifecycle-badge"></span>
+            </div>
+            <div class="meta-line">
+              <a href="#" id="p-workspace-link">&larr; Assignments &amp; Hours</a>
+              &nbsp;&middot;&nbsp;
+              <a href="#" id="p-app-info-link">Application Info &rarr;</a>
+            </div>
           </div>
-          <span class="badge" id="p-lifecycle-badge"></span>
-        </div>
-        <div class="meta-line">
-          <a href="#" id="p-workspace-link">&larr; Assignments &amp; Hours</a>
-          &nbsp;&middot;&nbsp;
-          <a href="#" id="p-app-info-link">Application Info &rarr;</a>
+          <div class="overview-actions">
+            <a class="btn-secondary btn-sm" id="share-link-open-btn" href="#" target="_blank" rel="noopener">Preview Dashboard &#8599;</a>
+            <a class="btn-primary btn-sm" id="done-editing-btn" href="#">Done Editing</a>
+          </div>
         </div>
         <div class="share-link-row" id="share-link-row">
-          <label>Dashboard View <span style="font-weight:400; text-transform:none; letter-spacing:0;">— what the client sees, live</span></label>
+          <label>Dashboard URL <span style="font-weight:400; text-transform:none; letter-spacing:0;">— what the client sees, live</span></label>
           <div class="share-link-bar">
             <input type="text" id="share-link-input" readonly />
-            <button type="button" class="btn-secondary btn-sm" id="share-link-copy-btn">Copy Link</button>
-            <a class="btn-secondary btn-sm" id="share-link-open-btn" href="#" target="_blank" rel="noopener">Open Dashboard View &#8599;</a>
+            <button type="button" class="btn-secondary btn-sm" id="share-link-copy-btn">Copy</button>
           </div>
         </div>
       </div>
 
-      <!-- ===== Engagement Information ===== -->
-      <div class="card">
-        <h2>Engagement Information</h2>
-        <div class="field">
-          <label>Client Status</label>
-          <div class="status-pill-bar" id="p-status-toggle"></div>
-          <div class="field-hint">Status determines whether the client appears in the active list (does not show on the exported dashboard).</div>
-        </div>
-        <form id="company-form">
-          <div class="field">
-            <label for="co-address">Address</label>
-            <input type="text" id="co-address" />
-          </div>
+      <!-- ===== Status & Engagement ===== -->
+      <div class="card" id="sec-status">
+        <h2>Status &amp; Engagement</h2>
+        <div class="card-hint">Controls whether the client appears in active lists (does not show on the exported dashboard).</div>
+        <div class="segmented-control" id="p-status-toggle"></div>
+      </div>
+
+      <form id="company-form">
+        <!-- ===== Company Information ===== -->
+        <div class="card" id="sec-company">
+          <h2>Company Information</h2>
+          <div class="card-hint">Basic company details and online presence.</div>
           <div class="field-grid">
-            <div>
+            <div class="field-col">
+              <div class="subcard-title">Company Details</div>
               <div class="field">
-                <label>Logo</label>
-                <div id="co-logo-file"></div>
-                <div class="field-hint">Shows on the client dashboard header. Leave unset to hide.</div>
+                <label for="co-address">Address</label>
+                <input type="text" id="co-address" />
               </div>
               <div class="field">
                 <label for="co-website">Website</label>
-                <input type="url" id="co-website" placeholder="https://…" />
+                <div class="url-field-row">
+                  <input type="url" id="co-website" placeholder="https://…" />
+                  <a class="url-open-btn" id="co-website-open" href="#" target="_blank" rel="noopener" title="Open">&#8599;</a>
+                </div>
               </div>
               <div class="field">
                 <label for="co-naics">NAICS codes</label>
                 <input type="text" id="co-naics" placeholder="339113, 336992" />
               </div>
+              <div class="field">
+                <label>Logo</label>
+                <div id="co-logo-file"></div>
+                <div class="field-hint">Displayed in the client dashboard header.</div>
+              </div>
             </div>
-            <div>
+            <div class="field-col">
+              <div class="subcard-title">Online Presence</div>
               <div class="field">
                 <label for="co-linkedin">LinkedIn</label>
-                <input type="url" id="co-linkedin" placeholder="https://…" />
+                <div class="url-field-row">
+                  <input type="url" id="co-linkedin" placeholder="https://…" />
+                  <a class="url-open-btn" id="co-linkedin-open" href="#" target="_blank" rel="noopener" title="Open">&#8599;</a>
+                </div>
               </div>
               <div class="field">
                 <label for="co-facebook">Facebook</label>
-                <input type="url" id="co-facebook" placeholder="https://…" />
+                <div class="url-field-row">
+                  <input type="url" id="co-facebook" placeholder="https://…" />
+                  <a class="url-open-btn" id="co-facebook-open" href="#" target="_blank" rel="noopener" title="Open">&#8599;</a>
+                </div>
               </div>
               <div class="field">
                 <label for="co-instagram">Instagram</label>
-                <input type="url" id="co-instagram" placeholder="https://…" />
+                <div class="url-field-row">
+                  <input type="url" id="co-instagram" placeholder="https://…" />
+                  <a class="url-open-btn" id="co-instagram-open" href="#" target="_blank" rel="noopener" title="Open">&#8599;</a>
+                </div>
               </div>
               <div class="field">
                 <label for="co-twitter">X / Twitter</label>
-                <input type="url" id="co-twitter" placeholder="https://…" />
+                <div class="url-field-row">
+                  <input type="url" id="co-twitter" placeholder="https://…" />
+                  <a class="url-open-btn" id="co-twitter-open" href="#" target="_blank" rel="noopener" title="Open">&#8599;</a>
+                </div>
               </div>
               <div class="field">
                 <label for="co-youtube">YouTube</label>
-                <input type="url" id="co-youtube" placeholder="https://…" />
+                <div class="url-field-row">
+                  <input type="url" id="co-youtube" placeholder="https://…" />
+                  <a class="url-open-btn" id="co-youtube-open" href="#" target="_blank" rel="noopener" title="Open">&#8599;</a>
+                </div>
               </div>
             </div>
           </div>
-          <div class="field">
-            <label for="co-description">Engagement Description <span class="field-hint">(supports **bold** and "- " bullet lines)</span></label>
-            <textarea id="co-description" rows="6"></textarea>
+        </div>
+
+        <!-- ===== Engagement Description ===== -->
+        <div class="card" id="sec-description">
+          <h2>Engagement Description</h2>
+          <div class="card-hint">Appears on the client dashboard.</div>
+          <div class="rt-toolbar" data-rt-target="co-description">
+            <button type="button" data-rt="bold" title="Bold"><strong>B</strong></button>
+            <button type="button" data-rt="bullet" title="Bullet list">&#8226;</button>
           </div>
-          <div class="field">
-            <label for="co-top-issues">Top Business Issues <span class="field-hint">(pulled from the intake application — editable here)</span></label>
-            <textarea id="co-top-issues" rows="4"></textarea>
+          <textarea id="co-description" rows="6"></textarea>
+        </div>
+
+        <!-- ===== Top Business Issues ===== -->
+        <div class="card" id="sec-issues">
+          <h2>Top Business Issues</h2>
+          <div class="card-hint">Pulled from the intake application — editable here.</div>
+          <div class="rt-toolbar" data-rt-target="co-top-issues">
+            <button type="button" data-rt="bold" title="Bold"><strong>B</strong></button>
+            <button type="button" data-rt="bullet" title="Bullet list">&#8226;</button>
           </div>
-          <div class="field-hint">Saves automatically as you edit each field.</div>
-        </form>
-      </div>
+          <textarea id="co-top-issues" rows="4"></textarea>
+        </div>
+      </form>
 
       <!-- ===== Accordion list sections (Resource Vault, Next Steps, Contacts, Team, Competitors, Top Customers) ===== -->
       <div id="list-sections"></div>
 
       <!-- ===== EG Workflow Documents ===== -->
-      <div class="card">
+      <div class="card" id="sec-workflow">
         <h2>EG Workflow Documents</h2>
         <div class="field-hint" style="margin-bottom:10px;">Discovery, Controlling, and Close-Out are client-specific files — upload them directly. Research Review links out to the Fathom call recording instead.</div>
         <form id="workflow-form">
@@ -307,14 +464,15 @@
       </div>
 
       <!-- ===== Economic Gardening Research Reports ===== -->
-      <div class="card">
+      <div class="card" id="sec-research">
         <h2>Economic Gardening Research Reports</h2>
         <div class="field-hint" style="margin-bottom:10px;">Each item becomes a link in the Preview Dashboard.</div>
         <div id="research-areas-sections"></div>
       </div>
 
     </div>
-  </main>
+    </main>
+  </div>
 </div>
 
 <script>
@@ -432,7 +590,10 @@
     // Breadcrumb: back to this client's Client Control Center page, instead
     // of just landing back on the generic client list.
     $("header-back-link").href = `client_control_center.html?client=${client.id}`;
-    $("header-back-link").textContent = `← Back to Client Control Center`;
+    $("header-back-link").textContent = `← Client Control Center`;
+    // "Done Editing" gives the page a natural endpoint even though every
+    // field autosaves -- same destination as the header breadcrumb.
+    $("done-editing-btn").href = `client_control_center.html?client=${client.id}`;
     $("p-lifecycle-badge").className = `badge badge-${client.status}`;
     $("p-lifecycle-badge").textContent = client.status;
     $("p-workspace-link").href = `client_workspace.html?client=${client.id}`;
@@ -454,6 +615,48 @@
     if (new URLSearchParams(location.search).get("section") === "research") {
       $("research-areas-sections").scrollIntoView({ behavior: "smooth", block: "start" });
     }
+
+    wireEditorNavScrollSpy();
+  }
+
+  // ---------- Left section-nav rail ----------
+  // Highlights whichever section is currently in view as the page scrolls,
+  // so the rail always shows "you are here" instead of a static list of
+  // links. Set up once per page load, after every section (including the
+  // JS-rendered accordion cards) actually exists in the DOM.
+  function wireEditorNavScrollSpy() {
+    const links = Array.from(document.querySelectorAll("#editor-nav-links a"));
+    const sections = links
+      .map((link) => ({ link, el: document.getElementById(link.dataset.section) }))
+      .filter((s) => s.el);
+    if (!sections.length) return;
+
+    const setActive = (id) => {
+      links.forEach((link) => link.classList.toggle("active", link.dataset.section === id));
+    };
+    setActive(sections[0].el.id);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Pick whichever observed section is closest to the top of the
+        // viewport among those currently intersecting -- avoids the active
+        // link flickering between adjacent short sections.
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (!visible.length) return;
+        visible.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        setActive(visible[0].target.id);
+      },
+      { rootMargin: "-15% 0px -70% 0px", threshold: 0 }
+    );
+    sections.forEach((s) => observer.observe(s.el));
+
+    links.forEach((link) => {
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        const target = document.getElementById(link.dataset.section);
+        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
   }
 
   // ---------- Client-Facing Link ----------
@@ -489,28 +692,51 @@
   // ---------- Client Status ----------
   function renderStatusToggle(c) {
     const canEditStatus = isSuperAdmin || isTeamLeadHere;
+    // True segmented control now (not colored status badges) -- one solid
+    // "on" segment, the rest quiet/neutral, per the redesign.
     $("p-status-toggle").innerHTML = PROJECT_STATUSES.map((s) => `
-      <button type="button" data-pstatus="${s}" class="badge badge-${s} status-pill ${s === c.project_status ? "active" : ""}" ${canEditStatus ? "" : "disabled"}>${PROJECT_STATUS_LABELS[s]}</button>
+      <button type="button" data-pstatus="${s}" class="status-pill ${s === c.project_status ? "active" : ""}" ${canEditStatus ? "" : "disabled"}>${PROJECT_STATUS_LABELS[s]}</button>
     `).join("");
     document.querySelectorAll("#p-status-toggle button").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const newStatus = btn.dataset.pstatus;
         if (newStatus === currentClient.project_status) return;
         document.querySelectorAll("#p-status-toggle button").forEach((b) => (b.disabled = true));
+        setSaveStatus("saving");
         const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", currentClient.id);
         if (error) {
           showBanner("Couldn't update project status: " + error.message, "error");
+          setSaveStatus("error");
           renderStatusToggle(currentClient);
           return;
         }
         currentClient.project_status = newStatus;
         showBanner("Project status updated.", "success");
+        setSaveStatus("saved");
         renderStatusToggle(currentClient);
       });
     });
   }
 
   // ---------- Company Information ----------
+  // URL fields double as "link fields" now (label + input + a small open
+  // button) -- co-*-open ids match co-* + "-open", so this stays generic
+  // instead of hand-wiring six near-identical buttons.
+  const URL_FIELD_IDS = ["co-website", "co-linkedin", "co-facebook", "co-instagram", "co-twitter", "co-youtube"];
+  function syncUrlOpenButton(id) {
+    const btn = $(`${id}-open`);
+    if (!btn) return;
+    const value = $(id).value.trim();
+    if (value) {
+      btn.href = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+      btn.classList.remove("disabled-link");
+    } else {
+      btn.href = "#";
+      btn.classList.add("disabled-link");
+    }
+  }
+  function syncAllUrlOpenButtons() { URL_FIELD_IDS.forEach(syncUrlOpenButton); }
+
   function fillCompanyForm(c) {
     $("co-website").value = c.website_url || "";
     $("co-address").value = c.address || "";
@@ -523,6 +749,8 @@
     $("co-description").value = c.description || "";
     $("co-top-issues").value = c.top_business_issues || "";
     renderLogoField();
+    syncAllUrlOpenButtons();
+    URL_FIELD_IDS.forEach((id) => $(id).addEventListener("input", () => syncUrlOpenButton(id)));
   }
 
   // Autosaves field-by-field on blur (same pattern as the Resource Vault
@@ -544,6 +772,27 @@
     "co-top-issues": "top_business_issues",
   };
 
+  // ---------- Autosave status indicator ----------
+  // A small persistent "All changes saved" / "Saving…" pill in the header,
+  // instead of static "saves automatically" copy buried in a field hint.
+  let saveStatusResetTimer = null;
+  function setSaveStatus(state) {
+    const el = $("save-status");
+    const text = $("save-status-text");
+    clearTimeout(saveStatusResetTimer);
+    if (state === "saving") {
+      el.classList.add("saving");
+      text.textContent = "Saving…";
+    } else if (state === "error") {
+      el.classList.remove("saving");
+      text.textContent = "Couldn't save";
+      saveStatusResetTimer = setTimeout(() => setSaveStatus("saved"), 4000);
+    } else {
+      el.classList.remove("saving");
+      text.textContent = "All changes saved";
+    }
+  }
+
   function wireCompanyAutosave() {
     Object.entries(COMPANY_FIELD_COLUMNS).forEach(([id, column]) => {
       const el = $(id);
@@ -552,18 +801,58 @@
       el.addEventListener("blur", async () => {
         const value = el.value.trim();
         if (value === original.trim()) return;
+        setSaveStatus("saving");
         const { error } = await sb.from("clients").update({ [column]: value || null }).eq("id", currentClient.id);
         if (error) {
           showBanner("Couldn't save: " + error.message, "error");
+          setSaveStatus("error");
           el.value = original;
           return;
         }
         original = value;
         currentClient[column] = value || null;
+        setSaveStatus("saved");
       });
     });
   }
   wireCompanyAutosave();
+
+  // ---------- Rich-text toolbar (Description / Top Business Issues) ----------
+  // A very lightweight treatment -- these buttons just insert the same
+  // markdown-ish syntax the field already renders (**bold**, "- " bullets)
+  // at the cursor, so nobody has to remember the shorthand by hand.
+  document.querySelectorAll(".rt-toolbar").forEach((toolbar) => {
+    const targetId = toolbar.dataset.rtTarget;
+    const textarea = $(targetId);
+    if (!textarea) return;
+    toolbar.querySelectorAll("button[data-rt]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const action = btn.dataset.rt;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selected = textarea.value.slice(start, end);
+        let insert, cursorOffset;
+        if (action === "bold") {
+          insert = `**${selected || "bold text"}**`;
+          cursorOffset = selected ? insert.length : 2;
+        } else {
+          // Bullet: prefix the current line (or each selected line) with "- ".
+          const lineStart = textarea.value.lastIndexOf("\n", start - 1) + 1;
+          const before = textarea.value.slice(0, lineStart);
+          const after = textarea.value.slice(lineStart);
+          textarea.value = before + "- " + after;
+          textarea.focus();
+          textarea.setSelectionRange(start + 2, end + 2);
+          textarea.dispatchEvent(new Event("input"));
+          return;
+        }
+        textarea.setRangeText(insert, start, end, "end");
+        textarea.focus();
+        textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
+        textarea.dispatchEvent(new Event("input"));
+      });
+    });
+  });
 
   // ---------- Logo upload ----------
   // Logos go to a dedicated PUBLIC bucket (client-logos), not the private
@@ -846,9 +1135,13 @@
   function renderListSections() {
     const container = $("list-sections");
     container.innerHTML = LIST_CONFIGS.map((cfg) => `
-      <div class="card">
+      <div class="card" id="editor-anchor-${cfg.key}">
         <div class="accordion-header" data-accordion="${cfg.key}">
-          <h2><span class="accordion-chevron">&#9656;</span> ${escapeHtml(cfg.title)} <span class="meta-line" id="${cfg.key}-count" style="margin:0;"></span></h2>
+          <h2>${escapeHtml(cfg.title)}</h2>
+          <div class="accordion-header-right">
+            <span class="accordion-count" id="${cfg.key}-count"></span>
+            <span class="accordion-chevron">&#9656;</span>
+          </div>
         </div>
         <div class="accordion-body" id="${cfg.key}-body">
           ${cfg.hint ? `<div class="field-hint" style="margin-bottom:10px;">${escapeHtml(cfg.hint)}</div>` : ""}
@@ -1146,7 +1439,12 @@
 
   function renderListRows(cfg) {
     const rows = listData[cfg.key] || [];
-    $(`${cfg.key}-count`).textContent = rows.length ? `(${rows.length})` : "";
+    const countLabel = rows.length ? `${rows.length} item${rows.length === 1 ? "" : "s"}` : "";
+    $(`${cfg.key}-count`).textContent = countLabel;
+    // Mirrors the same count next to "Resource Vault"/"Next Steps" in the
+    // left nav rail, when that nav item exists for this section.
+    const navCount = document.getElementById(`nav-count-${cfg.key}`);
+    if (navCount) navCount.textContent = rows.length ? String(rows.length) : "";
     const list = $(`${cfg.key}-list`);
     if (!rows.length) {
       list.innerHTML = `<div class="list-empty">Nothing added yet.</div>`;
