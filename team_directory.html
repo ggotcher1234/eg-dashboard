@@ -91,6 +91,9 @@
     text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted);
     background: #f8fafb; padding: 10px 14px; border-bottom: 1px solid var(--border);
   }
+  thead th.sortable { cursor: pointer; user-select: none; }
+  thead th.sortable:hover { color: var(--text); }
+  thead th .sort-arrow { display: inline-block; width: 12px; font-size: 10px; letter-spacing: 0; }
   tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover { background: #fafbfc; }
@@ -210,9 +213,9 @@
     <table>
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Title</th>
-          <th style="width:110px;">Role</th>
+          <th class="sortable" data-sort="name" id="th-name">Name<span class="sort-arrow"></span></th>
+          <th class="sortable" data-sort="title" id="th-title">Title<span class="sort-arrow"></span></th>
+          <th class="sortable" style="width:110px;" data-sort="role" id="th-role">Role<span class="sort-arrow"></span></th>
           <th style="width:130px;">Phone</th>
           <th>Email</th>
           <th style="width:80px;"></th>
@@ -605,9 +608,55 @@
     renderList();
   }
 
+  // ---------- Column sorting ----------
+  // Click a header to sort by it ascending; click the same header again to
+  // flip to descending. Blank values (e.g. no Title set) always sort to the
+  // bottom regardless of direction, so sorting never buries real data under
+  // a wall of dashes.
+  let sortField = "name";
+  let sortDir = 1; // 1 = A→Z, -1 = Z→A
+
+  function sortValue(u, field) {
+    if (field === "name") return (u.full_name || "").toLowerCase();
+    if (field === "title") return (u.title || (u.default_specialty ? SPECIALTY_LABELS[u.default_specialty] : "") || "").toLowerCase();
+    if (field === "role") return (ROLE_LABELS[u.role] || u.role || "").toLowerCase();
+    return "";
+  }
+
+  function sortRows(rows) {
+    return [...rows].sort((a, b) => {
+      const va = sortValue(a, sortField);
+      const vb = sortValue(b, sortField);
+      if (!va && vb) return 1;
+      if (va && !vb) return -1;
+      if (!va && !vb) return 0;
+      return va < vb ? -1 * sortDir : va > vb ? 1 * sortDir : 0;
+    });
+  }
+
+  function updateSortIndicators() {
+    ["name", "title", "role"].forEach((field) => {
+      const arrow = $(`th-${field}`).querySelector(".sort-arrow");
+      arrow.textContent = field === sortField ? (sortDir === 1 ? "▲" : "▼") : "";
+    });
+  }
+
+  document.querySelectorAll("th.sortable").forEach((th) => {
+    th.addEventListener("click", () => {
+      const field = th.dataset.sort;
+      if (sortField === field) {
+        sortDir *= -1;
+      } else {
+        sortField = field;
+        sortDir = 1;
+      }
+      renderList();
+    });
+  });
+
   function renderList() {
     const q = $("search-box").value.trim().toLowerCase();
-    const rows = allUsers.filter((u) => {
+    let rows = allUsers.filter((u) => {
       if (!q) return true;
       const specialtyLabel = u.default_specialty ? SPECIALTY_LABELS[u.default_specialty] || "" : "";
       return (
@@ -616,6 +665,8 @@
         specialtyLabel.toLowerCase().includes(q)
       );
     });
+    rows = sortRows(rows);
+    updateSortIndicators();
 
     $("row-count").textContent = `${rows.length} of ${allUsers.length} people`;
 
