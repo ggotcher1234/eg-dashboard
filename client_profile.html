@@ -48,12 +48,6 @@
 
   main { max-width: 900px; margin: 28px auto; padding: 0 20px 70px; }
 
-  #login-view { max-width: 380px; margin: 90px auto; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-  #login-view h2 { margin-top: 0; font-size: 18px; }
-  #login-view label { display: block; font-size: 12.5px; font-weight: 600; margin: 14px 0 5px; color: var(--muted); }
-  #login-view input { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
-  #login-view button { width: 100%; margin-top: 20px; padding: 10px; }
-  #login-error { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; }
 
   #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
   #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
@@ -160,19 +154,6 @@
 <body>
 
 <div id="loading-view"><div>Loading…</div></div>
-
-<div id="login-view" class="hidden">
-  <h2>EG Dashboard</h2>
-  <div style="font-size:13px; color:var(--muted); margin-top:-8px;">Client Profile — sign in</div>
-  <form id="login-form">
-    <label for="login-email">Email</label>
-    <input type="text" id="login-email" autocomplete="username" required />
-    <label for="login-password">Password</label>
-    <input type="password" id="login-password" autocomplete="current-password" required />
-    <button type="submit" class="btn-primary">Sign in</button>
-    <div id="login-error"></div>
-  </form>
-</div>
 
 <div id="app-view" class="hidden">
   <header>
@@ -348,6 +329,10 @@
   const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
 
   const $ = (id) => document.getElementById(id);
+  function redirectToLogin() {
+    const dest = location.pathname.split("/").pop() + location.search;
+    location.href = "index.html?return=" + encodeURIComponent(dest);
+  }
   const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
   const sanitizeFilename = (name) => name.replace(/[^a-zA-Z0-9._-]/g, "_");
 
@@ -359,25 +344,11 @@
   }
 
   // ---------- Auth ----------
-  $("login-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const email = $("login-email").value.trim();
-    const password = $("login-password").value;
-    $("login-error").style.display = "none";
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) {
-      $("login-error").textContent = error.message;
-      $("login-error").style.display = "block";
-      return;
-    }
-    await afterSignIn();
-  });
-
   $("signout-btn").addEventListener("click", async () => {
     await sb.auth.signOut();
     currentUser = null;
     $("app-view").classList.add("hidden");
-    $("login-view").classList.remove("hidden");
+    redirectToLogin();
   });
 
   async function afterSignIn() {
@@ -391,11 +362,8 @@
       .single();
 
     if (profileErr || !profile) {
-      $("loading-view").classList.add("hidden");
-      $("login-view").classList.remove("hidden");
-      $("login-error").textContent = "Signed in, but no matching staff profile was found for this account.";
-      $("login-error").style.display = "block";
       await sb.auth.signOut();
+      redirectToLogin();
       return;
     }
 
@@ -403,7 +371,6 @@
     isSuperAdmin = profile.role === "super_admin";
 
     $("loading-view").classList.add("hidden");
-    $("login-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = profile.role.replace("_", " ");
@@ -423,8 +390,7 @@
     if (session) {
       afterSignIn();
     } else {
-      $("loading-view").classList.add("hidden");
-      $("login-view").classList.remove("hidden");
+      redirectToLogin();
     }
   });
 

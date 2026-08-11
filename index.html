@@ -61,6 +61,12 @@
   #login-view input { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
   #login-view button { width: 100%; margin-top: 20px; padding: 10px; }
   #login-error { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; }
+  #login-info { color: var(--accent-dark); font-size: 13px; margin-top: 12px; display: none; }
+  .login-logo { text-align: center; margin-bottom: 18px; }
+  .login-logo img { height: 46px; }
+  .login-forgot { text-align: center; margin-top: 16px; font-size: 12.5px; }
+  .login-forgot a { color: var(--navy-light); text-decoration: none; }
+  .login-forgot a:hover { text-decoration: underline; }
 
   main { max-width: 980px; margin: 0 auto; padding: 0 20px 80px; }
   .hidden { display: none !important; }
@@ -153,6 +159,7 @@
 <div id="loading-view"><div>Loading…</div></div>
 
 <div id="login-view" class="hidden">
+  <div class="login-logo"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></div>
   <h2>EG Dashboard</h2>
   <div style="font-size:13px; color:var(--muted); margin-top:-8px;">Home — sign in</div>
   <form id="login-form">
@@ -162,7 +169,9 @@
     <input type="password" id="login-password" autocomplete="current-password" required />
     <button type="submit" class="btn-primary">Sign in</button>
     <div id="login-error"></div>
+    <div id="login-info"></div>
   </form>
+  <div class="login-forgot"><a href="#" id="forgot-password-link">Forgot your password?</a></div>
 </div>
 
 <div id="app-view" class="hidden">
@@ -289,6 +298,32 @@
   }
 
   // ---------- Auth ----------
+  $("forgot-password-link").addEventListener("click", async (e) => {
+    e.preventDefault();
+    const email = $("login-email").value.trim();
+    $("login-info").style.display = "none";
+    if (!email) {
+      $("login-error").textContent = "Enter your email above, then click \"Forgot your password?\" again.";
+      $("login-error").style.display = "block";
+      $("login-email").focus();
+      return;
+    }
+    $("login-error").style.display = "none";
+    const link = $("forgot-password-link");
+    link.style.pointerEvents = "none";
+    link.textContent = "Sending\u2026";
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: "https://egdb.netlify.app/reset_password.html" });
+    link.style.pointerEvents = "";
+    link.textContent = "Forgot your password?";
+    if (error) {
+      $("login-error").textContent = error.message;
+      $("login-error").style.display = "block";
+    } else {
+      $("login-info").textContent = "Check your email for a password reset link.";
+      $("login-info").style.display = "block";
+    }
+  });
+
   $("login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = $("login-email").value.trim();
@@ -330,6 +365,19 @@
     }
 
     currentUser = profile;
+
+    // Other pages now redirect here to sign in rather than showing their own
+    // login form (single central login). If we were sent here that way,
+    // bounce straight back to whatever page/URL they came from instead of
+    // rendering the home dashboard.
+    const returnTo = new URLSearchParams(location.search).get("return");
+    // Only ever follow a same-site relative path (e.g. "client_workspace.html?client=..."),
+    // never an absolute/external URL, so this can't be turned into an open redirect.
+    if (returnTo && /^[a-zA-Z0-9_.-]+\.html([?#].*)?$/.test(returnTo)) {
+      location.href = returnTo;
+      return;
+    }
+
     $("loading-view").classList.add("hidden");
     $("login-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
