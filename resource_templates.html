@@ -84,7 +84,7 @@
     </div>
     <div id="userbox2"><button class="btn-ghost" id="signout-btn2">Sign out</button></div>
   </header>
-  <div id="not-admin-note">This page is Super-Admin only. Ask a Super Admin to manage the shared Resource Vault files.</div>
+  <div id="not-admin-note">This page is Admin only. Ask an Admin to manage the shared Resource Vault files.</div>
 </div>
 
 <div id="app-view" class="hidden">
@@ -147,6 +147,13 @@
   let templates = [];
 
   const $ = (id) => document.getElementById(id);
+  // Chris asked (8/11/26 call) that role names shown to users match current
+  // EG terminology: Consultant -> Specialist, Super Admin -> Admin.
+  // The underlying role VALUES in the database ("consultant", "super_admin", etc.)
+  // are unchanged -- only what is displayed on screen is remapped here.
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
   function redirectToLogin() {
     const dest = location.pathname.split("/").pop() + location.search;
     location.href = "index.html?return=" + encodeURIComponent(dest);
@@ -227,7 +234,7 @@
 
     $("app-view").classList.remove("hidden");
     $("user-name").textContent = profile.full_name;
-    $("user-role").textContent = profile.role.replace("_", " ");
+    $("user-role").textContent = roleLabel(profile.role);
     await loadTemplates();
   }
 

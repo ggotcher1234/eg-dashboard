@@ -208,9 +208,9 @@
         </div>
       </div>
 
-      <!-- ===== Company Information ===== -->
+      <!-- ===== Engagement Information ===== -->
       <div class="card">
-        <h2>Company Information</h2>
+        <h2>Engagement Information</h2>
         <div class="field">
           <label>Client Status</label>
           <div class="status-pill-bar" id="p-status-toggle"></div>
@@ -261,7 +261,7 @@
             </div>
           </div>
           <div class="field">
-            <label for="co-description">Company Description <span class="field-hint">(supports **bold** and "- " bullet lines)</span></label>
+            <label for="co-description">Engagement Description <span class="field-hint">(supports **bold** and "- " bullet lines)</span></label>
             <textarea id="co-description" rows="6"></textarea>
           </div>
           <div class="field">
@@ -336,6 +336,13 @@
   const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
 
   const $ = (id) => document.getElementById(id);
+  // Chris asked (8/11/26 call) that role names shown to users match current
+  // EG terminology: Consultant -> Specialist, Super Admin -> Admin.
+  // The underlying role VALUES in the database ("consultant", "super_admin", etc.)
+  // are unchanged -- only what is displayed on screen is remapped here.
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
   function redirectToLogin() {
     const dest = location.pathname.split("/").pop() + location.search;
     location.href = "index.html?return=" + encodeURIComponent(dest);
@@ -380,7 +387,7 @@
     $("loading-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
     $("user-name").textContent = profile.full_name;
-    $("user-role").textContent = profile.role.replace("_", " ");
+    $("user-role").textContent = roleLabel(profile.role);
 
     const clientId = new URLSearchParams(location.search).get("client");
     if (clientId) {
@@ -455,7 +462,7 @@
     const copyBtn = $("share-link-copy-btn");
     const openBtn = $("share-link-open-btn");
     if (!client.slug) {
-      input.value = "This client doesn't have a link slug set yet — contact a Super Admin.";
+      input.value = "This client doesn't have a link slug set yet — contact an Admin.";
       openBtn.href = "#";
       openBtn.classList.add("disabled-link");
       copyBtn.disabled = true;
@@ -772,7 +779,7 @@
   // add-form / inline-edit-row machinery.
   const RESOURCE_VAULT_CONFIG = {
     key: "resource_vault", title: "Resource Vault", custom: "resourceVault",
-    hint: "Each resource can be a Link URL (opens in a new tab — a video, quiz, external doc, etc.) or an uploaded file (downloads), whichever fits. Rows marked \"Shared\" show for every client — Super Admins can edit those right here and the change applies everywhere. Add anything client-specific below.",
+    hint: "Each resource can be a Link URL (opens in a new tab — a video, quiz, external doc, etc.) or an uploaded file (downloads), whichever fits. Rows marked \"Shared\" show for every client — Admins can edit those right here and the change applies everywhere. Add anything client-specific below.",
     customLoad: async (clientId) => {
       const { data, error } = await sb
         .from("client_resource_vault_items")

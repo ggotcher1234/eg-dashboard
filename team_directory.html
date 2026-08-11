@@ -169,7 +169,7 @@
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
       <h1>Team Directory</h1>
-      <div class="sub">EG Group staff — Team Leads &amp; Consultants &nbsp;·&nbsp; <a class="back-link" href="index.html">← Home</a></div>
+      <div class="sub">EG Group staff — Team Leads &amp; Specialists &nbsp;·&nbsp; <a class="back-link" href="index.html">← Home</a></div>
     </div>
     </div>
     <div id="userbox">
@@ -275,7 +275,7 @@
 
       <label for="add-role">Role</label>
       <select id="add-role">
-        <option value="consultant">Consultant</option>
+        <option value="consultant">Specialist</option>
         <option value="team_lead">Team Lead</option>
       </select>
 
@@ -339,9 +339,9 @@
         <option value="quality_control">Quality Control</option>
       </select>
 
-      <label for="pf-role">Role <span id="pf-role-lock-note" style="font-weight:400; text-transform:none;">(Super Admin only)</span></label>
+      <label for="pf-role">Role <span id="pf-role-lock-note" style="font-weight:400; text-transform:none;">(Admin only)</span></label>
       <select id="pf-role">
-        <option value="consultant">Consultant</option>
+        <option value="consultant">Specialist</option>
         <option value="team_lead">Team Lead</option>
       </select>
 
@@ -364,7 +364,7 @@
     </form>
 
     <div id="relink-section" class="hidden" style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border);">
-      <label style="margin-top:0;">Relink Login <span style="font-weight:400; text-transform:none;">(Super Admin only)</span></label>
+      <label style="margin-top:0;">Relink Login <span style="font-weight:400; text-transform:none;">(Admin only)</span></label>
       <div class="field-hint" style="margin-bottom:8px;">
         If this person's Supabase Auth account was deleted and recreated (locked out, typo'd email, etc.), paste
         the new login's User UID here to reattach their existing profile, role, and client assignments to it.
@@ -392,7 +392,7 @@
     admin: "Admin",
     quality_control: "Quality Control",
   };
-  const ROLE_LABELS = { super_admin: "Super Admin", team_lead: "Team Lead", consultant: "Consultant" };
+  const ROLE_LABELS = { super_admin: "Admin", team_lead: "Team Lead", consultant: "Specialist" };
 
   // Deduped 27-person EG Team contact list (from EG_contacts.csv — see
   // 009_seed_team_contacts.sql for the merge/mapping notes: Chris Gibbons,
@@ -434,6 +434,13 @@
   let openProfileId = null;
 
   const $ = (id) => document.getElementById(id);
+  // Chris asked (8/11/26 call) that role names shown to users match current
+  // EG terminology: Consultant -> Specialist, Super Admin -> Admin.
+  // The underlying role VALUES in the database ("consultant", "super_admin", etc.)
+  // are unchanged -- only what is displayed on screen is remapped here.
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
   function redirectToLogin() {
     const dest = location.pathname.split("/").pop() + location.search;
     location.href = "index.html?return=" + encodeURIComponent(dest);
@@ -491,7 +498,7 @@
     $("loading-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
     $("user-name").textContent = profile.full_name;
-    $("user-role").textContent = profile.role.replace("_", " ");
+    $("user-role").textContent = roleLabel(profile.role);
     $("add-btn").classList.toggle("hidden", !isSuperAdmin);
     $("import-btn").classList.toggle("hidden", !isSuperAdmin);
     $("roster-import-btn").classList.toggle("hidden", !isSuperAdmin);
@@ -1130,7 +1137,7 @@
     $("pf-secondary-email").disabled = !canEdit;
     $("pf-phone").disabled = !canEdit;
     $("pf-role").disabled = !canEditRole;
-    $("pf-role-lock-note").textContent = canEditRole ? "" : "(Super Admin only)";
+    $("pf-role-lock-note").textContent = canEditRole ? "" : "(Admin only)";
 
     $("profile-save").classList.toggle("hidden", !canEdit);
 

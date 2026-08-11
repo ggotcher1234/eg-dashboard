@@ -182,7 +182,7 @@
           <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
           <div class="mac-body">
             <div class="mac-title-row"><span class="mac-title">Dashboard Edit</span><span class="mac-arrow">&rarr;</span></div>
-            <div class="mac-sub">Company info, contacts, competitors, and files</div>
+            <div class="mac-sub">Engagement info, contacts, competitors, and files</div>
           </div>
         </a>
         <button type="button" class="modal-action-card" id="cm-email-btn">
@@ -251,6 +251,13 @@
   let activeClient = null;
 
   const $ = (id) => document.getElementById(id);
+  // Chris asked (8/11/26 call) that role names shown to users match current
+  // EG terminology: Consultant -> Specialist, Super Admin -> Admin.
+  // The underlying role VALUES in the database ("consultant", "super_admin", etc.)
+  // are unchanged -- only what is displayed on screen is remapped here.
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
   function redirectToLogin() {
     const dest = location.pathname.split("/").pop() + location.search;
     location.href = "index.html?return=" + encodeURIComponent(dest);
@@ -306,7 +313,7 @@
     $("loading-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
     $("user-name").textContent = profile.full_name;
-    $("user-role").textContent = profile.role.replace("_", " ");
+    $("user-role").textContent = roleLabel(profile.role);
 
     const clientId = new URLSearchParams(location.search).get("client");
     if (!clientId) {
@@ -360,7 +367,7 @@
       if (r.is_team_lead) teamLead = name; else consultants.push(name);
     }
     const teamParts = [`Team Lead: ${teamLead ? escapeHtml(teamLead) : "—"}`];
-    if (consultants.length) teamParts.push(`Consultant${consultants.length > 1 ? "s" : ""}: ${escapeHtml(consultants.join(", "))}`);
+    if (consultants.length) teamParts.push(`Specialist${consultants.length > 1 ? "s" : ""}: ${escapeHtml(consultants.join(", "))}`);
     $("cm-team").textContent = teamParts.join(" · ");
 
     $("cm-hours-link").href = `client_workspace.html?client=${client.id}`;

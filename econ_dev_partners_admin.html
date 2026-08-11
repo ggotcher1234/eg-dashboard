@@ -213,7 +213,7 @@
   <main>
     <div id="banner"></div>
     <div id="readonly-note" class="readonly-note hidden">
-      You're viewing this list read-only. Only a Super Admin can add, edit, or remove partners.
+      You're viewing this list read-only. Only an Admin can add, edit, or remove partners.
     </div>
 
     <div class="toolbar">
@@ -306,6 +306,13 @@
   let openContactsPartnerId = null;   // which partner's Contacts row is expanded (accordion-style, one at a time)
 
   const $ = (id) => document.getElementById(id);
+  // Chris asked (8/11/26 call) that role names shown to users match current
+  // EG terminology: Consultant -> Specialist, Super Admin -> Admin.
+  // The underlying role VALUES in the database ("consultant", "super_admin", etc.)
+  // are unchanged -- only what is displayed on screen is remapped here.
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
   function redirectToLogin() {
     const dest = location.pathname.split("/").pop() + location.search;
     location.href = "index.html?return=" + encodeURIComponent(dest);
@@ -348,7 +355,7 @@
     $("loading-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
     $("user-name").textContent = profile.full_name;
-    $("user-role").textContent = profile.role.replace("_", " ");
+    $("user-role").textContent = roleLabel(profile.role);
 
     if (isSuperAdmin) {
       $("add-btn").classList.remove("hidden");

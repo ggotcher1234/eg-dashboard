@@ -211,7 +211,7 @@
         </div>
 
         <div id="ws-locked-note" class="locked-note hidden">
-          This client is On Hold / Closed — hours can't be changed by the Team Lead or consultants right now. A Super Admin can still make changes if needed.
+          This client is On Hold / Closed — hours can't be changed by the Team Lead or specialists right now. An Admin can still make changes if needed.
         </div>
 
         <div class="status-pill-bar" id="project-status-toggle"></div>
@@ -239,7 +239,7 @@
           <thead>
             <tr>
               <th>Specialty</th>
-              <th>Consultant</th>
+              <th>Specialist</th>
               <th style="width:110px; text-align:right;">Hours</th>
               <th style="width:80px; text-align:right;">Spent</th>
               <th id="assignments-actions-header" class="hidden" style="width:70px;"></th>
@@ -333,6 +333,13 @@
   let pendingDeleteClientId = null;
 
   const $ = (id) => document.getElementById(id);
+  // Chris asked (8/11/26 call) that role names shown to users match current
+  // EG terminology: Consultant -> Specialist, Super Admin -> Admin.
+  // The underlying role VALUES in the database ("consultant", "super_admin", etc.)
+  // are unchanged -- only what is displayed on screen is remapped here.
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
   function redirectToLogin() {
     const dest = location.pathname.split("/").pop() + location.search;
     location.href = "index.html?return=" + encodeURIComponent(dest);
@@ -387,7 +394,7 @@
     $("loading-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
     $("user-name").textContent = profile.full_name;
-    $("user-role").textContent = profile.role.replace("_", " ");
+    $("user-role").textContent = roleLabel(profile.role);
 
     await loadUsers();
     await loadClients();
@@ -659,10 +666,10 @@
         const { error } = await sb.from("client_assignments").update(payload).eq("id", assignmentId);
         select.disabled = false;
         if (error) {
-          showBanner("Couldn't update consultant: " + error.message, "error");
+          showBanner("Couldn't update specialist: " + error.message, "error");
           return;
         }
-        showBanner(select.value ? "Consultant assigned." : "Slot cleared to unassigned.", "success");
+        showBanner(select.value ? "Specialist assigned." : "Slot cleared to unassigned.", "success");
         await openClient(currentClient.id);
       });
     });

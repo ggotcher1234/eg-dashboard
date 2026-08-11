@@ -251,7 +251,7 @@
         <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
         <div>
           <div class="ql-title">Team Directory</div>
-          <div class="ql-sub">Team Lead &amp; Consultant contacts</div>
+          <div class="ql-sub">Team Lead &amp; Specialist contacts</div>
         </div>
       </a>
     </div>
@@ -288,6 +288,13 @@
   let statFilter = null; // { predicate, label } — set when a KPI card is clicked
 
   const $ = (id) => document.getElementById(id);
+  // Chris asked (8/11/26 call) that role names shown to users match current
+  // EG terminology: Consultant -> Specialist, Super Admin -> Admin.
+  // The underlying role VALUES in the database ("consultant", "super_admin", etc.)
+  // are unchanged -- only what is displayed on screen is remapped here.
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
   const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
   const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
 
@@ -393,7 +400,7 @@
     $("login-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
     $("user-name").textContent = profile.full_name;
-    $("user-role").textContent = profile.role.replace("_", " ");
+    $("user-role").textContent = roleLabel(profile.role);
 
     // Admin-only links (Partners, Applications, Team Directory) are only useful to a
     // Super Admin day-to-day — Team Leads/Consultants get a clean client-picker-only view.
