@@ -651,7 +651,7 @@
     if (path) {
       container.innerHTML = `
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <span class="wf-file-link" style="cursor:pointer; color:var(--navy-light); font-weight:600; font-size:13px;">&#128196; ${escapeHtml(fileNameFromPath(path))}</span>
+          <span class="wf-file-link" style="cursor:pointer; color:var(--navy-light); font-weight:600; font-size:13px;">${fileIconFor(path)} ${escapeHtml(fileNameFromPath(path))}</span>
           <button type="button" class="btn-secondary btn-sm" data-wf-replace>Replace</button>
           <button type="button" class="btn-secondary btn-sm" data-wf-remove>Remove</button>
         </div>
@@ -1239,11 +1239,29 @@
     return last.replace(/^\d+-/, "");
   }
 
+  // Color-coded by file type so a file list is scannable at a glance --
+  // red book for PDF, blue for Word, green for Excel, orange for
+  // PowerPoint, matching each app's own brand color.
+  const FILE_TYPE_ICONS = {
+    pdf: "\u{1F4D5}",
+    doc: "\u{1F4D8}", docx: "\u{1F4D8}",
+    xls: "\u{1F4D7}", xlsx: "\u{1F4D7}", csv: "\u{1F4D7}",
+    ppt: "\u{1F4D9}", pptx: "\u{1F4D9}",
+    png: "\u{1F5BC}\u{FE0F}", jpg: "\u{1F5BC}\u{FE0F}", jpeg: "\u{1F5BC}\u{FE0F}", gif: "\u{1F5BC}\u{FE0F}",
+    zip: "\u{1F5C3}\u{FE0F}",
+  };
+  function fileIconFor(path) {
+    const name = (path.split("/").pop() || "").toLowerCase();
+    const dot = name.lastIndexOf(".");
+    const ext = dot === -1 ? "" : name.slice(dot + 1);
+    return FILE_TYPE_ICONS[ext] || "\u{1F4C4}";
+  }
+
   function renderResourceVaultRows(rows) {
     const list = $("resource_vault-list");
     list.innerHTML = rows.map((r) => {
       const fileHtml = r.storagePath
-        ? `<span class="rv-file-link" data-path="${escapeHtml(r.storagePath)}">&#128196; ${escapeHtml(fileNameFromPath(r.storagePath))}</span>`
+        ? `<span class="rv-file-link" data-path="${escapeHtml(r.storagePath)}">${fileIconFor(r.storagePath)} ${escapeHtml(fileNameFromPath(r.storagePath))}</span>`
         : `<span class="field-hint">No file uploaded yet${r.isTemplate ? " — add one from Resource Templates." : "."}</span>`;
       // A link takes priority over an uploaded file when both are set —
       // matches how the client-facing dashboard resolves it.
@@ -1684,7 +1702,7 @@
     if (!docs.length) return `<div class="field-hint" style="margin-bottom:6px;">No files uploaded yet.</div>`;
     return docs.map((d) => `
       <div class="rq-doc-row">
-        <span class="rq-doc-link" data-path="${escapeHtml(d.storage_path)}">&#128196; ${escapeHtml(d.file_name)}</span>
+        <span class="rq-doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(d.file_name)}</span>
         <button type="button" class="btn-secondary icon-btn rq-visibility-toggle" data-id="${d.id}" data-visibility="${d.visibility}">
           ${d.visibility === "client_facing" ? "Client-facing" : "Internal"}
         </button>

@@ -173,6 +173,24 @@
     return last.replace(/^\d+-/, "");
   }
 
+  // Color-coded by file type so a file list is scannable at a glance --
+  // red book for PDF, blue for Word, green for Excel, orange for
+  // PowerPoint, matching each app's own brand color.
+  const FILE_TYPE_ICONS = {
+    pdf: "\u{1F4D5}",
+    doc: "\u{1F4D8}", docx: "\u{1F4D8}",
+    xls: "\u{1F4D7}", xlsx: "\u{1F4D7}", csv: "\u{1F4D7}",
+    ppt: "\u{1F4D9}", pptx: "\u{1F4D9}",
+    png: "\u{1F5BC}\u{FE0F}", jpg: "\u{1F5BC}\u{FE0F}", jpeg: "\u{1F5BC}\u{FE0F}", gif: "\u{1F5BC}\u{FE0F}",
+    zip: "\u{1F5C3}\u{FE0F}",
+  };
+  function fileIconFor(path) {
+    const name = (path.split("/").pop() || "").toLowerCase();
+    const dot = name.lastIndexOf(".");
+    const ext = dot === -1 ? "" : name.slice(dot + 1);
+    return FILE_TYPE_ICONS[ext] || "\u{1F4C4}";
+  }
+
   async function signOut() {
     await sb.auth.signOut();
     currentUser = null;
@@ -253,7 +271,7 @@
             <label>File</label>
             ${t.storage_path
               ? `<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                   <span class="tpl-file-link" data-path="${escapeHtml(t.storage_path)}">&#128196; ${escapeHtml(fileNameFromPath(t.storage_path))}</span>
+                   <span class="tpl-file-link" data-path="${escapeHtml(t.storage_path)}">${fileIconFor(t.storage_path)} ${escapeHtml(fileNameFromPath(t.storage_path))}</span>
                    <button type="button" class="btn-secondary btn-sm" data-replace="${t.id}">Replace</button>
                  </div>`
               : `<label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload file<input type="file" class="tpl-upload-input" data-id="${t.id}" style="display:none;" /></label>`}

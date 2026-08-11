@@ -341,6 +341,21 @@
     return dot === -1 ? "" : name.slice(dot + 1);
   }
 
+  // Color-coded by file type so a file list is scannable at a glance --
+  // red book for PDF, blue for Word, green for Excel, orange for
+  // PowerPoint, matching each app's own brand color.
+  const FILE_TYPE_ICONS = {
+    pdf: "\u{1F4D5}",
+    doc: "\u{1F4D8}", docx: "\u{1F4D8}",
+    xls: "\u{1F4D7}", xlsx: "\u{1F4D7}", csv: "\u{1F4D7}",
+    ppt: "\u{1F4D9}", pptx: "\u{1F4D9}",
+    png: "\u{1F5BC}\u{FE0F}", jpg: "\u{1F5BC}\u{FE0F}", jpeg: "\u{1F5BC}\u{FE0F}", gif: "\u{1F5BC}\u{FE0F}",
+    zip: "\u{1F5C3}\u{FE0F}",
+  };
+  function fileIconFor(path) {
+    return FILE_TYPE_ICONS[fileExtension(path)] || "\u{1F4C4}";
+  }
+
   function openSignedDoc(path) {
     return async () => {
       // 300s (not 60s) so the Office viewer has time to fetch the file
@@ -357,7 +372,7 @@
 
   function renderDocLinks(docs) {
     if (!docs || !docs.length) return `<div class="rc-empty">No files shared yet.</div>`;
-    return docs.map((d) => `<a class="doc-link" data-path="${escapeHtml(d.storage_path)}">&#128196; ${escapeHtml(d.file_name)}</a>`).join("");
+    return docs.map((d) => `<a class="doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(d.file_name)}</a>`).join("");
   }
 
   function wireDocLinks(container) {
