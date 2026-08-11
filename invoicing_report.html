@@ -73,6 +73,21 @@
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; margin-bottom: 18px; }
   .card h2 { margin: 0 0 4px; font-size: 15.5px; }
   .card .card-hint { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+  .card-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+  .card-header-row h2 { margin-bottom: 4px; }
+  .card-header-row .card-hint { margin-bottom: 0; }
+
+  /* Payroll table styled like a standard accounting ledger: numbers right-
+     aligned and set in tabular figures so the decimal points line up, with
+     a bold double-bordered total row at the bottom. */
+  #payroll-table th.money, #payroll-table td.money {
+    text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
+  }
+  #payroll-table tbody td:first-child, #payroll-table tfoot td:first-child { text-align: left; }
+  #payroll-tfoot td {
+    padding: 10px; font-size: 13.5px; font-weight: 700; color: var(--navy);
+    border-top: 2px solid var(--navy); font-variant-numeric: tabular-nums;
+  }
 
   .specialist-group { margin-bottom: 18px; }
   .specialist-group:last-child { margin-bottom: 0; }
@@ -165,6 +180,10 @@
         <div class="sb-value" id="sum-over">0</div>
         <div class="sb-label">Assignments Over Budget</div>
       </div>
+      <div class="summary-box">
+        <div class="sb-value" id="sum-payroll">$0.00</div>
+        <div class="sb-label">Total Payroll This Month</div>
+      </div>
     </div>
 
     <div class="card">
@@ -194,6 +213,31 @@
       <div class="card-hint" id="month-label-hint"></div>
       <div id="monthly-groups"></div>
       <div id="monthly-empty" class="empty-note hidden">No hours logged for this month yet.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header-row">
+        <div>
+          <h2>Payroll Summary</h2>
+          <div class="card-hint">Every team member is paid the same flat rate, regardless of role.</div>
+        </div>
+        <button class="btn-secondary" id="export-payroll-csv-btn">Export Payroll CSV</button>
+      </div>
+      <div class="table-scroll">
+        <table id="payroll-table">
+          <thead>
+            <tr>
+              <th>Team Member</th>
+              <th class="money">Hours</th>
+              <th class="money">Rate</th>
+              <th class="money">Total Pay</th>
+            </tr>
+          </thead>
+          <tbody id="payroll-tbody"></tbody>
+          <tfoot id="payroll-tfoot"></tfoot>
+        </table>
+      </div>
+      <div id="payroll-empty" class="empty-note hidden">No hours logged for this month yet.</div>
     </div>
   </main>
 </div>
@@ -227,6 +271,14 @@
   // logged hour-by-hour in time_entries (see client_workspace.html) -- so
   // there's nothing for this report to summarize or check for those two.
   const EXCLUDED_SPECIALTIES = ["admin", "quality_control"];
+
+  // Flat rate, same for every team member regardless of role (Team Lead,
+  // Market Research, etc.) -- per Greg, 8/12/26. If EG ever moves to
+  // per-person or per-role rates, this is the one place that needs to change.
+  const HOURLY_RATE = 95;
+  function money(n) {
+    return "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
 
   function escapeHtml(str) {
     const div = document.createElement("div");
@@ -381,14 +433,17 @@
 
     renderMonthlyGroups(rowsWithTotals.filter((r) => r.hoursThisMonth > 0));
     renderOverage(rowsWithTotals.filter((r) => r.isOver));
+    const payrollRows = renderPayrollSummary(rowsWithTotals.filter((r) => r.hoursThisMonth > 0));
 
     const totalHours = rowsWithTotals.reduce((sum, r) => sum + r.hoursThisMonth, 0);
     const specialistsWithHours = new Set(rowsWithTotals.filter((r) => r.hoursThisMonth > 0).map((r) => r.specialistName));
     $("sum-hours").textContent = round2(totalHours);
     $("sum-specialists").textContent = specialistsWithHours.size;
     $("sum-over").textContent = rowsWithTotals.filter((r) => r.isOver).length;
+    $("sum-payroll").textContent = money(payrollRows.reduce((sum, p) => sum + p.pay, 0));
 
     window._invoicingReportRows = rowsWithTotals; // for CSV export
+    window._invoicingPayrollRows = payrollRows; // for payroll CSV export
   }
 
   function round2(n) { return Math.round(n * 100) / 100; }
@@ -456,6 +511,54 @@
     `).join("");
   }
 
+  // One line per team member, hours from every assignment they logged time
+  // against this month added together -- someone working across three
+  // clients still gets a single paycheck line, not three. Returns the
+  // computed rows so render() can total them for the summary box and the
+  // payroll CSV export can reuse the exact same numbers shown on screen.
+  function renderPayrollSummary(rows) {
+    const bySpecialist = {};
+    for (const r of rows) (bySpecialist[r.specialistName] ||= 0);
+    for (const r of rows) bySpecialist[r.specialistName] += r.hoursThisMonth;
+
+    const payrollRows = Object.keys(bySpecialist)
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => {
+        const hours = round2(bySpecialist[name]);
+        return { name, hours, rate: HOURLY_RATE, pay: round2(hours * HOURLY_RATE) };
+      });
+
+    const tbody = $("payroll-tbody");
+    const tfoot = $("payroll-tfoot");
+    $("payroll-empty").classList.toggle("hidden", payrollRows.length !== 0);
+
+    tbody.innerHTML = payrollRows.map((p) => `
+      <tr>
+        <td>${escapeHtml(p.name)}</td>
+        <td class="money">${p.hours}</td>
+        <td class="money">${money(p.rate)}</td>
+        <td class="money">${money(p.pay)}</td>
+      </tr>
+    `).join("");
+
+    if (payrollRows.length) {
+      const totalHours = round2(payrollRows.reduce((sum, p) => sum + p.hours, 0));
+      const totalPay = round2(payrollRows.reduce((sum, p) => sum + p.pay, 0));
+      tfoot.innerHTML = `
+        <tr>
+          <td>Total</td>
+          <td class="money">${totalHours}</td>
+          <td class="money"></td>
+          <td class="money">${money(totalPay)}</td>
+        </tr>
+      `;
+    } else {
+      tfoot.innerHTML = "";
+    }
+
+    return payrollRows;
+  }
+
   function csvField(value) {
     const s = String(value == null ? "" : value);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -481,6 +584,30 @@
     a.download = `invoicing-report-${$("report-month").value}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  });
+
+  function downloadCsv(lines, filename) {
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  $("export-payroll-csv-btn").addEventListener("click", () => {
+    const rows = window._invoicingPayrollRows || [];
+    if (!rows.length) { showBanner("Nothing to export for this month.", "error"); return; }
+    const header = ["Team Member", "Hours", "Rate", "Total Pay"];
+    const lines = [header.map(csvField).join(",")];
+    for (const p of rows) {
+      lines.push([p.name, p.hours, p.rate.toFixed(2), p.pay.toFixed(2)].map(csvField).join(","));
+    }
+    const totalHours = round2(rows.reduce((sum, p) => sum + p.hours, 0));
+    const totalPay = round2(rows.reduce((sum, p) => sum + p.pay, 0));
+    lines.push(["Total", totalHours, "", totalPay.toFixed(2)].map(csvField).join(","));
+    downloadCsv(lines, `payroll-summary-${$("report-month").value}.csv`);
   });
 </script>
 </body>
