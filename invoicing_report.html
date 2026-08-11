@@ -45,30 +45,49 @@
   header .btn-ghost { color: #c9d6e3; }
   header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
 
-  main { max-width: 980px; margin: 28px auto; padding: 0 20px 70px; }
+  main { max-width: 1160px; margin: 28px auto; padding: 0 20px 70px; }
   .hidden { display: none !important; }
   #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
   #not-admin-note { max-width: 460px; margin: 90px auto; text-align: center; color: var(--muted); font-size: 14px; }
 
-  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; margin-top: 20px; }
   #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
   #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
 
-  .intro { font-size: 13.5px; color: var(--muted); margin-bottom: 18px; }
-
+  /* Month + Export CSV in one clean bordered control row, matching the
+     "control panel" toolbar pattern used elsewhere in the app -- not a
+     button floating on its own above the page. */
   .toolbar-row {
-    display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap;
-    margin-bottom: 20px;
+    display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    margin: 22px 0 20px; background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 16px; box-shadow: 0 1px 3px rgba(20,48,77,0.05);
   }
-  .month-field label { display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 5px; }
-  .month-field input[type="month"] { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; background: #fff; }
+  .month-field { display: flex; align-items: center; gap: 10px; }
+  .month-field label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); }
+  .month-field input[type="month"] { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; background: #f6f8fa; }
   .toolbar-actions { display: flex; gap: 10px; }
 
-  .summary-strip { display: flex; gap: 14px; margin-bottom: 22px; flex-wrap: wrap; }
-  .summary-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; flex: 1; min-width: 150px; }
-  .summary-box .sb-value { font-size: 21px; font-weight: 700; color: var(--navy); line-height: 1.1; }
-  .summary-box .sb-label { font-size: 11.5px; color: var(--muted); margin-top: 4px; font-weight: 600; }
-  .summary-box.warn .sb-value { color: var(--danger); }
+  /* KPI cards -- icon + big number + two-line label, sized to carry more
+     visual weight. Budget Alerts flips from success to warning treatment
+     only when there's an actual overage; zero is good news, not a warning. */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+  .kpi-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px;
+    box-shadow: 0 1px 3px rgba(20,48,77,0.05);
+  }
+  .kpi-icon {
+    width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 12px; background: #eaf1f9; color: var(--navy-light);
+  }
+  .kpi-icon svg { width: 20px; height: 20px; }
+  .kpi-card.kpi-success .kpi-icon { background: #e2eee5; color: var(--accent-dark); }
+  .kpi-card.kpi-warn .kpi-icon { background: #fbe9e9; color: var(--danger-dark); }
+  .kpi-card.kpi-money .kpi-icon { background: #eaf1f9; color: var(--navy-light); }
+  .kpi-value { font-size: 28px; font-weight: 700; color: var(--navy); line-height: 1.1; }
+  .kpi-card.kpi-success .kpi-value { color: var(--accent-dark); }
+  .kpi-card.kpi-warn .kpi-value { color: var(--danger-dark); }
+  .kpi-label { font-size: 13px; font-weight: 700; color: var(--text); margin-top: 6px; }
+  .kpi-sublabel { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; margin-bottom: 18px; }
   .card h2 { margin: 0 0 4px; font-size: 15.5px; }
@@ -77,6 +96,28 @@
   .card-header-row h2 { margin-bottom: 4px; }
   .card-header-row .card-hint { margin-bottom: 0; }
   .card-header-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+  /* Budget Alerts -- a compact success panel when everything's fine,
+     auto-expanding into a real table only when there's something to flag. */
+  .alert-card { padding: 18px 22px; }
+  .alert-header { display: flex; align-items: flex-start; gap: 14px; }
+  .alert-icon {
+    width: 36px; height: 36px; border-radius: 9px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    background: #e2eee5; color: var(--accent-dark);
+  }
+  .alert-card.has-alerts .alert-icon { background: #fbe9e9; color: var(--danger-dark); }
+  .alert-icon svg { width: 18px; height: 18px; }
+  .alert-header-body { flex: 1; min-width: 0; }
+  .alert-header-body h2 { margin: 0; font-size: 15.5px; }
+  .alert-header-body .card-hint { margin: 3px 0 0; }
+  .alert-toggle { flex-shrink: 0; background: transparent; color: var(--muted); font-size: 13px; padding: 4px 8px; transition: transform 0.15s ease; }
+  .alert-toggle:hover { background: #eef1f4; }
+  .alert-toggle.open { transform: rotate(180deg); }
+  .alert-success-line {
+    display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600;
+    color: var(--accent-dark); margin-top: 12px;
+  }
+  .alert-body { margin-top: 14px; }
   .rate-field { display: flex; align-items: center; gap: 7px; }
   .rate-field label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); }
   .rate-field .rate-prefix-wrap { position: relative; display: flex; align-items: center; }
@@ -101,14 +142,34 @@
     border-top: 2px solid var(--navy); font-variant-numeric: tabular-nums;
   }
 
-  .specialist-group { margin-bottom: 18px; }
+  /* Hours by Specialist -- an avatar-led roster instead of a repeated
+     mini-table per person. Each specialist gets one accent color, reused
+     for both their avatar and every usage bar on their row(s), so a long
+     list stays easy to scan by eye rather than by reading every number. */
+  .specialist-group { margin-bottom: 20px; }
   .specialist-group:last-child { margin-bottom: 0; }
   .specialist-header {
-    display: flex; align-items: baseline; justify-content: space-between; padding: 8px 0;
-    border-bottom: 2px solid var(--navy); margin-bottom: 4px;
+    display: flex; align-items: center; gap: 12px; padding: 4px 0 12px;
+    border-bottom: 1px solid var(--border); margin-bottom: 12px;
   }
-  .specialist-header .sh-name { font-weight: 700; font-size: 14.5px; color: var(--navy); }
-  .specialist-header .sh-total { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .specialist-avatar {
+    width: 34px; height: 34px; border-radius: 999px; flex-shrink: 0; display: flex; align-items: center;
+    justify-content: center; color: #fff; font-size: 12.5px; font-weight: 700; letter-spacing: 0.2px;
+  }
+  .specialist-header .sh-name { font-weight: 700; font-size: 15px; color: var(--navy); flex: 1; }
+  .specialist-header .sh-total { font-size: 13px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+
+  .roster-item { padding: 10px 0 10px 46px; border-bottom: 1px solid #f0f2f4; }
+  .roster-item:last-child { border-bottom: none; padding-bottom: 0; }
+  .ri-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .ri-engagement { font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .ri-hours { font-size: 12.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  .ri-usage-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
+  .ri-usage-text { font-size: 12px; color: var(--muted); }
+  .ri-remaining { font-size: 12px; font-weight: 700; color: var(--accent-dark); white-space: nowrap; }
+  .ri-remaining.negative { color: var(--danger-dark); }
+  .ri-bar-track { height: 7px; border-radius: 999px; background: #eef1f4; margin-top: 5px; overflow: hidden; }
+  .ri-bar-fill { height: 100%; border-radius: 999px; transition: width 0.2s ease; }
 
   table { width: 100%; border-collapse: collapse; }
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -151,7 +212,7 @@
       <a class="brand-badge" href="index.html"><img src="/NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
         <h1>Invoicing Report</h1>
-        <div class="sub">Monthly hours by specialist &nbsp;·&nbsp; <a class="back-link" href="index.html">← Home</a></div>
+        <div class="sub">Monthly specialist hours and engagement budget status &nbsp;·&nbsp; <a class="back-link" href="index.html">← Home</a></div>
       </div>
     </div>
     <div id="userbox">
@@ -163,11 +224,6 @@
 
   <main>
     <div id="banner"></div>
-    <div class="intro">
-      Each specialist's hours for the selected month, laid out Program – Engagement Name – Role – Hours to match the
-      monthly invoice. Cumulative hours (this month plus everything logged before it) are checked against each
-      assignment's allotted hours, and anything over budget is flagged below regardless of the month selected.
-    </div>
 
     <div class="toolbar-row">
       <div class="month-field">
@@ -179,45 +235,64 @@
       </div>
     </div>
 
-    <div class="summary-strip">
-      <div class="summary-box">
-        <div class="sb-value" id="sum-hours">0</div>
-        <div class="sb-label">Hours Logged This Month</div>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+        <div class="kpi-value" id="sum-hours">0</div>
+        <div class="kpi-label">Hours Logged</div>
+        <div class="kpi-sublabel">This Month</div>
       </div>
-      <div class="summary-box">
-        <div class="sb-value" id="sum-specialists">0</div>
-        <div class="sb-label">Specialists With Hours</div>
+      <div class="kpi-card">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+        <div class="kpi-value" id="sum-specialists">0</div>
+        <div class="kpi-label">Specialists</div>
+        <div class="kpi-sublabel">With Hours</div>
       </div>
-      <div class="summary-box warn">
-        <div class="sb-value" id="sum-over">0</div>
-        <div class="sb-label">Assignments Over Budget</div>
+      <div class="kpi-card kpi-success" id="kpi-over-card">
+        <div class="kpi-icon" id="kpi-over-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></div>
+        <div class="kpi-value" id="sum-over">0</div>
+        <div class="kpi-label">Budget Alerts</div>
+        <div class="kpi-sublabel">Over Budget</div>
       </div>
-      <div class="summary-box">
-        <div class="sb-value" id="sum-payroll">$0.00</div>
-        <div class="sb-label">Total Payroll This Month</div>
+      <div class="kpi-card kpi-money">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <div class="kpi-value" id="sum-payroll">$0.00</div>
+        <div class="kpi-label">Total Payroll</div>
+        <div class="kpi-sublabel">This Month</div>
       </div>
     </div>
 
-    <div class="card">
-      <h2>Over-Allocated Assignments</h2>
-      <div class="card-hint">Cumulative hours logged so far exceed the hours allotted — regardless of the month selected above.</div>
-      <div class="table-scroll">
-        <table id="overage-table">
-          <thead>
-            <tr>
-              <th>Specialist</th>
-              <th>Program</th>
-              <th>Engagement Name</th>
-              <th>Role</th>
-              <th class="num">Cumulative</th>
-              <th class="num">Allotted</th>
-              <th class="num">Over By</th>
-            </tr>
-          </thead>
-          <tbody id="overage-tbody"></tbody>
-        </table>
+    <div class="card alert-card" id="alert-card">
+      <div class="alert-header">
+        <div class="alert-icon" id="alert-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></div>
+        <div class="alert-header-body">
+          <h2>Budget Alerts</h2>
+          <div class="card-hint">Cumulative hours logged so far do not exceed the hours allotted — regardless of the month selected.</div>
+        </div>
+        <button type="button" class="alert-toggle hidden" id="alert-toggle-btn" title="Collapse">&#9662;</button>
       </div>
-      <div id="overage-empty" class="empty-note hidden">Nothing over budget right now.</div>
+      <div id="alert-success-line" class="alert-success-line hidden">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        No assignments are over budget.
+      </div>
+      <div class="alert-body" id="alert-body">
+        <div class="table-scroll">
+          <table id="overage-table">
+            <thead>
+              <tr>
+                <th>Specialist</th>
+                <th>Program</th>
+                <th>Engagement Name</th>
+                <th>Role</th>
+                <th class="num">Used</th>
+                <th class="num">Budget</th>
+                <th class="num">Over By</th>
+              </tr>
+            </thead>
+            <tbody id="overage-tbody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -524,6 +599,16 @@
 
   function round2(n) { return Math.round(n * 100) / 100; }
 
+  // Each specialist gets one accent color, reused for their avatar initials
+  // and every usage bar on their row(s) -- makes a long roster scannable by
+  // eye (a color you recognize) rather than by reading every number.
+  const AVATAR_PALETTE = ["#1f4a75", "#0f7c86", "#6b4c9a", "#5c7248", "#a9740f", "#b3403a"];
+  function colorForIndex(i) { return AVATAR_PALETTE[i % AVATAR_PALETTE.length]; }
+  function initialsFor(name) {
+    const parts = String(name).trim().split(/\s+/);
+    return ((parts[0]?.[0] || "") + (parts[parts.length - 1]?.[0] || "")).toUpperCase();
+  }
+
   function renderMonthlyGroups(rows) {
     const container = $("monthly-groups");
     $("monthly-empty").classList.toggle("hidden", rows.length !== 0);
@@ -533,46 +618,76 @@
     for (const r of rows) (bySpecialist[r.specialistName] ||= []).push(r);
     const names = Object.keys(bySpecialist).sort((a, b) => a.localeCompare(b));
 
-    container.innerHTML = names.map((name) => {
+    container.innerHTML = names.map((name, i) => {
       const group = bySpecialist[name];
       const subtotal = round2(group.reduce((sum, r) => sum + r.hoursThisMonth, 0));
-      const rowsHtml = group.map((r) => {
+      const color = colorForIndex(i);
+
+      const itemsHtml = group.map((r) => {
         const remaining = round2(r.hoursAllotted - r.cumulativeThroughMonth);
+        const pct = r.hoursAllotted > 0 ? Math.min(100, Math.round((r.cumulativeThroughMonth / r.hoursAllotted) * 100)) : 0;
         return `
-        <tr>
-          <td>${escapeHtml(r.program)}</td>
-          <td>${escapeHtml(r.client)}</td>
-          <td>${escapeHtml(r.role)}</td>
-          <td class="num">${r.hoursThisMonth}${r.isOver ? '<span class="over-flag">Over</span>' : ""}</td>
-          <td class="num">${r.cumulativeThroughMonth}</td>
-          <td class="num">${r.hoursAllotted}</td>
-          <td class="num${remaining < 0 ? " negative" : ""}">${remaining}</td>
-        </tr>
+        <div class="roster-item">
+          <div class="ri-top">
+            <span class="ri-engagement">${escapeHtml(r.client)} &middot; ${escapeHtml(r.role)}</span>
+            <span class="ri-hours">${r.hoursThisMonth} hrs this month${r.isOver ? '<span class="over-flag">Over</span>' : ""}</span>
+          </div>
+          <div class="ri-usage-row">
+            <span class="ri-usage-text">${r.cumulativeThroughMonth} of ${r.hoursAllotted} hours used &middot; ${pct}% used</span>
+            <span class="ri-remaining${remaining < 0 ? " negative" : ""}">${remaining < 0 ? Math.abs(remaining) + " hrs over" : remaining + " remaining"}</span>
+          </div>
+          <div class="ri-bar-track">
+            <div class="ri-bar-fill" style="width:${pct}%; background:${r.isOver ? "var(--danger)" : color};"></div>
+          </div>
+        </div>
       `;
       }).join("");
+
       return `
         <div class="specialist-group">
           <div class="specialist-header">
+            <span class="specialist-avatar" style="background:${color};">${escapeHtml(initialsFor(name))}</span>
             <span class="sh-name">${escapeHtml(name)}</span>
             <span class="sh-total">${subtotal} hrs this month</span>
           </div>
-          <div class="table-scroll">
-            <table>
-              <thead><tr>
-                <th>Program</th><th>Engagement Name</th><th>Role</th>
-                <th class="num">Hours (Month)</th><th class="num">Cumulative</th><th class="num">Allotted</th><th class="num">Remaining</th>
-              </tr></thead>
-              <tbody>${rowsHtml}</tbody>
-            </table>
-          </div>
+          ${itemsHtml}
         </div>
       `;
     }).join("");
   }
 
+  let alertsOpen = true;
   function renderOverage(rows) {
+    const hasAlerts = rows.length > 0;
+    const card = $("alert-card");
+    const toggleBtn = $("alert-toggle-btn");
+    card.classList.toggle("has-alerts", hasAlerts);
+    $("kpi-over-card").classList.toggle("kpi-success", !hasAlerts);
+    $("kpi-over-card").classList.toggle("kpi-warn", hasAlerts);
+    $("alert-success-line").classList.toggle("hidden", hasAlerts);
+    toggleBtn.classList.toggle("hidden", !hasAlerts);
+
+    if (!hasAlerts) {
+      $("alert-body").classList.add("hidden");
+      return;
+    }
+
+    // Overages always start expanded (per Greg: "expand it automatically
+    // into the table") -- the toggle just lets an Admin collapse a long
+    // list back down without losing the "something needs attention" cue
+    // from the KPI card and icon above.
+    if (!toggleBtn.dataset.wired) {
+      toggleBtn.dataset.wired = "1";
+      toggleBtn.addEventListener("click", () => {
+        alertsOpen = !alertsOpen;
+        $("alert-body").classList.toggle("hidden", !alertsOpen);
+        toggleBtn.classList.toggle("open", alertsOpen);
+      });
+    }
+    $("alert-body").classList.toggle("hidden", !alertsOpen);
+    toggleBtn.classList.toggle("open", alertsOpen);
+
     const tbody = $("overage-tbody");
-    $("overage-empty").classList.toggle("hidden", rows.length !== 0);
     rows.sort((a, b) => a.specialistName.localeCompare(b.specialistName));
     tbody.innerHTML = rows.map((r) => `
       <tr class="overage-row">
