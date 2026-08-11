@@ -187,7 +187,7 @@
 <div id="app-view" class="hidden">
   <header>
     <div class="header-left">
-      <div class="brand-badge"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></div>
+      <div class="brand-badge"><img src="/NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></div>
       <h1 id="brand-title">Economic Gardening Dashboard</h1>
     </div>
     <div style="display:flex; align-items:center; gap:18px;">
@@ -276,6 +276,16 @@
     // (Section 8.1) is set up at all.
     const qsSlug = new URLSearchParams(location.search).get("slug");
     if (qsSlug) return qsSlug;
+
+    // The short /c/<slug> link (netlify.toml rewrites /c/:slug to
+    // /client_public.html?slug=:slug) is a server-side rewrite — Netlify
+    // serves this page's bytes for that request, but the browser's own
+    // address bar (and therefore location.search, from this script's point
+    // of view) still shows /c/<slug>, never the rewritten query string. So
+    // this page has to recognize its own short-link path directly instead
+    // of relying on the query string being there.
+    const pathMatch = location.pathname.match(/^\/c\/([^/]+)\/?$/);
+    if (pathMatch) return decodeURIComponent(pathMatch[1]);
 
     // Long-term: a memorable subdomain, e.g. acmerobotics.egdashboardbuilder.com
     // — once wildcard DNS is wired up, the first hostname label IS the slug.
