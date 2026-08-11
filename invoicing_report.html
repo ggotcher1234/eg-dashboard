@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Invoicing Report</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  header { background: var(--navy); color: #fff; padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; letter-spacing: 0.2px; }
+  header .sub { font-size: 12.5px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  header .brand-row { display: flex; align-items: center; gap: 14px; }
+  .brand-badge { background: #fff; border-radius: 8px; padding: 5px 10px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 26px; display: block; }
+  #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  button, a.btn { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; text-decoration: none; display: inline-block; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+
+  main { max-width: 980px; margin: 28px auto; padding: 0 20px 70px; }
+  .hidden { display: none !important; }
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+  #not-admin-note { max-width: 460px; margin: 90px auto; text-align: center; color: var(--muted); font-size: 14px; }
+
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+
+  .intro { font-size: 13.5px; color: var(--muted); margin-bottom: 18px; }
+
+  .toolbar-row {
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .month-field label { display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 5px; }
+  .month-field input[type="month"] { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; background: #fff; }
+  .toolbar-actions { display: flex; gap: 10px; }
+
+  .summary-strip { display: flex; gap: 14px; margin-bottom: 22px; flex-wrap: wrap; }
+  .summary-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; flex: 1; min-width: 150px; }
+  .summary-box .sb-value { font-size: 21px; font-weight: 700; color: var(--navy); line-height: 1.1; }
+  .summary-box .sb-label { font-size: 11.5px; color: var(--muted); margin-top: 4px; font-weight: 600; }
+  .summary-box.warn .sb-value { color: var(--danger); }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; margin-bottom: 18px; }
+  .card h2 { margin: 0 0 4px; font-size: 15.5px; }
+  .card .card-hint { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+
+  .specialist-group { margin-bottom: 18px; }
+  .specialist-group:last-child { margin-bottom: 0; }
+  .specialist-header {
+    display: flex; align-items: baseline; justify-content: space-between; padding: 8px 0;
+    border-bottom: 2px solid var(--navy); margin-bottom: 4px;
+  }
+  .specialist-header .sh-name { font-weight: 700; font-size: 14.5px; color: var(--navy); }
+  .specialist-header .sh-total { font-size: 13px; color: var(--muted); font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  @media (max-width: 640px) { .table-scroll table { min-width: 560px; } }
+  thead th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted);
+    padding: 7px 10px; border-bottom: 1px solid var(--border);
+  }
+  tbody td { padding: 8px 10px; border-bottom: 1px solid #f0f2f4; font-size: 13.5px; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { text-align: right; white-space: nowrap; }
+  .over-flag {
+    display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+    color: var(--danger-dark); background: #fbe9e9; padding: 2px 8px; border-radius: 999px; margin-left: 6px;
+  }
+
+  .overage-row td { background: #fdf9f2; }
+  .empty-note { padding: 26px; text-align: center; color: var(--muted); font-size: 13.5px; }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="not-admin-view" class="hidden">
+  <header>
+    <div class="brand-row">
+      <a class="brand-badge" href="index.html"><img src="/NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
+      <div><h1>Invoicing Report</h1></div>
+    </div>
+    <div id="userbox2"><button class="btn-ghost" id="signout-btn2">Sign out</button></div>
+  </header>
+  <div id="not-admin-note">This page is Admin only. Ask an Admin to pull the monthly invoicing report.</div>
+</div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <div class="brand-row">
+      <a class="brand-badge" href="index.html"><img src="/NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
+      <div>
+        <h1>Invoicing Report</h1>
+        <div class="sub">Monthly hours by specialist &nbsp;·&nbsp; <a class="back-link" href="index.html">← Home</a></div>
+      </div>
+    </div>
+    <div id="userbox">
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span>
+      <button class="btn-ghost" id="signout-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="banner"></div>
+    <div class="intro">
+      Each specialist's hours for the selected month, laid out Program – Engagement Name – Role – Hours to match the
+      monthly invoice. Cumulative hours (this month plus everything logged before it) are checked against each
+      assignment's allotted hours, and anything over budget is flagged below regardless of the month selected.
+    </div>
+
+    <div class="toolbar-row">
+      <div class="month-field">
+        <label for="report-month">Month</label>
+        <input type="month" id="report-month" />
+      </div>
+      <div class="toolbar-actions">
+        <button class="btn-secondary" id="export-csv-btn">Export CSV</button>
+      </div>
+    </div>
+
+    <div class="summary-strip">
+      <div class="summary-box">
+        <div class="sb-value" id="sum-hours">0</div>
+        <div class="sb-label">Hours Logged This Month</div>
+      </div>
+      <div class="summary-box">
+        <div class="sb-value" id="sum-specialists">0</div>
+        <div class="sb-label">Specialists With Hours</div>
+      </div>
+      <div class="summary-box warn">
+        <div class="sb-value" id="sum-over">0</div>
+        <div class="sb-label">Assignments Over Budget</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Over-Allocated Assignments</h2>
+      <div class="card-hint">Cumulative hours logged so far exceed the hours allotted — regardless of the month selected above.</div>
+      <div class="table-scroll">
+        <table id="overage-table">
+          <thead>
+            <tr>
+              <th>Specialist</th>
+              <th>Program</th>
+              <th>Engagement Name</th>
+              <th>Role</th>
+              <th class="num">Cumulative</th>
+              <th class="num">Allotted</th>
+              <th class="num">Over By</th>
+            </tr>
+          </thead>
+          <tbody id="overage-tbody"></tbody>
+        </table>
+      </div>
+      <div id="overage-empty" class="empty-note hidden">Nothing over budget right now.</div>
+    </div>
+
+    <div class="card">
+      <h2>Hours by Specialist</h2>
+      <div class="card-hint" id="month-label-hint"></div>
+      <div id="monthly-groups"></div>
+      <div id="monthly-empty" class="empty-note hidden">No hours logged for this month yet.</div>
+    </div>
+  </main>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentUser = null;
+  let reportRows = []; // one row per active, assigned, hour-tracked client_assignment
+
+  const $ = (id) => document.getElementById(id);
+  // Chris asked (8/11/26 call) that role names shown to users match current
+  // EG terminology: Consultant -> Specialist, Super Admin -> Admin.
+  // The underlying role VALUES in the database ("consultant", "super_admin", etc.)
+  // are unchanged -- only what is displayed on screen is remapped here.
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
+  function redirectToLogin() {
+    const dest = location.pathname.split("/").pop() + location.search;
+    location.href = "index.html?return=" + encodeURIComponent(dest);
+  }
+
+  const SPECIALTY_LABELS = {
+    team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
+    gis: "GIS", watering_holes: "Watering Holes",
+  };
+  // Admin and Quality Control hours are a flat sunk-cost allocation, not
+  // logged hour-by-hour in time_entries (see client_workspace.html) -- so
+  // there's nothing for this report to summarize or check for those two.
+  const EXCLUDED_SPECIALTIES = ["admin", "quality_control"];
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 3000);
+  }
+
+  async function signOut() {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    $("not-admin-view").classList.add("hidden");
+    redirectToLogin();
+  }
+  $("signout-btn").addEventListener("click", signOut);
+  $("signout-btn2").addEventListener("click", signOut);
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users")
+      .select("id, full_name, role, organization_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      await sb.auth.signOut();
+      redirectToLogin();
+      return;
+    }
+
+    currentUser = profile;
+    $("loading-view").classList.add("hidden");
+
+    if (profile.role !== "super_admin") {
+      $("not-admin-view").classList.remove("hidden");
+      return;
+    }
+
+    $("app-view").classList.remove("hidden");
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = roleLabel(profile.role);
+
+    const now = new Date();
+    $("report-month").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    $("report-month").addEventListener("change", render);
+
+    await loadData();
+  }
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      afterSignIn();
+    } else {
+      redirectToLogin();
+    }
+  });
+
+  // ---------- Data loading ----------
+  // Pulls every active, hour-tracked assignment plus every logged time entry
+  // for the whole org, then does the month/cumulative grouping client-side.
+  // At EG's current scale (~30 specialists, a handful of logged hours each
+  // per month) this is a small amount of data -- no need for a database
+  // function just to add two numbers together.
+  async function loadData() {
+    const [assignmentsRes, entriesRes, usersRes] = await Promise.all([
+      sb.from("client_assignments")
+        .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name))")
+        .not("user_id", "is", null),
+      sb.from("time_entries").select("assignment_id, hours, entry_date"),
+      sb.from("users").select("id, full_name"),
+    ]);
+
+    if (assignmentsRes.error) { showBanner("Couldn't load assignments: " + assignmentsRes.error.message, "error"); return; }
+    if (entriesRes.error) { showBanner("Couldn't load time entries: " + entriesRes.error.message, "error"); return; }
+    if (usersRes.error) { showBanner("Couldn't load specialists: " + usersRes.error.message, "error"); return; }
+
+    const usersById = {};
+    for (const u of usersRes.data) usersById[u.id] = u;
+
+    // Group every logged entry by assignment, split into "this calendar
+    // month" buckets so re-rendering for a different month doesn't need
+    // another round trip.
+    const entriesByAssignment = {};
+    for (const e of entriesRes.data) {
+      (entriesByAssignment[e.assignment_id] ||= []).push(e);
+    }
+
+    reportRows = assignmentsRes.data
+      .filter((a) => !EXCLUDED_SPECIALTIES.includes(a.specialty_type))
+      .map((a) => {
+        const person = usersById[a.user_id];
+        const entries = entriesByAssignment[a.id] || [];
+        return {
+          assignmentId: a.id,
+          specialistName: person ? person.full_name : "Unknown",
+          program: (a.clients && a.clients.econ_dev_companies && a.clients.econ_dev_companies.name) || "—",
+          client: (a.clients && a.clients.name) || "—",
+          // Matches the same "Role N" convention used on the Client Workspace
+          // Assignments table — only append the slot number when there's more
+          // than one of that specialty (e.g. "Digital Marketing 1", "GIS 2"),
+          // so Rita can tell which slot an invoice line refers to.
+          role: (SPECIALTY_LABELS[a.specialty_type] || a.specialty_type) + (a.slot_number > 1 ? " " + a.slot_number : ""),
+          hoursAllotted: Number(a.hours_allotted) || 0,
+          entries, // [{ hours, entry_date }]
+        };
+      });
+
+    render();
+  }
+
+  function monthBounds(monthValue) {
+    const [y, m] = monthValue.split("-").map(Number);
+    const start = `${monthValue}-01`;
+    const lastDay = new Date(y, m, 0).getDate();
+    const end = `${monthValue}-${String(lastDay).padStart(2, "0")}`;
+    return { start, end };
+  }
+
+  function render() {
+    const monthValue = $("report-month").value;
+    if (!monthValue) return;
+    const { start, end } = monthBounds(monthValue);
+
+    const rowsWithTotals = reportRows.map((r) => {
+      let hoursThisMonth = 0;
+      let cumulativeThroughMonth = 0;
+      for (const e of r.entries) {
+        if (e.entry_date >= start && e.entry_date <= end) hoursThisMonth += Number(e.hours);
+        if (e.entry_date <= end) cumulativeThroughMonth += Number(e.hours);
+      }
+      return {
+        ...r,
+        hoursThisMonth: round2(hoursThisMonth),
+        cumulativeThroughMonth: round2(cumulativeThroughMonth),
+        isOver: cumulativeThroughMonth > r.hoursAllotted,
+      };
+    });
+
+    const monthDate = new Date(monthValue + "-02"); // avoid TZ edge cases landing on prior day
+    $("month-label-hint").textContent =
+      "Showing " + monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" }) + ".";
+
+    renderMonthlyGroups(rowsWithTotals.filter((r) => r.hoursThisMonth > 0));
+    renderOverage(rowsWithTotals.filter((r) => r.isOver));
+
+    const totalHours = rowsWithTotals.reduce((sum, r) => sum + r.hoursThisMonth, 0);
+    const specialistsWithHours = new Set(rowsWithTotals.filter((r) => r.hoursThisMonth > 0).map((r) => r.specialistName));
+    $("sum-hours").textContent = round2(totalHours);
+    $("sum-specialists").textContent = specialistsWithHours.size;
+    $("sum-over").textContent = rowsWithTotals.filter((r) => r.isOver).length;
+
+    window._invoicingReportRows = rowsWithTotals; // for CSV export
+  }
+
+  function round2(n) { return Math.round(n * 100) / 100; }
+
+  function renderMonthlyGroups(rows) {
+    const container = $("monthly-groups");
+    $("monthly-empty").classList.toggle("hidden", rows.length !== 0);
+    if (!rows.length) { container.innerHTML = ""; return; }
+
+    const bySpecialist = {};
+    for (const r of rows) (bySpecialist[r.specialistName] ||= []).push(r);
+    const names = Object.keys(bySpecialist).sort((a, b) => a.localeCompare(b));
+
+    container.innerHTML = names.map((name) => {
+      const group = bySpecialist[name];
+      const subtotal = round2(group.reduce((sum, r) => sum + r.hoursThisMonth, 0));
+      const rowsHtml = group.map((r) => `
+        <tr>
+          <td>${escapeHtml(r.program)}</td>
+          <td>${escapeHtml(r.client)}</td>
+          <td>${escapeHtml(r.role)}</td>
+          <td class="num">${r.hoursThisMonth}${r.isOver ? '<span class="over-flag">Over</span>' : ""}</td>
+        </tr>
+      `).join("");
+      return `
+        <div class="specialist-group">
+          <div class="specialist-header">
+            <span class="sh-name">${escapeHtml(name)}</span>
+            <span class="sh-total">${subtotal} hrs this month</span>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Program</th><th>Engagement Name</th><th>Role</th><th class="num">Hours</th></tr></thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function renderOverage(rows) {
+    const tbody = $("overage-tbody");
+    $("overage-empty").classList.toggle("hidden", rows.length !== 0);
+    rows.sort((a, b) => a.specialistName.localeCompare(b.specialistName));
+    tbody.innerHTML = rows.map((r) => `
+      <tr class="overage-row">
+        <td>${escapeHtml(r.specialistName)}</td>
+        <td>${escapeHtml(r.program)}</td>
+        <td>${escapeHtml(r.client)}</td>
+        <td>${escapeHtml(r.role)}</td>
+        <td class="num">${r.cumulativeThroughMonth}</td>
+        <td class="num">${r.hoursAllotted}</td>
+        <td class="num">${round2(r.cumulativeThroughMonth - r.hoursAllotted)}</td>
+      </tr>
+    `).join("");
+  }
+
+  function csvField(value) {
+    const s = String(value == null ? "" : value);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
+  $("export-csv-btn").addEventListener("click", () => {
+    const rows = (window._invoicingReportRows || []).filter((r) => r.hoursThisMonth > 0);
+    if (!rows.length) { showBanner("Nothing to export for this month.", "error"); return; }
+    rows.sort((a, b) => a.specialistName.localeCompare(b.specialistName));
+    const header = ["Specialist", "Program", "Engagement Name", "Role", "Hours This Month", "Cumulative Hours", "Hours Allotted", "Status"];
+    const lines = [header.map(csvField).join(",")];
+    for (const r of rows) {
+      lines.push([
+        r.specialistName, r.program, r.client, r.role,
+        r.hoursThisMonth, r.cumulativeThroughMonth, r.hoursAllotted,
+        r.isOver ? "OVER BUDGET" : "",
+      ].map(csvField).join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `invoicing-report-${$("report-month").value}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+</script>
+</body>
+</html>
