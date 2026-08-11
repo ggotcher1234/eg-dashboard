@@ -433,6 +433,7 @@
   let clientsByApp = {};   // application id -> { id, status, project_status } for accepted applications
   let activeTab = "all"; // default filter when this page opens — may change later
   let reviewingAppId = null;
+  let reviewBackClientId = null; // set when reached via Client Control Center's "Application Info" deep link
   let pendingRejectId = null;
   let pendingDeleteAppId = null;
 
@@ -534,6 +535,7 @@
     const deepLinkClientId = new URLSearchParams(location.search).get("client");
     const deepLinkApp = deepLinkClientId ? allApplications.find((a) => a.client_id === deepLinkClientId) : null;
     if (deepLinkApp) {
+      reviewBackClientId = deepLinkClientId;
       showReviewView(deepLinkApp.id);
     } else if (new URLSearchParams(location.search).get("new") === "1") {
       // Deep link from the home page's "+ Add Client" button — jump
@@ -650,7 +652,7 @@
         ${showProjectCol ? `<td>${projectStatus ? `<span class="badge badge-${projectStatus}">${projectStatus.replace("_", " ")}</span>` : "—"}</td>` : ""}
         ${isSuperAdmin ? `<td onclick="event.stopPropagation()"><button class="btn-danger icon-btn" data-delete-app="${a.id}" title="Delete this client">&times;</button></td>` : ""}
       `;
-      tr.addEventListener("click", () => showReviewView(a.id));
+      tr.addEventListener("click", () => { reviewBackClientId = null; showReviewView(a.id); });
       tbody.appendChild(tr);
     }
 
@@ -780,13 +782,22 @@
   });
 
   // ---------- Review view ----------
-  $("review-back").addEventListener("click", showListView);
+  $("review-back").addEventListener("click", () => {
+    if (reviewBackClientId) {
+      location.href = `client_control_center.html?client=${reviewBackClientId}`;
+    } else {
+      showListView();
+    }
+  });
 
   function showReviewView(appId) {
     reviewingAppId = appId;
     $("view-list").classList.add("hidden");
     $("view-new").classList.add("hidden");
     $("view-review").classList.remove("hidden");
+    // Reached via Client Control Center's "Application Info" link — send
+    // the breadcrumb back there instead of the generic applications list.
+    $("review-back").textContent = reviewBackClientId ? "← Back to Client Control Center" : "← Back to applications";
     renderReview();
   }
 
