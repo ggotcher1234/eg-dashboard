@@ -50,18 +50,26 @@
 
   .company-description { font-size: 14px; line-height: 1.65; }
   .company-description p { margin: 0 0 10px; }
+  .company-description p:last-child { margin-bottom: 0; }
   .company-description ul { margin: 0 0 10px; padding-left: 22px; }
+  .company-description ul:last-child { margin-bottom: 0; }
   .company-description strong { color: var(--navy); text-transform: uppercase; font-size: 12.5px; letter-spacing: 0.3px; }
+  .company-description em { font-style: italic; }
 
   .company-top-issues {
     font-size: 13.5px; line-height: 1.6; margin-top: 12px; padding: 12px 14px;
     background: #f8fafb; border: 1px solid var(--border); border-radius: 8px;
-    white-space: pre-wrap;
   }
   .company-top-issues .cti-label {
     font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
-    color: var(--muted); margin-bottom: 4px;
+    color: var(--muted); margin-bottom: 6px;
   }
+  .company-top-issues p { margin: 0 0 8px; }
+  .company-top-issues p:last-child { margin-bottom: 0; }
+  .company-top-issues ul { margin: 0 0 8px; padding-left: 20px; }
+  .company-top-issues ul:last-child { margin-bottom: 0; }
+  .company-top-issues strong { color: var(--navy); font-weight: 700; }
+  .company-top-issues em { font-style: italic; }
 
   .company-naics { font-size: 13px; color: var(--muted); margin-top: 4px; }
   .company-website { display: inline-block; font-size: 13.5px; font-weight: 700; color: var(--accent-dark); text-decoration: none; margin-top: 10px; }
@@ -306,8 +314,10 @@
   }
 
   // Very small markdown-lite renderer for the free-text Company Description
-  // field: "- " lines become bullets, **text** becomes bold/uppercase
-  // section labels (matching the reference tool's "**NCEG GOALS**" style).
+  // and Top Business Issues fields (client_profile.html's editor writes
+  // this same format): "- " lines become bullets, **text** becomes bold
+  // (uppercase section-label style on Description, see CSS), *text*
+  // becomes italic.
   function renderDescription(text) {
     if (!text) return "";
     const lines = String(text).split(/\r?\n/);
@@ -318,15 +328,20 @@
       if (!line) { if (inList) { html += "</ul>"; inList = false; } continue; }
       if (line.startsWith("- ")) {
         if (!inList) { html += "<ul>"; inList = true; }
-        html += `<li>${escapeHtml(line.slice(2))}</li>`;
+        html += `<li>${formatInline(line.slice(2))}</li>`;
       } else {
         if (inList) { html += "</ul>"; inList = false; }
-        const bolded = escapeHtml(line).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-        html += `<p>${bolded}</p>`;
+        html += `<p>${formatInline(line)}</p>`;
       }
     }
     if (inList) html += "</ul>";
     return html;
+  }
+
+  function formatInline(line) {
+    return escapeHtml(line)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>");
   }
 
   // Word/Excel/PowerPoint files have no native in-browser viewer -- opening
@@ -404,7 +419,7 @@
 
     if (c.top_business_issues) {
       $("company-top-issues").classList.remove("hidden");
-      $("company-top-issues").innerHTML = `<div class="cti-label">Top Business Issues</div>${escapeHtml(c.top_business_issues)}`;
+      $("company-top-issues").innerHTML = `<div class="cti-label">Top Business Issues</div>${renderDescription(c.top_business_issues)}`;
     }
 
     if (c.naics_codes) {

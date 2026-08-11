@@ -151,16 +151,32 @@
   .logo-card-actions { display: flex; gap: 8px; }
   .logo-card-empty { display: flex; align-items: center; gap: 10px; }
 
-  /* Lightweight rich-text toolbar above Description / Business Issues --
-     inserts the same markdown syntax (**bold**, "- " bullets) the field
-     already supports, just without needing to remember the shorthand. */
-  .rt-toolbar { display: flex; gap: 4px; margin-bottom: 6px; }
+  /* Real WYSIWYG editor for Description / Business Issues -- a
+     contenteditable box with a proper toolbar, not visible markdown
+     characters in a plain textarea. Bold/italic/bullets are serialized
+     back to the same "**bold**" / "- " plain-text format the client-facing
+     dashboard already parses (see richTextToHtml/richTextFromHtml below),
+     so nothing downstream needs to change. */
+  .rt-toolbar { display: flex; gap: 3px; margin-bottom: 8px; }
   .rt-toolbar button {
-    width: 30px; height: 28px; border-radius: 6px; background: #eef1f4; color: var(--text);
-    font-size: 12.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    min-width: 32px; height: 30px; padding: 0 8px; border-radius: 6px; background: #eef1f4; color: var(--text);
+    font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 4px;
   }
   .rt-toolbar button:hover { background: #e2e6ea; }
   .rt-toolbar button:active { background: #d7dce1; }
+  .rt-toolbar button.active { background: var(--navy); color: #fff; }
+
+  .rt-editor {
+    width: 100%; min-height: 150px; max-height: 420px; overflow-y: auto;
+    padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 14px; font-family: inherit; line-height: 1.6; color: var(--text); background: #fff;
+  }
+  .rt-editor:focus { outline: none; border-color: var(--navy-light); }
+  .rt-editor p { margin: 0 0 10px; }
+  .rt-editor p:last-child { margin-bottom: 0; }
+  .rt-editor ul { margin: 0 0 10px; padding-left: 22px; }
+  .rt-editor ul:last-child { margin-bottom: 0; }
+  .rt-editor:empty:before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
 
   .field { margin-bottom: 12px; }
   .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
@@ -412,9 +428,10 @@
           <div class="card-hint">Appears on the client dashboard.</div>
           <div class="rt-toolbar" data-rt-target="co-description">
             <button type="button" data-rt="bold" title="Bold"><strong>B</strong></button>
-            <button type="button" data-rt="bullet" title="Bullet list">&#8226;</button>
+            <button type="button" data-rt="italic" title="Italic"><em>I</em></button>
+            <button type="button" data-rt="bullet" title="Bullet list">&#8226;&nbsp;List</button>
           </div>
-          <textarea id="co-description" rows="6"></textarea>
+          <div class="rt-editor" id="co-description" contenteditable="true" data-placeholder="Write a short description of the engagement…"></div>
         </div>
 
         <!-- ===== Top Business Issues ===== -->
@@ -423,9 +440,10 @@
           <div class="card-hint">Pulled from the intake application — editable here.</div>
           <div class="rt-toolbar" data-rt-target="co-top-issues">
             <button type="button" data-rt="bold" title="Bold"><strong>B</strong></button>
-            <button type="button" data-rt="bullet" title="Bullet list">&#8226;</button>
+            <button type="button" data-rt="italic" title="Italic"><em>I</em></button>
+            <button type="button" data-rt="bullet" title="Bullet list">&#8226;&nbsp;List</button>
           </div>
-          <textarea id="co-top-issues" rows="4"></textarea>
+          <div class="rt-editor" id="co-top-issues" contenteditable="true" data-placeholder="What are the client's top business issues?"></div>
         </div>
       </form>
 
@@ -507,6 +525,72 @@
   }
   const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
   const sanitizeFilename = (name) => name.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+  // ---------- Rich text <-> plain-text markdown-lite conversion ----------
+  // Description and Top Business Issues are stored as plain text with a
+  // tiny markdown-lite syntax ("- " bullets, **bold**, *italic*) — same
+  // format client_public.html's renderer already expects. These two
+  // functions are the only bridge between that storage format and the real
+  // contenteditable WYSIWYG boxes below, so the client-facing dashboard
+  // never has to change.
+  function richTextToHtml(text) {
+    if (!text) return "";
+    const inline = (s) => escapeHtml(s)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>");
+    const lines = String(text).split(/\r?\n/);
+    let html = "", inList = false;
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (line.startsWith("- ")) {
+        if (!inList) { html += "<ul>"; inList = true; }
+        html += `<li>${inline(line.slice(2))}</li>`;
+      } else {
+        if (inList) { html += "</ul>"; inList = false; }
+        if (line) html += `<p>${inline(line)}</p>`;
+      }
+    }
+    if (inList) html += "</ul>";
+    return html;
+  }
+
+  function inlineNodeToMarkdown(node) {
+    let out = "";
+    node.childNodes.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        out += child.textContent;
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        const tag = child.tagName.toLowerCase();
+        const inner = inlineNodeToMarkdown(child);
+        if (tag === "b" || tag === "strong") out += `**${inner}**`;
+        else if (tag === "i" || tag === "em") out += `*${inner}*`;
+        else if (tag === "br") out += "\n";
+        else out += inner;
+      }
+    });
+    return out;
+  }
+
+  function richTextFromHtml(el) {
+    const lines = [];
+    el.childNodes.forEach((node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const t = node.textContent.trim();
+        if (t) lines.push(t);
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const tag = node.tagName.toLowerCase();
+      if (tag === "ul" || tag === "ol") {
+        node.querySelectorAll(":scope > li").forEach((li) => {
+          lines.push("- " + inlineNodeToMarkdown(li).trim());
+        });
+      } else if (tag !== "br") {
+        lines.push(inlineNodeToMarkdown(node).trim());
+      }
+    });
+    return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
 
   function showBanner(message, type) {
     const el = $("banner");
@@ -737,17 +821,32 @@
   }
   function syncAllUrlOpenButtons() { URL_FIELD_IDS.forEach(syncUrlOpenButton); }
 
+  // Description and Top Business Issues are contenteditable WYSIWYG boxes,
+  // not <input>/<textarea> -- these two helpers let the rest of the
+  // autosave code below treat every field the same way regardless of which
+  // kind of element it actually is.
+  const RICH_TEXT_FIELD_IDS = new Set(["co-description", "co-top-issues"]);
+  function getFieldValue(id) {
+    const el = $(id);
+    return RICH_TEXT_FIELD_IDS.has(id) ? richTextFromHtml(el) : el.value;
+  }
+  function setFieldValue(id, value) {
+    const el = $(id);
+    if (RICH_TEXT_FIELD_IDS.has(id)) el.innerHTML = richTextToHtml(value);
+    else el.value = value;
+  }
+
   function fillCompanyForm(c) {
-    $("co-website").value = c.website_url || "";
-    $("co-address").value = c.address || "";
-    $("co-naics").value = c.naics_codes || "";
-    $("co-linkedin").value = c.linkedin_url || "";
-    $("co-facebook").value = c.facebook_url || "";
-    $("co-instagram").value = c.instagram_url || "";
-    $("co-twitter").value = c.twitter_url || "";
-    $("co-youtube").value = c.youtube_url || "";
-    $("co-description").value = c.description || "";
-    $("co-top-issues").value = c.top_business_issues || "";
+    setFieldValue("co-website", c.website_url || "");
+    setFieldValue("co-address", c.address || "");
+    setFieldValue("co-naics", c.naics_codes || "");
+    setFieldValue("co-linkedin", c.linkedin_url || "");
+    setFieldValue("co-facebook", c.facebook_url || "");
+    setFieldValue("co-instagram", c.instagram_url || "");
+    setFieldValue("co-twitter", c.twitter_url || "");
+    setFieldValue("co-youtube", c.youtube_url || "");
+    setFieldValue("co-description", c.description || "");
+    setFieldValue("co-top-issues", c.top_business_issues || "");
     renderLogoField();
     syncAllUrlOpenButtons();
     URL_FIELD_IDS.forEach((id) => $(id).addEventListener("input", () => syncUrlOpenButton(id)));
@@ -796,17 +895,17 @@
   function wireCompanyAutosave() {
     Object.entries(COMPANY_FIELD_COLUMNS).forEach(([id, column]) => {
       const el = $(id);
-      let original = el.value;
-      el.addEventListener("focus", () => { original = el.value; });
+      let original = getFieldValue(id);
+      el.addEventListener("focus", () => { original = getFieldValue(id); });
       el.addEventListener("blur", async () => {
-        const value = el.value.trim();
+        const value = getFieldValue(id).trim();
         if (value === original.trim()) return;
         setSaveStatus("saving");
         const { error } = await sb.from("clients").update({ [column]: value || null }).eq("id", currentClient.id);
         if (error) {
           showBanner("Couldn't save: " + error.message, "error");
           setSaveStatus("error");
-          el.value = original;
+          setFieldValue(id, original);
           return;
         }
         original = value;
@@ -818,40 +917,35 @@
   wireCompanyAutosave();
 
   // ---------- Rich-text toolbar (Description / Top Business Issues) ----------
-  // A very lightweight treatment -- these buttons just insert the same
-  // markdown-ish syntax the field already renders (**bold**, "- " bullets)
-  // at the cursor, so nobody has to remember the shorthand by hand.
+  // A real WYSIWYG toolbar over the contenteditable boxes -- Bold/Italic/
+  // Bullet List actually format text live in the box via execCommand,
+  // instead of inserting visible **markdown** characters into a plain
+  // textarea. mousedown+preventDefault keeps the editor's text selection
+  // intact when a toolbar button is clicked (otherwise the click would
+  // blur the editor and the selection would be lost before execCommand runs).
+  document.execCommand("defaultParagraphSeparator", false, "p");
+  const RT_COMMANDS = { bold: "bold", italic: "italic", bullet: "insertUnorderedList" };
   document.querySelectorAll(".rt-toolbar").forEach((toolbar) => {
-    const targetId = toolbar.dataset.rtTarget;
-    const textarea = $(targetId);
-    if (!textarea) return;
+    const editor = $(toolbar.dataset.rtTarget);
+    if (!editor) return;
+
+    const updateToolbarState = () => {
+      toolbar.querySelectorAll("button[data-rt]").forEach((btn) => {
+        btn.classList.toggle("active", document.queryCommandState(RT_COMMANDS[btn.dataset.rt]));
+      });
+    };
+
     toolbar.querySelectorAll("button[data-rt]").forEach((btn) => {
+      btn.addEventListener("mousedown", (e) => e.preventDefault());
       btn.addEventListener("click", () => {
-        const action = btn.dataset.rt;
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const selected = textarea.value.slice(start, end);
-        let insert, cursorOffset;
-        if (action === "bold") {
-          insert = `**${selected || "bold text"}**`;
-          cursorOffset = selected ? insert.length : 2;
-        } else {
-          // Bullet: prefix the current line (or each selected line) with "- ".
-          const lineStart = textarea.value.lastIndexOf("\n", start - 1) + 1;
-          const before = textarea.value.slice(0, lineStart);
-          const after = textarea.value.slice(lineStart);
-          textarea.value = before + "- " + after;
-          textarea.focus();
-          textarea.setSelectionRange(start + 2, end + 2);
-          textarea.dispatchEvent(new Event("input"));
-          return;
-        }
-        textarea.setRangeText(insert, start, end, "end");
-        textarea.focus();
-        textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
-        textarea.dispatchEvent(new Event("input"));
+        editor.focus();
+        document.execCommand(RT_COMMANDS[btn.dataset.rt]);
+        updateToolbarState();
       });
     });
+    editor.addEventListener("keyup", updateToolbarState);
+    editor.addEventListener("mouseup", updateToolbarState);
+    editor.addEventListener("focus", updateToolbarState);
   });
 
   // ---------- Logo upload ----------
