@@ -669,8 +669,16 @@
       select.addEventListener("change", async () => {
         const tr = select.closest("tr");
         const assignmentId = tr.dataset.assignmentId;
+        const row = currentAssignments.find((x) => x.id === assignmentId);
         select.disabled = true;
-        const { error } = await sb.from("client_assignments").update({ user_id: select.value || null }).eq("id", assignmentId);
+        // Keep is_team_lead in sync with the slot itself (also self-heals
+        // any row created before this flag was set correctly on insert,
+        // e.g. via "+ Add row" — just re-picking the consultant here fixes
+        // it, since this goes through the authenticated Super Admin
+        // session that enforce_team_lead_assignment() requires).
+        const payload = { user_id: select.value || null };
+        if (row && row.specialty_type === "team_lead") payload.is_team_lead = true;
+        const { error } = await sb.from("client_assignments").update(payload).eq("id", assignmentId);
         select.disabled = false;
         if (error) {
           showBanner("Couldn't update consultant: " + error.message, "error");
