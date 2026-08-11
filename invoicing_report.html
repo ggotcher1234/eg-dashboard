@@ -76,6 +76,18 @@
   .card-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
   .card-header-row h2 { margin-bottom: 4px; }
   .card-header-row .card-hint { margin-bottom: 0; }
+  .card-header-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .rate-field { display: flex; align-items: center; gap: 7px; }
+  .rate-field label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); }
+  .rate-field .rate-prefix-wrap { position: relative; display: flex; align-items: center; }
+  .rate-field .rate-prefix { position: absolute; left: 9px; font-size: 13.5px; color: var(--muted); pointer-events: none; }
+  .rate-field input[type="number"] {
+    width: 84px; padding: 7px 8px 7px 20px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13.5px; font-family: inherit; background: #fff; font-variant-numeric: tabular-nums;
+  }
+  .rate-field .rate-suffix { font-size: 12.5px; color: var(--muted); }
+  .rate-field .rate-saved { font-size: 11.5px; color: var(--accent-dark); font-weight: 600; opacity: 0; transition: opacity 0.2s ease; }
+  .rate-field .rate-saved.show { opacity: 1; }
 
   /* Payroll table styled like a standard accounting ledger: numbers right-
      aligned and set in tabular figures so the decimal points line up, with
@@ -221,7 +233,18 @@
           <h2>Payroll Summary</h2>
           <div class="card-hint">Every team member is paid the same flat rate, regardless of role.</div>
         </div>
-        <button class="btn-secondary" id="export-payroll-csv-btn">Export Payroll CSV</button>
+        <div class="card-header-actions">
+          <div class="rate-field">
+            <label for="rate-input">Rate</label>
+            <div class="rate-prefix-wrap">
+              <span class="rate-prefix">$</span>
+              <input type="number" id="rate-input" min="0" step="0.01" />
+            </div>
+            <span class="rate-suffix">/hr</span>
+            <span class="rate-saved" id="rate-saved">Saved</span>
+          </div>
+          <button class="btn-secondary" id="export-payroll-csv-btn">Export Payroll CSV</button>
+        </div>
       </div>
       <div class="table-scroll">
         <table id="payroll-table">
@@ -273,9 +296,11 @@
   const EXCLUDED_SPECIALTIES = ["admin", "quality_control"];
 
   // Flat rate, same for every team member regardless of role (Team Lead,
-  // Market Research, etc.) -- per Greg, 8/12/26. If EG ever moves to
-  // per-person or per-role rates, this is the one place that needs to change.
-  const HOURLY_RATE = 95;
+  // Market Research, etc.) -- per Greg, 8/12/26. Loaded from
+  // organization_settings.hourly_rate (047 migration) and editable by
+  // Admins right on this page; 95 here is just the pre-load fallback in
+  // case that fetch hasn't resolved yet.
+  let hourlyRate = 95;
   function money(n) {
     return "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
@@ -335,8 +360,59 @@
     $("report-month").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     $("report-month").addEventListener("change", render);
 
+    await loadHourlyRate();
     await loadData();
   }
+
+  // ---------- Pay rate (organization_settings.hourly_rate) ----------
+  async function loadHourlyRate() {
+    const { data, error } = await sb
+      .from("organization_settings")
+      .select("hourly_rate")
+      .eq("organization_id", currentUser.organization_id)
+      .single();
+
+    if (error || !data) {
+      // Backfilled by the 047 migration for every existing org, so this
+      // shouldn't normally happen -- fall back to the default rather than
+      // blocking the page if it does.
+      showBanner("Couldn't load the pay rate, using the default of $95/hr.", "error");
+    } else {
+      hourlyRate = Number(data.hourly_rate);
+    }
+    $("rate-input").value = hourlyRate;
+  }
+
+  $("rate-input").addEventListener("change", async () => {
+    const input = $("rate-input");
+    const newRate = round2(Number(input.value));
+    if (!(newRate > 0)) {
+      showBanner("Pay rate must be a positive number.", "error");
+      input.value = hourlyRate;
+      return;
+    }
+    if (newRate === hourlyRate) return;
+
+    input.disabled = true;
+    const { error } = await sb
+      .from("organization_settings")
+      .update({ hourly_rate: newRate, updated_at: new Date().toISOString() })
+      .eq("organization_id", currentUser.organization_id);
+    input.disabled = false;
+
+    if (error) {
+      showBanner("Couldn't save the new rate: " + error.message, "error");
+      input.value = hourlyRate;
+      return;
+    }
+
+    hourlyRate = newRate;
+    input.value = hourlyRate;
+    const savedTag = $("rate-saved");
+    savedTag.classList.add("show");
+    setTimeout(() => savedTag.classList.remove("show"), 1800);
+    render();
+  });
 
   sb.auth.getSession().then(({ data: { session } }) => {
     if (session) {
@@ -525,7 +601,7 @@
       .sort((a, b) => a.localeCompare(b))
       .map((name) => {
         const hours = round2(bySpecialist[name]);
-        return { name, hours, rate: HOURLY_RATE, pay: round2(hours * HOURLY_RATE) };
+        return { name, hours, rate: hourlyRate, pay: round2(hours * hourlyRate) };
       });
 
     const tbody = $("payroll-tbody");
