@@ -62,9 +62,17 @@
     margin: 22px 0 20px; background: #fff; border: 1px solid var(--border); border-radius: 12px;
     padding: 12px 16px; box-shadow: 0 1px 3px rgba(20,48,77,0.05);
   }
-  .month-field { display: flex; align-items: center; gap: 10px; }
-  .month-field label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); }
+  .month-field { display: flex; align-items: center; gap: 8px; }
+  .month-field label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-right: 2px; }
   .month-field input[type="month"] { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; background: #f6f8fa; }
+  .month-nav-btn {
+    width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;
+    background: #eef1f4; color: var(--navy); border-radius: 8px; font-size: 16px; line-height: 1;
+  }
+  .month-nav-btn:hover { background: #e2e6ea; }
+  .month-nav-btn:disabled { opacity: 0.4; cursor: default; }
+  .btn-sm { padding: 8px 12px; font-size: 13px; }
+  #month-today { margin-left: 4px; }
   .toolbar-actions { display: flex; gap: 10px; }
 
   /* KPI cards -- same bold, colorful treatment used across the rest of the
@@ -262,7 +270,10 @@
     <div class="toolbar-row">
       <div class="month-field">
         <label for="report-month">Month</label>
+        <button type="button" class="month-nav-btn" id="month-prev" title="Previous month" aria-label="Previous month">&#8249;</button>
         <input type="month" id="report-month" />
+        <button type="button" class="month-nav-btn" id="month-next" title="Next month" aria-label="Next month">&#8250;</button>
+        <button type="button" class="btn-secondary btn-sm" id="month-today">This Month</button>
       </div>
       <div class="toolbar-actions">
         <button class="btn-secondary" id="export-csv-btn">Export CSV</button>
@@ -508,9 +519,30 @@
     const now = new Date();
     $("report-month").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     $("report-month").addEventListener("change", render);
+    wireMonthNav();
 
     await loadHourlyRate();
     await loadData();
+  }
+
+  // ---------- Month navigation ----------
+  // Prev/Next step the picker one calendar month at a time; "This Month"
+  // jumps straight back to the current month -- the same pattern most
+  // accounting software uses for flipping between statement periods.
+  function shiftMonth(delta) {
+    const [y, m] = $("report-month").value.split("-").map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    $("report-month").value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    render();
+  }
+  function wireMonthNav() {
+    $("month-prev").addEventListener("click", () => shiftMonth(-1));
+    $("month-next").addEventListener("click", () => shiftMonth(1));
+    $("month-today").addEventListener("click", () => {
+      const n = new Date();
+      $("report-month").value = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+      render();
+    });
   }
 
   // ---------- Pay rate (organization_settings.hourly_rate) ----------
