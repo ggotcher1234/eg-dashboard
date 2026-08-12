@@ -157,11 +157,13 @@
   /* Payroll table styled like a standard accounting ledger: numbers right-
      aligned and set in tabular figures so the decimal points line up, with
      a bold double-bordered total row at the bottom. */
-  #payroll-table th.money, #payroll-table td.money {
+  #payroll-table th.money, #payroll-table td.money,
+  #ytd-payroll-table th.money, #ytd-payroll-table td.money {
     text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
   }
-  #payroll-table tbody td:first-child, #payroll-table tfoot td:first-child { text-align: left; }
-  #payroll-tfoot td {
+  #payroll-table tbody td:first-child, #payroll-table tfoot td:first-child,
+  #ytd-payroll-table tbody td:first-child, #ytd-payroll-table tfoot td:first-child { text-align: left; }
+  #payroll-tfoot td, #ytd-payroll-tfoot td {
     padding: 10px; font-size: 13.5px; font-weight: 700; color: var(--navy);
     border-top: 2px solid var(--navy); font-variant-numeric: tabular-nums;
   }
@@ -381,6 +383,33 @@
         </table>
       </div>
       <div id="payroll-empty" class="empty-note hidden">No hours logged for this month yet.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header-row">
+        <div>
+          <h2>YTD Payroll Summary</h2>
+          <div class="card-hint" id="ytd-label-hint">Cumulative pay by team member, January 1 through the selected month — handy for 1099 prep at year end.</div>
+        </div>
+        <div class="card-header-actions">
+          <button class="btn-secondary" id="export-ytd-payroll-csv-btn">Export YTD CSV</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table id="ytd-payroll-table">
+          <thead>
+            <tr>
+              <th>Team Member</th>
+              <th class="money">Hours (YTD)</th>
+              <th class="money">Rate</th>
+              <th class="money">Total Pay (YTD)</th>
+            </tr>
+          </thead>
+          <tbody id="ytd-payroll-tbody"></tbody>
+          <tfoot id="ytd-payroll-tfoot"></tfoot>
+        </table>
+      </div>
+      <div id="ytd-payroll-empty" class="empty-note hidden">No hours logged yet this year.</div>
     </div>
   </main>
 </div>
@@ -608,18 +637,23 @@
     const monthValue = $("report-month").value;
     if (!monthValue) return;
     const { start, end } = monthBounds(monthValue);
+    const year = monthValue.slice(0, 4);
+    const yearStart = `${year}-01-01`;
 
     const rowsWithTotals = reportRows.map((r) => {
       let hoursThisMonth = 0;
       let cumulativeThroughMonth = 0;
+      let hoursYtd = 0;
       for (const e of r.entries) {
         if (e.entry_date >= start && e.entry_date <= end) hoursThisMonth += Number(e.hours);
         if (e.entry_date <= end) cumulativeThroughMonth += Number(e.hours);
+        if (e.entry_date >= yearStart && e.entry_date <= end) hoursYtd += Number(e.hours);
       }
       return {
         ...r,
         hoursThisMonth: round2(hoursThisMonth),
         cumulativeThroughMonth: round2(cumulativeThroughMonth),
+        hoursYtd: round2(hoursYtd),
         isOver: cumulativeThroughMonth > r.hoursAllotted,
       };
     });
@@ -627,10 +661,13 @@
     const monthDate = new Date(monthValue + "-02"); // avoid TZ edge cases landing on prior day
     $("month-label-hint").textContent =
       "Showing " + monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" }) + ".";
+    $("ytd-label-hint").textContent =
+      `Cumulative pay by team member, January 1 – ${monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })} — handy for 1099 prep at year end.`;
 
     renderMonthlyGroups(rowsWithTotals.filter((r) => r.hoursThisMonth > 0));
     renderOverage(rowsWithTotals.filter((r) => r.isOver));
     const payrollRows = renderPayrollSummary(rowsWithTotals.filter((r) => r.hoursThisMonth > 0));
+    const ytdPayrollRows = renderYtdPayrollSummary(rowsWithTotals.filter((r) => r.hoursYtd > 0));
 
     const totalHours = rowsWithTotals.reduce((sum, r) => sum + r.hoursThisMonth, 0);
     const specialistsWithHours = new Set(rowsWithTotals.filter((r) => r.hoursThisMonth > 0).map((r) => r.specialistName));
@@ -641,6 +678,8 @@
 
     window._invoicingReportRows = rowsWithTotals; // for CSV export
     window._invoicingPayrollRows = payrollRows; // for payroll CSV export
+    window._invoicingYtdPayrollRows = ytdPayrollRows; // for YTD payroll CSV export
+    window._invoicingYtdYear = year;
   }
 
   function round2(n) { return Math.round(n * 100) / 100; }
@@ -803,6 +842,55 @@
     return payrollRows;
   }
 
+  // Same shape as renderPayrollSummary, but totals hours from January 1 of
+  // the selected month's year through the end of that month rather than
+  // just the one month -- so selecting December gives the full calendar
+  // year in one line per person, ready to hand off for 1099 prep. Rate is
+  // applied at today's org-wide hourly_rate for the whole year since the
+  // app only stores one current rate, not a history of past rates.
+  function renderYtdPayrollSummary(rows) {
+    const bySpecialist = {};
+    for (const r of rows) (bySpecialist[r.specialistName] ||= 0);
+    for (const r of rows) bySpecialist[r.specialistName] += r.hoursYtd;
+
+    const ytdPayrollRows = Object.keys(bySpecialist)
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => {
+        const hours = round2(bySpecialist[name]);
+        return { name, hours, rate: hourlyRate, pay: round2(hours * hourlyRate) };
+      });
+
+    const tbody = $("ytd-payroll-tbody");
+    const tfoot = $("ytd-payroll-tfoot");
+    $("ytd-payroll-empty").classList.toggle("hidden", ytdPayrollRows.length !== 0);
+
+    tbody.innerHTML = ytdPayrollRows.map((p) => `
+      <tr>
+        <td>${escapeHtml(p.name)}</td>
+        <td class="money">${p.hours}</td>
+        <td class="money">${money(p.rate)}</td>
+        <td class="money">${money(p.pay)}</td>
+      </tr>
+    `).join("");
+
+    if (ytdPayrollRows.length) {
+      const totalHours = round2(ytdPayrollRows.reduce((sum, p) => sum + p.hours, 0));
+      const totalPay = round2(ytdPayrollRows.reduce((sum, p) => sum + p.pay, 0));
+      tfoot.innerHTML = `
+        <tr>
+          <td>Total</td>
+          <td class="money">${totalHours}</td>
+          <td class="money"></td>
+          <td class="money">${money(totalPay)}</td>
+        </tr>
+      `;
+    } else {
+      tfoot.innerHTML = "";
+    }
+
+    return ytdPayrollRows;
+  }
+
   function csvField(value) {
     const s = String(value == null ? "" : value);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -852,6 +940,20 @@
     const totalPay = round2(rows.reduce((sum, p) => sum + p.pay, 0));
     lines.push(["Total", totalHours, "", totalPay.toFixed(2)].map(csvField).join(","));
     downloadCsv(lines, `payroll-summary-${$("report-month").value}.csv`);
+  });
+
+  $("export-ytd-payroll-csv-btn").addEventListener("click", () => {
+    const rows = window._invoicingYtdPayrollRows || [];
+    if (!rows.length) { showBanner("Nothing to export for this year yet.", "error"); return; }
+    const header = ["Team Member", "Hours (YTD)", "Rate", "Total Pay (YTD)"];
+    const lines = [header.map(csvField).join(",")];
+    for (const p of rows) {
+      lines.push([p.name, p.hours, p.rate.toFixed(2), p.pay.toFixed(2)].map(csvField).join(","));
+    }
+    const totalHours = round2(rows.reduce((sum, p) => sum + p.hours, 0));
+    const totalPay = round2(rows.reduce((sum, p) => sum + p.pay, 0));
+    lines.push(["Total", totalHours, "", totalPay.toFixed(2)].map(csvField).join(","));
+    downloadCsv(lines, `payroll-ytd-${window._invoicingYtdYear || $("report-month").value.slice(0, 4)}.csv`);
   });
 </script>
 </body>
