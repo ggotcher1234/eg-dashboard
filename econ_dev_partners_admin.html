@@ -123,12 +123,26 @@
   .filter-dropdown button:hover { background: #eef1f4; }
   .filter-dropdown button.selected { color: var(--navy-light); font-weight: 700; }
 
-  /* Compact summary figures -- not dashboard cards, just quick data-
-     completeness signal above the table. */
-  .stats-row { display: flex; gap: 22px; margin-bottom: 16px; flex-wrap: wrap; }
-  .stats-row .stat-item { font-size: 13px; color: var(--muted); }
-  .stats-row .stat-item strong { color: var(--navy); font-weight: 700; margin-right: 4px; }
-  .stats-row .stat-item.stat-warn strong { color: var(--amber, #a9740f); }
+  /* Summary stat cards -- icon + big number + label, matching the Team
+     Directory page's stat card treatment. */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
+  .stat-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px;
+    display: flex; align-items: center; gap: 14px; position: relative;
+  }
+  .stat-card-icon {
+    width: 44px; height: 44px; border-radius: 999px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  }
+  .stat-card-icon svg { width: 20px; height: 20px; }
+  .stat-card.stat-blue .stat-card-icon { background: #e7eef7; color: var(--navy-light); }
+  .stat-card.stat-green .stat-card-icon { background: #e2eee5; color: var(--accent-dark); }
+  .stat-card.stat-amber .stat-card-icon { background: #fdf3e1; color: var(--amber, #a9740f); }
+  .stat-card-value { font-size: 24px; font-weight: 700; color: var(--navy); line-height: 1.1; }
+  .stat-card-label { font-size: 13px; font-weight: 600; color: var(--text); margin-top: 2px; }
+  .stat-card-sublabel { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+  .stat-card-info { position: absolute; top: 12px; right: 14px; color: var(--muted); cursor: default; }
+  .stat-card-info svg { display: block; }
+  @media (max-width: 640px) { .stats-row { grid-template-columns: 1fr 1fr; } }
 
   table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
@@ -298,9 +312,37 @@
     </div>
 
     <div class="stats-row">
-      <span class="stat-item"><strong id="stat-total">0</strong>Programs</span>
-      <span class="stat-item"><strong id="stat-contacts">0</strong>Contacts</span>
-      <span class="stat-item stat-warn"><strong id="stat-no-contacts">0</strong>Without Contacts</span>
+      <div class="stat-card stat-blue">
+        <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="1"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/></svg></div>
+        <div>
+          <div class="stat-card-value" id="stat-total">0</div>
+          <div class="stat-card-label">Programs</div>
+        </div>
+      </div>
+      <div class="stat-card stat-green">
+        <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+        <div>
+          <div class="stat-card-value" id="stat-contacts">0</div>
+          <div class="stat-card-label">Total Contacts</div>
+        </div>
+      </div>
+      <div class="stat-card stat-amber">
+        <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+        <div>
+          <div class="stat-card-value" id="stat-no-contacts">0</div>
+          <div class="stat-card-label">Programs Without Contacts</div>
+        </div>
+      </div>
+      <div class="stat-card stat-blue">
+        <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <div>
+          <div class="stat-card-value" id="stat-budget">—</div>
+          <div class="stat-card-label">Budget Data Entered</div>
+        </div>
+        <span class="stat-card-info" title="Number of programs with a budget amount on file. Budget was dropped from the main table since most programs don't have it filled in yet — it's still editable from Edit Program.">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        </span>
+      </div>
     </div>
 
     <div class="table-scroll">
@@ -501,9 +543,11 @@
   // shouldn't shift around as someone types into search.
   function renderStats() {
     const noContactsCount = allPartners.filter((p) => contactsForPartner(p.id).length === 0).length;
+    const budgetCount = allPartners.filter((p) => p.budget != null).length;
     $("stat-total").textContent = allPartners.length;
     $("stat-contacts").textContent = allContacts.length;
     $("stat-no-contacts").textContent = noContactsCount;
+    $("stat-budget").textContent = budgetCount > 0 ? budgetCount : "—";
   }
 
   function applySort(rows) {
