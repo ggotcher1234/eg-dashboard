@@ -256,6 +256,10 @@
         <input type="text" id="ed-to" readonly />
       </div>
       <div class="field">
+        <label>CC</label>
+        <input type="text" id="ed-cc" readonly />
+      </div>
+      <div class="field">
         <label>Subject</label>
         <input type="text" id="ed-subject" />
       </div>
@@ -483,13 +487,16 @@
 
   function updateMailtoHref() {
     const toParam = $("ed-to").value.split(",").map((s) => s.trim()).filter(Boolean).map(encodeURIComponent).join(",");
-    $("ed-mailto-btn").href = `mailto:${toParam}?subject=${encodeURIComponent($("ed-subject").value)}&body=${encodeURIComponent($("ed-body").value)}`;
+    const ccParam = $("ed-cc").value.split(",").map((s) => s.trim()).filter(Boolean).map(encodeURIComponent).join(",");
+    const ccQuery = ccParam ? `&cc=${ccParam}` : "";
+    $("ed-mailto-btn").href = `mailto:${toParam}?subject=${encodeURIComponent($("ed-subject").value)}${ccQuery}&body=${encodeURIComponent($("ed-body").value)}`;
   }
   $("ed-subject").addEventListener("input", updateMailtoHref);
   $("ed-body").addEventListener("input", updateMailtoHref);
 
   $("ed-copy-btn").addEventListener("click", async () => {
-    const text = `To: ${$("ed-to").value}\nSubject: ${$("ed-subject").value}\n\n${$("ed-body").value}`;
+    const ccLine = $("ed-cc").value ? `\nCc: ${$("ed-cc").value}` : "";
+    const text = `To: ${$("ed-to").value}${ccLine}\nSubject: ${$("ed-subject").value}\n\n${$("ed-body").value}`;
     try {
       await navigator.clipboard.writeText(text);
       showBanner("Email text copied — paste it into your email client.", "success");
@@ -500,12 +507,13 @@
 
   async function openEmailDraftModal(client) {
     $("ed-to").value = "Loading…";
+    $("ed-cc").value = "Loading…";
     $("ed-subject").value = "";
     $("ed-body").value = "";
     $("ed-no-contacts").classList.add("hidden");
     $("email-draft-overlay").classList.add("open");
 
-    const [{ data: contacts }, { data: docs }] = await Promise.all([
+    const [{ data: contacts }, { data: docs }, { data: team }] = await Promise.all([
       sb.from("client_contacts").select("name, email").eq("client_id", client.id),
       sb.from("documents")
         .select("file_name, uploaded_at")
@@ -513,11 +521,20 @@
         .eq("visibility", "client_facing")
         .order("uploaded_at", { ascending: false })
         .limit(10),
+      // Same EG Team roster shown in the Dashboard Edit "Team Members"
+      // accordion -- whoever's actually assigned via client_assignments.
+      sb.from("client_assignments")
+        .select("users(email)")
+        .eq("client_id", client.id)
+        .not("user_id", "is", null),
     ]);
 
     const emails = (contacts || []).map((c) => c.email).filter(Boolean);
     $("ed-to").value = emails.join(", ");
     $("ed-no-contacts").classList.toggle("hidden", emails.length > 0);
+
+    const teamEmails = [...new Set((team || []).map((r) => r.users && r.users.email).filter(Boolean))];
+    $("ed-cc").value = teamEmails.join(", ");
 
     const dashboardLink = client.slug
       ? new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href
