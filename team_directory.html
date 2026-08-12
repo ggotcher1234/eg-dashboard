@@ -710,6 +710,10 @@
   const AI_CONTEXT_LABEL = "EG Team";
   const AI_PAGE_KEY = "team";
   const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/eg-dashboard-ai`;
+  // Short-term memory for this drawer session only (not persisted) -- lets
+  // natural follow-ups like "what about her hours" work without the user
+  // having to restate context every time.
+  let aiHistory = [];
   const AI_SUGGESTED = [
     "Who are the current Team Leads?",
     "Which specialists are assigned to the most engagements?",
@@ -773,11 +777,13 @@
           "apikey": SUPABASE_ANON_KEY,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ question, pageKey: AI_PAGE_KEY, pageContext: AI_CONTEXT_LABEL }),
+        body: JSON.stringify({ question, pageKey: AI_PAGE_KEY, pageContext: AI_CONTEXT_LABEL, history: aiHistory }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error) throw new Error(data.error || `Request failed (${res.status})`);
       showAiAnswer(renderAiMarkup(data.answer));
+      aiHistory.push({ role: "user", content: question }, { role: "assistant", content: data.answer });
+      aiHistory = aiHistory.slice(-6);
     } catch (err) {
       console.error("Ask AI error:", err);
       showAiAnswer(`<p>Sorry, I couldn't reach the AI service just now. Try again in a moment.</p>`);

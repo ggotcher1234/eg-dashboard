@@ -210,6 +210,7 @@ Deno.serve(async (req: Request) => {
     const pageKey = body?.pageKey as string | undefined;
     const pageContext = body?.pageContext as string | undefined;
     const clientId = body?.clientId as string | undefined;
+    const history = sanitizeHistory(Array.isArray(body?.history) ? body.history : []);
 
     if (!question || typeof question !== "string") {
       return jsonResponse({ error: "Missing question." }, 400);
@@ -244,8 +245,8 @@ Deno.serve(async (req: Request) => {
     if (clientId) contextNote += `\n\nThe engagement currently open on screen has id: ${clientId}. If the user refers to "this engagement" and you need detail beyond what's already implied, call get_engagement_detail with this client_id.`;
 
     const answer = isAdmin
-      ? await answerAsAdmin(userClient, question, contextNote)
-      : await answerAsNonAdmin(question, contextNote);
+      ? await answerAsAdmin(userClient, question, contextNote, history)
+      : await answerAsNonAdmin(question, contextNote, history);
 
     return jsonResponse({ answer, isAdmin });
   } catch (err) {
@@ -253,6 +254,22 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Something went wrong answering that question." }, 500);
   }
 });
+
+// Client-supplied conversation history, kept short and defensively
+// validated -- it only ever influences what gets fed to Claude for THIS
+// same authenticated user, but we still cap length/size rather than trust
+// the browser blindly.
+const MAX_HISTORY_TURNS = 6; // 3 question/answer pairs
+function sanitizeHistory(raw: any[]): { role: "user" | "assistant"; content: string }[] {
+  const cleaned: { role: "user" | "assistant"; content: string }[] = [];
+  for (const item of raw) {
+    if (!item || (item.role !== "user" && item.role !== "assistant")) continue;
+    const content = typeof item.content === "string" ? item.content.slice(0, 4000) : "";
+    if (!content) continue;
+    cleaned.push({ role: item.role, content });
+  }
+  return cleaned.slice(-MAX_HISTORY_TURNS);
+}
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -265,30 +282,44 @@ const STYLE_INSTRUCTIONS =
   "Keep answers short (2-6 sentences, or a short list if that's clearer), specific, and friendly. Plain text with occasional **bold** for key terms or numbers -- no headers.";
 
 // ---------- Non-admin path: no tools, no data access, just app help ----------
-async function answerAsNonAdmin(question: string, contextNote: string): Promise<string> {
+async function answerAsNonAdmin(
+  question: string,
+  contextNote: string,
+  history: { role: "user" | "assistant"; content: string }[],
+): Promise<string> {
   const system = `You are "Ask AI," a helpful assistant embedded in the EG Dashboard app, an internal tool EG Group's staff use to manage economic gardening engagements.
 
 ${contextNote}
 
 ${STYLE_INSTRUCTIONS}
 
-This user is NOT an Admin, so you have not been given any live data access -- do not claim to know specific figures (hours, payroll, budgets, counts, other engagements' details, etc.). If they ask for something like that, tell them to check the relevant section on this page, or ask an Admin. Focus on explaining how to use the app, where to find things, and how to phrase useful questions.`;
+This user is NOT an Admin, so you have not been given any live data access -- do not claim to know specific figures (hours, payroll, budgets, counts, other engagements' details, etc.). If they ask for something like that, tell them to check the relevant section on this page, or ask an Admin. Focus on explaining how to use the app, where to find things, and how to phrase useful questions.
 
-  const res = await callClaude({ system, messages: [{ role: "user", content: question }] });
+If earlier messages in this conversation are included below, use them for context on follow-up questions (e.g. "what about her" referring back to someone already mentioned).`;
+
+  const messages: any[] = [...history, { role: "user", content: question }];
+  const res = await callClaude({ system, messages });
   return extractText(res);
 }
 
 // ---------- Admin path: tool-use loop against live Supabase data ----------
-async function answerAsAdmin(userClient: SupabaseClient, question: string, contextNote: string): Promise<string> {
+async function answerAsAdmin(
+  userClient: SupabaseClient,
+  question: string,
+  contextNote: string,
+  history: { role: "user" | "assistant"; content: string }[],
+): Promise<string> {
   const system = `You are "Ask AI," a helpful assistant embedded in the EG Dashboard app, an internal tool EG Group's staff use to manage economic gardening engagements.
 
 ${contextNote}
 
 ${STYLE_INSTRUCTIONS}
 
-This user is an Admin, so you have tools available to query live EG Group data in Supabase -- use them whenever the question needs current figures, names, or status, regardless of what page they're currently on. Call as many tools, in as many rounds, as you need to fully answer. Only state facts that came back from a tool call; never invent names or numbers. If a tool returns no matching data, say so plainly.`;
+This user is an Admin, so you have tools available to query live EG Group data in Supabase -- use them whenever the question needs current figures, names, or status, regardless of what page they're currently on. Call as many tools, in as many rounds, as you need to fully answer. Only state facts that came back from a tool call; never invent names or numbers. If a tool returns no matching data, say so plainly.
 
-  const messages: any[] = [{ role: "user", content: question }];
+If earlier messages in this conversation are included below, use them for context on follow-up questions (e.g. "what about her hours" referring back to a specialist already mentioned, or "that one" referring back to an engagement already discussed) -- call tools again with the resolved specifics rather than asking the user to repeat themselves.`;
+
+  const messages: any[] = [...history, { role: "user", content: question }];
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const res = await callClaude({ system, messages, tools: ADMIN_TOOLS });
