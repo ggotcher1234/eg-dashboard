@@ -93,16 +93,42 @@
   header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
   .btn-sm { padding: 5px 10px; font-size: 12.5px; }
 
-  main { max-width: 980px; margin: 28px auto; padding: 0 20px 60px; }
+  main { max-width: 1160px; margin: 28px auto; padding: 0 20px 60px; }
 
-
+  /* Control bar: search + filter left, count + export/import/add right --
+     one deliberate row instead of a scattered strip. Add Program is the
+     only strong green action; Export/Import stay quiet secondary buttons. */
   .toolbar {
     display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
   }
+  .toolbar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .toolbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .toolbar input[type="text"] {
     padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13.5px; width: 260px; background: #fff;
   }
-  .toolbar .count { font-size: 12.5px; color: var(--muted); }
+  .toolbar .count { font-size: 12.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  .filter-wrap { position: relative; }
+  .filter-btn { background: #fff; border: 1px solid var(--border); color: var(--text); display: inline-flex; align-items: center; gap: 6px; }
+  .filter-btn:hover { background: #eef1f4; }
+  .filter-btn.active-filter { border-color: var(--navy-light); color: var(--navy-light); }
+  .filter-dropdown {
+    display: none; position: absolute; top: 38px; left: 0; width: 190px; background: #fff; border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 40; padding: 6px;
+  }
+  .filter-dropdown.open { display: block; }
+  .filter-dropdown button {
+    display: block; width: 100%; text-align: left; background: transparent; color: var(--text);
+    padding: 8px 10px; border-radius: 6px; font-size: 13px; font-weight: 500;
+  }
+  .filter-dropdown button:hover { background: #eef1f4; }
+  .filter-dropdown button.selected { color: var(--navy-light); font-weight: 700; }
+
+  /* Compact summary figures -- not dashboard cards, just quick data-
+     completeness signal above the table. */
+  .stats-row { display: flex; gap: 22px; margin-bottom: 16px; flex-wrap: wrap; }
+  .stats-row .stat-item { font-size: 13px; color: var(--muted); }
+  .stats-row .stat-item strong { color: var(--navy); font-weight: 700; margin-right: 4px; }
+  .stats-row .stat-item.stat-warn strong { color: var(--amber, #a9740f); }
 
   table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
@@ -114,22 +140,55 @@
     text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted);
     background: #f8fafb; padding: 10px 14px; border-bottom: 1px solid var(--border);
   }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--navy-light); }
+  th.sortable .sort-arrow { font-size: 10px; margin-left: 3px; opacity: 0.5; }
+  th.sortable.sorted .sort-arrow { opacity: 1; color: var(--navy-light); }
   tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover { background: #fafbfc; }
-  td.code { font-weight: 600; color: var(--navy); font-family: "SF Mono", Menlo, monospace; }
-  td.actions { text-align: right; white-space: nowrap; }
-  .inactive-tag { font-size: 10.5px; text-transform: uppercase; color: #9a3f3f; background: #fbe9e9; padding: 2px 7px; border-radius: 999px; margin-left: 8px; }
+  td.program-cell .p-name { font-weight: 700; color: var(--navy); font-size: 14px; }
+  td.program-cell .p-code { font-size: 11.5px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; margin-top: 2px; }
+  td.actions { text-align: right; white-space: nowrap; position: relative; }
+  .status-badge {
+    font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px;
+    padding: 3px 9px; border-radius: 999px; display: inline-block;
+  }
+  .status-badge.active { background: #e9f5ee; color: var(--accent-dark); }
+  .status-badge.inactive { background: #f1f2f4; color: var(--muted); }
   .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; }
 
-  /* Contacts toggle + expandable detail row */
-  .contacts-toggle {
-    background: transparent; border: 1px solid var(--border); color: var(--navy-light);
-    padding: 5px 10px; font-size: 12.5px; font-weight: 600; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;
+  /* "Manage" dropdown replaces a permanently-visible red Delete button on
+     every row -- Delete is destructive and infrequent, it shouldn't be the
+     loudest thing on the page. */
+  .manage-btn {
+    background: #fff; border: 1px solid var(--border); color: var(--text);
+    display: inline-flex; align-items: center; gap: 6px;
   }
-  .contacts-toggle:hover { background: #eef1f4; }
-  .contacts-toggle .chev { transition: transform 0.15s ease; display: inline-block; }
-  .contacts-toggle.open .chev { transform: rotate(90deg); }
+  .manage-btn:hover { background: #eef1f4; }
+  .manage-dropdown {
+    display: none; position: absolute; top: 40px; right: 14px; width: 180px; background: #fff; border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.14); z-index: 40; padding: 6px; text-align: left;
+  }
+  .manage-dropdown.open { display: block; }
+  .manage-dropdown button {
+    display: block; width: 100%; text-align: left; background: transparent; color: var(--text);
+    padding: 8px 10px; border-radius: 6px; font-size: 13px; font-weight: 500;
+  }
+  .manage-dropdown button:hover { background: #eef1f4; }
+  .manage-dropdown button.danger-item { color: var(--danger-dark); }
+  .manage-dropdown button.danger-item:hover { background: #fbe9e9; }
+  .manage-dropdown .menu-divider { border-top: 1px solid var(--border); margin: 5px 2px; }
+
+  /* Contacts toggle + expandable detail row -- the whole pill is the click
+     target now, no separate chevron affordance. */
+  .contacts-toggle {
+    background: #eef3f9; border: 1px solid #d7e4f2; color: var(--navy-light);
+    padding: 5px 12px; font-size: 12.5px; font-weight: 700; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .contacts-toggle:hover { background: #dfeaf5; }
+  .contacts-toggle.empty { background: #eef1f4; border-color: var(--border); color: var(--navy-light); }
+  .contacts-toggle.empty:hover { background: #e2e6ea; }
   tr.contacts-detail-row td { background: #f8fafb; padding: 16px 18px; border-bottom: 1px solid var(--border); }
   .contacts-detail-inner { max-width: 780px; }
   .contact-row {
@@ -199,8 +258,8 @@
     <div class="brand-row">
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
-      <h1>Economic Development Partners</h1>
-      <div class="sub">EG Group internal directory — Section 5.1 &nbsp;·&nbsp; <a class="back-link" href="index.html">← Home</a></div>
+      <h1>EG Programs</h1>
+      <div class="sub">Manage programs, contacts, regions, and budgets. &nbsp;·&nbsp; <a class="back-link" href="index.html">← Home</a></div>
     </div>
     </div>
     <div id="userbox">
@@ -213,48 +272,64 @@
   <main>
     <div id="banner"></div>
     <div id="readonly-note" class="readonly-note hidden">
-      You're viewing this list read-only. Only an Admin can add, edit, or remove partners.
+      You're viewing this list read-only. Only an Admin can add, edit, or remove programs.
     </div>
 
     <div class="toolbar">
-      <input type="text" id="search-box" placeholder="Search by name or code…" />
-      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-        <span class="count" id="row-count"></span>
-        <button class="btn-secondary btn-sm hidden" id="contacts-csv-export-btn">&#8595; Export Contacts CSV</button>
-        <button class="btn-secondary btn-sm hidden" id="contacts-csv-import-btn">&#8593; Import Contacts CSV</button>
-        <input type="file" accept=".csv,text/csv" id="contacts-csv-file" class="csv-file-input" />
-        <button class="btn-primary hidden" id="add-btn">+ Add Partner</button>
+      <div class="toolbar-left">
+        <input type="text" id="search-box" placeholder="Search programs by name or code…" />
+        <div class="filter-wrap">
+          <button type="button" class="btn-secondary filter-btn" id="filter-btn">&#9776; Filters</button>
+          <div class="filter-dropdown" id="filter-dropdown">
+            <button type="button" data-filter="all" class="selected">All Programs</button>
+            <button type="button" data-filter="active">Active</button>
+            <button type="button" data-filter="inactive">Inactive</button>
+            <button type="button" data-filter="no-contacts">Without Contacts</button>
+          </div>
+        </div>
       </div>
+      <div class="toolbar-right">
+        <span class="count" id="row-count"></span>
+        <button class="btn-secondary btn-sm hidden" id="contacts-csv-export-btn">&#8595; Export CSV</button>
+        <button class="btn-secondary btn-sm hidden" id="contacts-csv-import-btn">&#8593; Import CSV</button>
+        <input type="file" accept=".csv,text/csv" id="contacts-csv-file" class="csv-file-input" />
+        <button class="btn-primary hidden" id="add-btn">+ Add Program</button>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <span class="stat-item"><strong id="stat-total">0</strong>Programs</span>
+      <span class="stat-item"><strong id="stat-contacts">0</strong>Contacts</span>
+      <span class="stat-item stat-warn"><strong id="stat-no-contacts">0</strong>Without Contacts</span>
     </div>
 
     <div class="table-scroll">
     <table id="partners-table">
       <thead>
         <tr>
-          <th style="width:110px;">Code</th>
-          <th>Name</th>
-          <th style="width:110px;">Region</th>
-          <th style="width:110px;">Budget</th>
-          <th style="width:150px;">Contacts</th>
-          <th id="actions-header" class="hidden" style="width:130px;"></th>
+          <th class="sortable" data-sort="name">Program <span class="sort-arrow">&#8645;</span></th>
+          <th class="sortable" style="width:100px;" data-sort="region">Region <span class="sort-arrow">&#8645;</span></th>
+          <th class="sortable" style="width:150px;" data-sort="contacts">Contacts <span class="sort-arrow">&#8645;</span></th>
+          <th style="width:110px;">Status</th>
+          <th id="actions-header" class="hidden" style="width:90px;"></th>
         </tr>
       </thead>
       <tbody id="partners-tbody"></tbody>
     </table>
     </div>
-    <div id="empty-note" class="empty-note hidden">No partners match your search.</div>
+    <div id="empty-note" class="empty-note hidden">No programs match your search.</div>
   </main>
 </div>
 
 <!-- Add/Edit modal -->
 <div class="overlay" id="modal-overlay">
   <div class="modal">
-    <h3 id="modal-title">Add Partner</h3>
+    <h3 id="modal-title">Add Program</h3>
     <form id="partner-form">
       <input type="hidden" id="form-id" />
       <label for="form-code">Code (short abbreviation)</label>
       <input type="text" id="form-code" maxlength="20" required />
-      <div class="field-error" id="code-error">A partner with this code already exists.</div>
+      <div class="field-error" id="code-error">A program with this code already exists.</div>
 
       <label for="form-name">Full name</label>
       <input type="text" id="form-name" required />
@@ -281,10 +356,10 @@
 <!-- Delete confirm modal -->
 <div class="overlay" id="delete-overlay">
   <div class="modal" style="width:380px;">
-    <h3>Remove partner?</h3>
+    <h3>Remove program?</h3>
     <p style="font-size:13.5px; color:var(--muted);">
-      This removes <strong id="delete-name"></strong> from the partner list. Existing clients already
-      attributed to this partner keep their history — this only affects future assignments.
+      This removes <strong id="delete-name"></strong> from the program list. Existing clients already
+      attributed to this program keep their history — this only affects future assignments.
     </p>
     <div class="modal-actions">
       <button type="button" class="btn-secondary" id="delete-cancel">Cancel</button>
@@ -304,6 +379,10 @@
   let isSuperAdmin = false;
   let pendingDeleteId = null;
   let openContactsPartnerId = null;   // which partner's Contacts row is expanded (accordion-style, one at a time)
+  let openManageId = null;            // which row's "Manage" dropdown is open (one at a time)
+  let statusFilter = "all";           // all | active | inactive | no-contacts
+  let sortField = "name";
+  let sortDir = "asc";
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -391,7 +470,7 @@
       .order("code", { ascending: true });
 
     if (error) {
-      showBanner("Couldn't load partners: " + error.message, "error");
+      showBanner("Couldn't load programs: " + error.message, "error");
       return;
     }
     allPartners = data;
@@ -407,7 +486,7 @@
       .order("created_at", { ascending: true });
 
     if (error) {
-      showBanner("Couldn't load partner contacts: " + error.message, "error");
+      showBanner("Couldn't load program contacts: " + error.message, "error");
       return;
     }
     allContacts = data;
@@ -417,13 +496,54 @@
     return allContacts.filter((c) => c.partner_id === partnerId);
   }
 
+  // Total counts always reflect the full dataset, not whatever the search
+  // box / filter currently show -- a quick data-completeness signal that
+  // shouldn't shift around as someone types into search.
+  function renderStats() {
+    const noContactsCount = allPartners.filter((p) => contactsForPartner(p.id).length === 0).length;
+    $("stat-total").textContent = allPartners.length;
+    $("stat-contacts").textContent = allContacts.length;
+    $("stat-no-contacts").textContent = noContactsCount;
+  }
+
+  function applySort(rows) {
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      let av, bv;
+      if (sortField === "contacts") {
+        av = contactsForPartner(a.id).length;
+        bv = contactsForPartner(b.id).length;
+      } else if (sortField === "region") {
+        av = (a.region || "").toLowerCase();
+        bv = (b.region || "").toLowerCase();
+      } else {
+        av = (a.name || "").toLowerCase();
+        bv = (b.name || "").toLowerCase();
+      }
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+  }
+
   function renderTable() {
+    renderStats();
+
     const q = $("search-box").value.trim().toLowerCase();
-    const rows = allPartners.filter(
+    let rows = allPartners.filter(
       (p) => !q || p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q)
     );
+    if (statusFilter === "active") rows = rows.filter((p) => p.active);
+    else if (statusFilter === "inactive") rows = rows.filter((p) => !p.active);
+    else if (statusFilter === "no-contacts") rows = rows.filter((p) => contactsForPartner(p.id).length === 0);
+    rows = applySort(rows);
 
-    $("row-count").textContent = `${rows.length} of ${allPartners.length} partners`;
+    $("row-count").textContent = `${rows.length} of ${allPartners.length} Programs`;
+
+    document.querySelectorAll("th.sortable").forEach((th) => {
+      th.classList.toggle("sorted", th.dataset.sort === sortField);
+      th.querySelector(".sort-arrow").textContent = th.dataset.sort === sortField ? (sortDir === "asc" ? "↑" : "↓") : "↕";
+    });
 
     const tbody = $("partners-tbody");
     tbody.innerHTML = "";
@@ -434,31 +554,38 @@
       $("empty-note").classList.add("hidden");
     }
 
-    const colspan = isSuperAdmin ? 6 : 5;
+    const colspan = isSuperAdmin ? 5 : 4;
 
     for (const p of rows) {
       const tr = document.createElement("tr");
 
+      const isManageOpen = openManageId === p.id;
       const actionsCell = isSuperAdmin
         ? `<td class="actions">
-             <button class="btn-secondary btn-sm" onclick="openEdit('${p.id}')">Edit</button>
-             <button class="btn-danger btn-sm" onclick="openDelete('${p.id}')" style="margin-left:6px;">Delete</button>
+             <button type="button" class="manage-btn btn-sm" data-toggle-manage="${p.id}">Manage &#9662;</button>
+             <div class="manage-dropdown ${isManageOpen ? "open" : ""}" id="manage-dropdown-${p.id}">
+               <button type="button" onclick="openEdit('${p.id}')">Edit Program</button>
+               <button type="button" data-manage-contacts="${p.id}">Manage Contacts</button>
+               <div class="menu-divider"></div>
+               <button type="button" class="danger-item" onclick="openDelete('${p.id}')">Delete Program</button>
+             </div>
            </td>`
         : "";
 
       const partnerContacts = contactsForPartner(p.id);
       const isOpen = openContactsPartnerId === p.id;
+      const contactsPillHtml = partnerContacts.length
+        ? `<button type="button" class="contacts-toggle ${isOpen ? "open" : ""}" data-toggle-contacts="${p.id}">${partnerContacts.length} contact${partnerContacts.length === 1 ? "" : "s"}</button>`
+        : `<button type="button" class="contacts-toggle empty ${isOpen ? "open" : ""}" data-toggle-contacts="${p.id}">+ Add contacts</button>`;
 
       tr.innerHTML = `
-        <td class="code">${escapeHtml(p.code)}</td>
-        <td>${escapeHtml(p.name)}${p.active ? "" : '<span class="inactive-tag">inactive</span>'}</td>
-        <td>${escapeHtml(p.region || "—")}</td>
-        <td>${p.budget != null ? "$" + Number(p.budget).toLocaleString() : "—"}</td>
-        <td>
-          <button type="button" class="contacts-toggle ${isOpen ? "open" : ""}" data-toggle-contacts="${p.id}">
-            <span class="chev">&#9656;</span> ${partnerContacts.length} contact${partnerContacts.length === 1 ? "" : "s"}
-          </button>
+        <td class="program-cell">
+          <div class="p-name">${escapeHtml(p.name)}</div>
+          <div class="p-code">${escapeHtml(p.code)}</div>
         </td>
+        <td>${escapeHtml(p.region || "—")}</td>
+        <td>${contactsPillHtml}</td>
+        <td><span class="status-badge ${p.active ? "active" : "inactive"}">${p.active ? "Active" : "Inactive"}</span></td>
         ${actionsCell}
       `;
       tbody.appendChild(tr);
@@ -472,8 +599,63 @@
     }
 
     wireContactsToggles();
+    wireManageDropdowns();
     if (openContactsPartnerId) wireContactsDetail(openContactsPartnerId);
   }
+
+  // ---------- Sort headers ----------
+  document.querySelectorAll("th.sortable").forEach((th) => {
+    th.addEventListener("click", () => {
+      const field = th.dataset.sort;
+      if (sortField === field) sortDir = sortDir === "asc" ? "desc" : "asc";
+      else { sortField = field; sortDir = "asc"; }
+      renderTable();
+    });
+  });
+
+  // ---------- Filters dropdown ----------
+  $("filter-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("filter-dropdown").classList.toggle("open");
+  });
+  document.querySelectorAll("#filter-dropdown [data-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      statusFilter = btn.dataset.filter;
+      $("filter-btn").classList.toggle("active-filter", statusFilter !== "all");
+      document.querySelectorAll("#filter-dropdown [data-filter]").forEach((b) => b.classList.toggle("selected", b === btn));
+      $("filter-dropdown").classList.remove("open");
+      renderTable();
+    });
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".filter-wrap")) $("filter-dropdown").classList.remove("open");
+  });
+
+  // ---------- "Manage" row menu ----------
+  function wireManageDropdowns() {
+    document.querySelectorAll("[data-toggle-manage]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.toggleManage;
+        openManageId = openManageId === id ? null : id;
+        renderTable();
+      });
+    });
+    document.querySelectorAll("[data-manage-contacts]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.manageContacts;
+        openManageId = null;
+        openContactsPartnerId = openContactsPartnerId === id ? null : id;
+        renderTable();
+      });
+    });
+  }
+  document.addEventListener("click", (e) => {
+    if (openManageId && !e.target.closest(".manage-dropdown") && !e.target.closest("[data-toggle-manage]")) {
+      openManageId = null;
+      renderTable();
+    }
+  });
 
   function renderContactsDetail(p, contacts) {
     const rowsHtml = contacts.length
@@ -493,7 +675,7 @@
             <span class="cr-muted">${escapeHtml(c.phone || "—")}</span>
           </div>
         `).join("")
-      : `<div class="contacts-empty">No contacts on file for this partner yet.</div>`;
+      : `<div class="contacts-empty">No contacts on file for this program yet.</div>`;
 
     const addFormHtml = isSuperAdmin ? `
       <form class="contacts-add-row" data-add-contact-partner="${p.id}">
@@ -592,7 +774,7 @@
   $("modal-cancel").addEventListener("click", closeModal);
 
   function openAdd() {
-    $("modal-title").textContent = "Add Partner";
+    $("modal-title").textContent = "Add Program";
     $("form-id").value = "";
     $("form-code").value = "";
     $("form-name").value = "";
@@ -608,7 +790,7 @@
   window.openEdit = function (id) {
     const p = allPartners.find((x) => x.id === id);
     if (!p) return;
-    $("modal-title").textContent = "Edit Partner";
+    $("modal-title").textContent = "Edit Program";
     $("form-id").value = p.id;
     $("form-code").value = p.code;
     $("form-name").value = p.name;
@@ -665,7 +847,7 @@
     }
 
     closeModal();
-    showBanner(id ? "Partner updated." : "Partner added.", "success");
+    showBanner(id ? "Program updated." : "Program added.", "success");
     await loadPartners();
   });
 
@@ -690,12 +872,12 @@
     if (error) {
       showBanner(
         error.code === "23503"
-          ? "Can't delete — one or more clients still reference this partner."
+          ? "Can't delete — one or more clients still reference this program."
           : "Couldn't delete: " + error.message,
         "error"
       );
     } else {
-      showBanner("Partner removed.", "success");
+      showBanner("Program removed.", "success");
       await loadPartners();
     }
     pendingDeleteId = null;
