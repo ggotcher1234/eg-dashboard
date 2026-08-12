@@ -148,7 +148,11 @@
      usage bar on their row(s); when a specialist has more than one
      engagement, their name cell spans all of their rows (rowspan) so the
      eye isn't asked to re-read the same name over and over. */
-  .specialist-table th:nth-child(5), .specialist-table td:nth-child(5) { text-align: right; }
+  /* Class-based, not nth-child -- continuation rows for a multi-engagement
+     specialist only render 4 <td>s (the specialist cell is skipped in favor
+     of the rowspan from the first row), which shifts every cell's DOM
+     position left by one and breaks nth-child column targeting. */
+  .specialist-table th.col-remaining, .specialist-table td.remaining-cell { text-align: right; }
   .specialist-table td { vertical-align: top; padding: 12px 10px; }
   .specialist-table tr.group-start td { border-top: 1px solid var(--border); }
   .specialist-table tr.group-start:first-child td { border-top: none; }
@@ -310,7 +314,7 @@
               <th>Engagement / Role</th>
               <th>Hours (Month)</th>
               <th>Used / Budget</th>
-              <th>Remaining</th>
+              <th class="col-remaining">Remaining</th>
             </tr>
           </thead>
           <tbody id="monthly-groups"></tbody>
@@ -670,7 +674,7 @@
             <div class="ub-bar-track"><div class="ub-bar-fill" style="width:${pct}%; background:${r.isOver ? "var(--danger)" : color};"></div></div>
             <div class="ub-caption">${pct}% used</div>
           </td>
-          <td>
+          <td class="remaining-cell">
             <div class="remaining-value${remaining < 0 ? " negative" : ""}" style="${remaining < 0 ? "" : `color:${color};`}">${remaining < 0 ? Math.abs(remaining) + " hrs over" : remaining + " hrs"}</div>
           </td>
         </tr>
