@@ -43,6 +43,8 @@
   header .sub { font-size: 12.5px; color: #c9d6e3; margin-top: 2px; }
   header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
   header a.back-link:hover { color: #fff; text-decoration: underline; }
+  header a.back-link-top { display: block; color: #9fb3c8; font-size: 11.5px; text-decoration: none; margin-bottom: 3px; }
+  header a.back-link-top:hover { color: #fff; text-decoration: underline; }
   #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
   #userbox .role-pill {
     background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px;
@@ -64,17 +66,48 @@
   header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
   .btn-sm { padding: 5px 10px; font-size: 12.5px; }
 
-  main { max-width: 900px; margin: 28px auto; padding: 0 20px 60px; }
+  main { max-width: 1040px; margin: 28px auto; padding: 0 20px 60px; }
 
-
-  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  /* Toolbar -- search + Filters on one row, count + Import + Add Team
+     Member on the next, matching the control-panel pattern used on the
+     EG Programs page. */
+  .toolbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .search-wrap { position: relative; }
   .search-wrap svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); opacity: 0.45; }
   .search-wrap input[type="text"] {
     padding: 9px 12px 9px 34px; border: 1px solid var(--border); border-radius: 8px; font-size: 13.5px;
     width: 300px; background: #fff;
   }
-  .toolbar .count { font-size: 12.5px; color: var(--muted); }
+  .count { font-size: 12.5px; color: var(--muted); }
+
+  /* Filters + Import -- same small dropdown-button pattern used on the
+     EG Programs page, so both admin screens behave the same way. */
+  .dropdown-wrap { position: relative; }
+  .dropdown-panel {
+    display: none; position: absolute; top: calc(100% + 6px); right: 0; min-width: 190px;
+    background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 20px rgba(20,48,77,0.12);
+    padding: 6px; z-index: 20;
+  }
+  .dropdown-panel.left { left: 0; right: auto; }
+  .dropdown-panel.open { display: block; }
+  .dropdown-panel button {
+    display: block; width: 100%; text-align: left; background: transparent; border: none; border-radius: 6px;
+    padding: 8px 10px; font-size: 13px; font-weight: 500; color: var(--text);
+  }
+  .dropdown-panel button:hover { background: #eef1f4; }
+  .dropdown-panel button.selected { color: var(--navy-light); font-weight: 700; }
+  .dropdown-panel .dropdown-label {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted);
+    padding: 6px 10px 2px;
+  }
+  .dropdown-panel .menu-divider { border-top: 1px solid var(--border); margin: 5px 2px; }
+  .filter-btn.active-filter { border-color: var(--navy-light); color: var(--navy-light); }
+
+  /* Compact summary tiles -- plain figures, not oversized KPI cards. */
+  .stats-row { display: flex; gap: 22px; margin-bottom: 16px; flex-wrap: wrap; }
+  .stats-row .stat-item { font-size: 13px; color: var(--muted); }
+  .stats-row .stat-item strong { color: var(--navy); font-weight: 700; margin-right: 4px; }
 
   #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
   #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
@@ -92,10 +125,34 @@
   thead th.sortable { cursor: pointer; user-select: none; }
   thead th.sortable:hover { color: var(--text); }
   thead th .sort-arrow { display: inline-block; width: 12px; font-size: 10px; letter-spacing: 0; }
-  tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
+  tbody td { padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover { background: #fafbfc; }
-  td.actions { text-align: right; white-space: nowrap; }
+  td.actions { text-align: right; white-space: nowrap; position: relative; }
+
+  .member-name { font-weight: 700; color: var(--navy); font-size: 13.5px; line-height: 1.3; }
+  .member-role-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+  .cell-muted { color: var(--muted); font-style: italic; }
+  .contact-link { display: inline-flex; align-items: center; gap: 5px; color: var(--navy-light); text-decoration: none; }
+  .contact-link:hover { text-decoration: underline; }
+  .contact-link svg { opacity: 0.65; flex-shrink: 0; }
+
+  .manage-btn { background: #eef1f4; color: var(--text); }
+  .manage-btn:hover { background: #e2e6ea; }
+  .manage-dropdown {
+    display: none; position: absolute; top: calc(100% + 4px); right: 14px; min-width: 170px;
+    background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 20px rgba(20,48,77,0.14);
+    padding: 6px; z-index: 15; text-align: left;
+  }
+  .manage-dropdown.open { display: block; }
+  .manage-dropdown button {
+    display: block; width: 100%; text-align: left; background: transparent; border: none; border-radius: 6px;
+    padding: 8px 10px; font-size: 13px; font-weight: 500; color: var(--text); cursor: pointer;
+  }
+  .manage-dropdown button:hover { background: #eef1f4; }
+  .manage-dropdown button.danger-item { color: var(--danger-dark); }
+  .manage-dropdown button.danger-item:hover { background: #fbe9e9; }
+  .manage-dropdown .menu-divider { border-top: 1px solid var(--border); margin: 5px 2px; }
   .avatar-sm {
     width: 28px; height: 28px; border-radius: 50%; background: var(--navy-light); color: #fff;
     display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; flex-shrink: 0;
@@ -168,8 +225,9 @@
     <div class="brand-row">
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
+      <a class="back-link-top" href="index.html">← Home</a>
       <h1>Team Directory</h1>
-      <div class="sub">EG Group staff — Team Leads &amp; Specialists &nbsp;·&nbsp; <a class="back-link" href="index.html">← Home</a></div>
+      <div class="sub">Manage team leads, specialists, roles, and contact information.</div>
     </div>
     </div>
     <div id="userbox">
@@ -182,32 +240,60 @@
   <main>
     <div id="banner"></div>
 
-    <div class="toolbar">
-      <div class="search-wrap">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-          <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <input type="text" id="search-box" placeholder="Search by name, title, or specialty…" />
+    <div class="toolbar-row">
+      <div class="toolbar-left">
+        <div class="search-wrap">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+            <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input type="text" id="search-box" placeholder="Search team members by name or specialty…" />
+        </div>
+        <div class="dropdown-wrap">
+          <button type="button" class="btn-secondary filter-btn" id="filter-btn">&#9776; Filters</button>
+          <div class="dropdown-panel left" id="filter-dropdown">
+            <div class="dropdown-label">Role</div>
+            <button type="button" data-role-filter="all" class="selected">All Roles</button>
+            <button type="button" data-role-filter="team_lead">Team Lead</button>
+            <button type="button" data-role-filter="consultant">Specialist</button>
+            <div class="menu-divider"></div>
+            <div class="dropdown-label">Specialty</div>
+            <button type="button" data-specialty-filter="all" class="selected">All Specialties</button>
+          </div>
+        </div>
       </div>
-      <div style="display:flex; align-items:center; gap:14px;">
+      <div class="toolbar-right">
         <span class="count" id="row-count"></span>
-        <button class="btn-secondary hidden" id="import-btn">Import EG Team List</button>
-        <button class="btn-secondary hidden" id="roster-import-btn">Import Roster (CSV)</button>
+        <div class="dropdown-wrap">
+          <button class="btn-secondary hidden" id="import-menu-btn">Import &#9662;</button>
+          <div class="dropdown-panel" id="import-dropdown">
+            <button type="button" id="import-menu-eg">Import EG Team List</button>
+            <button type="button" id="import-menu-csv">Import CSV</button>
+          </div>
+        </div>
+        <button class="btn-secondary hidden" id="import-btn" style="display:none;">Import EG Team List</button>
+        <button class="btn-secondary hidden" id="roster-import-btn" style="display:none;">Import Roster (CSV)</button>
         <input type="file" accept=".csv" id="roster-csv-file" style="display:none;" />
         <button class="btn-primary hidden" id="add-btn">+ Add Team Member</button>
       </div>
+    </div>
+
+    <div class="stats-row">
+      <span class="stat-item"><strong id="stat-total">0</strong>Team Members</span>
+      <span class="stat-item"><strong id="stat-leads">0</strong>Team Leads</span>
+      <span class="stat-item"><strong id="stat-specialists">0</strong>Specialists</span>
+      <span class="stat-item"><strong id="stat-specialties">0</strong>Specialties</span>
     </div>
 
     <div class="table-scroll">
     <table>
       <thead>
         <tr>
-          <th class="sortable" data-sort="name" id="th-name">Name<span class="sort-arrow"></span></th>
-          <th class="sortable" data-sort="title" id="th-title">Title<span class="sort-arrow"></span></th>
+          <th class="sortable" data-sort="name" id="th-name">Team Member<span class="sort-arrow"></span></th>
+          <th class="sortable" data-sort="specialty" id="th-specialty">Specialty<span class="sort-arrow"></span></th>
           <th class="sortable" style="width:110px;" data-sort="role" id="th-role">Role<span class="sort-arrow"></span></th>
-          <th style="width:130px;">Phone</th>
+          <th style="width:140px;">Phone</th>
           <th>Email</th>
-          <th style="width:80px;"></th>
+          <th style="width:70px;"></th>
         </tr>
       </thead>
       <tbody id="team-tbody"></tbody>
@@ -432,6 +518,15 @@
   let isSuperAdmin = false;
   let allUsers = [];
   let openProfileId = null;
+  let roleFilter = "all"; // all | team_lead | consultant
+  let specialtyFilter = "all"; // all | <specialty key>
+  let openManageId = null; // which row's "Manage" dropdown is open (one at a time)
+
+  // The Specialty catalog itself (everything except "team_lead", which is a
+  // Role, not a Specialty) -- also doubles as the fixed "N Specialties"
+  // count in the summary row, so that number doesn't wobble based on who
+  // happens to be assigned one today.
+  const SPECIALTY_FILTER_KEYS = Object.keys(SPECIALTY_LABELS).filter((k) => k !== "team_lead");
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -459,6 +554,36 @@
     return div.innerHTML;
   }
 
+  // Normalize a raw phone string to "(XXX) XXX-XXXX" for display only --
+  // never written back to the database. Source data comes from a couple of
+  // different spreadsheets over the years with inconsistent formatting
+  // (dots, dashes, stray digits); anything that isn't a clean 10 or
+  // 11-digit US number is left exactly as entered rather than mangled
+  // further by a "best guess" reformat.
+  function formatPhoneDisplay(raw) {
+    if (!raw) return null;
+    const digits = String(raw).replace(/\D/g, "");
+    let ten = null;
+    if (digits.length === 10) ten = digits;
+    else if (digits.length === 11 && digits[0] === "1") ten = digits.slice(1);
+    if (!ten) return String(raw).trim();
+    return `(${ten.slice(0, 3)}) ${ten.slice(3, 6)}-${ten.slice(6)}`;
+  }
+
+  function telHref(raw) {
+    const digits = String(raw || "").replace(/\D/g, "");
+    return digits ? `tel:${digits}` : "";
+  }
+
+  // Specialty is now shown separately from Role -- "Team Lead" is a Role,
+  // not a Specialty, so a Team Lead whose default_specialty happens to be
+  // the "team_lead" catalog entry shows a blank Specialty cell rather than
+  // a confusing duplicate of their Role badge.
+  function specialtyLabelForDisplay(u) {
+    if (!u.default_specialty || u.default_specialty === "team_lead") return "";
+    return SPECIALTY_LABELS[u.default_specialty] || "";
+  }
+
   function initials(name) {
     return (name || "?")
       .split(/\s+/)
@@ -467,6 +592,72 @@
       .map((p) => p[0].toUpperCase())
       .join("");
   }
+
+  // ---------- Filters dropdown ----------
+  // Specialty options are built from the catalog rather than hard-coded in
+  // the HTML, so adding a new specialty elsewhere in the app doesn't
+  // silently leave this filter out of sync.
+  (function buildSpecialtyFilterOptions() {
+    const panel = $("filter-dropdown");
+    SPECIALTY_FILTER_KEYS.forEach((key) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.dataset.specialtyFilter = key;
+      btn.textContent = SPECIALTY_LABELS[key];
+      panel.appendChild(btn);
+    });
+  })();
+
+  $("filter-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("import-dropdown").classList.remove("open");
+    $("filter-dropdown").classList.toggle("open");
+  });
+
+  $("filter-dropdown").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-role-filter], button[data-specialty-filter]");
+    if (!btn) return;
+
+    if (btn.dataset.roleFilter) {
+      roleFilter = btn.dataset.roleFilter;
+      $("filter-dropdown").querySelectorAll("[data-role-filter]").forEach((b) => b.classList.toggle("selected", b === btn));
+    } else {
+      specialtyFilter = btn.dataset.specialtyFilter;
+      $("filter-dropdown").querySelectorAll("[data-specialty-filter]").forEach((b) => b.classList.toggle("selected", b === btn));
+    }
+    $("filter-btn").classList.toggle("active-filter", roleFilter !== "all" || specialtyFilter !== "all");
+    renderList();
+  });
+
+  // ---------- Import menu ----------
+  // The two import actions (bulk EG Team seed list, ongoing roster CSV)
+  // already work and are well-tested -- this just gives them one shared
+  // entry point in the toolbar instead of two separate buttons. The
+  // original buttons stay in the DOM (hidden) so their existing click
+  // handlers, defined further down, don't need to be duplicated here.
+  $("import-menu-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("filter-dropdown").classList.remove("open");
+    $("import-dropdown").classList.toggle("open");
+  });
+  $("import-menu-eg").addEventListener("click", () => {
+    $("import-dropdown").classList.remove("open");
+    $("import-btn").click();
+  });
+  $("import-menu-csv").addEventListener("click", () => {
+    $("import-dropdown").classList.remove("open");
+    $("roster-import-btn").click();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".dropdown-wrap")) {
+      $("filter-dropdown").classList.remove("open");
+      $("import-dropdown").classList.remove("open");
+    }
+    if (!e.target.closest(".manage-dropdown") && !e.target.closest("[data-toggle-manage]")) {
+      if (openManageId) { openManageId = null; renderList(); }
+    }
+  });
 
   // ---------- Auth ----------
   $("signout-btn").addEventListener("click", async () => {
@@ -500,8 +691,7 @@
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = roleLabel(profile.role);
     $("add-btn").classList.toggle("hidden", !isSuperAdmin);
-    $("import-btn").classList.toggle("hidden", !isSuperAdmin);
-    $("roster-import-btn").classList.toggle("hidden", !isSuperAdmin);
+    $("import-menu-btn").classList.toggle("hidden", !isSuperAdmin);
 
     await loadUsers();
   }
@@ -547,6 +737,7 @@
   window.openDelete = function (id) {
     const u = allUsers.find((x) => x.id === id);
     if (!u || !isSuperAdmin) return;
+    openManageId = null;
     pendingDeleteId = id;
     $("delete-name").textContent = u.full_name;
     $("delete-error").style.display = "none";
@@ -614,7 +805,7 @@
 
   function sortValue(u, field) {
     if (field === "name") return (u.full_name || "").toLowerCase();
-    if (field === "title") return (u.title || (u.default_specialty ? SPECIALTY_LABELS[u.default_specialty] : "") || "").toLowerCase();
+    if (field === "specialty") return specialtyLabelForDisplay(u).toLowerCase();
     if (field === "role") return (ROLE_LABELS[u.role] || u.role || "").toLowerCase();
     return "";
   }
@@ -631,7 +822,7 @@
   }
 
   function updateSortIndicators() {
-    ["name", "title", "role"].forEach((field) => {
+    ["name", "specialty", "role"].forEach((field) => {
       const arrow = $(`th-${field}`).querySelector(".sort-arrow");
       arrow.textContent = field === sortField ? (sortDir === 1 ? "▲" : "▼") : "";
     });
@@ -650,11 +841,24 @@
     });
   });
 
+  // Fixed catalog size, not "how many are currently assigned" -- so the
+  // number in the summary row stays stable and always answers "how many
+  // specialties does this org track", matching how "Programs" and
+  // "Contacts" are counted on the EG Programs page.
+  function renderStats(rows) {
+    $("stat-total").textContent = allUsers.length;
+    $("stat-leads").textContent = allUsers.filter((u) => u.role === "team_lead").length;
+    $("stat-specialists").textContent = allUsers.filter((u) => u.role === "consultant").length;
+    $("stat-specialties").textContent = SPECIALTY_FILTER_KEYS.length;
+  }
+
   function renderList() {
     const q = $("search-box").value.trim().toLowerCase();
     let rows = allUsers.filter((u) => {
+      const specialtyLabel = specialtyLabelForDisplay(u);
+      if (roleFilter !== "all" && u.role !== roleFilter) return false;
+      if (specialtyFilter !== "all" && u.default_specialty !== specialtyFilter) return false;
       if (!q) return true;
-      const specialtyLabel = u.default_specialty ? SPECIALTY_LABELS[u.default_specialty] || "" : "";
       return (
         (u.full_name || "").toLowerCase().includes(q) ||
         (u.title || "").toLowerCase().includes(q) ||
@@ -663,6 +867,7 @@
     });
     rows = sortRows(rows);
     updateSortIndicators();
+    renderStats(rows);
 
     $("row-count").textContent = `${rows.length} of ${allUsers.length} people`;
 
@@ -672,23 +877,52 @@
 
     for (const u of rows) {
       const tr = document.createElement("tr");
+      const canEditThis = isSuperAdmin || u.id === currentUser.id;
+      const specialtyLabel = specialtyLabelForDisplay(u);
+      const phoneDisplay = formatPhoneDisplay(u.phone);
+      const isManageOpen = openManageId === u.id;
+
+      const actionsCell = isSuperAdmin
+        ? `
+          <button type="button" class="btn-secondary btn-sm manage-btn" data-toggle-manage="${u.id}">Manage &#9662;</button>
+          <div class="manage-dropdown ${isManageOpen ? "open" : ""}">
+            <button type="button" onclick="openProfile('${u.id}')">Edit</button>
+            <div class="menu-divider"></div>
+            <button type="button" class="danger-item" onclick="openDelete('${u.id}')">Delete</button>
+          </div>
+        `
+        : `<button class="btn-secondary btn-sm" onclick="openProfile('${u.id}')">${canEditThis ? "Edit" : "View"}</button>`;
+
       tr.innerHTML = `
         <td>
           <div style="display:flex; align-items:center; gap:10px;">
             <div class="avatar-sm">${u.avatar_url ? `<img src="${escapeHtml(u.avatar_url)}" alt="" />` : escapeHtml(initials(u.full_name))}</div>
-            <div style="font-weight:600;">${escapeHtml(u.full_name)}</div>
+            <div>
+              <div class="member-name">${escapeHtml(u.full_name)}</div>
+              <div class="member-role-sub">${escapeHtml(ROLE_LABELS[u.role] || u.role)}</div>
+            </div>
           </div>
         </td>
-        <td>${escapeHtml(u.title || (u.default_specialty ? SPECIALTY_LABELS[u.default_specialty] : "") || "—")}</td>
+        <td>${specialtyLabel ? escapeHtml(specialtyLabel) : '<span class="cell-muted">Not provided</span>'}</td>
         <td><span class="role-badge ${u.role}">${ROLE_LABELS[u.role] || u.role}</span></td>
-        <td>${escapeHtml(u.phone || "—")}</td>
-        <td><a href="mailto:${escapeHtml(u.email)}" style="color:var(--navy-light);">${escapeHtml(u.email)}</a></td>
-        <td class="actions">
-          <button class="btn-secondary btn-sm" onclick="openProfile('${u.id}')">${isSuperAdmin || u.id === currentUser.id ? "Edit" : "View"}</button>
-          ${isSuperAdmin ? `<button class="btn-danger btn-sm" style="margin-left:6px;" onclick="openDelete('${u.id}')">Delete</button>` : ""}
-        </td>
+        <td>${phoneDisplay
+          ? `<a class="contact-link" href="${telHref(u.phone)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>${escapeHtml(phoneDisplay)}</a>`
+          : '<span class="cell-muted">Not provided</span>'}</td>
+        <td><a class="contact-link" href="mailto:${escapeHtml(u.email)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M22 6l-10 7L2 6"/></svg>${escapeHtml(u.email)}</a></td>
+        <td class="actions">${actionsCell}</td>
       `;
       tbody.appendChild(tr);
+    }
+
+    if (isSuperAdmin) {
+      tbody.querySelectorAll("[data-toggle-manage]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.toggleManage;
+          openManageId = openManageId === id ? null : id;
+          renderList();
+        });
+      });
     }
   }
 
@@ -1110,6 +1344,7 @@
   function openProfile(id) {
     const u = allUsers.find((x) => x.id === id);
     if (!u) return;
+    openManageId = null;
     openProfileId = id;
 
     const canEdit = isSuperAdmin || u.id === currentUser.id;
