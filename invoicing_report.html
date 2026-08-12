@@ -728,25 +728,19 @@
     return div.innerHTML;
   }
 
-  /* ---------- Ask AI (front-end only, mock answers) ---------- */
+  /* ---------- Ask AI ----------
+     Browser -> eg-dashboard-ai Supabase Edge Function -> Claude API. The
+     Claude key lives only as a secret on that function; this page just
+     forwards the signed-in user's own session token so the function can
+     tell who's asking (and, for Admins only, answer from live data). */
   const AI_CONTEXT_LABEL = "Invoicing Report";
+  const AI_PAGE_KEY = "invoicing";
+  const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/eg-dashboard-ai`;
   const AI_SUGGESTED = [
-    {
-      q: "Who is over budget this month?",
-      a: "<p>Based on the current month's <strong>Budget Alerts</strong>, here's what's flagged:</p><ul><li><strong>Angela Woods</strong> — Riverfront Commons: 42 of 35 hrs used (120%)</li><li><strong>Marcus Lee</strong> — Downtown Corridor: 28 of 25 hrs used (112%)</li></ul><p>You can see the full list in the <strong>Hours & Budgets</strong> tab under Budget Alerts.</p>"
-    },
-    {
-      q: "What's total payroll this month?",
-      a: "<p>Total payroll for the selected month is shown in the <strong>Total Payroll</strong> KPI card at the top of the page, and the full specialist-by-specialist breakdown is available in the <strong>Payroll MTD</strong> tab.</p>"
-    },
-    {
-      q: "Which specialist logged the most hours?",
-      a: "<p>Sort the <strong>Hours by Specialist</strong> table (Hours & Budgets tab) by the Hours column to see who logged the most time this month. You can also use the search and program filter to narrow this down by engagement.</p>"
-    },
-    {
-      q: "What's the YTD payroll total?",
-      a: "<p>The year-to-date payroll total is shown at the top of the <strong>Payroll YTD</strong> tab, with a per-specialist breakdown below it — useful for 1099 prep at year end.</p><p><em>Note: YTD figures assume each specialist's current hourly rate applied for the full year, since historical rate changes aren't tracked.</em></p>"
-    }
+    "Who is over budget this month?",
+    "What's total payroll this month?",
+    "Which specialist logged the most hours?",
+    "What's the YTD payroll total?",
   ];
 
   function initAskAi() {
@@ -767,17 +761,17 @@
 
   function renderAiSuggested() {
     const list = $("ai-suggested-list");
-    list.innerHTML = AI_SUGGESTED.map((item, i) => `
+    list.innerHTML = AI_SUGGESTED.map((q, i) => `
       <button class="ai-suggested-chip" data-idx="${i}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"/><path d="M12 17h.01"/></svg>
-        ${escapeHtml(item.q)}
+        ${escapeHtml(q)}
       </button>
     `).join("");
     list.querySelectorAll(".ai-suggested-chip").forEach((chip) => {
       chip.addEventListener("click", () => {
-        const item = AI_SUGGESTED[Number(chip.dataset.idx)];
-        $("ai-question-input").value = item.q;
-        showAiAnswer(item.a);
+        const q = AI_SUGGESTED[Number(chip.dataset.idx)];
+        $("ai-question-input").value = q;
+        askAi(q);
       });
     });
   }
@@ -795,9 +789,46 @@
   function submitAiQuestion() {
     const q = $("ai-question-input").value.trim();
     if (!q) return;
-    const match = AI_SUGGESTED.find((item) => item.q.toLowerCase() === q.toLowerCase());
-    const answer = match ? match.a : `<p>I don't have a canned answer for that yet — this is a UI preview with mock responses. Try one of the suggested questions above.</p>`;
-    showAiAnswer(answer);
+    askAi(q);
+  }
+
+  // Turns Claude's plain-text answer (occasional **bold**, blank-line
+  // paragraphs, "- " list items) into safe HTML -- text is escaped first,
+  // so nothing the model returns is ever interpreted as markup.
+  function renderAiMarkup(text) {
+    const escaped = escapeHtml(text || "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    return escaped.split(/\n\n+/).map((block) => {
+      const lines = block.split("\n").filter((l) => l.trim());
+      if (lines.length && lines.every((l) => /^\s*-\s+/.test(l))) {
+        return `<ul>${lines.map((l) => `<li>${l.replace(/^\s*-\s+/, "")}</li>`).join("")}</ul>`;
+      }
+      return `<p>${lines.join("<br>")}</p>`;
+    }).join("");
+  }
+
+  async function askAi(question) {
+    $("ai-answer-block").classList.remove("hidden");
+    $("ai-answer-card").innerHTML = `<p style="color:var(--muted);">Thinking…</p>`;
+    $("ai-answer-time").textContent = "";
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error("No active session");
+      const res = await fetch(AI_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": SUPABASE_ANON_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ question, pageKey: AI_PAGE_KEY, pageContext: AI_CONTEXT_LABEL }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || `Request failed (${res.status})`);
+      showAiAnswer(renderAiMarkup(data.answer));
+    } catch (err) {
+      console.error("Ask AI error:", err);
+      showAiAnswer(`<p>Sorry, I couldn't reach the AI service just now. Try again in a moment.</p>`);
+    }
   }
 
   function showAiAnswer(html) {

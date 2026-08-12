@@ -635,15 +635,22 @@
   const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
   const sanitizeFilename = (name) => name.replace(/[^a-zA-Z0-9._-]/g, "_");
 
-  /* ---------- Ask AI (front-end only, mock answers) ---------- */
+  /* ---------- Ask AI ----------
+     Browser -> eg-dashboard-ai Supabase Edge Function -> Claude API. The
+     Claude key lives only as a secret on that function; this page just
+     forwards the signed-in user's own session token (plus this engagement's
+     id) so the function can tell who's asking and, for Admins only, answer
+     from this engagement's live data. */
   let AI_CONTEXT_LABEL = "Dashboard Edit";
+  const AI_PAGE_KEY = "profile";
+  const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/eg-dashboard-ai`;
 
   function aiSuggestedQuestions() {
     return [
-      { q: "What's missing from this dashboard?", a: `<p>Check each accordion section for empty states — Company Information, Contacts, Competitors, Top Customers, Resource Vault, and Project Next Steps all show a hint when nothing's been added yet.</p>` },
-      { q: "How do I update the client-facing link?", a: `<p>The Client-Facing Link section shows the live dashboard URL. Make sure the engagement has a slug set, or the link will be disabled.</p>` },
-      { q: "Who's on the team for this engagement?", a: `<p>See the <strong>Team Members</strong> section — it lists specialists from Assignments &amp; Hours plus any linked Econ Dev Partner contacts.</p>` },
-      { q: "How do I upload a workflow document?", a: `<p>Each research area under Resource Vault has its own upload box. Files there become visible on the client-facing dashboard depending on their assigned visibility.</p>` }
+      "What's missing from this dashboard?",
+      "How do I update the client-facing link?",
+      "Who's on the team for this engagement?",
+      "How do I upload a workflow document?",
     ];
   }
 
@@ -665,17 +672,17 @@
   function renderAiSuggested() {
     const list = $("ai-suggested-list");
     const questions = aiSuggestedQuestions();
-    list.innerHTML = questions.map((item, i) => `
+    list.innerHTML = questions.map((q, i) => `
       <button class="ai-suggested-chip" data-idx="${i}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"/><path d="M12 17h.01"/></svg>
-        ${escapeHtml(item.q)}
+        ${escapeHtml(q)}
       </button>
     `).join("");
     list.querySelectorAll(".ai-suggested-chip").forEach((chip) => {
       chip.addEventListener("click", () => {
-        const item = questions[Number(chip.dataset.idx)];
-        $("ai-question-input").value = item.q;
-        showAiAnswer(item.a);
+        const q = questions[Number(chip.dataset.idx)];
+        $("ai-question-input").value = q;
+        askAi(q);
       });
     });
   }
@@ -695,9 +702,51 @@
   function submitAiQuestion() {
     const q = $("ai-question-input").value.trim();
     if (!q) return;
-    const match = aiSuggestedQuestions().find((item) => item.q.toLowerCase() === q.toLowerCase());
-    const answer = match ? match.a : `<p>I don't have a canned answer for that yet — this is a UI preview with mock responses. Try one of the suggested questions above.</p>`;
-    showAiAnswer(answer);
+    askAi(q);
+  }
+
+  // Turns Claude's plain-text answer (occasional **bold**, blank-line
+  // paragraphs, "- " list items) into safe HTML -- text is escaped first,
+  // so nothing the model returns is ever interpreted as markup.
+  function renderAiMarkup(text) {
+    const escaped = escapeHtml(text || "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    return escaped.split(/\n\n+/).map((block) => {
+      const lines = block.split("\n").filter((l) => l.trim());
+      if (lines.length && lines.every((l) => /^\s*-\s+/.test(l))) {
+        return `<ul>${lines.map((l) => `<li>${l.replace(/^\s*-\s+/, "")}</li>`).join("")}</ul>`;
+      }
+      return `<p>${lines.join("<br>")}</p>`;
+    }).join("");
+  }
+
+  async function askAi(question) {
+    $("ai-answer-block").classList.remove("hidden");
+    $("ai-answer-card").innerHTML = `<p style="color:var(--muted);">Thinking…</p>`;
+    $("ai-answer-time").textContent = "";
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error("No active session");
+      const res = await fetch(AI_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": SUPABASE_ANON_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question,
+          pageKey: AI_PAGE_KEY,
+          pageContext: AI_CONTEXT_LABEL,
+          clientId: currentClient ? currentClient.id : undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || `Request failed (${res.status})`);
+      showAiAnswer(renderAiMarkup(data.answer));
+    } catch (err) {
+      console.error("Ask AI error:", err);
+      showAiAnswer(`<p>Sorry, I couldn't reach the AI service just now. Try again in a moment.</p>`);
+    }
   }
 
   function showAiAnswer(html) {
