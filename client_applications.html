@@ -252,7 +252,10 @@
   .wizard-body { display: grid; grid-template-columns: 220px 1fr; gap: 18px; align-items: start; }
   @media (max-width: 800px) { .wizard-body { grid-template-columns: 1fr; } .wizard-sidebar { order: 2; } }
   .wizard-sidebar { display: flex; flex-direction: column; gap: 14px; }
-  .wizard-side-steps { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 8px; }
+  .wizard-progress-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .wizard-progress-card-title { font-size: 13.5px; font-weight: 700; color: var(--navy); margin-bottom: 2px; }
+  .wizard-progress-card-sub { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .wizard-side-steps { display: flex; flex-direction: column; gap: 2px; }
   .wizard-side-step {
     display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px; border-radius: 7px;
     cursor: pointer; font-size: 13px;
@@ -270,25 +273,10 @@
   .wizard-side-step-status { font-size: 11.5px; color: var(--muted); }
   .wizard-side-step.active .wizard-side-step-name { color: var(--navy-light); }
 
-  .wizard-help-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
-  .wizard-help-title { font-weight: 700; font-size: 13.5px; margin-bottom: 6px; }
-  .wizard-help-text { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
-  .wizard-help-link { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--navy-light); text-decoration: none; margin-top: 6px; }
-  .wizard-help-link:hover { text-decoration: underline; }
-
-  .wizard-panel-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 26px 28px; }
+  .wizard-panel-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; }
   .wizard-panel-card h3 { margin: 0 0 3px; font-size: 18px; }
-  .wizard-panel-hint { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
-  .wizard-info-box {
-    display: flex; align-items: flex-start; gap: 10px; background: #f4f6f8; border: 1px solid var(--border); border-radius: 8px;
-    padding: 12px 14px; margin-top: 18px;
-  }
-  .wizard-info-box .info-dot {
-    width: 22px; height: 22px; border-radius: 50%; background: var(--navy-light); color: #fff; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; margin-top: 1px;
-  }
-  .wizard-info-box .info-title { font-weight: 700; font-size: 13px; }
-  .wizard-info-box .info-text { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .wizard-panel-hint { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+  .wizard-required-note { font-size: 12px; color: var(--muted); margin-top: 14px; }
 
   .add-contact-btn {
     display: flex; align-items: center; gap: 8px; background: transparent; border: 1px dashed var(--border); border-radius: 8px;
@@ -508,7 +496,6 @@
         </div>
         <div class="wizard-topbar-actions">
           <span class="save-indicator" id="wiz-save-indicator"><span class="dot"></span><span id="wiz-save-text">Not saved yet</span></span>
-          <button type="button" class="btn-secondary btn-sm" id="wiz-save-draft-top">&#128190; Save Draft</button>
         </div>
       </div>
 
@@ -518,7 +505,11 @@
 
       <div class="wizard-body">
         <aside class="wizard-sidebar">
-          <div class="wizard-side-steps" id="wiz-side-steps"></div>
+          <div class="wizard-progress-card">
+            <div class="wizard-progress-card-title">Application Progress</div>
+            <div class="wizard-progress-card-sub">Step <span id="wiz-side-step-num">1</span> of 5</div>
+            <div class="wizard-side-steps" id="wiz-side-steps"></div>
+          </div>
         </aside>
 
         <div class="wizard-main">
@@ -526,8 +517,8 @@
 
             <!-- Step 1: Engagement -->
             <div class="wizard-panel-card wizard-panel" data-step="1">
-              <h3>Engagement Basics</h3>
-              <div class="wizard-panel-hint">Tell us about the engagement and the EG program.</div>
+              <h3>Engagement Details</h3>
+              <div class="wizard-panel-hint">Enter the basic information for this engagement.</div>
               <div class="grid-2">
                 <div class="field">
                   <label>Engagement Name <span class="required-star">*</span></label>
@@ -547,26 +538,20 @@
                   <input type="text" id="f-phone" placeholder="(555) 123-4567" />
                 </div>
                 <div class="field">
-                  <label>Year Founded</label>
-                  <input type="number" id="f-year-founded" min="1800" max="2100" placeholder="e.g., 2015" />
-                </div>
-                <div class="field">
-                  <label>Ownership</label>
-                  <select id="f-is-private">
+                  <label>Ownership <span class="required-star">*</span></label>
+                  <select id="f-is-private" required>
                     <option value="">Select ownership type…</option>
                     <option value="true">Private</option>
                     <option value="false">Public</option>
                   </select>
                   <div class="field-hint" style="margin-top:5px;">Select the ownership structure that best describes the organization.</div>
                 </div>
-              </div>
-              <div class="wizard-info-box">
-                <span class="info-dot">i</span>
-                <div>
-                  <div class="info-title">Required fields</div>
-                  <div class="info-text">Fields marked with an asterisk (*) are required to continue.</div>
+                <div class="field">
+                  <label>Year Founded</label>
+                  <input type="number" id="f-year-founded" min="1800" max="2100" placeholder="e.g., 2015" />
                 </div>
               </div>
+              <div class="wizard-required-note">Fields marked <span class="required-star">*</span> are required.</div>
             </div>
 
             <!-- Step 2: Company & Address -->
@@ -1154,9 +1139,7 @@
     } else if (new URLSearchParams(location.search).get("new") === "1") {
       // Deep link from the home page's "+ Add Client" button — jump
       // straight into the new-application form instead of the list.
-      $("new-app-form").reset();
-      $("view-list").classList.add("hidden");
-      $("view-new").classList.remove("hidden");
+      wizOpenNew();
     } else {
       showListView();
     }
@@ -1335,7 +1318,6 @@
     clearTimeout(wizAutosaveTimer);
     wizAutosaveTimer = setTimeout(() => wizSaveDraft(false), 700);
   });
-  $("wiz-save-draft-top").addEventListener("click", () => wizSaveDraft(true));
   $("wiz-save-draft-bottom").addEventListener("click", () => wizSaveDraft(true));
 
   // ---------- Contacts: progressive disclosure ----------
@@ -1381,6 +1363,7 @@
   function wizRenderChrome() {
     const pct = Math.round((wizStep / WIZARD_STEPS.length) * 100);
     $("wiz-step-num").textContent = wizStep;
+    $("wiz-side-step-num").textContent = wizStep;
     $("wiz-pct").textContent = pct + "%";
     $("wiz-progress-fill").style.width = pct + "%";
 
@@ -1419,7 +1402,8 @@
     $("wiz-back").classList.toggle("hidden", wizStep === 1);
     $("wiz-continue").classList.toggle("hidden", wizStep === WIZARD_STEPS.length);
     $("new-app-submit").classList.toggle("hidden", wizStep !== WIZARD_STEPS.length);
-    $("wiz-continue").textContent = wizStep === WIZARD_STEPS.length - 1 ? "Continue to Review →" : "Continue →";
+    const nextStep = WIZARD_STEPS[wizStep]; // wizStep is 1-indexed, so this is the *next* step's entry
+    $("wiz-continue").textContent = nextStep ? `Continue to ${nextStep.label} →` : "Continue →";
   }
 
   function wizGoToStep(n) {
@@ -1427,8 +1411,8 @@
     // Only step 1's two required fields gate forward progress -- everything
     // past that is optional, so there's nothing else worth blocking on.
     if (n > wizStep && wizStep === 1) {
-      if (!$("f-company-name").value.trim() || !$("f-econ-dev").value) {
-        showBanner("Engagement Name and EG Program are required before continuing.", "error");
+      if (!$("f-company-name").value.trim() || !$("f-econ-dev").value || !$("f-is-private").value) {
+        showBanner("Engagement Name, EG Program, and Ownership are required before continuing.", "error");
         return;
       }
     }
@@ -1557,7 +1541,12 @@
     `;
   }
 
-  $("new-app-btn").addEventListener("click", () => {
+  // Shared opener for the New Application wizard — used both by the button
+  // click on this page and by the ?new=1 deep link from the home page's
+  // "+ Add Client" button. Both paths must run the same init (draft
+  // restore, panel reset, chrome render) or the step stepper and sidebar
+  // render empty, which is what was happening on the deep-link path before.
+  function wizOpenNew() {
     $("new-app-form").reset();
     $("f-country").value = "United States";
     wizHideContactCard("secondary");
@@ -1582,7 +1571,8 @@
 
     $("view-list").classList.add("hidden");
     $("view-new").classList.remove("hidden");
-  });
+  }
+  $("new-app-btn").addEventListener("click", wizOpenNew);
   $("new-app-cancel").addEventListener("click", showListView);
 
   $("new-app-form").addEventListener("submit", async (e) => {
