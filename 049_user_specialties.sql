@@ -58,10 +58,16 @@ with check ( user_id = auth.uid() or is_super_admin() );
 -- as their first specialty tag, so nobody's current specialty disappears
 -- when the app switches over to reading from this table. Skips "admin"
 -- (no longer a valid specialty value) and blanks.
+--
+-- default_specialty turns out to be a Postgres enum (specialty_type), not
+-- plain text -- comparing it to '' errors (22P02: invalid input value for
+-- enum), since '' was never a real member of that enum to begin with; a
+-- blank specialty is already represented as NULL, which "is not null"
+-- alone correctly excludes. Cast to text explicitly for the insert and
+-- for the 'admin' comparison so this doesn't depend on an implicit cast.
 insert into user_specialties (organization_id, user_id, specialty)
-select u.organization_id, u.id, u.default_specialty
+select u.organization_id, u.id, u.default_specialty::text
 from users u
 where u.default_specialty is not null
-  and u.default_specialty <> ''
-  and u.default_specialty <> 'admin'
+  and u.default_specialty::text <> 'admin'
 on conflict (user_id, specialty) do nothing;

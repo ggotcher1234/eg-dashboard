@@ -193,9 +193,14 @@
   .manage-btn { background: #eef1f4; color: var(--text); }
   .manage-btn:hover { background: #e2e6ea; }
   .manage-dropdown {
-    display: none; position: absolute; top: calc(100% + 4px); right: 14px; min-width: 170px;
+    /* position: fixed (not absolute) and top/right set via JS
+       (positionOpenManageDropdown()) -- table/.table-scroll both clip
+       overflow for other reasons (rounded corners, mobile horizontal
+       scroll), which was cutting this dropdown off for rows near the
+       bottom of the table. Fixed positioning escapes that clipping. */
+    display: none; position: fixed; min-width: 170px;
     background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 20px rgba(20,48,77,0.14);
-    padding: 6px; z-index: 15; text-align: left;
+    padding: 6px; z-index: 60; text-align: left;
   }
   .manage-dropdown.open { display: block; }
   .manage-dropdown button {
@@ -1005,6 +1010,13 @@
     }
   });
 
+  // The dropdown is position:fixed relative to the viewport, so it won't
+  // track the button if the page scrolls while it's open -- just close it
+  // instead of trying to keep it glued in place.
+  window.addEventListener("scroll", () => {
+    if (openManageId) { openManageId = null; renderList(); }
+  }, true);
+
   // ---------- Auth ----------
   $("signout-btn").addEventListener("click", async () => {
     await sb.auth.signOut();
@@ -1294,6 +1306,31 @@
           renderList();
         });
       });
+    }
+
+    positionOpenManageDropdown();
+  }
+
+  // The dropdown is position:fixed (see .manage-dropdown CSS comment) so
+  // it isn't clipped by the table's own overflow -- but that means its
+  // coordinates have to be set here in JS relative to the trigger button,
+  // instead of just "top: 100%" in CSS. Flips upward automatically when
+  // there isn't room below (e.g. the last row or two in the table).
+  function positionOpenManageDropdown() {
+    if (!openManageId) return;
+    const btn = document.querySelector(`[data-toggle-manage="${openManageId}"]`);
+    const dropdown = document.querySelector(".manage-dropdown.open");
+    if (!btn || !dropdown) return;
+    const rect = btn.getBoundingClientRect();
+    const dropdownHeight = dropdown.offsetHeight;
+    const openUpward = window.innerHeight - rect.bottom < dropdownHeight + 10 && rect.top > dropdownHeight;
+    dropdown.style.right = Math.max(8, window.innerWidth - rect.right) + "px";
+    if (openUpward) {
+      dropdown.style.top = "";
+      dropdown.style.bottom = (window.innerHeight - rect.top + 4) + "px";
+    } else {
+      dropdown.style.bottom = "";
+      dropdown.style.top = (rect.bottom + 4) + "px";
     }
   }
 
