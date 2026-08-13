@@ -61,6 +61,20 @@
   #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
 
   .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .drafts-wrap { position: relative; }
+  .drafts-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--navy-light); color: #fff; font-size: 11px; font-weight: 700; margin-left: 4px; }
+  .drafts-dropdown { position: absolute; top: calc(100% + 8px); right: 0; width: min(320px, calc(100vw - 24px)); max-height: 380px; overflow-y: auto; background: #fff; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.18); z-index: 60; }
+  .drafts-dropdown.hidden { display: none; }
+  .drafts-dropdown-header { padding: 12px 14px; font-size: 12.5px; font-weight: 700; color: var(--navy); border-bottom: 1px solid var(--border); }
+  .draft-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .draft-row:last-child { border-bottom: none; }
+  .draft-row:hover { background: #f4f6f8; }
+  .draft-row-name { font-weight: 600; font-size: 13px; color: var(--text); }
+  .draft-row-time { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .draft-row-delete { background: transparent; border: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 4px 6px; cursor: pointer; flex-shrink: 0; }
+  .draft-row-delete:hover { color: var(--danger); }
+  .drafts-empty { padding: 16px 14px; font-size: 12.5px; color: var(--muted); text-align: center; }
+  .drafts-empty.hidden { display: none; }
   .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
   .tab { padding: 7px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: #eef1f4; color: var(--muted); cursor: pointer; }
   .tab.active { background: var(--navy); color: #fff; }
@@ -469,6 +483,16 @@
           <span class="tab" data-status="closed">Closed</span>
           <span class="tab" data-status="rejected">Rejected</span>
           <span class="tab active" data-status="all">All</span>
+        </div>
+        <div class="drafts-wrap" id="drafts-wrap">
+          <button type="button" class="btn-secondary" id="drafts-btn">
+            Drafts <span class="drafts-count hidden" id="drafts-count">0</span>
+          </button>
+          <div class="drafts-dropdown hidden" id="drafts-dropdown">
+            <div class="drafts-dropdown-header">Saved Drafts</div>
+            <div id="drafts-list"></div>
+            <div class="drafts-empty hidden" id="drafts-empty">No saved drafts.</div>
+          </div>
         </div>
         <button class="btn-primary" id="new-app-btn">+ New Application</button>
       </div>
@@ -1135,7 +1159,7 @@
       document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.status === statusParam));
     }
 
-    await Promise.all([loadPartners(), loadUsers()]);
+    await Promise.all([loadPartners(), loadUsers(), loadDrafts()]);
     await loadApplications();
 
     // Deep link from Client Workspace's "View Application Info" link —
@@ -1278,15 +1302,21 @@
     { n: 5, key: "review", label: "Review" },
   ];
   let wizStep = 1;
-  const WIZ_DRAFT_KEY = "eg_new_application_draft_v1";
+  // Which client_application_drafts row (if any) the wizard is currently
+  // attached to. null until the first successful save, at which point it's
+  // set to the new row's id so every save after that is an UPDATE instead
+  // of creating a duplicate draft.
+  let currentDraftId = null;
+  let applicationDrafts = [];
 
   function wizFieldEls() {
     return Array.from(document.querySelectorAll("#new-app-form input[id], #new-app-form select[id], #new-app-form textarea[id]"))
       .filter((el) => el.type !== "file");
   }
 
-  // ---------- Autosave (browser-local draft, not synced to the server —
-  // there's no application row yet to attach it to until final submit) ----------
+  // ---------- Draft save/restore/delete (synced to Supabase, so a draft
+  // survives across devices/browsers and multiple can exist at once —
+  // see 048_client_application_drafts.sql) ----------
   function wizSerialize() {
     const data = {};
     wizFieldEls().forEach((el) => { data[el.id] = el.type === "checkbox" ? el.checked : el.value; });
@@ -1311,24 +1341,98 @@
     else if (state === "saved") { el.classList.remove("saving"); text.textContent = "Saved just now"; }
     else { el.classList.remove("saving"); text.textContent = "Not saved yet"; }
   }
-  function wizSaveDraft(showFlash) {
+  async function wizSaveDraft(showFlash) {
     if (showFlash) wizSetSaveIndicator("saving");
+    const data = wizSerialize();
+    const engagementName = (data["f-company-name"] || "").trim() || null;
     try {
-      localStorage.setItem(WIZ_DRAFT_KEY, JSON.stringify({ savedAt: Date.now(), data: wizSerialize() }));
+      if (currentDraftId) {
+        const { error } = await sb.from("client_application_drafts")
+          .update({ engagement_name: engagementName, data, updated_at: new Date().toISOString() })
+          .eq("id", currentDraftId);
+        if (error) throw error;
+      } else {
+        const { data: inserted, error } = await sb.from("client_application_drafts")
+          .insert({ organization_id: currentUser.organization_id, created_by: currentUser.id, engagement_name: engagementName, data })
+          .select("id")
+          .single();
+        if (error) throw error;
+        currentDraftId = inserted.id;
+      }
       wizSetSaveIndicator("saved");
+      await loadDrafts();
     } catch (err) {
-      // localStorage can throw in private-browsing / storage-full edge cases —
-      // autosave just silently no-ops rather than interrupting the applicant.
+      wizSetSaveIndicator("idle");
+      if (showFlash) showBanner("Couldn't save draft: " + err.message, "error");
     }
   }
-  function wizClearDraft() {
-    try { localStorage.removeItem(WIZ_DRAFT_KEY); } catch (err) {}
+  async function wizDeleteDraftRow(draftId) {
+    if (!draftId) return;
+    const { error } = await sb.from("client_application_drafts").delete().eq("id", draftId);
+    if (error) console.error("Couldn't delete draft:", error.message);
   }
+  async function loadDrafts() {
+    const { data, error } = await sb.from("client_application_drafts")
+      .select("id, engagement_name, data, updated_at")
+      .order("updated_at", { ascending: false });
+    if (error) { console.error("Couldn't load drafts:", error.message); return; }
+    applicationDrafts = data || [];
+    renderDraftsList();
+  }
+  function wizTimeAgo(iso) {
+    const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.round(hrs / 24)}d ago`;
+  }
+  function renderDraftsList() {
+    $("drafts-count").textContent = applicationDrafts.length;
+    $("drafts-count").classList.toggle("hidden", applicationDrafts.length === 0);
+    $("drafts-empty").classList.toggle("hidden", applicationDrafts.length > 0);
+    $("drafts-list").innerHTML = applicationDrafts.map((d) => `
+      <div class="draft-row" data-resume-draft="${d.id}">
+        <div>
+          <div class="draft-row-name">${escapeHtml(d.engagement_name || "Untitled draft")}</div>
+          <div class="draft-row-time">Saved ${wizTimeAgo(d.updated_at)}</div>
+        </div>
+        <button type="button" class="draft-row-delete" data-delete-draft="${d.id}" title="Delete draft">&times;</button>
+      </div>
+    `).join("");
+    document.querySelectorAll("[data-resume-draft]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        if (e.target.closest("[data-delete-draft]")) return;
+        wizResumeDraft(el.dataset.resumeDraft);
+      });
+    });
+    document.querySelectorAll("[data-delete-draft]").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.deleteDraft;
+        const draft = applicationDrafts.find((d) => d.id === id);
+        const label = draft && draft.engagement_name ? `"${draft.engagement_name}"` : "this draft";
+        if (!confirm(`Delete ${label}? This can't be undone.`)) return;
+        await wizDeleteDraftRow(id);
+        if (currentDraftId === id) currentDraftId = null;
+        await loadDrafts();
+      });
+    });
+  }
+  function closeDraftsDropdown() { $("drafts-dropdown").classList.add("hidden"); }
+  $("drafts-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("drafts-dropdown").classList.toggle("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!$("drafts-wrap").contains(e.target)) closeDraftsDropdown();
+  });
+
   let wizAutosaveTimer = null;
   $("new-app-form").addEventListener("input", () => {
     wizSetSaveIndicator("saving");
     clearTimeout(wizAutosaveTimer);
-    wizAutosaveTimer = setTimeout(() => wizSaveDraft(false), 700);
+    wizAutosaveTimer = setTimeout(() => wizSaveDraft(false), 1200);
   });
   $("wiz-save-draft-bottom").addEventListener("click", () => wizSaveDraft(true));
 
@@ -1558,31 +1662,30 @@
   // "+ Add Client" button. Both paths must run the same init (draft
   // restore, panel reset, chrome render) or the step stepper and sidebar
   // render empty, which is what was happening on the deep-link path before.
-  function wizOpenNew() {
+  function wizStartWizard(draft) {
     $("new-app-form").reset();
     $("f-country").value = "United States";
     wizHideContactCard("secondary");
     wizStep = 1;
-
-    let restoredDraft = false;
-    try {
-      const raw = localStorage.getItem(WIZ_DRAFT_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        wizRestore(parsed.data);
-        restoredDraft = true;
-      }
-    } catch (err) {}
+    currentDraftId = draft ? draft.id : null;
+    if (draft) wizRestore(draft.data);
 
     document.querySelectorAll(".wizard-panel").forEach((panel) => {
       panel.classList.toggle("hidden", Number(panel.dataset.step) !== 1);
     });
     wizRenderChrome();
-    wizSetSaveIndicator(restoredDraft ? "saved" : "idle");
-    if (restoredDraft) showBanner("Restored your saved draft.", "success");
+    wizSetSaveIndicator(draft ? "saved" : "idle");
+    if (draft) showBanner("Draft resumed.", "success");
 
+    closeDraftsDropdown();
     $("view-list").classList.add("hidden");
     $("view-new").classList.remove("hidden");
+  }
+  function wizOpenNew() { wizStartWizard(null); }
+  function wizResumeDraft(draftId) {
+    const draft = applicationDrafts.find((d) => d.id === draftId);
+    if (!draft) return;
+    wizStartWizard(draft);
   }
   $("new-app-btn").addEventListener("click", wizOpenNew);
   $("wizard-ai-note").addEventListener("click", openAiDrawer);
@@ -1695,7 +1798,9 @@
 
     btn.disabled = false;
     btn.textContent = "Submit Application";
-    wizClearDraft();
+    await wizDeleteDraftRow(currentDraftId);
+    currentDraftId = null;
+    await loadDrafts();
     await loadApplications();
     activeTab = "pending";
     document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.status === "pending"));
