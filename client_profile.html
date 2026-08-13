@@ -1002,8 +1002,24 @@
     links.forEach((link) => {
       link.addEventListener("click", (e) => {
         e.preventDefault();
-        const target = document.getElementById(link.dataset.section);
-        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+        // If this is one of the collapsible accordion cards (Resource
+        // Vault, Next Steps, etc.), open it first -- jumping to a section
+        // that's still collapsed just lands on a thin, easy-to-miss row.
+        // Opening it changes the page's layout height, so the scroll is
+        // deferred a couple animation frames until that reflow settles --
+        // otherwise the browser measures the scroll target against the
+        // old (shorter) layout and overshoots past it, landing on
+        // whatever section happens to be in that spot once things resettle.
+        const key = link.dataset.section.replace(/^editor-anchor-/, "");
+        if (key !== link.dataset.section && document.querySelector(`[data-accordion="${key}"]`)) {
+          openAccordionSection(key);
+        }
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const target = document.getElementById(link.dataset.section);
+            if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+        });
       });
     });
   }
@@ -1579,17 +1595,27 @@
 
     // True accordion behavior — opening one section closes any other
     // section that was open, so the page doesn't end up with every list
-    // expanded at once as resources/contacts/etc. pile up.
+    // expanded at once as resources/contacts/etc. pile up. Pulled out as
+    // its own function so the "Edit Sections" nav rail can also open a
+    // section directly when jumping to it (see wireEditorNavScrollSpy).
+    window.openAccordionSection = function (key) {
+      document.querySelectorAll("[data-accordion]").forEach((h) => {
+        h.classList.remove("open");
+        $(`${h.dataset.accordion}-body`).classList.remove("open");
+      });
+      const hdr = document.querySelector(`[data-accordion="${key}"]`);
+      if (hdr) {
+        hdr.classList.add("open");
+        $(`${hdr.dataset.accordion}-body`).classList.add("open");
+      }
+    };
     document.querySelectorAll("[data-accordion]").forEach((hdr) => {
       hdr.addEventListener("click", () => {
-        const wasOpen = hdr.classList.contains("open");
-        document.querySelectorAll("[data-accordion]").forEach((h) => {
-          h.classList.remove("open");
-          $(`${h.dataset.accordion}-body`).classList.remove("open");
-        });
-        if (!wasOpen) {
-          hdr.classList.add("open");
-          $(`${hdr.dataset.accordion}-body`).classList.add("open");
+        if (hdr.classList.contains("open")) {
+          hdr.classList.remove("open");
+          $(`${hdr.dataset.accordion}-body`).classList.remove("open");
+        } else {
+          openAccordionSection(hdr.dataset.accordion);
         }
       });
     });
