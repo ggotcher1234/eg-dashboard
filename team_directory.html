@@ -1726,11 +1726,24 @@
 
   $("profile-form").addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (!openProfileId) return;
+    // These used to fail silently (no banner, no network call, nothing) if
+    // any of these guards tripped -- made each one visible so a bad save
+    // shows up as an actual message instead of just doing nothing.
+    if (!openProfileId) {
+      showBanner("Couldn't save — no profile was open. Please reopen it and try again.", "error");
+      return;
+    }
 
     const u = allUsers.find((x) => x.id === openProfileId);
+    if (!u) {
+      showBanner("Couldn't save — that profile wasn't found in the current list. Try refreshing the page.", "error");
+      return;
+    }
     const canEdit = isSuperAdmin || u.id === currentUser.id;
-    if (!canEdit) return;
+    if (!canEdit) {
+      showBanner("Couldn't save — you don't have permission to edit this profile.", "error");
+      return;
+    }
 
     const payload = {
       title: $("pf-title").value.trim() || null,
