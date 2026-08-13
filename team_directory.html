@@ -171,6 +171,21 @@
   .member-name { font-weight: 700; color: var(--navy); font-size: 13.5px; line-height: 1.3; }
   .member-role-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
   .cell-muted { color: var(--muted); font-style: italic; }
+  .specialty-chip-row { display: flex; flex-wrap: wrap; gap: 4px; }
+  .specialty-chip {
+    display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 2px 8px;
+    border-radius: 999px; background: #eef1f4; color: var(--text); white-space: nowrap;
+  }
+  .specialty-chip-more { background: #e2e8ee; color: var(--muted); cursor: default; }
+  .specialty-checks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+  .specialty-check-item {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; text-transform: none;
+    letter-spacing: normal; color: var(--text); background: #f4f6f8; border: 1px solid var(--border);
+    padding: 5px 10px; border-radius: 999px; cursor: pointer; user-select: none;
+  }
+  .specialty-check-item input { margin: 0; }
+  .specialty-check-item:has(input:checked) { background: #e2e8ee; border-color: var(--navy-light); }
+  .specialty-check-item:has(input:disabled) { opacity: 0.55; cursor: default; }
   .contact-link { display: inline-flex; align-items: center; gap: 5px; color: var(--navy-light); text-decoration: none; white-space: nowrap; }
   .contact-link:hover { text-decoration: underline; }
   .contact-link svg { opacity: 0.65; flex-shrink: 0; }
@@ -407,6 +422,7 @@
           <div class="dropdown-panel left" id="filter-dropdown">
             <div class="dropdown-label">Role</div>
             <button type="button" data-role-filter="all" class="selected">All Roles</button>
+            <button type="button" data-role-filter="super_admin">Admin</button>
             <button type="button" data-role-filter="team_lead">Team Lead</button>
             <button type="button" data-role-filter="consultant">Specialist</button>
             <div class="menu-divider"></div>
@@ -471,7 +487,7 @@
       <thead>
         <tr>
           <th class="sortable" data-sort="name" id="th-name">Team Member<span class="sort-arrow"></span></th>
-          <th class="sortable" data-sort="specialty" id="th-specialty">Specialty<span class="sort-arrow"></span></th>
+          <th class="sortable" data-sort="specialty" id="th-specialty" title="Sorted alphabetically by each person's combined specialty list">Specialties<span class="sort-arrow"></span></th>
           <th class="sortable" style="width:110px;" data-sort="role" id="th-role">Role<span class="sort-arrow"></span></th>
           <th style="width:150px; white-space:nowrap;">Phone</th>
           <th>Email</th>
@@ -551,17 +567,8 @@
       <label for="add-title">Title <span style="font-weight:400; text-transform:none;">(optional)</span></label>
       <input type="text" id="add-title" placeholder="e.g. GIS Researcher" />
 
-      <label for="add-specialty">Default Specialty <span style="font-weight:400; text-transform:none;">(optional)</span></label>
-      <select id="add-specialty">
-        <option value="">—</option>
-        <option value="team_lead">Team Lead</option>
-        <option value="market_research">Market Research</option>
-        <option value="digital_marketing">Digital Marketing</option>
-        <option value="gis">GIS</option>
-        <option value="watering_holes">Watering Holes</option>
-        <option value="admin">Admin</option>
-        <option value="quality_control">Quality Control</option>
-      </select>
+      <label>Specialties <span style="font-weight:400; text-transform:none;">(optional, pick any that apply)</span></label>
+      <div class="specialty-checks" id="add-specialties"></div>
 
       <label for="add-phone">Phone <span style="font-weight:400; text-transform:none;">(optional)</span></label>
       <input type="text" id="add-phone" />
@@ -596,17 +603,8 @@
       <label for="pf-title">Title</label>
       <input type="text" id="pf-title" placeholder="e.g. GIS Researcher" />
 
-      <label for="pf-specialty">Default Specialty <span style="font-weight:400; text-transform:none;">(pre-fills Team Lead's assignment screen)</span></label>
-      <select id="pf-specialty">
-        <option value="">—</option>
-        <option value="team_lead">Team Lead</option>
-        <option value="market_research">Market Research</option>
-        <option value="digital_marketing">Digital Marketing</option>
-        <option value="gis">GIS</option>
-        <option value="watering_holes">Watering Holes</option>
-        <option value="admin">Admin</option>
-        <option value="quality_control">Quality Control</option>
-      </select>
+      <label>Specialties <span style="font-weight:400; text-transform:none;">(pick any that apply)</span></label>
+      <div class="specialty-checks" id="pf-specialties"></div>
 
       <label for="pf-role">Role <span id="pf-role-lock-note" style="font-weight:400; text-transform:none;">(Admin only)</span></label>
       <select id="pf-role">
@@ -653,13 +651,17 @@
   const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+  // "Admin" deliberately isn't in here -- Greg: being an Admin is a role,
+  // not a specialty, so it was dropped from this catalog. "Team Lead" IS
+  // kept, since a person's account role and what they're capable of on a
+  // given engagement aren't the same thing -- an Admin-role account can
+  // still be Team Lead on one engagement and Digital Marketing on another.
   const SPECIALTY_LABELS = {
     team_lead: "Team Lead",
     market_research: "Market Research",
     digital_marketing: "Digital Marketing",
     gis: "GIS",
     watering_holes: "Watering Holes",
-    admin: "Admin",
     quality_control: "Quality Control",
   };
   const ROLE_LABELS = { super_admin: "Admin", team_lead: "Team Lead", consultant: "Specialist" };
@@ -706,11 +708,10 @@
   let specialtyFilter = "all"; // all | <specialty key>
   let openManageId = null; // which row's "Manage" dropdown is open (one at a time)
 
-  // The Specialty catalog itself (everything except "team_lead", which is a
-  // Role, not a Specialty) -- also doubles as the fixed "N Specialties"
+  // The full Specialty catalog -- also doubles as the fixed "N Specialties"
   // count in the summary row, so that number doesn't wobble based on who
   // happens to be assigned one today.
-  const SPECIALTY_FILTER_KEYS = Object.keys(SPECIALTY_LABELS).filter((k) => k !== "team_lead");
+  const SPECIALTY_FILTER_KEYS = Object.keys(SPECIALTY_LABELS);
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -872,13 +873,34 @@
     return digits ? `tel:${digits}` : "";
   }
 
-  // Specialty is now shown separately from Role -- "Team Lead" is a Role,
-  // not a Specialty, so a Team Lead whose default_specialty happens to be
-  // the "team_lead" catalog entry shows a blank Specialty cell rather than
-  // a confusing duplicate of their Role badge.
-  function specialtyLabelForDisplay(u) {
-    if (!u.default_specialty || u.default_specialty === "team_lead") return "";
-    return SPECIALTY_LABELS[u.default_specialty] || "";
+  // A person can hold multiple specialties (Greg's EG Team List Rules --
+  // one email, one role, many specialties). u.specialties is populated by
+  // loadUsers() from the user_specialties table.
+  function specialtyLabelsForDisplay(u) {
+    return (u.specialties || []).map((s) => SPECIALTY_LABELS[s] || s).sort((a, b) => a.localeCompare(b));
+  }
+  // Sortable/searchable flat string -- specialties joined alphabetically,
+  // e.g. a person tagged Digital Marketing + GIS sorts/searches as
+  // "digital marketing, gis". See renderList()'s search and sortValue()
+  // for how this is used; the column header links to a short explanation
+  // via the "sort-note" tooltip since sorting a multi-value field isn't
+  // as obvious as sorting a single one.
+  function specialtiesSortValue(u) {
+    return specialtyLabelsForDisplay(u).join(", ").toLowerCase();
+  }
+  // Compact display for the table cell -- shows up to 2 specialty chips
+  // plus a "+N" overflow chip (hover for the full list) so someone with
+  // 3-4 specialties doesn't blow out the row height or the column width.
+  function renderSpecialtyChips(u) {
+    const labels = specialtyLabelsForDisplay(u);
+    if (!labels.length) return '<span class="cell-muted">Not provided</span>';
+    const shown = labels.slice(0, 2);
+    const rest = labels.slice(2);
+    let html = shown.map((l) => `<span class="specialty-chip">${escapeHtml(l)}</span>`).join("");
+    if (rest.length) {
+      html += `<span class="specialty-chip specialty-chip-more" title="${escapeHtml(rest.join(", "))}">+${rest.length}</span>`;
+    }
+    return `<div class="specialty-chip-row">${html}</div>`;
   }
 
   function initials(name) {
@@ -888,6 +910,33 @@
       .slice(0, 2)
       .map((p) => p[0].toUpperCase())
       .join("");
+  }
+
+  // ---------- Specialty checkbox groups (Add + Edit forms) ----------
+  // A person can hold multiple specialties, so both forms use a checkbox
+  // group instead of a single-select dropdown. Built from the catalog so
+  // both forms and the filter dropdown below always stay in sync.
+  function buildSpecialtyCheckboxes(containerId, namePrefix) {
+    const container = $(containerId);
+    container.innerHTML = SPECIALTY_FILTER_KEYS.map((key) => `
+      <label class="specialty-check-item">
+        <input type="checkbox" value="${key}" id="${namePrefix}-${key}" />
+        ${escapeHtml(SPECIALTY_LABELS[key])}
+      </label>
+    `).join("");
+  }
+  buildSpecialtyCheckboxes("add-specialties", "add-spec");
+  buildSpecialtyCheckboxes("pf-specialties", "pf-spec");
+
+  function getCheckedSpecialties(containerId) {
+    return Array.from($(containerId).querySelectorAll("input[type=checkbox]:checked")).map((i) => i.value);
+  }
+  function setCheckedSpecialties(containerId, specialties, disabled) {
+    const set = new Set(specialties || []);
+    $(containerId).querySelectorAll("input[type=checkbox]").forEach((i) => {
+      i.checked = set.has(i.value);
+      i.disabled = !!disabled;
+    });
   }
 
   // ---------- Filters dropdown ----------
@@ -1014,6 +1063,23 @@
     return result;
   }
 
+  // ---------- Specialties (user_specialties table) ----------
+  // replaceUserSpecialties clears and rewrites the full set for a person,
+  // used by the Edit modal where checkboxes can be freely added/removed.
+  // addUserSpecialties just inserts (no clearing) -- used right after
+  // creating a brand-new account, which has nothing to clear yet.
+  async function addUserSpecialties(userId, specialties) {
+    if (!specialties || !specialties.length) return;
+    const rows = specialties.map((s) => ({ organization_id: currentUser.organization_id, user_id: userId, specialty: s }));
+    const { error } = await sb.from("user_specialties").upsert(rows, { onConflict: "user_id,specialty" });
+    if (error) throw new Error(error.message);
+  }
+  async function replaceUserSpecialties(userId, specialties) {
+    const { error: delErr } = await sb.from("user_specialties").delete().eq("user_id", userId);
+    if (delErr) throw new Error(delErr.message);
+    await addUserSpecialties(userId, specialties);
+  }
+
   async function callDeleteTeamMember(userId) {
     const { data: { session } } = await sb.auth.getSession();
     const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-create-team-member`, {
@@ -1079,16 +1145,26 @@
 
   // ---------- Load & render ----------
   async function loadUsers() {
-    const { data, error } = await sb
-      .from("users")
-      .select("id, full_name, title, role, email, secondary_email, phone, about, default_specialty, avatar_url")
-      .order("full_name", { ascending: true });
+    const [{ data, error }, { data: specialtyRows, error: specErr }] = await Promise.all([
+      sb.from("users")
+        .select("id, full_name, title, role, email, secondary_email, phone, about, default_specialty, avatar_url")
+        .order("full_name", { ascending: true }),
+      sb.from("user_specialties").select("user_id, specialty"),
+    ]);
 
     if (error) {
       showBanner("Couldn't load the directory: " + error.message, "error");
       return;
     }
-    allUsers = data;
+    if (specErr) {
+      showBanner("Couldn't load specialties: " + specErr.message, "error");
+    }
+
+    const specialtiesByUser = {};
+    (specialtyRows || []).forEach((r) => {
+      (specialtiesByUser[r.user_id] || (specialtiesByUser[r.user_id] = [])).push(r.specialty);
+    });
+    allUsers = data.map((u) => ({ ...u, specialties: specialtiesByUser[u.id] || [] }));
     renderList();
   }
 
@@ -1102,7 +1178,7 @@
 
   function sortValue(u, field) {
     if (field === "name") return (u.full_name || "").toLowerCase();
-    if (field === "specialty") return specialtyLabelForDisplay(u).toLowerCase();
+    if (field === "specialty") return specialtiesSortValue(u);
     if (field === "role") return (ROLE_LABELS[u.role] || u.role || "").toLowerCase();
     return "";
   }
@@ -1152,14 +1228,13 @@
   function renderList() {
     const q = $("search-box").value.trim().toLowerCase();
     let rows = allUsers.filter((u) => {
-      const specialtyLabel = specialtyLabelForDisplay(u);
       if (roleFilter !== "all" && u.role !== roleFilter) return false;
-      if (specialtyFilter !== "all" && u.default_specialty !== specialtyFilter) return false;
+      if (specialtyFilter !== "all" && !(u.specialties || []).includes(specialtyFilter)) return false;
       if (!q) return true;
       return (
         (u.full_name || "").toLowerCase().includes(q) ||
         (u.title || "").toLowerCase().includes(q) ||
-        specialtyLabel.toLowerCase().includes(q)
+        specialtiesSortValue(u).includes(q)
       );
     });
     rows = sortRows(rows);
@@ -1175,7 +1250,6 @@
     for (const u of rows) {
       const tr = document.createElement("tr");
       const canEditThis = isSuperAdmin || u.id === currentUser.id;
-      const specialtyLabel = specialtyLabelForDisplay(u);
       const phoneDisplay = formatPhoneDisplay(u.phone);
       const isManageOpen = openManageId === u.id;
 
@@ -1200,7 +1274,7 @@
             </div>
           </div>
         </td>
-        <td>${specialtyLabel ? escapeHtml(specialtyLabel) : '<span class="cell-muted">Not provided</span>'}</td>
+        <td>${renderSpecialtyChips(u)}</td>
         <td><span class="role-badge ${u.role}">${ROLE_LABELS[u.role] || u.role}</span></td>
         <td>${phoneDisplay
           ? `<a class="contact-link" href="${telHref(u.phone)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>${escapeHtml(phoneDisplay)}</a>`
@@ -1237,12 +1311,16 @@
     e.preventDefault();
     $("add-error").style.display = "none";
 
+    const specialties = getCheckedSpecialties("add-specialties");
     const payload = {
       full_name: $("add-name").value.trim(),
       email: $("add-email").value.trim(),
       role: $("add-role").value,
       title: $("add-title").value.trim(),
-      default_specialty: $("add-specialty").value,
+      // Kept for backward compat with the edge function's existing
+      // payload shape (first picked specialty, or blank) -- the real,
+      // full set is written to user_specialties separately below.
+      default_specialty: specialties[0] || "",
       phone: $("add-phone").value.trim(),
     };
 
@@ -1252,9 +1330,18 @@
 
     try {
       await callCreateTeamMember(payload);
+      // The edge function's response shape isn't something this page
+      // controls, so instead of relying on it to hand back the new
+      // user's id, look it up by email (unique) once loadUsers() has
+      // the freshly-created row.
+      await loadUsers();
+      const created = allUsers.find((u) => (u.email || "").toLowerCase() === payload.email.toLowerCase());
+      if (created && specialties.length) {
+        await addUserSpecialties(created.id, specialties);
+        await loadUsers();
+      }
       $("add-overlay").classList.remove("open");
       showBanner(`${payload.full_name} added.`, "success");
-      await loadUsers();
     } catch (err) {
       $("add-error").textContent = err.message;
       $("add-error").style.display = "block";
@@ -1320,6 +1407,10 @@
           secondary_email: p.secondary_email || "",
           default_specialty: p.default_specialty,
         });
+        if (p.default_specialty) {
+          const { data: newUser } = await sb.from("users").select("id").eq("email", p.email).maybeSingle();
+          if (newUser) await addUserSpecialties(newUser.id, [p.default_specialty]);
+        }
         statusEl.textContent = "Created";
         statusEl.className = "import-status created";
         created++;
@@ -1393,13 +1484,29 @@
     "administration": "admin",
     "quality control": "quality_control",
   };
-  // A person can appear on multiple rows (one per specialty they cover).
-  // When picking their single default_specialty/title, Team Lead wins if
-  // present, otherwise the first specialty found in this priority order.
-  const SPECIALTY_PRIORITY = ["team_lead", "market_research", "digital_marketing", "gis", "watering_holes", "admin", "quality_control"];
+  // A person can appear on multiple rows (one per specialty they cover) --
+  // ALL of those become real specialty tags now (Greg's EG Team List
+  // Rules: one email can have multiple specialties). This priority order
+  // is only used to pick ONE representative specialty for the auto-filled
+  // Title and the Team-Lead role-upgrade check below, not to drop the rest.
+  const SPECIALTY_PRIORITY = ["team_lead", "market_research", "digital_marketing", "gis", "watering_holes", "quality_control"];
 
   function normalizePosition(pos) {
     return (pos || "").trim().toLowerCase().replace(/\s+/g, " ");
+  }
+
+  // "Admin" positions in the source spreadsheet map to nothing here on
+  // purpose (SPECIALTY_LABELS no longer has an "admin" entry -- Greg
+  // dropped it as a specialty, it's a role now) -- matches this importer's
+  // existing cautious stance of never changing anyone's role/permissions
+  // on its own.
+  function matchedSpecialties(positions) {
+    const found = new Set();
+    for (const pos of positions) {
+      const key = POSITION_SPECIALTY_MAP[pos];
+      if (key && SPECIALTY_LABELS[key]) found.add(key);
+    }
+    return [...found];
   }
 
   let rosterPlan = []; // built on file select, executed on "Apply Changes"
@@ -1457,21 +1564,23 @@
 
     rosterPlan = [];
     for (const [email, p] of people) {
-      const specialty = SPECIALTY_PRIORITY.find((s) => [...p.positions].some((pos) => POSITION_SPECIALTY_MAP[pos] === s)) || null;
-      const title = specialty ? SPECIALTY_LABELS[specialty] : "";
+      const specialties = matchedSpecialties([...p.positions]);
+      const primary = SPECIALTY_PRIORITY.find((s) => specialties.includes(s)) || null;
+      const title = primary ? SPECIALTY_LABELS[primary] : "";
       const existing = existingByEmail[email];
 
       if (!existing) {
         rosterPlan.push({
           action: "create",
           label: p.full_name || email,
+          specialties,
           payload: {
             full_name: p.full_name || email,
             email,
-            role: specialty === "team_lead" ? "team_lead" : "consultant",
+            role: primary === "team_lead" ? "team_lead" : "consultant",
             title,
             phone: p.phone,
-            default_specialty: specialty || "",
+            default_specialty: primary || "",
           },
         });
         continue;
@@ -1481,17 +1590,21 @@
       if (p.full_name && p.full_name !== existing.full_name) updates.full_name = p.full_name;
       if (p.phone && p.phone !== (existing.phone || "")) updates.phone = p.phone;
       if (title && title !== (existing.title || "")) updates.title = title;
-      if (specialty && specialty !== (existing.default_specialty || "")) updates.default_specialty = specialty;
+      if (primary && primary !== (existing.default_specialty || "")) updates.default_specialty = primary;
       // Never touch an existing Super Admin's role, and never demote an
       // existing Team Lead back to Consultant via import — only ever
       // upgrade a plain Consultant up to Team Lead when the roster says so.
-      if (specialty === "team_lead" && existing.role === "consultant") updates.role = "team_lead";
+      if (primary === "team_lead" && existing.role === "consultant") updates.role = "team_lead";
+      // Additive only — never remove a specialty someone already has just
+      // because this particular file doesn't mention it.
+      const specialtiesToAdd = specialties.filter((s) => !(existing.specialties || []).includes(s));
 
       rosterPlan.push({
-        action: Object.keys(updates).length ? "update" : "none",
+        action: (Object.keys(updates).length || specialtiesToAdd.length) ? "update" : "none",
         label: existing.full_name,
         userId: existing.id,
         updates,
+        specialtiesToAdd,
       });
     }
 
@@ -1533,13 +1646,22 @@
         if (plan.action === "create") {
           statusEl.textContent = "Creating…";
           await callCreateTeamMember(plan.payload);
+          if (plan.specialties && plan.specialties.length) {
+            const { data: newUser } = await sb.from("users").select("id").eq("email", plan.payload.email).maybeSingle();
+            if (newUser) await addUserSpecialties(newUser.id, plan.specialties);
+          }
           statusEl.textContent = "Created";
           statusEl.className = "import-status created";
           created++;
         } else {
           statusEl.textContent = "Updating…";
-          const { error } = await sb.from("users").update(plan.updates).eq("id", plan.userId);
-          if (error) throw new Error(error.message);
+          if (Object.keys(plan.updates).length) {
+            const { error } = await sb.from("users").update(plan.updates).eq("id", plan.userId);
+            if (error) throw new Error(error.message);
+          }
+          if (plan.specialtiesToAdd && plan.specialtiesToAdd.length) {
+            await addUserSpecialties(plan.userId, plan.specialtiesToAdd);
+          }
           statusEl.textContent = "Updated";
           statusEl.className = "import-status updated";
           updated++;
@@ -1649,13 +1771,13 @@
 
     renderAvatarField(u, canEdit);
     $("pf-name").textContent = u.full_name;
-    $("pf-title-display").textContent = u.title || (u.default_specialty ? SPECIALTY_LABELS[u.default_specialty] : "") || "";
+    $("pf-title-display").textContent = u.title || specialtyLabelsForDisplay(u).join(", ") || "";
     $("pf-role-badge").textContent = ROLE_LABELS[u.role] || u.role;
     $("pf-role-badge").className = "role-badge " + u.role;
 
     $("pf-id").value = u.id;
     $("pf-title").value = u.title || "";
-    $("pf-specialty").value = u.default_specialty || "";
+    setCheckedSpecialties("pf-specialties", u.specialties, !canEdit);
     $("pf-role").value = u.role;
     $("pf-about").value = u.about || "";
     $("pf-secondary-email").value = u.secondary_email || "";
@@ -1664,7 +1786,6 @@
 
     // Lock down fields the viewer isn't allowed to touch
     $("pf-title").disabled = !canEdit;
-    $("pf-specialty").disabled = !canEdit;
     $("pf-about").disabled = !canEdit;
     $("pf-secondary-email").disabled = !canEdit;
     $("pf-phone").disabled = !canEdit;
@@ -1745,9 +1866,13 @@
       return;
     }
 
+    const specialties = getCheckedSpecialties("pf-specialties");
     const payload = {
       title: $("pf-title").value.trim() || null,
-      default_specialty: $("pf-specialty").value || null,
+      // Kept in sync with the first checked specialty for backward compat
+      // with anything still reading the old single-value column; the real
+      // source of truth is now user_specialties, written below.
+      default_specialty: specialties[0] || null,
       about: $("pf-about").value.trim() || null,
       secondary_email: $("pf-secondary-email").value.trim() || null,
       phone: $("pf-phone").value.trim() || null,
@@ -1762,13 +1887,24 @@
 
     const { error } = await sb.from("users").update(payload).eq("id", openProfileId);
 
-    saveBtn.disabled = false;
-    saveBtn.textContent = "Save";
-
     if (error) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save";
       showBanner("Couldn't save: " + error.message, "error");
       return;
     }
+
+    try {
+      await replaceUserSpecialties(openProfileId, specialties);
+    } catch (err) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save";
+      showBanner("Profile fields saved, but specialties failed to save: " + err.message, "error");
+      return;
+    }
+
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save";
 
     closeProfile();
     showBanner("Profile updated.", "success");
