@@ -49,6 +49,18 @@
   }
   .profile-dropdown button:hover, header .profile-dropdown button:hover { background: #eef1f4; color: var(--text); }
 
+  #view-as-select {
+    font-size: 12px; font-weight: 600; color: #fff; background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; padding: 5px 8px; cursor: pointer;
+  }
+  #view-as-select option { color: #111; }
+  .preview-banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    background: #fdf1dc; border: 1px solid #f0d5a3; border-radius: 10px; padding: 10px 16px; margin-bottom: 18px;
+    font-size: 13px; color: #7a5410;
+  }
+  .preview-banner button { flex-shrink: 0; }
+
   #notif-wrap { position: relative; }
   #notif-bell { position: relative; font-size: 15px; line-height: 1; }
   .notif-count { position: absolute; top: -3px; right: -3px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; min-width: 16px; height: 16px; border-radius: 999px; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
@@ -453,6 +465,13 @@
           I'm here if you have any questions — just click <strong>Ask AI</strong> any time.
         </div>
       </div>
+      <div id="view-as-wrap" class="hidden">
+        <select id="view-as-select" title="Preview the dashboard as a different role">
+          <option value="">Viewing as: Admin</option>
+          <option value="team_lead">Viewing as: Team Lead</option>
+          <option value="consultant">Viewing as: Specialist</option>
+        </select>
+      </div>
       <div id="notif-wrap" class="hidden">
         <button class="btn-ghost" id="notif-bell" title="Notifications">
           &#128276;
@@ -519,6 +538,11 @@
 
   <main>
     <div id="banner"></div>
+
+    <div class="preview-banner hidden" id="preview-banner">
+      <span>&#128065; Previewing the dashboard as a <strong id="preview-banner-role"></strong> &mdash; showing which sections that role sees, with no personal engagements/hours filled in (not your real data).</span>
+      <button type="button" class="btn-secondary" id="preview-exit-btn">Return to Admin view</button>
+    </div>
 
     <div class="page-header">
       <h1 id="greeting-heading">Welcome</h1>
@@ -651,6 +675,21 @@
   let currentUser = null;
   let isSuperAdminUser = false;
   let isTeamLeadUser = false;
+  let isRealSuperAdmin = false;         // the signed-in user's ACTUAL role -- never changed by "view as" preview
+  let viewAsRole = null;                // null = real role. "team_lead" | "consultant" while previewing
+  // Snapshots of the Admin's own real personal data, taken once after the
+  // initial load. "View as" swaps the live myClientIds/hoursThisMonth/etc.
+  // (used throughout rendering) to empty/zero while previewing, then
+  // restores from these snapshots on exit -- so previewing never has to
+  // re-fetch anything, and never shows the Admin's real numbers under a
+  // different role's label.
+  let realMyClientIds = new Set();
+  let realHoursThisMonth = 0;
+  let realMyOpenTasksCount = 0;
+  let realMyBillableOpenCount = 0;
+  let realMyAssignedSteps = [];
+  let realMyBillableAssignments = [];
+  let realMyTasksDueItems = [];
   let allClients = [];
   let teamLeadByClient = {};
   let consultantsByClient = {};
@@ -899,6 +938,13 @@
 
     isSuperAdminUser = profile.role === "super_admin";
     isTeamLeadUser = profile.role === "team_lead";
+    isRealSuperAdmin = isSuperAdminUser;
+    // "View as" preview is Admin-only -- lets an Admin see which sections
+    // of this page a Team Lead or Specialist would see, without switching
+    // accounts. The control itself always stays visible (gated on the REAL
+    // role) so there's always a way back, even while previewing a role that
+    // wouldn't normally see it.
+    $("view-as-wrap").classList.toggle("hidden", !isRealSuperAdmin);
 
     // The toolbar's global search bar is for everyone; only the "+ Add
     // Engagement" button is Super-Admin-only — accept_client_application()
@@ -942,11 +988,73 @@
     renderRecentActivityPanel();
     renderQuickActions();
 
+    // Snapshot the real personal numbers once, right after they've loaded --
+    // "view as" swaps the live variables below to empty/zero while
+    // previewing, then restores from these snapshots on exit.
+    realMyClientIds = new Set(myClientIds);
+    realHoursThisMonth = hoursThisMonth;
+    realMyOpenTasksCount = myOpenTasksCount;
+    realMyBillableOpenCount = myBillableOpenCount;
+    realMyAssignedSteps = myAssignedSteps.slice();
+    realMyBillableAssignments = myBillableAssignments.slice();
+    realMyTasksDueItems = myTasksDueItems.slice();
+
     // An engagement-tab link lands here with ?tab=attention (etc.) so it's a
     // real, bookmarkable URL instead of silent in-page state.
     const tabParam = new URLSearchParams(location.search).get("tab");
     if (tabParam && ["all", "attention", "recent"].includes(tabParam)) setEngagementTab(tabParam);
   }
+
+  // ---------- "View as" role preview (Admin only) ----------
+  // Lets an Admin see which sections of this page appear for a Team Lead or
+  // Specialist without switching accounts. This only ever changes what
+  // renders in THIS browser tab -- it doesn't touch the server, doesn't
+  // re-authenticate, and never shows the Admin's own real assignments/hours
+  // under a different role's label (they're blanked to empty/zero instead,
+  // per Greg: "no assigned engagements, hours, or other things -- just a way
+  // to see how the interface changes").
+  const VIEW_AS_LABELS = { team_lead: "Team Lead", consultant: "Specialist" };
+  function applyViewAs(role) {
+    viewAsRole = role || null;
+    const previewing = viewAsRole !== null;
+
+    myClientIds = previewing ? new Set() : new Set(realMyClientIds);
+    hoursThisMonth = previewing ? 0 : realHoursThisMonth;
+    myOpenTasksCount = previewing ? 0 : realMyOpenTasksCount;
+    myBillableOpenCount = previewing ? 0 : realMyBillableOpenCount;
+    myAssignedSteps = previewing ? [] : realMyAssignedSteps.slice();
+    myBillableAssignments = previewing ? [] : realMyBillableAssignments.slice();
+    myTasksDueItems = previewing ? [] : realMyTasksDueItems.slice();
+
+    const effectiveRole = viewAsRole || currentUser.role;
+    isSuperAdminUser = effectiveRole === "super_admin";
+    isTeamLeadUser = effectiveRole === "team_lead";
+
+    $("add-client-btn").classList.toggle("hidden", !isSuperAdminUser);
+    $("admin-tools-wrap").classList.toggle("hidden", !isSuperAdminUser);
+    $("eng-scope-select").classList.toggle("hidden", !(isSuperAdminUser || isTeamLeadUser));
+
+    engagementScope = isSuperAdminUser ? "all" : "mine";
+    engagementTab = "all";
+    engagementsExpanded = false;
+    tasksDuePanelOpen = false;
+    $("tasks-due-panel").classList.add("hidden");
+    $("eng-tabs").querySelectorAll("[data-tab]").forEach((b) => b.classList.remove("active"));
+
+    $("preview-banner").classList.toggle("hidden", !previewing);
+    if (previewing) $("preview-banner-role").textContent = VIEW_AS_LABELS[viewAsRole] || viewAsRole;
+    $("view-as-select").value = viewAsRole || "";
+
+    updateScopeButtons();
+    renderPersonalStats();
+    renderWorkloadLine();
+    renderNeedsAttention();
+    renderEngagementsList();
+    renderRecentActivityPanel();
+    renderQuickActions();
+  }
+  $("view-as-select").addEventListener("change", () => applyViewAs($("view-as-select").value));
+  $("preview-exit-btn").addEventListener("click", () => applyViewAs(null));
 
   function setGreeting(fullName) {
     const hour = new Date().getHours();
