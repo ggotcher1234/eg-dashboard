@@ -927,11 +927,13 @@
     await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex()]);
     await loadMyBillableTasks(); // needs allClients + myAssignmentRows, both settled above
     buildTasksDueItems();
-    // "Mine" is always the default, even for a Team Lead/Admin with zero
-    // personal assignments -- the empty state note ("You're not assigned to
-    // any engagements yet.") already covers that case, so there's no need
-    // to silently switch them to the org-wide view instead.
-    engagementScope = "mine";
+    // "Mine" is the default for Team Leads and Specialists -- their own
+    // work is the most useful first view, even if it's empty (the "You're
+    // not assigned to any engagements yet." note covers that case). Admins
+    // default to "All" instead: an Admin's job is the org-wide picture, not
+    // their own handful of assignments, per the role-based hierarchy
+    // (Specialist: my work first. Team Lead: team workload. Admin: everything.).
+    engagementScope = isSuperAdminUser ? "all" : "mine";
     updateScopeButtons();
     renderPersonalStats();
     renderWorkloadLine();
