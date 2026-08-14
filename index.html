@@ -883,6 +883,7 @@
     setGreeting(profile.full_name);
 
     await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries()]);
+    await loadMyBillableTasks(); // needs allClients + myAssignmentRows, both settled above
     engagementScope = myClientIds.size > 0 ? "mine" : "all";
     updateScopeButtons();
     renderPersonalStats();
@@ -1057,12 +1058,43 @@
   }
 
   // ---------- My assignments / next steps / hours (personalization) ----------
+  let myAssignmentRows = []; // client_assignments where user_id = me: id, client_id, specialty_type, hours_allotted
   async function loadMyAssignments() {
     const { data, error } = await sb
       .from("client_assignments")
-      .select("client_id")
+      .select("id, client_id, specialty_type, hours_allotted")
       .eq("user_id", currentUser.id);
-    myClientIds = new Set(error ? [] : (data || []).map((r) => r.client_id));
+    myAssignmentRows = error ? [] : (data || []);
+    myClientIds = new Set(myAssignmentRows.map((r) => r.client_id));
+  }
+
+  // Admin and Quality Control are sunk costs (mirrors client_control_center.html
+  // and client_workspace.html): those hours count as spent the moment
+  // they're allotted, with no time_entries logging expected, so they never
+  // show up as "hours left to bill."
+  const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+
+  // Greg: if I'm still holding unbilled hours on a specialty slot -- say
+  // Digital Marketing on an active engagement -- that's a task due too, not
+  // just an explicitly assigned Project Next Step. One "task" per
+  // (engagement, specialty) assignment that still has hours_allotted >
+  // hours actually logged, on engagements that aren't Closed yet.
+  let myBillableOpenCount = 0;
+  async function loadMyBillableTasks() {
+    myBillableOpenCount = 0;
+    if (!myAssignmentRows.length) return;
+    const loggedIds = myAssignmentRows.filter((a) => !SUNK_COST_SPECIALTIES.includes(a.specialty_type)).map((a) => a.id);
+    let hoursByAssignment = {};
+    if (loggedIds.length) {
+      const { data: entries } = await sb.from("time_entries").select("assignment_id, hours").in("assignment_id", loggedIds);
+      for (const e of entries || []) hoursByAssignment[e.assignment_id] = (hoursByAssignment[e.assignment_id] || 0) + Number(e.hours || 0);
+    }
+    const clientStatusById = Object.fromEntries(allClients.map((c) => [c.id, c.project_status]));
+    for (const a of myAssignmentRows) {
+      if (clientStatusById[a.client_id] === "closed") continue; // wrapped up -- nothing left to bill
+      const used = SUNK_COST_SPECIALTIES.includes(a.specialty_type) ? Number(a.hours_allotted || 0) : (hoursByAssignment[a.id] || 0);
+      if (Number(a.hours_allotted || 0) - used > 0) myBillableOpenCount++;
+    }
   }
 
   // Powers the "Next: ..." line on each engagement row and the Tasks Due
@@ -1115,10 +1147,14 @@
   function renderPersonalStats() {
     const attentionCount = computeNeedsAttention(myClientIds).length;
     const hoursDisplay = hoursThisMonth % 1 ? hoursThisMonth.toFixed(1) : String(hoursThisMonth);
+    // Tasks Due = explicitly assigned, incomplete Project Next Steps, PLUS
+    // one per (engagement, specialty) assignment that still has unbilled
+    // hours (hours_allotted > hours logged) on a not-yet-Closed engagement.
+    const tasksDue = myOpenTasksCount + myBillableOpenCount;
     const stats = [
       { value: myClientIds.size, label: "My Engagements", tint: "stat-navy" },
       { value: attentionCount, label: "Needs Attention", tint: "stat-coral" },
-      { value: myOpenTasksCount, label: "Tasks Due", tint: "stat-amber" },
+      { value: tasksDue, label: "Tasks Due", tint: "stat-amber" },
       { value: hoursDisplay, label: "Hours This Month", tint: "stat-accent" },
     ];
     $("personal-stat-grid").innerHTML = stats.map((s) => `
