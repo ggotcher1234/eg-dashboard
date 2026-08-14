@@ -646,6 +646,20 @@
               <div class="ql-sub">Team leads and specialist contacts</div>
             </div>
           </a>
+          <a class="quicklink quicklink-compact q-green admin-only-tool hidden" href="client_applications.html">
+            <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.7 0 3.29.47 4.65 1.28"/><path d="M21 3v6h-6"/></svg></div>
+            <div>
+              <div class="ql-title">Engagement Applications</div>
+              <div class="ql-sub">Review and manage applications</div>
+            </div>
+          </a>
+          <a class="quicklink quicklink-compact q-purple admin-only-tool hidden" href="invoicing_report.html">
+            <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+            <div>
+              <div class="ql-title">Invoicing Report</div>
+              <div class="ql-sub">Hours, budgets, and billing flags</div>
+            </div>
+          </a>
         </div>
       </div>
     </div>
@@ -944,9 +958,10 @@
     if (isSuperAdminUser) await loadNotifications();
 
     // Programs and EG Team are shared reference directories everyone can
-    // browse -- Engagement Applications and Invoicing Report are the two
-    // sensitive/admin-only actions that used to sit alongside them, so
-    // they're gone from this row entirely rather than gated per role.
+    // browse. Engagement Applications and Invoicing Report stay in the same
+    // row but are Super-Admin-only -- reviewing applications and payroll
+    // figures aren't something a Team Lead/Specialist needs from here.
+    document.querySelectorAll(".admin-only-tool").forEach((el) => el.classList.toggle("hidden", !isSuperAdminUser));
 
     // Only Team Leads and Admins juggle other people's engagements day to
     // day — a Specialist's landing view is just "mine," no toggle needed.
@@ -1015,6 +1030,7 @@
     isTeamLeadUser = effectiveRole === "team_lead";
 
     $("add-client-btn").classList.toggle("hidden", !isSuperAdminUser);
+    document.querySelectorAll(".admin-only-tool").forEach((el) => el.classList.toggle("hidden", !isSuperAdminUser));
     $("eng-scope-select").classList.toggle("hidden", !(isSuperAdminUser || isTeamLeadUser));
 
     engagementScope = isSuperAdminUser ? "all" : "mine";
