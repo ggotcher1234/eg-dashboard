@@ -952,6 +952,12 @@
     renderStatusToggle(client);
     fillCompanyForm(client);
     await loadWorkflowLinks(client.id);
+    // Team Members is loaded first, on its own, because the Project Next
+    // Steps "Assigned To" dropdown (built inside renderListSections, right
+    // below) needs the engagement's team roster already in hand -- loading
+    // it in the same Promise.all as everything else would race it against
+    // the Next Steps render with no guarantee it wins.
+    listData.team = await TEAM_CONFIG.customLoad(client.id);
     renderListSections();
     await Promise.all(LIST_CONFIGS.map((cfg) => loadListSection(cfg)));
     await loadPartnerContactsSection();
@@ -1463,12 +1469,27 @@
       }));
     },
   };
+  // Assignee options for the Next Steps "Assigned To" dropdown -- drawn
+  // from this engagement's own Team Members (listData.team, loaded before
+  // renderListSections() so it's always ready by the time this is called),
+  // deduped by user in case someone holds two specialty slots.
+  function nextStepAssigneeOptions() {
+    const seen = new Map();
+    for (const r of listData.team || []) {
+      if (!r.user_id || !r.users || !r.users.full_name) continue;
+      if (!seen.has(r.user_id)) seen.set(r.user_id, r.users.full_name);
+    }
+    return [...seen.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }
   const NEXT_STEPS_CONFIG = {
     key: "next_steps", table: "client_next_steps", title: "Project Next Steps",
     hint: "Track project milestones. Shows as a checkable list on the client dashboard.",
     fields: [
       { name: "description", label: "Task", type: "text", required: true },
       { name: "notes", label: "Notes/Date/Time", type: "text" },
+      { name: "assigned_to", label: "Assigned To", type: "select", options: nextStepAssigneeOptions, blankLabel: "Unassigned" },
     ],
     isChecklist: true,
     render: (r) => ({ title: r.description, sub: r.notes || "" }),
@@ -1487,7 +1508,7 @@
     customLoad: async (clientId) => {
       const { data, error } = await sb
         .from("client_assignments")
-        .select("id, specialty_type, is_team_lead, users(full_name, email, phone)")
+        .select("id, user_id, specialty_type, is_team_lead, users(full_name, email, phone)")
         .eq("client_id", clientId)
         .not("user_id", "is", null)
         .order("is_team_lead", { ascending: false });
@@ -1578,7 +1599,14 @@
             ${cfg.fields.map((f) => `
               <div class="field">
                 <label for="${cfg.key}-new-${f.name}">${escapeHtml(f.label)}</label>
+                ${f.type === "select" ? `
+                <select id="${cfg.key}-new-${f.name}" ${f.required ? "required" : ""}>
+                  <option value="">${escapeHtml(f.blankLabel || "—")}</option>
+                  ${f.options().map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join("")}
+                </select>
+                ` : `
                 <input type="${f.type}" id="${cfg.key}-new-${f.name}" ${f.required ? "required" : ""} />
+                `}
               </div>
             `).join("")}
             <button type="submit" class="btn-secondary btn-sm">+ Add</button>
@@ -1873,6 +1901,12 @@
           ${cfg.fields.map((f) => `
             <div class="field">
               <label>${escapeHtml(f.label)}</label>
+              ${f.type === "select" ? `
+              <select class="row-select-edit" data-row-id="${r.id}" data-field="${f.name}" ${f.required ? "required" : ""}>
+                <option value="">${escapeHtml(f.blankLabel || "—")}</option>
+                ${f.options().map((o) => `<option value="${escapeHtml(o.value)}" ${r[f.name] === o.value ? "selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}
+              </select>
+              ` : `
               <input
                 type="${f.type}"
                 class="row-input-edit"
@@ -1882,6 +1916,7 @@
                 value="${escapeHtml(r[f.name] || "")}"
                 style="${cfg.isChecklist && f.name === cfg.fields[0].name && r.completed ? "text-decoration:line-through; color:var(--muted);" : ""}"
               />
+              `}
             </div>
           `).join("")}
         </div>
@@ -1906,6 +1941,24 @@
         if (error) {
           showBanner(`Couldn't save: ` + error.message, "error");
           inp.value = original;
+          return;
+        }
+        const row = (listData[cfg.key] || []).find((x) => x.id === rowId);
+        if (row) row[fieldName] = value || null;
+      });
+    });
+
+    // Select fields (currently just Next Steps' Assigned To) save on
+    // "change" rather than "blur" -- a dropdown pick is already a complete,
+    // deliberate choice, no need to wait for the field to lose focus.
+    list.querySelectorAll(".row-select-edit").forEach((sel) => {
+      sel.addEventListener("change", async () => {
+        const value = sel.value;
+        const rowId = sel.dataset.rowId;
+        const fieldName = sel.dataset.field;
+        const { error } = await sb.from(cfg.table).update({ [fieldName]: value || null }).eq("id", rowId);
+        if (error) {
+          showBanner(`Couldn't save: ` + error.message, "error");
           return;
         }
         const row = (listData[cfg.key] || []).find((x) => x.id === rowId);

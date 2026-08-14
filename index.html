@@ -1070,18 +1070,26 @@
   // client, and a per-client count of how many are still open. There's no
   // due-date field on this table yet, so this is a task name only, never a
   // fabricated date.
+  // myOpenTasksCount is a real per-person count -- Project Next Steps rows
+  // with assigned_to = the signed-in user and completed = false (see
+  // 050_next_step_assignee.sql). Distinct from openStepCountByClient below,
+  // which is engagement-wide and just powers the "Next: ..." line on each
+  // engagement row, not the Tasks Due stat.
+  let myOpenTasksCount = 0;
   async function loadNextSteps() {
     const { data, error } = await sb
       .from("client_next_steps")
-      .select("client_id, description, completed, sort_order")
+      .select("client_id, description, completed, sort_order, assigned_to")
       .order("sort_order");
     nextStepByClient = {};
     openStepCountByClient = {};
+    myOpenTasksCount = 0;
     if (error) return; // RLS narrows this for non-admins viewing outside their own assignments -- fall back to blank "Next" fields rather than blocking the page.
     for (const s of data || []) {
       if (s.completed) continue;
       openStepCountByClient[s.client_id] = (openStepCountByClient[s.client_id] || 0) + 1;
       if (!nextStepByClient[s.client_id]) nextStepByClient[s.client_id] = s.description;
+      if (s.assigned_to === currentUser.id) myOpenTasksCount++;
     }
   }
 
@@ -1105,13 +1113,12 @@
   // schema), so it's left out rather than showing a made-up number, same
   // rule the old "Research Due This Week" card followed.
   function renderPersonalStats() {
-    const tasksDue = [...myClientIds].reduce((sum, id) => sum + (openStepCountByClient[id] || 0), 0);
     const attentionCount = computeNeedsAttention(myClientIds).length;
     const hoursDisplay = hoursThisMonth % 1 ? hoursThisMonth.toFixed(1) : String(hoursThisMonth);
     const stats = [
       { value: myClientIds.size, label: "My Engagements", tint: "stat-navy" },
       { value: attentionCount, label: "Needs Attention", tint: "stat-coral" },
-      { value: tasksDue, label: "Tasks Due", tint: "stat-amber" },
+      { value: myOpenTasksCount, label: "Tasks Due", tint: "stat-amber" },
       { value: hoursDisplay, label: "Hours This Month", tint: "stat-accent" },
     ];
     $("personal-stat-grid").innerHTML = stats.map((s) => `
