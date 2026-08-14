@@ -550,7 +550,7 @@
         <div class="section-header" style="margin-bottom:8px;"><h2 class="section-title">Quick Actions</h2></div>
         <div class="quick-actions-list" id="quick-actions-list"></div>
         <div class="qa-picker hidden" id="qa-picker">
-          <div class="qa-picker-label">Add research to which engagement?</div>
+          <div class="qa-picker-label" id="qa-picker-label"></div>
           <input type="text" id="qa-picker-search" placeholder="Search engagements…" autocomplete="off" />
           <div class="qa-picker-list" id="qa-picker-list"></div>
         </div>
@@ -1307,13 +1307,12 @@
   });
 
   // ---------- Quick Actions ----------
-  // Log Hours / Edit Dashboard need a specific engagement to open into --
-  // rather than a picker, these deep-link to the user's most recently
-  // updated assigned engagement (falling back to the most recently updated
-  // engagement overall if they have no assignments yet). Add Research is
-  // different -- a specialist could be adding research to any of several
-  // accounts on a given day, not just the most recent one -- so that action
-  // opens a small picker instead of guessing.
+  // Edit Dashboard deep-links to the user's most recently updated assigned
+  // engagement (falling back to the most recently updated engagement
+  // overall if they have no assignments yet). Add Research and Log Hours
+  // both open the same small picker instead of guessing -- a specialist
+  // juggling several accounts could mean any of them on a given day, not
+  // just the most recently touched one.
   //
   // "Add Engagement" was dropped from this list: this panel is the
   // specialist's daily work console, and creating a brand-new engagement
@@ -1334,10 +1333,10 @@
       { label: "Ask AI", icon: "M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z", onClick: openAiDrawer },
     ];
     if (engagementPickerPool().length) {
-      actions.push({ label: "Add Research", icon: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.35-4.35", onClick: toggleResearchPicker });
+      actions.push({ label: "Add Research", icon: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.35-4.35", onClick: () => toggleQaPicker("research") });
+      actions.push({ label: "Log Hours", icon: "M12 8v4l3 3M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", onClick: () => toggleQaPicker("hours") });
     }
     if (recent) {
-      actions.push({ label: `Log Hours — ${recent.name}`, icon: "M12 8v4l3 3M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", onClick: () => { window.location.href = `client_workspace.html?client=${recent.id}`; } });
       actions.push({ label: `Edit Dashboard — ${recent.name}`, icon: "M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z", onClick: () => { window.location.href = `client_profile.html?client=${recent.id}`; } });
     }
     $("quick-actions-list").innerHTML = actions.map((a, i) => `
@@ -1349,28 +1348,35 @@
     $("quick-actions-list").querySelectorAll("[data-qa]").forEach((btn) => {
       btn.addEventListener("click", () => actions[Number(btn.dataset.qa)].onClick());
     });
-    closeResearchPicker();
+    closeQaPicker();
   }
 
-  // "Add Research" opens a small picker (rather than assuming the most
-  // recent engagement) so a specialist juggling several accounts can pick
-  // the right one, then lands directly in that engagement's Research
-  // section on the Edit Dashboard editor.
+  // Add Research and Log Hours share one small picker (rather than assuming
+  // the most recent engagement) so a specialist can pick the right account,
+  // then lands directly on that engagement's Research section or its
+  // Assignments & Hours page.
+  const QA_PICKER_CONFIG = {
+    research: { label: "Add research to which engagement?", buildUrl: (id) => `client_profile.html?client=${id}&section=research` },
+    hours: { label: "Log hours for which engagement?", buildUrl: (id) => `client_workspace.html?client=${id}` },
+  };
   let qaPickerOpen = false;
-  function closeResearchPicker() {
+  let qaPickerMode = null;
+  function closeQaPicker() {
     qaPickerOpen = false;
+    qaPickerMode = null;
     $("qa-picker").classList.add("hidden");
   }
-  function toggleResearchPicker() {
-    qaPickerOpen = !qaPickerOpen;
-    $("qa-picker").classList.toggle("hidden", !qaPickerOpen);
-    if (qaPickerOpen) {
-      $("qa-picker-search").value = "";
-      renderResearchPickerList("");
-      $("qa-picker-search").focus();
-    }
+  function toggleQaPicker(mode) {
+    if (qaPickerOpen && qaPickerMode === mode) { closeQaPicker(); return; }
+    qaPickerOpen = true;
+    qaPickerMode = mode;
+    $("qa-picker").classList.remove("hidden");
+    $("qa-picker-label").textContent = QA_PICKER_CONFIG[mode].label;
+    $("qa-picker-search").value = "";
+    renderQaPickerList("");
+    $("qa-picker-search").focus();
   }
-  function renderResearchPickerList(query) {
+  function renderQaPickerList(query) {
     const q = query.trim().toLowerCase();
     const pool = engagementPickerPool();
     const matches = (q ? pool.filter((c) => c.name.toLowerCase().includes(q)) : pool)
@@ -1381,13 +1387,13 @@
       : `<div class="cr-meta" style="padding:8px 10px;">No engagements match.</div>`;
     $("qa-picker-list").querySelectorAll(".qa-picker-item").forEach((item) => {
       item.addEventListener("click", () => {
-        window.location.href = `client_profile.html?client=${item.dataset.clientId}&section=research`;
+        window.location.href = QA_PICKER_CONFIG[qaPickerMode].buildUrl(item.dataset.clientId);
       });
     });
   }
-  $("qa-picker-search").addEventListener("input", () => renderResearchPickerList($("qa-picker-search").value));
+  $("qa-picker-search").addEventListener("input", () => renderQaPickerList($("qa-picker-search").value));
   document.addEventListener("click", (e) => {
-    if (qaPickerOpen && !$("qa-picker").contains(e.target) && !e.target.closest('[data-qa]')) closeResearchPicker();
+    if (qaPickerOpen && !$("qa-picker").contains(e.target) && !e.target.closest('[data-qa]')) closeQaPicker();
   });
 
   // ---------- Engagement Pipeline (Team Lead + Admin) ----------
