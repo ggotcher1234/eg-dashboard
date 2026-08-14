@@ -135,10 +135,9 @@
   .gsr-item .gsr-meta { font-size: 12px; color: var(--muted); flex-shrink: 0; }
   .gsr-ask-ai { color: #6528a3; font-weight: 700; border-top: 1px solid var(--border); }
 
-  /* KPI cards -- each pipeline stage gets its own saturated accent (left
-     bar + diagonal tint wash + colored value/label) so the row reads as a
-     bold, easy-to-scan pipeline instead of five identical gray boxes. */
-  .stat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 26px; }
+  /* KPI cards -- each stat gets its own saturated accent (left bar +
+     diagonal tint wash + colored value/label) so the personal-stat-grid row
+     reads as bold and easy-to-scan instead of identical gray boxes. */
   .stat-card {
     position: relative; border: none; border-radius: 12px; padding: 13px 16px 13px 19px;
     cursor: pointer; overflow: hidden; box-shadow: 0 1px 3px rgba(20,48,77,0.07), 0 3px 8px rgba(20,48,77,0.05);
@@ -261,11 +260,7 @@
   .badge-closed { background: #eef1f4; color: var(--muted); }
 
   @media (max-width: 720px) {
-    .stat-grid { grid-template-columns: repeat(2, 1fr); }
     .client-row { flex-wrap: wrap; row-gap: 10px; }
-  }
-  @media (max-width: 420px) {
-    .stat-grid { grid-template-columns: 1fr; }
   }
 
   /* ---------- Top nav + Ask AI ---------- */
@@ -575,7 +570,6 @@
             <button type="button" class="eng-tab" data-tab="recent">Recent</button>
           </div>
         </div>
-        <div class="cr-meta hidden" id="pipeline-filter-note" style="margin:0 18px 12px;"></div>
         <div id="engagements-list"></div>
         <div id="engagements-empty" class="empty-note hidden" style="border:none; box-shadow:none; margin:0;">You're not assigned to any engagements yet.</div>
         <div class="eng-view-all-wrap hidden" id="eng-view-all-wrap">
@@ -612,11 +606,6 @@
     </div>
 
     <div class="management-section">
-      <div id="pipeline-wrap" class="hidden">
-        <div class="subsection-label">Engagement Pipeline</div>
-        <div class="stat-grid" id="stat-grid"></div>
-      </div>
-
       <div id="admin-tools-wrap" class="hidden">
         <div class="subsection-label">Management</div>
         <div class="admin-grid" id="quicklinks-section">
@@ -673,7 +662,6 @@
   let hoursThisMonth = 0;               // sum of my time_entries this calendar month
   let engagementScope = "mine";         // "mine" | "all" -- whose engagements the list/Needs Attention show
   let engagementTab = "all";            // "all" | "attention" | "recent"
-  let pipelineFilterStatus = null;      // set by clicking an Engagement Pipeline card
   let engagementsExpanded = false;      // My Engagements list is capped until "View all" is clicked
   const ENGAGEMENTS_ROW_LIMIT = 6;
 
@@ -924,12 +912,11 @@
     $("notif-wrap").classList.toggle("hidden", !isSuperAdminUser);
     if (isSuperAdminUser) await loadNotifications();
 
-    // The org-wide Engagement Pipeline counters (Pending/Accepted/In
-    // Progress/On Hold/Closed) are Team-Lead-and-up now, not the first thing
-    // everyone sees — that's an operations view, not a specialist's daily
-    // work console. The Management row (Applications/Programs/Team/
-    // Invoicing) stays Super-Admin-only, same as before.
-    $("pipeline-wrap").classList.toggle("hidden", !(isSuperAdminUser || isTeamLeadUser));
+    // The Management row (Applications/Programs/Team/Invoicing) stays
+    // Super-Admin-only. The org-wide pipeline counters (Pending/Accepted/In
+    // Progress/On Hold/Closed) that used to live here now live as counts on
+    // the filter tabs of the Engagements page itself, right where they're
+    // used to filter.
     $("admin-tools-wrap").classList.toggle("hidden", !isSuperAdminUser);
 
     // Only Team Leads and Admins juggle other people's engagements day to
@@ -949,7 +936,6 @@
     renderEngagementsList();
     renderRecentActivityPanel();
     renderQuickActions();
-    if (isSuperAdminUser || isTeamLeadUser) await renderPipelineCards();
 
     // An engagement-tab link lands here with ?tab=attention (etc.) so it's a
     // real, bookmarkable URL instead of silent in-page state.
@@ -1407,14 +1393,12 @@
   }
   function setEngagementScope(scope) {
     engagementScope = scope;
-    pipelineFilterStatus = null;
     updateScopeButtons();
     renderNeedsAttention();
     renderEngagementsList();
   }
   function setEngagementTab(tab) {
     engagementTab = tab;
-    pipelineFilterStatus = null;
     $("eng-tabs").querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
     renderEngagementsList();
   }
@@ -1423,7 +1407,6 @@
     const list = $("engagements-list");
     let pool = engagementScope === "mine" ? allClients.filter((c) => myClientIds.has(c.id)) : allClients;
 
-    if (pipelineFilterStatus) pool = pool.filter((c) => c.project_status === pipelineFilterStatus);
     if (engagementTab === "attention") {
       const ids = new Set(computeNeedsAttention(engagementScope === "mine" ? myClientIds : null).map((it) => it.client.id));
       pool = pool.filter((c) => ids.has(c.id));
@@ -1431,15 +1414,6 @@
       pool = [...pool].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)).slice(0, 10);
     } else {
       pool = [...pool].sort((a, b) => a.name.localeCompare(b.name));
-    }
-
-    const note = $("pipeline-filter-note");
-    if (pipelineFilterStatus) {
-      note.innerHTML = `Filtered to <strong>${escapeHtml(PROJECT_STATUS_LABELS[pipelineFilterStatus] || pipelineFilterStatus)}</strong> engagements &middot; <a href="#" id="clear-pipeline-filter">Clear filter ✕</a>`;
-      note.classList.remove("hidden");
-      document.getElementById("clear-pipeline-filter").addEventListener("click", (e) => { e.preventDefault(); pipelineFilterStatus = null; renderEngagementsList(); });
-    } else {
-      note.classList.add("hidden");
     }
 
     $("engagements-empty").classList.toggle("hidden", pool.length > 0);
@@ -1650,58 +1624,6 @@
   document.addEventListener("click", (e) => {
     if (qaPickerOpen && !$("qa-picker").contains(e.target) && !e.target.closest('[data-qa]')) closeQaPicker();
   });
-
-  // ---------- Engagement Pipeline (Team Lead + Admin) ----------
-  // "Research Due This Week" from the original mockup isn't shown here —
-  // there's no due-date tracking on research questions/documents yet, and a
-  // stat card showing a made-up number would be worse than not having it.
-  // On Hold stands in for now as a similarly "needs attention" metric drawn
-  // from real data; happy to wire up real due dates later if that's wanted.
-  async function renderPipelineCards() {
-    const acceptedCount = allClients.filter((c) => c.project_status === "accepted").length;
-    const inProgressCount = allClients.filter((c) => c.project_status === "in_progress").length;
-    const onHoldCount = allClients.filter((c) => c.project_status === "on_hold").length;
-    const closedCount = allClients.filter((c) => c.project_status === "closed").length;
-
-    const { count: pendingAppCount } = await sb
-      .from("client_applications")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending");
-
-    // These five track one pipeline end to end — an application comes in
-    // (Pending), gets accepted (Accepted), work starts (In Progress), and
-    // it either stalls (On Hold) or wraps up (Closed). In Progress gets the
-    // single accent treatment (stat-accent) so the row has one clear focal
-    // point instead of five equal-weight boxes.
-    const stats = [
-      { key: "pending_apps", value: pendingAppCount || 0, label: "Pending Applications", tint: "stat-amber" },
-      { key: "accepted", value: acceptedCount, label: "Accepted", tint: "stat-navy" },
-      { key: "in_progress", value: inProgressCount, label: "In Progress", tint: "stat-accent" },
-      { key: "on_hold", value: onHoldCount, label: "On Hold", tint: "stat-coral" },
-      { key: "closed", value: closedCount, label: "Closed", tint: "stat-purple" },
-    ];
-    $("stat-grid").innerHTML = stats.map((s) => `
-      <div class="stat-card ${s.tint}" data-stat="${s.key}">
-        <div class="stat-value">${s.value}</div>
-        <div class="stat-label">${escapeHtml(s.label)}</div>
-      </div>
-    `).join("");
-
-    $("stat-grid").querySelectorAll("[data-stat]").forEach((card) => {
-      card.addEventListener("click", () => {
-        const key = card.dataset.stat;
-        if (key === "pending_apps") { window.location.href = "client_applications.html?status=pending"; return; }
-        engagementScope = "all";
-        engagementTab = "all";
-        updateScopeButtons();
-        $("eng-tabs").querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === "all"));
-        pipelineFilterStatus = key;
-        renderNeedsAttention();
-        renderEngagementsList();
-        $("engagements-section").scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    });
-  }
 
 </script>
 </body>

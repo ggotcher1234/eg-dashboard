@@ -76,8 +76,14 @@
   .drafts-empty { padding: 16px 14px; font-size: 12.5px; color: var(--muted); text-align: center; }
   .drafts-empty.hidden { display: none; }
   .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
-  .tab { padding: 7px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: #eef1f4; color: var(--muted); cursor: pointer; }
+  .tab {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    padding: 6px 14px; border-radius: 12px; font-size: 12.5px; font-weight: 600;
+    background: #eef1f4; color: var(--muted); cursor: pointer; line-height: 1.2;
+  }
   .tab.active { background: var(--navy); color: #fff; }
+  .tab-count { font-size: 11px; font-weight: 700; opacity: 0.65; }
+  .tab.active .tab-count { opacity: 0.85; }
 
   table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
@@ -476,13 +482,13 @@
     <div id="view-list">
       <div class="toolbar">
         <div class="tabs">
-          <span class="tab" data-status="pending">Pending</span>
-          <span class="tab" data-status="accepted">Accepted</span>
-          <span class="tab" data-status="in_progress">In Progress</span>
-          <span class="tab" data-status="on_hold">On Hold</span>
-          <span class="tab" data-status="closed">Closed</span>
-          <span class="tab" data-status="rejected">Rejected</span>
-          <span class="tab active" data-status="all">All</span>
+          <span class="tab" data-status="pending">Pending<span class="tab-count">0</span></span>
+          <span class="tab" data-status="accepted">Accepted<span class="tab-count">0</span></span>
+          <span class="tab" data-status="in_progress">In Progress<span class="tab-count">0</span></span>
+          <span class="tab" data-status="on_hold">On Hold<span class="tab-count">0</span></span>
+          <span class="tab" data-status="closed">Closed<span class="tab-count">0</span></span>
+          <span class="tab" data-status="rejected">Rejected<span class="tab-count">0</span></span>
+          <span class="tab active" data-status="all">All<span class="tab-count">0</span></span>
         </div>
         <div class="drafts-wrap" id="drafts-wrap">
           <button type="button" class="btn-secondary" id="drafts-btn">
@@ -1248,19 +1254,34 @@
     });
   });
 
+  // Same filtering logic renderList uses to build the table, extracted so
+  // the tab counts can never drift from what the table actually shows.
+  function rowsForTab(status) {
+    if (status === "all") return allApplications;
+    if (PROJECT_STATUSES.includes(status)) {
+      return allApplications.filter((a) => a.status === "accepted" && (clientsByApp[a.id]?.project_status || "accepted") === status);
+    }
+    return allApplications.filter((a) => a.status === status);
+  }
+
+  // Counts moved here from the old Engagement Pipeline row on the home
+  // page — they belong on the filter tabs themselves, right where they're
+  // used, same pattern as the Drafts count badge (just stacked under the
+  // label instead of beside it, since every tab gets one here).
+  function updateTabCounts() {
+    document.querySelectorAll(".tab").forEach((tab) => {
+      const el = tab.querySelector(".tab-count");
+      if (el) el.textContent = rowsForTab(tab.dataset.status).length;
+    });
+  }
+
   function renderList() {
     const showProjectCol = activeTab === "all" || PROJECT_STATUSES.includes(activeTab);
     $("project-status-header").classList.toggle("hidden", !showProjectCol);
     $("delete-header").classList.toggle("hidden", !isSuperAdmin);
 
-    let rows;
-    if (activeTab === "all") {
-      rows = allApplications;
-    } else if (PROJECT_STATUSES.includes(activeTab)) {
-      rows = allApplications.filter((a) => a.status === "accepted" && (clientsByApp[a.id]?.project_status || "accepted") === activeTab);
-    } else {
-      rows = allApplications.filter((a) => a.status === activeTab);
-    }
+    const rows = rowsForTab(activeTab);
+    updateTabCounts();
 
     const pById = partnersById();
     const uById = usersById();
