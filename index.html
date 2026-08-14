@@ -96,10 +96,13 @@
   .page-header { padding: 22px 0 16px; }
   .page-header h1 { margin: 0; font-size: 25px; font-weight: 700; color: var(--navy); letter-spacing: -0.2px; }
   .page-header p { margin: 5px 0 0; font-size: 14px; color: var(--muted); }
+  .workload-line { margin: 6px 0 0; font-size: 13px; color: var(--navy-light); font-weight: 600; }
 
   /* Search + Add Client sit inside one bordered panel so the toolbar reads
      as a single "control panel" row instead of a search bar floating on
-     its own above the page. */
+     its own above the page. This bar now also doubles as the global
+     omnisearch (engagements/specialists/programs/ask AI), so it's always
+     shown rather than gated to admins. */
   .toolbar-row {
     display: flex; gap: 8px; margin-bottom: 22px; align-items: center; justify-content: flex-end;
     background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 8px;
@@ -118,6 +121,19 @@
     background: var(--accent); color: #fff;
   }
   #add-client-btn:hover { background: var(--accent-dark); }
+
+  .global-search-wrap { position: relative; flex: 1; max-width: 640px; }
+  .global-search-results {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #fff;
+    border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(20,48,77,0.15);
+    z-index: 70; max-height: 420px; overflow-y: auto;
+  }
+  .gsr-group-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; padding: 10px 14px 4px; }
+  .gsr-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; cursor: pointer; font-size: 13.5px; }
+  .gsr-item:hover { background: #f4f6f8; }
+  .gsr-item .gsr-name { font-weight: 600; color: var(--text); }
+  .gsr-item .gsr-meta { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .gsr-ask-ai { color: #6528a3; font-weight: 700; border-top: 1px solid var(--border); }
 
   /* KPI cards -- each pipeline stage gets its own saturated accent (left
      bar + diagonal tint wash + colored value/label) so the row reads as a
@@ -330,6 +346,12 @@
   .tasks-due-row .tdr-open { font-size: 12.5px; font-weight: 700; color: var(--navy-light); white-space: nowrap; }
 
   .attention-list { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 28px; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
+  .attention-empty-strip {
+    display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 18px;
+    background: #e9f5ee; border: 1px solid #bfe3cf; border-radius: 10px; color: #24614a;
+    font-size: 13.5px; font-weight: 600; margin-bottom: 24px;
+  }
+  .attention-empty-strip .ae-check { font-size: 15px; }
   .attention-row { display: flex; align-items: center; gap: 12px; padding: 12px 18px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.15s ease; }
   .attention-row:last-child { border-bottom: none; }
   .attention-row:hover { background: #f8fafb; }
@@ -342,17 +364,20 @@
 
   .engagements-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
   .eng-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px 18px 12px; }
+  .eng-title-row { display: flex; align-items: center; gap: 8px; }
   .eng-title { margin: 0; font-size: 16px; font-weight: 800; color: var(--navy); }
-  .eng-search-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 0 18px 14px; }
-  .eng-search-wrap .search-box { flex: 1; min-width: 200px; }
-  .eng-search-wrap .search-box input { height: 38px; background: #f6f8fa; }
-  .eng-tabs, .eng-scope-toggle { display: flex; gap: 4px; background: #eef1f4; border-radius: 999px; padding: 3px; flex-shrink: 0; }
-  .eng-tab, .eng-scope-btn { background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 999px; white-space: nowrap; }
+  .eng-scope-select {
+    font-size: 12.5px; font-weight: 700; color: var(--navy); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 8px; background: #fff; cursor: pointer;
+  }
+  .eng-tabs { display: flex; gap: 4px; background: #eef1f4; border-radius: 999px; padding: 3px; flex-shrink: 0; }
+  .eng-tab { background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 999px; white-space: nowrap; }
   .eng-tab.active { background: #fff; color: var(--navy); box-shadow: 0 1px 3px rgba(20,48,77,0.1); }
-  .eng-scope-btn.active { background: var(--navy); color: #fff; }
   .cr-next { font-size: 12.5px; color: var(--navy-light); font-weight: 600; }
   .eng-icon-sq { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0; }
   .eng-tl-block { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .eng-tl-caption { font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
+  .eng-tl-name-row { display: flex; align-items: center; gap: 8px; }
   .eng-tl-block .eng-tl-name { font-size: 13px; color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .avatar-sm { width: 28px; height: 28px; border-radius: 50%; background: var(--navy-light); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; overflow: hidden; }
   .avatar-sm img { width: 100%; height: 100%; object-fit: cover; }
@@ -503,10 +528,18 @@
     <div class="page-header">
       <h1 id="greeting-heading">Welcome</h1>
       <p id="greeting-sub">Here's what needs your attention today.</p>
+      <p class="workload-line hidden" id="workload-line"></p>
     </div>
 
-    <div class="toolbar-row hidden" id="toolbar-row">
-      <a class="btn-primary" id="add-client-btn" href="client_applications.html?new=1">+ Add Engagement</a>
+    <div class="toolbar-row" id="toolbar-row">
+      <div class="global-search-wrap">
+        <div class="search-box">
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="global-search-input" placeholder="Search engagements, specialists, programs, or ask AI…" autocomplete="off" />
+        </div>
+        <div class="global-search-results hidden" id="global-search-results"></div>
+      </div>
+      <a class="btn-primary hidden" id="add-client-btn" href="client_applications.html?new=1">+ Add Engagement</a>
     </div>
 
     <div class="personal-stat-grid" id="personal-stat-grid"></div>
@@ -517,30 +550,29 @@
     </div>
 
     <div id="attention-section">
-      <div class="section-header">
+      <div class="section-header" id="attention-header">
         <h2 class="section-title">Needs Attention</h2>
       </div>
       <div class="attention-list" id="attention-list"></div>
+      <div class="attention-empty-strip hidden" id="attention-empty-strip">
+        <span class="ae-check">&#10003;</span> Nothing needs attention right now.
+      </div>
     </div>
 
     <div id="engagements-section" style="margin-top:8px;">
       <div class="engagements-panel">
         <div class="eng-panel-header">
-          <h2 class="eng-title">My Engagements</h2>
+          <div class="eng-title-row">
+            <h2 class="eng-title">My Engagements</h2>
+            <select class="eng-scope-select hidden" id="eng-scope-select">
+              <option value="mine">Mine</option>
+              <option value="all">All</option>
+            </select>
+          </div>
           <div class="eng-tabs" id="eng-tabs">
             <button type="button" class="eng-tab active" data-tab="all">All</button>
             <button type="button" class="eng-tab" data-tab="attention">Needs Attention</button>
             <button type="button" class="eng-tab" data-tab="recent">Recent</button>
-          </div>
-        </div>
-        <div class="eng-search-wrap">
-          <div class="search-box">
-            <span class="search-icon">&#128269;</span>
-            <input type="text" id="search-input" placeholder="Search engagements…" autocomplete="off" />
-          </div>
-          <div class="eng-scope-toggle hidden" id="eng-scope-toggle">
-            <button type="button" class="eng-scope-btn active" data-scope="mine">Mine</button>
-            <button type="button" class="eng-scope-btn" data-scope="all">All</button>
           </div>
         </div>
         <div class="cr-meta hidden" id="pipeline-filter-note" style="margin:0 18px 12px;"></div>
@@ -555,13 +587,21 @@
     <div class="two-col-row">
       <div class="panel-card">
         <div class="section-header" style="margin-bottom:8px;">
-          <h2 class="section-title">Recent Activity</h2>
+          <h2 class="section-title">My Recent Activity</h2>
           <a href="#" id="view-all-activity-link">View all activity &rarr;</a>
         </div>
         <div id="recent-activity-list"></div>
       </div>
       <div class="panel-card">
-        <div class="section-header" style="margin-bottom:8px;"><h2 class="section-title">Quick Actions</h2></div>
+        <div class="section-header" style="margin-bottom:8px;">
+          <h2 class="section-title">Quick Actions</h2>
+          <div style="position:relative;">
+            <button type="button" class="btn-ghost" id="qa-more-btn" title="More actions" style="padding:4px 8px;">&#8942;</button>
+            <div class="notif-dropdown hidden" id="qa-more-dropdown" style="width:170px; right:0; top:32px;">
+              <button type="button" class="btn-ghost" id="qa-more-edit-dashboard" style="width:100%; text-align:left; padding:10px 14px; border-radius:0;">Edit Dashboard</button>
+            </div>
+          </div>
+        </div>
         <div class="quick-actions-list" id="quick-actions-list"></div>
         <div class="qa-picker hidden" id="qa-picker">
           <div class="qa-picker-label" id="qa-picker-label"></div>
@@ -634,7 +674,6 @@
   let engagementScope = "mine";         // "mine" | "all" -- whose engagements the list/Needs Attention show
   let engagementTab = "all";            // "all" | "attention" | "recent"
   let pipelineFilterStatus = null;      // set by clicking an Engagement Pipeline card
-  let searchQuery = "";
   let engagementsExpanded = false;      // My Engagements list is capped until "View all" is clicked
   const ENGAGEMENTS_ROW_LIMIT = 6;
 
@@ -874,11 +913,10 @@
     isSuperAdminUser = profile.role === "super_admin";
     isTeamLeadUser = profile.role === "team_lead";
 
-    // Creating a client (and assigning who works it) is Super-Admin-only —
-    // accept_client_application() already enforces this server-side, this
-    // just keeps a Team Lead/Consultant from seeing a button (or an empty
-    // toolbar) that would only fail for them.
-    $("toolbar-row").classList.toggle("hidden", !isSuperAdminUser);
+    // The toolbar's global search bar is for everyone; only the "+ Add
+    // Engagement" button is Super-Admin-only — accept_client_application()
+    // already enforces this server-side, this just keeps a Team
+    // Lead/Consultant from seeing a button that would only fail for them.
     $("add-client-btn").classList.toggle("hidden", !isSuperAdminUser);
 
     // Notifications (e.g. "Team Lead closed client X") are Super-Admin-only —
@@ -896,16 +934,17 @@
 
     // Only Team Leads and Admins juggle other people's engagements day to
     // day — a Specialist's landing view is just "mine," no toggle needed.
-    $("eng-scope-toggle").classList.toggle("hidden", !(isSuperAdminUser || isTeamLeadUser));
+    $("eng-scope-select").classList.toggle("hidden", !(isSuperAdminUser || isTeamLeadUser));
 
     setGreeting(profile.full_name);
 
-    await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries()]);
+    await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex()]);
     await loadMyBillableTasks(); // needs allClients + myAssignmentRows, both settled above
     buildTasksDueItems();
     engagementScope = myClientIds.size > 0 ? "mine" : "all";
     updateScopeButtons();
     renderPersonalStats();
+    renderWorkloadLine();
     renderNeedsAttention();
     renderEngagementsList();
     renderRecentActivityPanel();
@@ -1023,6 +1062,19 @@
     const { data, error } = await sb.from("clients").select("*, econ_dev_companies(code, name)").order("name");
     if (error) { showBanner("Couldn't load clients: " + error.message, "error"); return; }
     allClients = data;
+  }
+
+  // Lightweight index for the global search bar's "specialists" and
+  // "programs" results — engagements themselves come from allClients.
+  let allSpecialists = [];
+  let allPrograms = [];
+  async function loadSearchIndex() {
+    const [{ data: users }, { data: programs }] = await Promise.all([
+      sb.from("users").select("id, full_name").order("full_name"),
+      sb.from("econ_dev_companies").select("id, name, code").order("name"),
+    ]);
+    allSpecialists = users || [];
+    allPrograms = programs || [];
   }
 
   // Team Lead (for the "Team Lead: ..." line on each client card) plus
@@ -1210,7 +1262,7 @@
       { value: myClientIds.size, label: "My Engagements", tint: "stat-navy" },
       { value: attentionCount, label: "Needs Attention", tint: "stat-coral" },
       { value: tasksDue, label: "Tasks Due", tint: "stat-amber", key: "tasks_due" },
-      { value: hoursDisplay, label: "Hours This Month", tint: "stat-accent" },
+      { value: hoursDisplay, label: "Billable Hours MTD", tint: "stat-accent" },
     ];
     $("personal-stat-grid").innerHTML = stats.map((s) => `
       <div class="stat-card ${s.tint} ${s.key ? "stat-clickable" : ""}" ${s.key ? `data-personal-stat="${s.key}"` : ""}>
@@ -1219,6 +1271,20 @@
       </div>
     `).join("");
     document.querySelector('[data-personal-stat="tasks_due"]').addEventListener("click", toggleTasksDuePanel);
+  }
+
+  // Small capacity signal beside the greeting -- real data only. No
+  // "available for additional work" claim here on purpose: nothing in the
+  // schema defines a target/max-hours per specialist to compare against, so
+  // that would be a guess dressed up as a fact, same rule the rest of this
+  // page follows.
+  function renderWorkloadLine() {
+    const activeCount = allClients.filter((c) => myClientIds.has(c.id) && c.project_status !== "closed").length;
+    const hoursDisplay = hoursThisMonth % 1 ? hoursThisMonth.toFixed(1) : String(hoursThisMonth);
+    const el = $("workload-line");
+    if (activeCount === 0 && hoursThisMonth === 0) { el.classList.add("hidden"); return; }
+    el.textContent = `${activeCount} active engagement${activeCount === 1 ? "" : "s"} · ${hoursDisplay} hrs MTD`;
+    el.classList.remove("hidden");
   }
 
   // Clicking the Tasks Due tile opens a small panel listing exactly which
@@ -1281,24 +1347,30 @@
   function renderNeedsAttention() {
     const scopeIds = engagementScope === "mine" ? myClientIds : null;
     const items = computeNeedsAttention(scopeIds).slice(0, 6);
-    $("attention-list").innerHTML = items.length
-      ? items.map((it) => `
-          <div class="attention-row" data-client-id="${it.client.id}">
-            <span class="attention-dot sev-${it.severity}"></span>
-            <div>
-              <div class="att-name">${escapeHtml(it.client.name)}</div>
-              <div class="att-reason">${escapeHtml(it.reason)}</div>
-            </div>
-            <span class="att-arrow">Open &rarr;</span>
-          </div>
-        `).join("")
-      : `<div class="notif-empty">Nothing needs attention right now — nice work.</div>`;
+    const hasItems = items.length > 0;
+    // When nothing needs attention, collapse the full card down to a slim
+    // status strip instead of an empty-feeling full-height section -- keeps
+    // My Engagements from getting pushed unnecessarily far down the page.
+    $("attention-header").classList.toggle("hidden", !hasItems);
+    $("attention-list").classList.toggle("hidden", !hasItems);
+    $("attention-empty-strip").classList.toggle("hidden", hasItems);
+    if (!hasItems) return;
+    $("attention-list").innerHTML = items.map((it) => `
+      <div class="attention-row" data-client-id="${it.client.id}">
+        <span class="attention-dot sev-${it.severity}"></span>
+        <div>
+          <div class="att-name">${escapeHtml(it.client.name)}</div>
+          <div class="att-reason">${escapeHtml(it.reason)}</div>
+        </div>
+        <span class="att-arrow">Open &rarr;</span>
+      </div>
+    `).join("");
     $("attention-list").querySelectorAll(".attention-row").forEach((row) => {
       row.addEventListener("click", () => { window.location.href = `client_control_center.html?client=${row.dataset.clientId}`; });
     });
   }
 
-  // ---------- My Engagements (tabs + scope + search) ----------
+  // ---------- My Engagements (tabs + Mine/All scope) ----------
   function clientRowHtml(c) {
     const partner = c.econ_dev_companies;
     const teamLead = teamLeadByClient[c.id];
@@ -1313,7 +1385,7 @@
           <div class="cr-meta">${partner ? escapeHtml(partner.code) : "—"} &middot; Last activity: ${formatLastActivity(c.updated_at)}</div>
         </div>
         <div class="eng-tl-block">
-          ${teamLead ? `<div class="avatar-sm">${teamLeadAvatar ? `<img src="${escapeHtml(teamLeadAvatar)}" alt="" />` : escapeHtml(initials(teamLead))}</div><span class="eng-tl-name">${escapeHtml(teamLead)}</span>` : `<span class="cr-meta">No Team Lead</span>`}
+          ${teamLead ? `<div><div class="eng-tl-caption">Team Lead</div><div class="eng-tl-name-row"><div class="avatar-sm">${teamLeadAvatar ? `<img src="${escapeHtml(teamLeadAvatar)}" alt="" />` : escapeHtml(initials(teamLead))}</div><span class="eng-tl-name">${escapeHtml(teamLead)}</span></div></div>` : `<span class="cr-meta">No Team Lead</span>`}
         </div>
         <div><span class="badge badge-${c.project_status}">${PROJECT_STATUS_LABELS[c.project_status] || c.project_status}</span></div>
         <div class="cr-next">${next ? `Next: ${escapeHtml(next)}` : "—"}</div>
@@ -1331,9 +1403,7 @@
   }
 
   function updateScopeButtons() {
-    $("eng-scope-toggle").querySelectorAll("[data-scope]").forEach((b) => {
-      b.classList.toggle("active", b.dataset.scope === engagementScope);
-    });
+    $("eng-scope-select").value = engagementScope;
   }
   function setEngagementScope(scope) {
     engagementScope = scope;
@@ -1353,22 +1423,18 @@
     const list = $("engagements-list");
     let pool = engagementScope === "mine" ? allClients.filter((c) => myClientIds.has(c.id)) : allClients;
 
-    if (searchQuery) {
-      pool = allClients.filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    if (pipelineFilterStatus) pool = pool.filter((c) => c.project_status === pipelineFilterStatus);
+    if (engagementTab === "attention") {
+      const ids = new Set(computeNeedsAttention(engagementScope === "mine" ? myClientIds : null).map((it) => it.client.id));
+      pool = pool.filter((c) => ids.has(c.id));
+    } else if (engagementTab === "recent") {
+      pool = [...pool].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)).slice(0, 10);
     } else {
-      if (pipelineFilterStatus) pool = pool.filter((c) => c.project_status === pipelineFilterStatus);
-      if (engagementTab === "attention") {
-        const ids = new Set(computeNeedsAttention(engagementScope === "mine" ? myClientIds : null).map((it) => it.client.id));
-        pool = pool.filter((c) => ids.has(c.id));
-      } else if (engagementTab === "recent") {
-        pool = [...pool].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)).slice(0, 10);
-      } else {
-        pool = [...pool].sort((a, b) => a.name.localeCompare(b.name));
-      }
+      pool = [...pool].sort((a, b) => a.name.localeCompare(b.name));
     }
 
     const note = $("pipeline-filter-note");
-    if (!searchQuery && pipelineFilterStatus) {
+    if (pipelineFilterStatus) {
       note.innerHTML = `Filtered to <strong>${escapeHtml(PROJECT_STATUS_LABELS[pipelineFilterStatus] || pipelineFilterStatus)}</strong> engagements &middot; <a href="#" id="clear-pipeline-filter">Clear filter ✕</a>`;
       note.classList.remove("hidden");
       document.getElementById("clear-pipeline-filter").addEventListener("click", (e) => { e.preventDefault(); pipelineFilterStatus = null; renderEngagementsList(); });
@@ -1376,17 +1442,15 @@
       note.classList.add("hidden");
     }
 
-    $("engagements-empty").classList.toggle("hidden", pool.length > 0 || !!searchQuery);
+    $("engagements-empty").classList.toggle("hidden", pool.length > 0);
 
-    const showAll = engagementsExpanded || searchQuery || pool.length <= ENGAGEMENTS_ROW_LIMIT;
+    const showAll = engagementsExpanded || pool.length <= ENGAGEMENTS_ROW_LIMIT;
     const visible = showAll ? pool : pool.slice(0, ENGAGEMENTS_ROW_LIMIT);
-    list.innerHTML = pool.length
-      ? visible.map(clientRowHtml).join("")
-      : (searchQuery ? `<div class="empty-note">No engagements match "${escapeHtml(searchQuery)}".</div>` : "");
+    list.innerHTML = pool.length ? visible.map(clientRowHtml).join("") : "";
     wireClientRows(list);
 
     const viewAllWrap = $("eng-view-all-wrap");
-    if (!searchQuery && pool.length > ENGAGEMENTS_ROW_LIMIT) {
+    if (pool.length > ENGAGEMENTS_ROW_LIMIT) {
       viewAllWrap.classList.remove("hidden");
       $("eng-view-all-link").textContent = engagementsExpanded ? "Show fewer engagements" : "View all engagements →";
     } else {
@@ -1400,11 +1464,9 @@
     engagementsExpanded = false;
     setEngagementTab(btn.dataset.tab);
   });
-  $("eng-scope-toggle").addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-scope]");
-    if (!btn) return;
+  $("eng-scope-select").addEventListener("change", () => {
     engagementsExpanded = false;
-    setEngagementScope(btn.dataset.scope);
+    setEngagementScope($("eng-scope-select").value);
   });
   $("eng-view-all-link").addEventListener("click", (e) => {
     e.preventDefault();
@@ -1412,16 +1474,75 @@
     renderEngagementsList();
   });
 
-  $("search-input").addEventListener("input", () => {
-    searchQuery = $("search-input").value.trim();
-    renderEngagementsList();
+  // ---------- Global search (engagements / specialists / programs / Ask AI) ----------
+  function renderGlobalSearchResults(query) {
+    const box = $("global-search-results");
+    const q = query.trim().toLowerCase();
+    if (!q) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+
+    const engMatches = allClients.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 5);
+    const specMatches = allSpecialists.filter((u) => u.full_name && u.full_name.toLowerCase().includes(q)).slice(0, 5);
+    const progMatches = allPrograms.filter((p) => (p.name || "").toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q)).slice(0, 5);
+
+    let html = "";
+    if (engMatches.length) {
+      html += `<div class="gsr-group-label">Engagements</div>` + engMatches.map((c) => `
+        <div class="gsr-item" data-gsr-nav="client_control_center.html?client=${c.id}">
+          <span class="gsr-name">${escapeHtml(c.name)}</span>
+          <span class="gsr-meta">${escapeHtml(PROJECT_STATUS_LABELS[c.project_status] || c.project_status)}</span>
+        </div>
+      `).join("");
+    }
+    if (specMatches.length) {
+      html += `<div class="gsr-group-label">Specialists</div>` + specMatches.map((u) => `
+        <div class="gsr-item" data-gsr-nav="team_directory.html">
+          <span class="gsr-name">${escapeHtml(u.full_name)}</span>
+        </div>
+      `).join("");
+    }
+    if (progMatches.length) {
+      html += `<div class="gsr-group-label">Programs</div>` + progMatches.map((p) => `
+        <div class="gsr-item" data-gsr-nav="econ_dev_partners_admin.html">
+          <span class="gsr-name">${escapeHtml(p.name)}</span>
+          <span class="gsr-meta">${escapeHtml(p.code || "")}</span>
+        </div>
+      `).join("");
+    }
+    html += `<div class="gsr-item gsr-ask-ai" data-gsr-ask="1"><span class="gsr-name">Ask AI: "${escapeHtml(query.trim())}"</span></div>`;
+
+    box.innerHTML = html;
+    box.classList.remove("hidden");
+    box.querySelectorAll("[data-gsr-nav]").forEach((el) => {
+      el.addEventListener("click", () => { window.location.href = el.dataset.gsrNav; });
+    });
+    const askRow = box.querySelector("[data-gsr-ask]");
+    if (askRow) {
+      askRow.addEventListener("click", () => {
+        const q2 = $("global-search-input").value.trim();
+        box.classList.add("hidden");
+        $("global-search-input").value = "";
+        openAiDrawer();
+        $("ai-ask-input").value = q2;
+        askAi(q2);
+      });
+    }
+  }
+  $("global-search-input").addEventListener("input", () => renderGlobalSearchResults($("global-search-input").value));
+  $("global-search-input").addEventListener("focus", () => {
+    if ($("global-search-input").value.trim()) renderGlobalSearchResults($("global-search-input").value);
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".global-search-wrap")) $("global-search-results").classList.add("hidden");
   });
 
   // ---------- Recent Activity (small side panel, localStorage-based) ----------
+  // Scoped to My Engagements -- this is a personal dashboard, so "recent"
+  // should mean engagements this specialist actually works, not every
+  // engagement anyone in the org happened to open on this browser.
   function renderRecentActivityPanel() {
-    const recents = getRecents().slice(0, 5);
+    const recents = getRecents().slice(0, 10);
     const byId = Object.fromEntries(allClients.map((c) => [c.id, c]));
-    const rows = recents.map((r) => byId[r.id]).filter(Boolean);
+    const rows = recents.map((r) => byId[r.id]).filter((c) => c && myClientIds.has(c.id)).slice(0, 5);
     $("recent-activity-list").innerHTML = rows.length
       ? rows.map((c) => `<div class="mini-activity-row" data-client-id="${c.id}"><span class="ma-name">${escapeHtml(c.name)}</span><span class="ma-time">${formatLastActivity(c.updated_at)}</span></div>`).join("")
       : `<div class="notif-empty" style="padding:14px 0;">No recent activity yet — engagements you open will show up here.</div>`;
@@ -1456,8 +1577,10 @@
     if (engagementPickerPool().length) {
       actions.push({ label: "Add Research", icon: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.35-4.35", onClick: () => toggleQaPicker("research") });
       actions.push({ label: "Log Hours", icon: "M12 8v4l3 3M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", onClick: () => toggleQaPicker("hours") });
-      actions.push({ label: "Edit Dashboard", icon: "M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z", onClick: () => toggleQaPicker("edit") });
     }
+    // Edit Dashboard moved into the "⋯" overflow menu next to the Quick
+    // Actions header -- it's a less-frequent action than Add Research/Log
+    // Hours, so it no longer competes for space in the primary 2-3 item list.
     $("quick-actions-list").innerHTML = actions.map((a, i) => `
       <button type="button" class="quick-action-btn" data-qa="${i}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${a.icon}"/></svg>
@@ -1469,6 +1592,18 @@
     });
     closeQaPicker();
   }
+
+  $("qa-more-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("qa-more-dropdown").classList.toggle("hidden");
+  });
+  $("qa-more-edit-dashboard").addEventListener("click", () => {
+    $("qa-more-dropdown").classList.add("hidden");
+    toggleQaPicker("edit");
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#qa-more-btn") && !e.target.closest("#qa-more-dropdown")) $("qa-more-dropdown").classList.add("hidden");
+  });
 
   // Add Research and Log Hours share one small picker (rather than assuming
   // the most recent engagement) so a specialist can pick the right account,
