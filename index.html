@@ -1307,12 +1307,10 @@
   });
 
   // ---------- Quick Actions ----------
-  // Edit Dashboard deep-links to the user's most recently updated assigned
-  // engagement (falling back to the most recently updated engagement
-  // overall if they have no assignments yet). Add Research and Log Hours
-  // both open the same small picker instead of guessing -- a specialist
-  // juggling several accounts could mean any of them on a given day, not
-  // just the most recently touched one.
+  // Add Research, Log Hours, and Edit Dashboard all share the same small
+  // picker instead of guessing which engagement a specialist means -- a
+  // specialist juggling several accounts could mean any of them on a given
+  // day, not just the most recently touched one.
   //
   // "Add Engagement" was dropped from this list: this panel is the
   // specialist's daily work console, and creating a brand-new engagement
@@ -1322,22 +1320,14 @@
   function engagementPickerPool() {
     return myClientIds.size ? allClients.filter((c) => myClientIds.has(c.id)) : allClients;
   }
-  function mostRecentEngagement() {
-    const pool = engagementPickerPool();
-    if (!pool.length) return null;
-    return [...pool].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
-  }
   function renderQuickActions() {
-    const recent = mostRecentEngagement();
     const actions = [
       { label: "Ask AI", icon: "M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z", onClick: openAiDrawer },
     ];
     if (engagementPickerPool().length) {
       actions.push({ label: "Add Research", icon: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.35-4.35", onClick: () => toggleQaPicker("research") });
       actions.push({ label: "Log Hours", icon: "M12 8v4l3 3M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", onClick: () => toggleQaPicker("hours") });
-    }
-    if (recent) {
-      actions.push({ label: `Edit Dashboard — ${recent.name}`, icon: "M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z", onClick: () => { window.location.href = `client_profile.html?client=${recent.id}`; } });
+      actions.push({ label: "Edit Dashboard", icon: "M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z", onClick: () => toggleQaPicker("edit") });
     }
     $("quick-actions-list").innerHTML = actions.map((a, i) => `
       <button type="button" class="quick-action-btn" data-qa="${i}">
@@ -1358,6 +1348,7 @@
   const QA_PICKER_CONFIG = {
     research: { label: "Add research to which engagement?", buildUrl: (id) => `client_profile.html?client=${id}&section=research` },
     hours: { label: "Log hours for which engagement?", buildUrl: (id) => `client_workspace.html?client=${id}` },
+    edit: { label: "Edit the dashboard for which engagement?", buildUrl: (id) => `client_profile.html?client=${id}` },
   };
   let qaPickerOpen = false;
   let qaPickerMode = null;
