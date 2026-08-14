@@ -311,6 +311,47 @@
   .ai-answer-actions button:hover { color: var(--text); background: #f4f6f8; }
   .ai-drawer-footer { padding: 12px 22px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); text-align: center; }
 
+  /* ---------- Personalized landing page ---------- */
+  .personal-stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 26px; }
+  @media (max-width: 720px) { .personal-stat-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 420px) { .personal-stat-grid { grid-template-columns: 1fr; } }
+
+  .attention-list { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 28px; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
+  .attention-row { display: flex; align-items: center; gap: 12px; padding: 12px 18px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.15s ease; }
+  .attention-row:last-child { border-bottom: none; }
+  .attention-row:hover { background: #f8fafb; }
+  .attention-dot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; }
+  .attention-dot.sev-high { background: var(--danger); }
+  .attention-dot.sev-med { background: var(--amber); }
+  .attention-row .att-name { font-weight: 700; font-size: 14px; color: var(--navy); }
+  .attention-row .att-reason { font-size: 12.5px; color: var(--muted); margin-top: 1px; }
+  .attention-row .att-arrow { margin-left: auto; font-size: 12.5px; color: var(--navy-light); font-weight: 700; white-space: nowrap; }
+
+  .eng-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .eng-tabs, .eng-scope-toggle { display: flex; gap: 4px; background: #eef1f4; border-radius: 999px; padding: 3px; }
+  .eng-tab, .eng-scope-btn { background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 999px; }
+  .eng-tab.active { background: #fff; color: var(--navy); box-shadow: 0 1px 3px rgba(20,48,77,0.1); }
+  .eng-scope-btn.active { background: var(--navy); color: #fff; }
+  .cr-next { font-size: 12.5px; color: var(--navy-light); margin-top: 3px; font-weight: 600; }
+
+  .two-col-row { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; margin: 30px 0; }
+  @media (max-width: 720px) { .two-col-row { grid-template-columns: 1fr; } }
+  .panel-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
+  .mini-activity-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; cursor: pointer; }
+  .mini-activity-row:last-child { border-bottom: none; }
+  .mini-activity-row .ma-name { font-weight: 600; color: var(--navy); }
+  .mini-activity-row .ma-time { color: var(--muted); font-size: 11.5px; }
+  .quick-actions-list { display: flex; flex-direction: column; gap: 8px; }
+  .quick-action-btn { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: #f6f8fa; color: var(--text); font-size: 13.5px; font-weight: 600; text-align: left; width: 100%; }
+  .quick-action-btn:hover { background: #eef1f4; }
+  .quick-action-btn svg { width: 16px; height: 16px; color: var(--navy-light); flex-shrink: 0; }
+
+  .management-section { margin-top: 8px; padding-top: 26px; border-top: 1px solid var(--border); }
+  .quicklink-compact { padding: 14px 16px 14px 18px; min-width: 180px; }
+  .quicklink-compact .ql-icon { width: 32px; height: 32px; border-radius: 9px; }
+  .quicklink-compact .ql-icon svg { width: 16px; height: 16px; }
+  .quicklink-compact .ql-title { font-size: 13px; }
+  .quicklink-compact .ql-sub { font-size: 11.5px; }
 </style>
 </head>
 <body>
@@ -427,8 +468,8 @@
     <div id="banner"></div>
 
     <div class="page-header">
-      <h1>Engagement Dashboard</h1>
-      <p>Manage engagements, applications, and team resources.</p>
+      <h1 id="greeting-heading">Welcome</h1>
+      <p id="greeting-sub">Here's what needs your attention today.</p>
     </div>
 
     <div class="toolbar-row">
@@ -439,56 +480,89 @@
       <a class="btn-primary" id="add-client-btn" href="client_applications.html?new=1">+ Add Engagement</a>
     </div>
 
-    <div class="stat-grid hidden" id="stat-grid"></div>
+    <div class="personal-stat-grid" id="personal-stat-grid"></div>
 
-    <div id="admin-tools-wrap" class="hidden">
-      <div class="subsection-label">Admin Tools</div>
-      <div class="admin-grid" id="quicklinks-section">
-        <a class="quicklink q-green" href="client_applications.html">
-          <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.7 0 3.29.47 4.65 1.28"/><path d="M21 3v6h-6"/></svg></div>
-          <div>
-            <div class="ql-title">Engagement Applications</div>
-            <div class="ql-sub">Review and manage applications</div>
-          </div>
-        </a>
-        <a class="quicklink q-blue" href="econ_dev_partners_admin.html">
-          <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h1M9 13h1M9 17h1M14 9h1M14 13h1M14 17h1"/></svg></div>
-          <div>
-            <div class="ql-title">Programs</div>
-            <div class="ql-sub">Manage Programs and Managers</div>
-          </div>
-        </a>
-        <a class="quicklink q-amber" href="team_directory.html">
-          <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-          <div>
-            <div class="ql-title">EG Team</div>
-            <div class="ql-sub">Team leads and specialist contacts</div>
-          </div>
-        </a>
-        <a class="quicklink q-purple" href="invoicing_report.html">
-          <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-          <div>
-            <div class="ql-title">Invoicing Report</div>
-            <div class="ql-sub">Hours, budgets, and billing flags</div>
-          </div>
-        </a>
-      </div>
-    </div>
-
-    <div id="recents-section">
+    <div id="attention-section">
       <div class="section-header">
-        <h2 class="section-title" id="recents-title">Recent Engagements</h2>
-        <a href="#" id="view-all-link">View All &rarr;</a>
+        <h2 class="section-title">Needs Attention</h2>
       </div>
-      <div class="client-list" id="recents-list"></div>
+      <div class="attention-list" id="attention-list"></div>
     </div>
 
-    <div id="search-section" class="hidden">
-      <div class="section-header"><h2 class="section-title">Search Results</h2></div>
-      <div class="client-list" id="search-list"></div>
+    <div id="engagements-section" style="margin-top:8px;">
+      <div class="section-header">
+        <h2 class="section-title">My Engagements</h2>
+      </div>
+      <div class="eng-controls">
+        <div class="eng-tabs" id="eng-tabs">
+          <button type="button" class="eng-tab active" data-tab="all">All</button>
+          <button type="button" class="eng-tab" data-tab="attention">Needs Attention</button>
+          <button type="button" class="eng-tab" data-tab="recent">Recently Active</button>
+        </div>
+        <div class="eng-scope-toggle hidden" id="eng-scope-toggle">
+          <button type="button" class="eng-scope-btn active" data-scope="mine">My Engagements</button>
+          <button type="button" class="eng-scope-btn" data-scope="all">All Engagements</button>
+        </div>
+      </div>
+      <div class="cr-meta hidden" id="pipeline-filter-note" style="margin-bottom:10px;"></div>
+      <div class="client-list" id="engagements-list"></div>
+      <div id="engagements-empty" class="empty-note hidden">You're not assigned to any engagements yet.</div>
     </div>
 
-    <div id="all-clients-note" class="empty-note hidden">You're not assigned to any engagements yet.</div>
+    <div class="two-col-row">
+      <div class="panel-card">
+        <div class="section-header" style="margin-bottom:8px;">
+          <h2 class="section-title">Recent Activity</h2>
+          <a href="#" id="view-all-activity-link">View all activity &rarr;</a>
+        </div>
+        <div id="recent-activity-list"></div>
+      </div>
+      <div class="panel-card">
+        <div class="section-header" style="margin-bottom:8px;"><h2 class="section-title">Quick Actions</h2></div>
+        <div class="quick-actions-list" id="quick-actions-list"></div>
+      </div>
+    </div>
+
+    <div class="management-section">
+      <div id="pipeline-wrap" class="hidden">
+        <div class="subsection-label">Engagement Pipeline</div>
+        <div class="stat-grid" id="stat-grid"></div>
+      </div>
+
+      <div id="admin-tools-wrap" class="hidden">
+        <div class="subsection-label">Management</div>
+        <div class="admin-grid" id="quicklinks-section">
+          <a class="quicklink quicklink-compact q-green" href="client_applications.html">
+            <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.7 0 3.29.47 4.65 1.28"/><path d="M21 3v6h-6"/></svg></div>
+            <div>
+              <div class="ql-title">Engagement Applications</div>
+              <div class="ql-sub">Review and manage applications</div>
+            </div>
+          </a>
+          <a class="quicklink quicklink-compact q-blue" href="econ_dev_partners_admin.html">
+            <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h1M9 13h1M9 17h1M14 9h1M14 13h1M14 17h1"/></svg></div>
+            <div>
+              <div class="ql-title">Programs</div>
+              <div class="ql-sub">Manage Programs and Managers</div>
+            </div>
+          </a>
+          <a class="quicklink quicklink-compact q-amber" href="team_directory.html">
+            <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+            <div>
+              <div class="ql-title">EG Team</div>
+              <div class="ql-sub">Team leads and specialist contacts</div>
+            </div>
+          </a>
+          <a class="quicklink quicklink-compact q-purple" href="invoicing_report.html">
+            <div class="ql-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+            <div>
+              <div class="ql-title">Invoicing Report</div>
+              <div class="ql-sub">Hours, budgets, and billing flags</div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -500,11 +574,19 @@
 
   let currentUser = null;
   let isSuperAdminUser = false;
+  let isTeamLeadUser = false;
   let allClients = [];
   let teamLeadByClient = {};
+  let consultantsByClient = {};
   let unreadNotifications = [];
-  let showingAllClients = false;
-  let statFilter = null; // { predicate, label } — set when a KPI card is clicked
+  let myClientIds = new Set();          // client_assignments where user_id = me
+  let nextStepByClient = {};            // client_id -> first incomplete Project Next Step
+  let openStepCountByClient = {};       // client_id -> count of incomplete steps
+  let hoursThisMonth = 0;               // sum of my time_entries this calendar month
+  let engagementScope = "mine";         // "mine" | "all" -- whose engagements the list/Needs Attention show
+  let engagementTab = "all";            // "all" | "attention" | "recent"
+  let pipelineFilterStatus = null;      // set by clicking an Engagement Pipeline card
+  let searchQuery = "";
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -530,10 +612,10 @@
   // having to restate context every time.
   let aiHistory = [];
   const AI_SUGGESTED = [
-    "Which engagements need attention?",
+    "What needs my attention today?",
+    "Which of my engagements haven't been updated this week?",
+    "Show my outstanding deliverables.",
     "Who is close to their hour limit?",
-    "What applications are still pending?",
-    "How many engagements are In Progress right now?",
   ];
   function initAskAi() {
     $("ai-context-text").textContent = AI_CONTEXT_LABEL;
@@ -735,11 +817,9 @@
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = roleLabel(profile.role);
 
-    // Admin-only links (Partners, Applications, Team Directory) are only useful to a
-    // Super Admin day-to-day — Team Leads/Consultants get a clean client-picker-only view.
     isSuperAdminUser = profile.role === "super_admin";
-    $("admin-tools-wrap").classList.toggle("hidden", !isSuperAdminUser);
-    $("stat-grid").classList.toggle("hidden", !isSuperAdminUser);
+    isTeamLeadUser = profile.role === "team_lead";
+
     // Creating a client (and assigning who works it) is Super-Admin-only —
     // accept_client_application() already enforces this server-side, this
     // just keeps a Team Lead/Consultant from seeing a button that would
@@ -751,23 +831,45 @@
     $("notif-wrap").classList.toggle("hidden", !isSuperAdminUser);
     if (isSuperAdminUser) await loadNotifications();
 
-    await loadClients();
-    await loadTeamLeads();
-    renderRecents();
-    if (isSuperAdminUser) await renderStatCards();
+    // The org-wide Engagement Pipeline counters (Pending/Accepted/In
+    // Progress/On Hold/Closed) are Team-Lead-and-up now, not the first thing
+    // everyone sees — that's an operations view, not a specialist's daily
+    // work console. The Management row (Applications/Programs/Team/
+    // Invoicing) stays Super-Admin-only, same as before.
+    $("pipeline-wrap").classList.toggle("hidden", !(isSuperAdminUser || isTeamLeadUser));
+    $("admin-tools-wrap").classList.toggle("hidden", !isSuperAdminUser);
 
-    // A KPI card click lands here with ?filter=in_progress (etc.) so the
-    // filtered view is a real, bookmarkable, back-button-able URL instead of
-    // silent in-page state.
-    const filterParam = new URLSearchParams(location.search).get("filter");
-    if (filterParam) applyStatFilter(filterParam, false);
+    // Only Team Leads and Admins juggle other people's engagements day to
+    // day — a Specialist's landing view is just "mine," no toggle needed.
+    $("eng-scope-toggle").classList.toggle("hidden", !(isSuperAdminUser || isTeamLeadUser));
 
-    // "Engagements" in the top nav links here with ?view=all so it lands
-    // straight on the full list instead of just the recents.
-    if (new URLSearchParams(location.search).get("view") === "all") {
-      showingAllClients = true;
-      renderRecents();
-    }
+    setGreeting(profile.full_name);
+
+    await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries()]);
+    engagementScope = myClientIds.size > 0 ? "mine" : "all";
+    updateScopeButtons();
+    renderPersonalStats();
+    renderNeedsAttention();
+    renderEngagementsList();
+    renderRecentActivityPanel();
+    renderQuickActions();
+    if (isSuperAdminUser || isTeamLeadUser) await renderPipelineCards();
+
+    // An engagement-tab link lands here with ?tab=attention (etc.) so it's a
+    // real, bookmarkable URL instead of silent in-page state.
+    const tabParam = new URLSearchParams(location.search).get("tab");
+    if (tabParam && ["all", "attention", "recent"].includes(tabParam)) setEngagementTab(tabParam);
+
+    // "Engagements" in the top nav links here with ?view=all so it lands on
+    // the full org-wide list instead of just "My Engagements."
+    if (new URLSearchParams(location.search).get("view") === "all") setEngagementScope("all");
+  }
+
+  function setGreeting(fullName) {
+    const hour = new Date().getHours();
+    const part = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
+    const first = (fullName || "").split(" ")[0] || "there";
+    $("greeting-heading").textContent = `Good ${part}, ${first}`;
   }
 
   // ---------- Notifications (Super Admin only) ----------
@@ -870,7 +972,6 @@
   // everyone else assigned (for the modal's "Consultant(s): ..." line).
   // Best-effort — a client with nobody assigned yet just shows a dash
   // rather than blocking the row.
-  let consultantsByClient = {};
   async function loadTeamLeads() {
     const { data, error } = await sb
       .from("client_assignments")
@@ -895,119 +996,277 @@
     return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }
 
+  // ---------- My assignments / next steps / hours (personalization) ----------
+  async function loadMyAssignments() {
+    const { data, error } = await sb
+      .from("client_assignments")
+      .select("client_id")
+      .eq("user_id", currentUser.id);
+    myClientIds = new Set(error ? [] : (data || []).map((r) => r.client_id));
+  }
+
+  // Powers the "Next: ..." line on each engagement row and the Tasks Due
+  // stat — the first (lowest sort_order) incomplete Project Next Step per
+  // client, and a per-client count of how many are still open. There's no
+  // due-date field on this table yet, so this is a task name only, never a
+  // fabricated date.
+  async function loadNextSteps() {
+    const { data, error } = await sb
+      .from("client_next_steps")
+      .select("client_id, description, completed, sort_order")
+      .order("sort_order");
+    nextStepByClient = {};
+    openStepCountByClient = {};
+    if (error) return; // RLS narrows this for non-admins viewing outside their own assignments -- fall back to blank "Next" fields rather than blocking the page.
+    for (const s of data || []) {
+      if (s.completed) continue;
+      openStepCountByClient[s.client_id] = (openStepCountByClient[s.client_id] || 0) + 1;
+      if (!nextStepByClient[s.client_id]) nextStepByClient[s.client_id] = s.description;
+    }
+  }
+
+  // Hours This Month is a straight sum of the signed-in user's own
+  // time_entries for the current calendar month -- the same table the "Log
+  // Hours" feature on the Client Workspace page writes to.
+  async function loadTimeEntries() {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const { data, error } = await sb
+      .from("time_entries")
+      .select("hours, entry_date")
+      .eq("consultant_id", currentUser.id)
+      .gte("entry_date", monthStart);
+    hoursThisMonth = error ? 0 : (data || []).reduce((sum, r) => sum + Number(r.hours || 0), 0);
+  }
+
+  // ---------- Personalized stat strip (everyone) ----------
+  // Only 4 tiles, not Greg's original 5 -- "Client Updates" isn't wired to
+  // any real feature yet (no client-comment/update-log table exists in the
+  // schema), so it's left out rather than showing a made-up number, same
+  // rule the old "Research Due This Week" card followed.
+  function renderPersonalStats() {
+    const tasksDue = [...myClientIds].reduce((sum, id) => sum + (openStepCountByClient[id] || 0), 0);
+    const attentionCount = computeNeedsAttention(myClientIds).length;
+    const hoursDisplay = hoursThisMonth % 1 ? hoursThisMonth.toFixed(1) : String(hoursThisMonth);
+    const stats = [
+      { value: myClientIds.size, label: "My Engagements", tint: "stat-navy" },
+      { value: attentionCount, label: "Needs Attention", tint: "stat-coral" },
+      { value: tasksDue, label: "Tasks Due", tint: "stat-amber" },
+      { value: hoursDisplay, label: "Hours This Month", tint: "stat-accent" },
+    ];
+    $("personal-stat-grid").innerHTML = stats.map((s) => `
+      <div class="stat-card ${s.tint}">
+        <div class="stat-value">${s.value}</div>
+        <div class="stat-label">${escapeHtml(s.label)}</div>
+      </div>
+    `).join("");
+  }
+
+  // ---------- Needs Attention ----------
+  // Real signals only: an engagement that's On Hold, or one that's
+  // Accepted/In Progress but hasn't been touched (clients.updated_at) in a
+  // week. This deliberately skips "deliverable due tomorrow" / "awaiting
+  // client input" style reasons -- there's no due-date field on Project Next
+  // Steps and no client-response-tracking table yet, so a reason like that
+  // would just be a made-up label next to a real client name.
+  const STALE_DAYS = 7;
+  function daysSince(iso) {
+    if (!iso) return Infinity;
+    return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  }
+  function computeNeedsAttention(scopeIds) {
+    const pool = scopeIds ? allClients.filter((c) => scopeIds.has(c.id)) : allClients;
+    const items = [];
+    for (const c of pool) {
+      if (c.project_status === "on_hold") {
+        items.push({ client: c, reason: "On Hold", severity: "med" });
+      } else if (["accepted", "in_progress"].includes(c.project_status)) {
+        const d = daysSince(c.updated_at);
+        if (d >= STALE_DAYS) items.push({ client: c, reason: `No activity in ${d} days`, severity: d >= 14 ? "high" : "med" });
+      }
+    }
+    items.sort((a, b) => (b.severity === "high") - (a.severity === "high") || new Date(a.client.updated_at) - new Date(b.client.updated_at));
+    return items;
+  }
+
+  function renderNeedsAttention() {
+    const scopeIds = engagementScope === "mine" ? myClientIds : null;
+    const items = computeNeedsAttention(scopeIds).slice(0, 6);
+    $("attention-list").innerHTML = items.length
+      ? items.map((it) => `
+          <div class="attention-row" data-client-id="${it.client.id}">
+            <span class="attention-dot sev-${it.severity}"></span>
+            <div>
+              <div class="att-name">${escapeHtml(it.client.name)}</div>
+              <div class="att-reason">${escapeHtml(it.reason)}</div>
+            </div>
+            <span class="att-arrow">Open &rarr;</span>
+          </div>
+        `).join("")
+      : `<div class="notif-empty">Nothing needs attention right now — nice work.</div>`;
+    $("attention-list").querySelectorAll(".attention-row").forEach((row) => {
+      row.addEventListener("click", () => { window.location.href = `client_control_center.html?client=${row.dataset.clientId}`; });
+    });
+  }
+
+  // ---------- My Engagements (tabs + scope + search) ----------
   function clientRowHtml(c) {
     const partner = c.econ_dev_companies;
     const teamLead = teamLeadByClient[c.id];
+    const next = nextStepByClient[c.id];
     return `
       <div class="client-row" data-client-id="${c.id}">
         <div>
           <div class="cr-name">${escapeHtml(c.name)}</div>
           <div class="cr-meta">${partner ? escapeHtml(partner.code) : "—"} &middot; Team Lead: ${teamLead ? escapeHtml(teamLead) : "—"} &middot; Last activity: ${formatLastActivity(c.updated_at)}</div>
+          ${next ? `<div class="cr-next">Next: ${escapeHtml(next)}</div>` : ""}
         </div>
         <div class="cr-right">
           <div class="cr-badges">
             <span class="badge badge-${c.status}">${c.status}</span>
             <span class="badge badge-${c.project_status}">${PROJECT_STATUS_LABELS[c.project_status] || c.project_status}</span>
           </div>
-          <span class="cr-open">Manage &rarr;</span>
+          <span class="cr-open">Open Dashboard &rarr;</span>
         </div>
       </div>
     `;
   }
 
-  function renderRecents() {
-    const list = $("recents-list");
+  function wireClientRows(container) {
+    container.querySelectorAll(".client-row").forEach((row) => {
+      row.addEventListener("click", () => {
+        window.location.href = `client_control_center.html?client=${row.dataset.clientId}`;
+      });
+    });
+  }
 
-    if (statFilter) {
-      $("recents-title").textContent = statFilter.label;
-      $("view-all-link").textContent = "Clear filter ✕";
-      $("all-clients-note").classList.add("hidden");
-      const filtered = allClients.filter(statFilter.predicate);
-      list.innerHTML = filtered.length ? filtered.map(clientRowHtml).join("") : `<div class="empty-note">No engagements match this filter.</div>`;
-      wireClientRows(list);
-      return;
+  function updateScopeButtons() {
+    $("eng-scope-toggle").querySelectorAll("[data-scope]").forEach((b) => {
+      b.classList.toggle("active", b.dataset.scope === engagementScope);
+    });
+  }
+  function setEngagementScope(scope) {
+    engagementScope = scope;
+    pipelineFilterStatus = null;
+    updateScopeButtons();
+    renderNeedsAttention();
+    renderEngagementsList();
+  }
+  function setEngagementTab(tab) {
+    engagementTab = tab;
+    pipelineFilterStatus = null;
+    $("eng-tabs").querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+    renderEngagementsList();
+  }
+
+  function renderEngagementsList() {
+    const list = $("engagements-list");
+    let pool = engagementScope === "mine" ? allClients.filter((c) => myClientIds.has(c.id)) : allClients;
+
+    if (searchQuery) {
+      pool = allClients.filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    } else {
+      if (pipelineFilterStatus) pool = pool.filter((c) => c.project_status === pipelineFilterStatus);
+      if (engagementTab === "attention") {
+        const ids = new Set(computeNeedsAttention(engagementScope === "mine" ? myClientIds : null).map((it) => it.client.id));
+        pool = pool.filter((c) => ids.has(c.id));
+      } else if (engagementTab === "recent") {
+        pool = [...pool].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)).slice(0, 10);
+      } else {
+        pool = [...pool].sort((a, b) => a.name.localeCompare(b.name));
+      }
     }
 
-    if (showingAllClients) {
-      $("recents-title").textContent = "All Engagements";
-      $("view-all-link").textContent = "Recent Only";
-      $("all-clients-note").classList.toggle("hidden", allClients.length > 0);
-      if (allClients.length === 0) { list.innerHTML = ""; return; }
-      const sorted = [...allClients].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
-      list.innerHTML = sorted.map(clientRowHtml).join("");
-      wireClientRows(list);
-      return;
+    const note = $("pipeline-filter-note");
+    if (!searchQuery && pipelineFilterStatus) {
+      note.innerHTML = `Filtered to <strong>${escapeHtml(PROJECT_STATUS_LABELS[pipelineFilterStatus] || pipelineFilterStatus)}</strong> engagements &middot; <a href="#" id="clear-pipeline-filter">Clear filter ✕</a>`;
+      note.classList.remove("hidden");
+      document.getElementById("clear-pipeline-filter").addEventListener("click", (e) => { e.preventDefault(); pipelineFilterStatus = null; renderEngagementsList(); });
+    } else {
+      note.classList.add("hidden");
     }
 
-    $("recents-title").textContent = "Recent Engagements";
-    $("view-all-link").textContent = "View All →";
-    const recents = getRecents();
-    if (!recents.length) {
-      list.innerHTML = "";
-      $("all-clients-note").classList.toggle("hidden", allClients.length > 0);
-      if (allClients.length === 0) return;
-      // Nothing recent yet — show the full client list instead so the page isn't empty.
-      list.innerHTML = allClients.slice(0, 8).map(clientRowHtml).join("");
-      wireClientRows(list);
-      return;
-    }
-    $("all-clients-note").classList.add("hidden");
-    const byId = Object.fromEntries(allClients.map((c) => [c.id, c]));
-    const rows = recents.map((r) => byId[r.id]).filter(Boolean);
-    list.innerHTML = rows.length ? rows.map(clientRowHtml).join("") : "";
+    $("engagements-empty").classList.toggle("hidden", pool.length > 0 || !!searchQuery);
+    list.innerHTML = pool.length
+      ? pool.map(clientRowHtml).join("")
+      : (searchQuery ? `<div class="empty-note">No engagements match "${escapeHtml(searchQuery)}".</div>` : "");
     wireClientRows(list);
   }
 
-  $("view-all-link").addEventListener("click", (e) => {
-    e.preventDefault();
-    if (statFilter) { clearStatFilter(); return; }
-    showingAllClients = !showingAllClients;
-    renderRecents();
+  $("eng-tabs").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-tab]");
+    if (!btn) return;
+    setEngagementTab(btn.dataset.tab);
+  });
+  $("eng-scope-toggle").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-scope]");
+    if (!btn) return;
+    setEngagementScope(btn.dataset.scope);
   });
 
-  // ---------- Stat cards (Super Admin only) ----------
+  $("search-input").addEventListener("input", () => {
+    searchQuery = $("search-input").value.trim();
+    renderEngagementsList();
+  });
+
+  // ---------- Recent Activity (small side panel, localStorage-based) ----------
+  function renderRecentActivityPanel() {
+    const recents = getRecents().slice(0, 5);
+    const byId = Object.fromEntries(allClients.map((c) => [c.id, c]));
+    const rows = recents.map((r) => byId[r.id]).filter(Boolean);
+    $("recent-activity-list").innerHTML = rows.length
+      ? rows.map((c) => `<div class="mini-activity-row" data-client-id="${c.id}"><span class="ma-name">${escapeHtml(c.name)}</span><span class="ma-time">${formatLastActivity(c.updated_at)}</span></div>`).join("")
+      : `<div class="notif-empty" style="padding:14px 0;">No recent activity yet — engagements you open will show up here.</div>`;
+    $("recent-activity-list").querySelectorAll(".mini-activity-row").forEach((row) => {
+      row.addEventListener("click", () => { window.location.href = `client_control_center.html?client=${row.dataset.clientId}`; });
+    });
+  }
+  $("view-all-activity-link").addEventListener("click", (e) => {
+    e.preventDefault();
+    setEngagementTab("recent");
+    $("engagements-section").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  // ---------- Quick Actions ----------
+  // Log Hours / Edit Dashboard need a specific engagement to open into --
+  // rather than a picker, these deep-link to the user's most recently
+  // updated assigned engagement (falling back to the most recently updated
+  // engagement overall if they have no assignments yet).
+  function mostRecentEngagement() {
+    const pool = myClientIds.size ? allClients.filter((c) => myClientIds.has(c.id)) : allClients;
+    if (!pool.length) return null;
+    return [...pool].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
+  }
+  function renderQuickActions() {
+    const recent = mostRecentEngagement();
+    const actions = [
+      { label: "Ask AI", icon: "M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z", onClick: openAiDrawer },
+    ];
+    if (recent) {
+      actions.push({ label: `Log Hours — ${recent.name}`, icon: "M12 8v4l3 3M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", onClick: () => { window.location.href = `client_workspace.html?client=${recent.id}`; } });
+      actions.push({ label: `Edit Dashboard — ${recent.name}`, icon: "M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z", onClick: () => { window.location.href = `client_profile.html?client=${recent.id}`; } });
+    }
+    if (isSuperAdminUser) {
+      actions.push({ label: "Add Engagement", icon: "M12 5v14M5 12h14", onClick: () => { window.location.href = "client_applications.html?new=1"; } });
+    }
+    $("quick-actions-list").innerHTML = actions.map((a, i) => `
+      <button type="button" class="quick-action-btn" data-qa="${i}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${a.icon}"/></svg>
+        ${escapeHtml(a.label)}
+      </button>
+    `).join("");
+    $("quick-actions-list").querySelectorAll("[data-qa]").forEach((btn) => {
+      btn.addEventListener("click", () => actions[Number(btn.dataset.qa)].onClick());
+    });
+  }
+
+  // ---------- Engagement Pipeline (Team Lead + Admin) ----------
   // "Research Due This Week" from the original mockup isn't shown here —
   // there's no due-date tracking on research questions/documents yet, and a
   // stat card showing a made-up number would be worse than not having it.
   // On Hold stands in for now as a similarly "needs attention" metric drawn
   // from real data; happy to wire up real due dates later if that's wanted.
-
-  // Active/In Progress/On Hold filter the client list right below;
-  // Pending Applications is a different record type (not in that list),
-  // so it deep-links straight into the filtered Applications tab instead.
-  const STAT_FILTER_MAP = {
-    accepted: { predicate: (c) => c.project_status === "accepted", label: "Accepted" },
-    in_progress: { predicate: (c) => c.project_status === "in_progress", label: "In Progress" },
-    on_hold: { predicate: (c) => c.project_status === "on_hold", label: "On Hold" },
-    closed: { predicate: (c) => c.project_status === "closed", label: "Closed" },
-  };
-
-  // Applying a KPI filter is real navigation, not just a silent in-page
-  // toggle: it updates the URL (bookmarkable, back-button-able) and scrolls
-  // straight to the filtered list so clicking a card visibly does something.
-  function applyStatFilter(key, updateUrl = true) {
-    const cfg = STAT_FILTER_MAP[key];
-    if (!cfg) return;
-    showingAllClients = false;
-    statFilter = cfg;
-    renderRecents();
-    if (updateUrl) {
-      const url = new URL(location.href);
-      url.searchParams.set("filter", key);
-      history.pushState({}, "", url);
-    }
-    $("recents-section").scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  function clearStatFilter() {
-    statFilter = null;
-    renderRecents();
-    const url = new URL(location.href);
-    url.searchParams.delete("filter");
-    history.replaceState({}, "", url);
-  }
-
-  async function renderStatCards() {
+  async function renderPipelineCards() {
     const acceptedCount = allClients.filter((c) => c.project_status === "accepted").length;
     const inProgressCount = allClients.filter((c) => c.project_status === "in_progress").length;
     const onHoldCount = allClients.filter((c) => c.project_status === "on_hold").length;
@@ -1020,16 +1279,9 @@
 
     // These five track one pipeline end to end — an application comes in
     // (Pending), gets accepted (Accepted), work starts (In Progress), and
-    // it either stalls (On Hold) or wraps up (Closed). No separate "Active
-    // Clients" card — that would have counted status='active' (the engagement
-    // lifecycle flag: active vs. finalized vs. archived), a different axis
-    // from project_status that, in practice, just duplicated In Progress
-    // for almost every client and hid "Accepted but not started yet" instead.
-    // In Progress is the one KPI worth glancing at every day -- it gets the
+    // it either stalls (On Hold) or wraps up (Closed). In Progress gets the
     // single accent treatment (stat-accent) so the row has one clear focal
-    // point instead of five equal-weight boxes. The rest stay flat; the
-    // whole card is the click target now, so no more "Review →" / "View →"
-    // link text repeated five times.
+    // point instead of five equal-weight boxes.
     const stats = [
       { key: "pending_apps", value: pendingAppCount || 0, label: "Pending Applications", tint: "stat-amber" },
       { key: "accepted", value: acceptedCount, label: "Accepted", tint: "stat-navy" },
@@ -1048,33 +1300,17 @@
       card.addEventListener("click", () => {
         const key = card.dataset.stat;
         if (key === "pending_apps") { window.location.href = "client_applications.html?status=pending"; return; }
-        applyStatFilter(key);
+        engagementScope = "all";
+        engagementTab = "all";
+        updateScopeButtons();
+        $("eng-tabs").querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === "all"));
+        pipelineFilterStatus = key;
+        renderNeedsAttention();
+        renderEngagementsList();
+        $("engagements-section").scrollIntoView({ behavior: "smooth", block: "start" });
       });
     });
   }
-
-  function wireClientRows(container) {
-    container.querySelectorAll(".client-row").forEach((row) => {
-      row.addEventListener("click", () => {
-        window.location.href = `client_control_center.html?client=${row.dataset.clientId}`;
-      });
-    });
-  }
-
-  $("search-input").addEventListener("input", () => {
-    const q = $("search-input").value.trim().toLowerCase();
-    if (!q) {
-      $("search-section").classList.add("hidden");
-      $("recents-section").classList.remove("hidden");
-      return;
-    }
-    $("recents-section").classList.add("hidden");
-    $("search-section").classList.remove("hidden");
-    const matches = allClients.filter((c) => c.name.toLowerCase().includes(q));
-    const list = $("search-list");
-    list.innerHTML = matches.length ? matches.map(clientRowHtml).join("") : `<div class="empty-note">No engagements match "${escapeHtml($("search-input").value)}".</div>`;
-    wireClientRows(list);
-  });
 
 </script>
 </body>
