@@ -362,6 +362,13 @@
   .quick-action-btn { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: #f6f8fa; color: var(--text); font-size: 13.5px; font-weight: 600; text-align: left; width: 100%; }
   .quick-action-btn:hover { background: #eef1f4; }
   .quick-action-btn svg { width: 16px; height: 16px; color: var(--navy-light); flex-shrink: 0; }
+  .qa-picker { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .qa-picker-label { font-size: 12px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+  .qa-picker input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; margin-bottom: 8px; font-family: inherit; }
+  .qa-picker input:focus { outline: none; border-color: var(--navy-light); }
+  .qa-picker-list { max-height: 220px; overflow-y: auto; }
+  .qa-picker-item { padding: 8px 10px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; }
+  .qa-picker-item:hover { background: #eef1f4; }
 
   .management-section { margin-top: 8px; padding-top: 26px; border-top: 1px solid var(--border); }
   .quicklink-compact { padding: 14px 16px 14px 18px; min-width: 180px; }
@@ -542,6 +549,11 @@
       <div class="panel-card">
         <div class="section-header" style="margin-bottom:8px;"><h2 class="section-title">Quick Actions</h2></div>
         <div class="quick-actions-list" id="quick-actions-list"></div>
+        <div class="qa-picker hidden" id="qa-picker">
+          <div class="qa-picker-label">Add research to which engagement?</div>
+          <input type="text" id="qa-picker-search" placeholder="Search engagements…" autocomplete="off" />
+          <div class="qa-picker-list" id="qa-picker-list"></div>
+        </div>
       </div>
     </div>
 
@@ -1298,9 +1310,21 @@
   // Log Hours / Edit Dashboard need a specific engagement to open into --
   // rather than a picker, these deep-link to the user's most recently
   // updated assigned engagement (falling back to the most recently updated
-  // engagement overall if they have no assignments yet).
+  // engagement overall if they have no assignments yet). Add Research is
+  // different -- a specialist could be adding research to any of several
+  // accounts on a given day, not just the most recent one -- so that action
+  // opens a small picker instead of guessing.
+  //
+  // "Add Engagement" was dropped from this list: this panel is the
+  // specialist's daily work console, and creating a brand-new engagement
+  // isn't a specialist action at all (accept_client_application() is
+  // Super-Admin-only server-side). Admins already have their own
+  // "+ Add Engagement" button in the toolbar above.
+  function engagementPickerPool() {
+    return myClientIds.size ? allClients.filter((c) => myClientIds.has(c.id)) : allClients;
+  }
   function mostRecentEngagement() {
-    const pool = myClientIds.size ? allClients.filter((c) => myClientIds.has(c.id)) : allClients;
+    const pool = engagementPickerPool();
     if (!pool.length) return null;
     return [...pool].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
   }
@@ -1309,12 +1333,12 @@
     const actions = [
       { label: "Ask AI", icon: "M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z", onClick: openAiDrawer },
     ];
+    if (engagementPickerPool().length) {
+      actions.push({ label: "Add Research", icon: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.35-4.35", onClick: toggleResearchPicker });
+    }
     if (recent) {
       actions.push({ label: `Log Hours — ${recent.name}`, icon: "M12 8v4l3 3M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", onClick: () => { window.location.href = `client_workspace.html?client=${recent.id}`; } });
       actions.push({ label: `Edit Dashboard — ${recent.name}`, icon: "M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z", onClick: () => { window.location.href = `client_profile.html?client=${recent.id}`; } });
-    }
-    if (isSuperAdminUser) {
-      actions.push({ label: "Add Engagement", icon: "M12 5v14M5 12h14", onClick: () => { window.location.href = "client_applications.html?new=1"; } });
     }
     $("quick-actions-list").innerHTML = actions.map((a, i) => `
       <button type="button" class="quick-action-btn" data-qa="${i}">
@@ -1325,7 +1349,46 @@
     $("quick-actions-list").querySelectorAll("[data-qa]").forEach((btn) => {
       btn.addEventListener("click", () => actions[Number(btn.dataset.qa)].onClick());
     });
+    closeResearchPicker();
   }
+
+  // "Add Research" opens a small picker (rather than assuming the most
+  // recent engagement) so a specialist juggling several accounts can pick
+  // the right one, then lands directly in that engagement's Research
+  // section on the Edit Dashboard editor.
+  let qaPickerOpen = false;
+  function closeResearchPicker() {
+    qaPickerOpen = false;
+    $("qa-picker").classList.add("hidden");
+  }
+  function toggleResearchPicker() {
+    qaPickerOpen = !qaPickerOpen;
+    $("qa-picker").classList.toggle("hidden", !qaPickerOpen);
+    if (qaPickerOpen) {
+      $("qa-picker-search").value = "";
+      renderResearchPickerList("");
+      $("qa-picker-search").focus();
+    }
+  }
+  function renderResearchPickerList(query) {
+    const q = query.trim().toLowerCase();
+    const pool = engagementPickerPool();
+    const matches = (q ? pool.filter((c) => c.name.toLowerCase().includes(q)) : pool)
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name));
+    $("qa-picker-list").innerHTML = matches.length
+      ? matches.map((c) => `<div class="qa-picker-item" data-client-id="${c.id}">${escapeHtml(c.name)}</div>`).join("")
+      : `<div class="cr-meta" style="padding:8px 10px;">No engagements match.</div>`;
+    $("qa-picker-list").querySelectorAll(".qa-picker-item").forEach((item) => {
+      item.addEventListener("click", () => {
+        window.location.href = `client_profile.html?client=${item.dataset.clientId}&section=research`;
+      });
+    });
+  }
+  $("qa-picker-search").addEventListener("input", () => renderResearchPickerList($("qa-picker-search").value));
+  document.addEventListener("click", (e) => {
+    if (qaPickerOpen && !$("qa-picker").contains(e.target) && !e.target.closest('[data-qa]')) closeResearchPicker();
+  });
 
   // ---------- Engagement Pipeline (Team Lead + Admin) ----------
   // "Research Due This Week" from the original mockup isn't shown here —
