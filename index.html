@@ -565,7 +565,6 @@
             </select>
           </div>
           <div class="eng-tabs" id="eng-tabs">
-            <button type="button" class="eng-tab active" data-tab="all">All</button>
             <button type="button" class="eng-tab" data-tab="attention">Needs Attention</button>
             <button type="button" class="eng-tab" data-tab="recent">Recent</button>
           </div>
@@ -928,7 +927,11 @@
     await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex()]);
     await loadMyBillableTasks(); // needs allClients + myAssignmentRows, both settled above
     buildTasksDueItems();
-    engagementScope = myClientIds.size > 0 ? "mine" : "all";
+    // "Mine" is always the default, even for a Team Lead/Admin with zero
+    // personal assignments -- the empty state note ("You're not assigned to
+    // any engagements yet.") already covers that case, so there's no need
+    // to silently switch them to the org-wide view instead.
+    engagementScope = "mine";
     updateScopeButtons();
     renderPersonalStats();
     renderWorkloadLine();
@@ -1432,11 +1435,14 @@
     }
   }
 
+  // No "All" pill here -- it was redundant with the unfiltered default
+  // state. Clicking a tab that's already active toggles it back off to
+  // that default instead of leaving no way back to the full list.
   $("eng-tabs").addEventListener("click", (e) => {
     const btn = e.target.closest("[data-tab]");
     if (!btn) return;
     engagementsExpanded = false;
-    setEngagementTab(btn.dataset.tab);
+    setEngagementTab(engagementTab === btn.dataset.tab ? "all" : btn.dataset.tab);
   });
   $("eng-scope-select").addEventListener("change", () => {
     engagementsExpanded = false;
