@@ -601,15 +601,23 @@
     redirectToLogin();
   });
 
-  async function afterSignIn() {
-    const { data: { user } } = await sb.auth.getUser();
+  // Profile and client both only depend on IDs already in hand (the signed-in
+  // user's id, the ?client= id from the URL) — running them one after another
+  // meant two full network round trips had to finish before anything but the
+  // generic "Loading…" screen appeared, which is what showed up as a visible
+  // flash of a blank page before the real engagement page rendered. Running
+  // them together with Promise.all cuts that in half. Also uses the user
+  // object already on the session instead of a separate getUser() call —
+  // one less round trip on the critical path.
+  async function afterSignIn(user) {
     if (!user) return;
 
-    const { data: profile, error: profileErr } = await sb
-      .from("users")
-      .select("id, full_name, role, organization_id")
-      .eq("id", user.id)
-      .single();
+    const clientId = new URLSearchParams(location.search).get("client");
+
+    const [{ data: profile, error: profileErr }] = await Promise.all([
+      sb.from("users").select("id, full_name, role, organization_id").eq("id", user.id).single(),
+      clientId ? loadClient(clientId) : Promise.resolve(),
+    ]);
 
     if (profileErr || !profile) {
       await sb.auth.signOut();
@@ -624,17 +632,14 @@
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = roleLabel(profile.role);
 
-    const clientId = new URLSearchParams(location.search).get("client");
     if (!clientId) {
       $("no-client-note").classList.remove("hidden");
-      return;
     }
-    await loadClient(clientId);
   }
 
   sb.auth.getSession().then(({ data: { session } }) => {
     if (session) {
-      afterSignIn();
+      afterSignIn(session.user);
     } else {
       redirectToLogin();
     }
