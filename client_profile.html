@@ -1484,10 +1484,18 @@
     const seen = new Map();
     for (const r of listData.team || []) {
       if (!r.user_id || !r.users || !r.users.full_name) continue;
-      if (!seen.has(r.user_id)) seen.set(r.user_id, r.users.full_name);
+      if (!seen.has(r.user_id)) seen.set(r.user_id, r.users);
     }
+    // Two team members can share a full name (rare, but real). Only append
+    // the email for names that actually collide, so the common case still
+    // reads as a plain name in the dropdown.
+    const nameCounts = new Map();
+    for (const u of seen.values()) nameCounts.set(u.full_name, (nameCounts.get(u.full_name) || 0) + 1);
     return [...seen.entries()]
-      .map(([value, label]) => ({ value, label }))
+      .map(([value, u]) => ({
+        value,
+        label: nameCounts.get(u.full_name) > 1 && u.email ? `${u.full_name} (${u.email})` : u.full_name,
+      }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }
   const NEXT_STEPS_CONFIG = {

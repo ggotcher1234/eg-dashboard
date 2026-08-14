@@ -489,6 +489,14 @@
     location.href = "index.html?return=" + encodeURIComponent(dest);
   }
   const usersById = () => Object.fromEntries(allUsers.map((u) => [u.id, u]));
+  // Two staff members can share a full name (rare, but real -- e.g. two
+  // "Chris Gibbons" entries). Only append the email for names that actually
+  // collide, so the common case still reads as a plain name.
+  function userLabel(u) {
+    if (!u) return "";
+    const collides = allUsers.filter((x) => x.full_name === u.full_name).length > 1;
+    return collides && u.email ? `${u.full_name} (${u.email})` : u.full_name;
+  }
   const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
 
   /* ---------- Ask AI ----------
@@ -723,7 +731,7 @@
   });
 
   async function loadUsers() {
-    const { data, error } = await sb.from("users").select("id, full_name, role").order("full_name");
+    const { data, error } = await sb.from("users").select("id, full_name, role, email").order("full_name");
     if (error) { showBanner("Couldn't load the staff directory: " + error.message, "error"); return; }
     allUsers = data;
   }
@@ -922,7 +930,7 @@
     return '<option value="">Select…</option>' + opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
   }
   function consultantOptionsHtml(selectedId) {
-    return '<option value="">Unassigned</option>' + allUsers.map((u) => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${escapeHtml(u.full_name)}</option>`).join("");
+    return '<option value="">Unassigned</option>' + allUsers.map((u) => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${escapeHtml(userLabel(u))}</option>`).join("");
   }
 
   // ---------- Assignments spreadsheet ----------
@@ -936,7 +944,7 @@
       tr.dataset.assignmentId = r.id;
       const consultantCell = canManageAssignments
         ? `<select class="row-select row-consultant-select">${consultantOptionsHtml(r.user_id)}</select>`
-        : `${person ? escapeHtml(person.full_name) : `<span style="color:var(--muted);">Unassigned</span>`}`;
+        : `${person ? escapeHtml(userLabel(person)) : `<span style="color:var(--muted);">Unassigned</span>`}`;
       const isFixed = fixedSlotIndex(r.specialty_type, r.slot_number) !== -1;
       const actionBtn = isFixed
         ? `<button class="btn-secondary icon-btn" data-clear="${r.id}">Clear</button>`
@@ -1107,7 +1115,7 @@
     } else {
       $("remove-title").textContent = "Remove this assignment?";
       $("remove-confirm").textContent = "Remove";
-      $("remove-text").textContent = `Remove ${person ? person.full_name : "this consultant"} from ${label}? Their logged hours stay on record.`;
+      $("remove-text").textContent = `Remove ${person ? userLabel(person) : "this consultant"} from ${label}? Their logged hours stay on record.`;
     }
     $("remove-overlay").classList.add("open");
   }
@@ -1139,7 +1147,7 @@
     $("log-hours-form").reset();
     $("log-hours-error").style.display = "none";
     $("log-hours-text").textContent = isSuperAdmin && person.id !== currentUser.id
-      ? `Logging hours for ${person.full_name} on ${label}.`
+      ? `Logging hours for ${userLabel(person)} on ${label}.`
       : `Logging your hours on ${label}.`;
     $("log-hours-date").value = new Date().toISOString().slice(0, 10);
     $("log-hours-overlay").classList.add("open");
