@@ -319,6 +319,15 @@
   .personal-stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 26px; }
   @media (max-width: 720px) { .personal-stat-grid { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 420px) { .personal-stat-grid { grid-template-columns: 1fr; } }
+  .stat-card.stat-clickable { cursor: pointer; }
+  .tasks-due-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin: -14px 0 26px; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
+  .tasks-due-panel-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700; margin-bottom: 10px; }
+  .tasks-due-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .tasks-due-row:last-child { border-bottom: none; }
+  .tasks-due-row:hover .tdr-label { text-decoration: underline; }
+  .tasks-due-row .tdr-label { font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .tasks-due-row .tdr-client { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .tasks-due-row .tdr-open { font-size: 12.5px; font-weight: 700; color: var(--navy-light); white-space: nowrap; }
 
   .attention-list { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 28px; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
   .attention-row { display: flex; align-items: center; gap: 12px; padding: 12px 18px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.15s ease; }
@@ -502,6 +511,11 @@
 
     <div class="personal-stat-grid" id="personal-stat-grid"></div>
 
+    <div class="tasks-due-panel hidden" id="tasks-due-panel">
+      <div class="tasks-due-panel-label">Your due tasks</div>
+      <div id="tasks-due-list"></div>
+    </div>
+
     <div id="attention-section">
       <div class="section-header">
         <h2 class="section-title">Needs Attention</h2>
@@ -634,6 +648,10 @@
   }
   const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
   const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+  const SPECIALTY_LABELS = {
+    team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
+    gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
+  };
 
   // ---------- Ask AI ----------
   // Browser -> eg-dashboard-ai Supabase Edge Function -> Claude API. The
@@ -884,6 +902,7 @@
 
     await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries()]);
     await loadMyBillableTasks(); // needs allClients + myAssignmentRows, both settled above
+    buildTasksDueItems();
     engagementScope = myClientIds.size > 0 ? "mine" : "all";
     updateScopeButtons();
     renderPersonalStats();
@@ -1080,8 +1099,10 @@
   // (engagement, specialty) assignment that still has hours_allotted >
   // hours actually logged, on engagements that aren't Closed yet.
   let myBillableOpenCount = 0;
+  let myBillableAssignments = []; // { clientId, assignmentId, specialtyType, remaining } -- raw list behind myBillableOpenCount
   async function loadMyBillableTasks() {
     myBillableOpenCount = 0;
+    myBillableAssignments = [];
     if (!myAssignmentRows.length) return;
     const loggedIds = myAssignmentRows.filter((a) => !SUNK_COST_SPECIALTIES.includes(a.specialty_type)).map((a) => a.id);
     let hoursByAssignment = {};
@@ -1093,8 +1114,37 @@
     for (const a of myAssignmentRows) {
       if (clientStatusById[a.client_id] === "closed") continue; // wrapped up -- nothing left to bill
       const used = SUNK_COST_SPECIALTIES.includes(a.specialty_type) ? Number(a.hours_allotted || 0) : (hoursByAssignment[a.id] || 0);
-      if (Number(a.hours_allotted || 0) - used > 0) myBillableOpenCount++;
+      const remaining = Number(a.hours_allotted || 0) - used;
+      if (remaining > 0) {
+        myBillableOpenCount++;
+        myBillableAssignments.push({ clientId: a.client_id, assignmentId: a.id, specialtyType: a.specialty_type, remaining });
+      }
     }
+  }
+
+  // ---------- Tasks Due detail list (backs the clickable dropdown) ----------
+  let myTasksDueItems = [];
+  function buildTasksDueItems() {
+    const byId = Object.fromEntries(allClients.map((c) => [c.id, c]));
+    const stepItems = myAssignedSteps.map((s) => {
+      const client = byId[s.clientId];
+      return {
+        label: s.description,
+        clientName: client ? client.name : "—",
+        url: `client_profile.html?client=${s.clientId}&section=next_steps`,
+      };
+    });
+    const hourItems = myBillableAssignments.map((a) => {
+      const client = byId[a.clientId];
+      const specialtyLabel = SPECIALTY_LABELS[a.specialtyType] || a.specialtyType;
+      const remainingLabel = a.remaining % 1 ? a.remaining.toFixed(1) : String(a.remaining);
+      return {
+        label: `${specialtyLabel} — ${remainingLabel} hrs left to bill`,
+        clientName: client ? client.name : "—",
+        url: `client_workspace.html?client=${a.clientId}&assignment=${a.assignmentId}`,
+      };
+    });
+    myTasksDueItems = [...stepItems, ...hourItems].sort((a, b) => a.clientName.localeCompare(b.clientName));
   }
 
   // Powers the "Next: ..." line on each engagement row and the Tasks Due
@@ -1108,6 +1158,7 @@
   // which is engagement-wide and just powers the "Next: ..." line on each
   // engagement row, not the Tasks Due stat.
   let myOpenTasksCount = 0;
+  let myAssignedSteps = []; // { clientId, description } -- raw list behind myOpenTasksCount, for the Tasks Due dropdown
   async function loadNextSteps() {
     const { data, error } = await sb
       .from("client_next_steps")
@@ -1116,12 +1167,16 @@
     nextStepByClient = {};
     openStepCountByClient = {};
     myOpenTasksCount = 0;
+    myAssignedSteps = [];
     if (error) return; // RLS narrows this for non-admins viewing outside their own assignments -- fall back to blank "Next" fields rather than blocking the page.
     for (const s of data || []) {
       if (s.completed) continue;
       openStepCountByClient[s.client_id] = (openStepCountByClient[s.client_id] || 0) + 1;
       if (!nextStepByClient[s.client_id]) nextStepByClient[s.client_id] = s.description;
-      if (s.assigned_to === currentUser.id) myOpenTasksCount++;
+      if (s.assigned_to === currentUser.id) {
+        myOpenTasksCount++;
+        myAssignedSteps.push({ clientId: s.client_id, description: s.description });
+      }
     }
   }
 
@@ -1154,15 +1209,46 @@
     const stats = [
       { value: myClientIds.size, label: "My Engagements", tint: "stat-navy" },
       { value: attentionCount, label: "Needs Attention", tint: "stat-coral" },
-      { value: tasksDue, label: "Tasks Due", tint: "stat-amber" },
+      { value: tasksDue, label: "Tasks Due", tint: "stat-amber", key: "tasks_due" },
       { value: hoursDisplay, label: "Hours This Month", tint: "stat-accent" },
     ];
     $("personal-stat-grid").innerHTML = stats.map((s) => `
-      <div class="stat-card ${s.tint}">
+      <div class="stat-card ${s.tint} ${s.key ? "stat-clickable" : ""}" ${s.key ? `data-personal-stat="${s.key}"` : ""}>
         <div class="stat-value">${s.value}</div>
         <div class="stat-label">${escapeHtml(s.label)}</div>
       </div>
     `).join("");
+    document.querySelector('[data-personal-stat="tasks_due"]').addEventListener("click", toggleTasksDuePanel);
+  }
+
+  // Clicking the Tasks Due tile opens a small panel listing exactly which
+  // items make up that number, each linking straight to where it's handled
+  // -- the Project Next Steps section for an assigned step, or the
+  // Assignments & Hours row (with Log Hours already open) for unbilled
+  // hours -- rather than leaving the number unexplained.
+  let tasksDuePanelOpen = false;
+  function toggleTasksDuePanel() {
+    tasksDuePanelOpen = !tasksDuePanelOpen;
+    $("tasks-due-panel").classList.toggle("hidden", !tasksDuePanelOpen);
+    if (tasksDuePanelOpen) renderTasksDuePanel();
+  }
+  function renderTasksDuePanel() {
+    $("tasks-due-list").innerHTML = myTasksDueItems.length
+      ? myTasksDueItems.map((it, i) => `
+          <div class="tasks-due-row" data-tdi="${i}">
+            <div>
+              <div class="tdr-label">${escapeHtml(it.label)}</div>
+              <div class="tdr-client">${escapeHtml(it.clientName)}</div>
+            </div>
+            <span class="tdr-open">Open &rarr;</span>
+          </div>
+        `).join("")
+      : `<div class="notif-empty" style="padding:6px 0;">Nothing due right now — nice work.</div>`;
+    $("tasks-due-list").querySelectorAll("[data-tdi]").forEach((row) => {
+      row.addEventListener("click", () => {
+        window.location.href = myTasksDueItems[Number(row.dataset.tdi)].url;
+      });
+    });
   }
 
   // ---------- Needs Attention ----------

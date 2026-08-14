@@ -967,8 +967,15 @@
     // Deep link from the home page's "Research Workspace" card
     // (?section=research) — same page, but lands the consultant directly at
     // the research section instead of the top of a long profile page.
-    if (new URLSearchParams(location.search).get("section") === "research") {
+    const sectionParam = new URLSearchParams(location.search).get("section");
+    if (sectionParam === "research") {
       $("research-areas-sections").scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (sectionParam && document.querySelector(`[data-accordion="${sectionParam}"]`)) {
+      // Deep link from the home page's "Tasks Due" list (?section=next_steps,
+      // e.g.) — opens that accordion (any LIST_CONFIGS key) instead of just
+      // scrolling past it collapsed.
+      openAccordionSection(sectionParam);
+      document.getElementById(`editor-anchor-${sectionParam}`).scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     wireEditorNavScrollSpy();
