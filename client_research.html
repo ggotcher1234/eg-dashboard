@@ -127,6 +127,17 @@
   .add-row-form .field { margin-bottom: 0; flex: 1; min-width: 140px; }
   .add-row-form label { font-size: 11px; }
 
+  /* Two distinct entry points (Add Research / Modify EG Resources on the
+     Engagement Workspace page) land here on different tabs, instead of
+     both sections always showing stacked on one long page. */
+  .rv-view-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .rv-view-tab {
+    background: #eef1f4; color: var(--text); border: 1px solid var(--border); padding: 9px 18px;
+    border-radius: 999px; font-size: 13.5px; font-weight: 700;
+  }
+  .rv-view-tab:hover { background: #e2e6ea; }
+  .rv-view-tab.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+
   #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
   .no-client-note { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 14px; }
   header .brand-row { display: flex; align-items: center; gap: 12px; }
@@ -299,71 +310,80 @@
         </div>
       </div>
 
-      <!-- ===== Resource Vault ===== -->
-      <div class="card">
-        <div class="accordion-header open" data-accordion="resource_vault">
-          <h2>Resource Vault</h2>
-          <div class="accordion-header-right">
-            <span class="accordion-count" id="resource_vault-count"></span>
-            <span class="accordion-chevron">&#9656;</span>
-          </div>
-        </div>
-        <div class="accordion-body open" id="resource_vault-body">
-          <div class="field-hint" style="margin-bottom:10px;">Each resource can be a Link URL (opens in a new tab — a video, quiz, external doc, etc.) or an uploaded file (downloads), whichever fits. Rows marked "Shared" show for every client — Admins can edit those right here and the change applies everywhere. Add anything client-specific below.</div>
-          <div id="resource_vault-list"></div>
-
-          <div id="rv-template-add-wrap" class="hidden" style="margin-top:14px; padding:12px; background:#f8fafb; border:1px dashed var(--border); border-radius:8px;">
-            <div class="field-hint" style="margin-bottom:8px;"><strong>Shared resource</strong> — appears in every client's Resource Vault right away.</div>
-            <form class="add-row-form" id="rv-template-add-form">
-              <div class="field">
-                <label for="rv-tpl-new-title">Title</label>
-                <input type="text" id="rv-tpl-new-title" required />
-              </div>
-              <div class="field">
-                <label for="rv-tpl-new-description">Description (shows below icon)</label>
-                <input type="text" id="rv-tpl-new-description" />
-              </div>
-              <div class="field">
-                <label for="rv-tpl-new-url">Link URL (optional)</label>
-                <input type="text" id="rv-tpl-new-url" placeholder="https://…" />
-              </div>
-              <div class="field">
-                <label for="rv-tpl-new-file">File (optional)</label>
-                <input type="file" id="rv-tpl-new-file" />
-              </div>
-              <div class="field-hint" style="margin-bottom:10px;">Use one or the other — a link URL opens in a new tab, a file downloads. If both are set, the link wins.</div>
-              <button type="submit" class="btn-secondary btn-sm">+ Add Shared Resource</button>
-            </form>
-          </div>
-
-          <form class="add-row-form" id="resource-vault-add-form">
-            <div class="field">
-              <label for="rv-new-title">Title</label>
-              <input type="text" id="rv-new-title" required />
-            </div>
-            <div class="field">
-              <label for="rv-new-description">Description (shows below icon)</label>
-              <input type="text" id="rv-new-description" />
-            </div>
-            <div class="field">
-              <label for="rv-new-url">Link URL (optional)</label>
-              <input type="text" id="rv-new-url" placeholder="https://…" />
-            </div>
-            <div class="field">
-              <label for="rv-new-file">File (optional)</label>
-              <input type="file" id="rv-new-file" />
-            </div>
-            <div class="field-hint" style="margin-bottom:10px;">Use one or the other — a link URL opens in a new tab, a file downloads. If both are set, the link wins.</div>
-            <button type="submit" class="btn-secondary btn-sm">+ Add Resource (this client only)</button>
-          </form>
-        </div>
+      <div class="rv-view-tabs">
+        <button type="button" class="rv-view-tab" id="tab-research" data-view="research">Add Research</button>
+        <button type="button" class="rv-view-tab" id="tab-vault" data-view="vault">Modify EG Resources</button>
       </div>
 
       <!-- ===== Economic Gardening Research Reports ===== -->
-      <div class="card">
-        <h2>Economic Gardening Research Reports</h2>
-        <div class="field-hint" style="margin-bottom:10px;">Each item becomes a link in the Preview Dashboard.</div>
-        <div id="research-areas-sections"></div>
+      <div id="panel-research">
+        <div class="card">
+          <h2>Economic Gardening Research Reports</h2>
+          <div class="field-hint" style="margin-bottom:10px;">Each item becomes a link in the Preview Dashboard.</div>
+          <div id="research-areas-sections"></div>
+        </div>
+      </div>
+
+      <!-- ===== Resource Vault ===== -->
+      <div id="panel-vault">
+        <div class="card">
+          <div class="accordion-header open" data-accordion="resource_vault">
+            <h2>Resource Vault</h2>
+            <div class="accordion-header-right">
+              <span class="accordion-count" id="resource_vault-count"></span>
+              <span class="accordion-chevron">&#9656;</span>
+            </div>
+          </div>
+          <div class="accordion-body open" id="resource_vault-body">
+            <div class="field-hint" style="margin-bottom:10px;">Each resource can be a Link URL (opens in a new tab — a video, quiz, external doc, etc.) or an uploaded file (downloads), whichever fits. Rows marked "Shared" show for every client — Admins can edit those right here and the change applies everywhere. Add anything client-specific below.</div>
+            <div id="resource_vault-list"></div>
+
+            <div id="rv-template-add-wrap" class="hidden" style="margin-top:14px; padding:12px; background:#f8fafb; border:1px dashed var(--border); border-radius:8px;">
+              <div class="field-hint" style="margin-bottom:8px;"><strong>Shared resource</strong> — appears in every client's Resource Vault right away.</div>
+              <form class="add-row-form" id="rv-template-add-form">
+                <div class="field">
+                  <label for="rv-tpl-new-title">Title</label>
+                  <input type="text" id="rv-tpl-new-title" required />
+                </div>
+                <div class="field">
+                  <label for="rv-tpl-new-description">Description (shows below icon)</label>
+                  <input type="text" id="rv-tpl-new-description" />
+                </div>
+                <div class="field">
+                  <label for="rv-tpl-new-url">Link URL (optional)</label>
+                  <input type="text" id="rv-tpl-new-url" placeholder="https://…" />
+                </div>
+                <div class="field">
+                  <label for="rv-tpl-new-file">File (optional)</label>
+                  <input type="file" id="rv-tpl-new-file" />
+                </div>
+                <div class="field-hint" style="margin-bottom:10px;">Use one or the other — a link URL opens in a new tab, a file downloads. If both are set, the link wins.</div>
+                <button type="submit" class="btn-secondary btn-sm">+ Add Shared Resource</button>
+              </form>
+            </div>
+
+            <form class="add-row-form" id="resource-vault-add-form">
+              <div class="field">
+                <label for="rv-new-title">Title</label>
+                <input type="text" id="rv-new-title" required />
+              </div>
+              <div class="field">
+                <label for="rv-new-description">Description (shows below icon)</label>
+                <input type="text" id="rv-new-description" />
+              </div>
+              <div class="field">
+                <label for="rv-new-url">Link URL (optional)</label>
+                <input type="text" id="rv-new-url" placeholder="https://…" />
+              </div>
+              <div class="field">
+                <label for="rv-new-file">File (optional)</label>
+                <input type="file" id="rv-new-file" />
+              </div>
+              <div class="field-hint" style="margin-bottom:10px;">Use one or the other — a link URL opens in a new tab, a file downloads. If both are set, the link wins.</div>
+              <button type="submit" class="btn-secondary btn-sm">+ Add Resource (this client only)</button>
+            </form>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -609,11 +629,23 @@
     await loadDocuments();
     await loadResearchQuestions();
 
-    // Deep link from the home page's "Add Research" quick action
-    // (?section=research) lands here directly; nothing further to do once
-    // the page itself has loaded, so this is just a no-op guard kept for
-    // parity with the old client_profile.html behavior.
+    // Which of the two entry points on the Engagement Workspace page got
+    // clicked -- "Add Research" (?view=research, the default) or "Modify
+    // EG Resources" (?view=vault) -- decides which panel shows first. Both
+    // stay reachable from the tabs once here, this just sets the landing tab.
+    const viewParam = new URLSearchParams(location.search).get("view");
+    setResearchView(viewParam === "vault" ? "vault" : "research");
   }
+
+  function setResearchView(view) {
+    const v = view === "vault" ? "vault" : "research";
+    document.querySelectorAll(".rv-view-tab").forEach((btn) => btn.classList.toggle("active", btn.dataset.view === v));
+    $("panel-research").classList.toggle("hidden", v !== "research");
+    $("panel-vault").classList.toggle("hidden", v !== "vault");
+  }
+  document.querySelectorAll(".rv-view-tab").forEach((btn) => {
+    btn.addEventListener("click", () => setResearchView(btn.dataset.view));
+  });
 
   function wireAccordionHeaders() {
     document.querySelectorAll("[data-accordion]").forEach((hdr) => {
