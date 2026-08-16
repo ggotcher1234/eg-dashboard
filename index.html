@@ -1518,7 +1518,11 @@
 
   function renderEngagementsList() {
     const list = $("engagements-list");
-    let pool = engagementScope === "mine" ? allClients.filter((c) => myClientIds.has(c.id)) : allClients;
+    // Closed engagements are done work -- they'd just be dead weight in a
+    // "what do I need to look at" list, so this view is active-only. They're
+    // still reachable via search and the Client Workspace itself.
+    let pool = allClients.filter((c) => c.project_status !== "closed");
+    if (engagementScope === "mine") pool = pool.filter((c) => myClientIds.has(c.id));
 
     if (engagementTab === "attention") {
       const ids = new Set(computeNeedsAttention(engagementScope === "mine" ? myClientIds : null).map((it) => it.client.id));
