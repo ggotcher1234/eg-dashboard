@@ -377,6 +377,11 @@
     font-size: 12.5px; font-weight: 700; color: var(--navy); border: 1px solid var(--border);
     border-radius: 6px; padding: 4px 8px; background: #fff; cursor: pointer;
   }
+  .eng-header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .eng-sort-select {
+    font-size: 12.5px; font-weight: 700; color: var(--navy); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 8px; background: #fff; cursor: pointer;
+  }
   .eng-tabs { display: flex; gap: 4px; background: #eef1f4; border-radius: 999px; padding: 3px; flex-shrink: 0; }
   .eng-tab { background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 999px; white-space: nowrap; }
   .eng-tab.active { background: #fff; color: var(--navy); box-shadow: 0 1px 3px rgba(20,48,77,0.1); }
@@ -588,9 +593,17 @@
               <option value="all">All</option>
             </select>
           </div>
-          <div class="eng-tabs" id="eng-tabs">
-            <button type="button" class="eng-tab" data-tab="attention">Needs Attention</button>
-            <button type="button" class="eng-tab" data-tab="recent">Recent</button>
+          <div class="eng-header-right">
+            <select class="eng-sort-select" id="eng-sort-select" title="Sort engagements">
+              <option value="name_asc">Name (A&ndash;Z)</option>
+              <option value="name_desc">Name (Z&ndash;A)</option>
+              <option value="lead_asc">Team Lead (A&ndash;Z)</option>
+              <option value="lead_desc">Team Lead (Z&ndash;A)</option>
+            </select>
+            <div class="eng-tabs" id="eng-tabs">
+              <button type="button" class="eng-tab" data-tab="attention">Needs Attention</button>
+              <button type="button" class="eng-tab" data-tab="recent">Recent</button>
+            </div>
           </div>
         </div>
         <div id="engagements-list"></div>
@@ -700,6 +713,7 @@
   let hoursThisMonth = 0;               // sum of my time_entries this calendar month
   let engagementScope = "mine";         // "mine" | "all" -- whose engagements the list/Needs Attention show
   let engagementTab = "all";            // "all" | "attention" | "recent"
+  let engagementSort = "name_asc";      // "name_asc" | "name_desc" | "lead_asc" | "lead_desc"
   let engagementsExpanded = false;      // My Engagements list is capped until "View all" is clicked
   const ENGAGEMENTS_ROW_LIMIT = 6;
 
@@ -1515,6 +1529,22 @@
     $("eng-tabs").querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
     renderEngagementsList();
   }
+  function setEngagementSort(sort) {
+    engagementSort = sort;
+    $("eng-sort-select").value = sort;
+    renderEngagementsList();
+  }
+  function sortEngagementPool(pool) {
+    const leadName = (c) => teamLeadByClient[c.id] || "";
+    const comparators = {
+      name_asc: (a, b) => a.name.localeCompare(b.name),
+      name_desc: (a, b) => b.name.localeCompare(a.name),
+      lead_asc: (a, b) => leadName(a).localeCompare(leadName(b)) || a.name.localeCompare(b.name),
+      lead_desc: (a, b) => leadName(b).localeCompare(leadName(a)) || a.name.localeCompare(b.name),
+    };
+    return [...pool].sort(comparators[engagementSort] || comparators.name_asc);
+  }
+  $("eng-sort-select").addEventListener("change", () => setEngagementSort($("eng-sort-select").value));
 
   function renderEngagementsList() {
     const list = $("engagements-list");
@@ -1528,10 +1558,11 @@
       const ids = new Set(computeNeedsAttention(engagementScope === "mine" ? myClientIds : null).map((it) => it.client.id));
       pool = pool.filter((c) => ids.has(c.id));
     } else if (engagementTab === "recent") {
+      // "Recent" picks its top 10 by last activity first -- the sort dropdown
+      // below only reorders *within* that set, it doesn't change which 10 show.
       pool = [...pool].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)).slice(0, 10);
-    } else {
-      pool = [...pool].sort((a, b) => a.name.localeCompare(b.name));
     }
+    pool = sortEngagementPool(pool);
 
     $("engagements-empty").classList.toggle("hidden", pool.length > 0);
 
