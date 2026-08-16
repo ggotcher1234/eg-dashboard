@@ -325,7 +325,7 @@
       </div>
 
       <!-- ===== Resource Vault ===== -->
-      <div id="panel-vault">
+      <div id="panel-vault" class="hidden">
         <div class="card">
           <div class="accordion-header open" data-accordion="resource_vault">
             <h2>Resource Vault</h2>
@@ -619,6 +619,15 @@
 
     $("rv-template-add-wrap").classList.toggle("hidden", !isSuperAdmin);
 
+    // Which of the two entry points on the Engagement Workspace page got
+    // clicked -- "Add Research" (?view=research, the default) or "Modify
+    // EG Resources" (?view=vault) -- decides which panel shows. Set this
+    // BEFORE the data loads below (not after) so the page never flashes
+    // the other panel while its content is still loading -- panel-vault
+    // starts hidden in the markup itself for the same reason.
+    const viewParam = new URLSearchParams(location.search).get("view");
+    setResearchView(viewParam === "vault" ? "vault" : "research");
+
     wireAccordionHeaders();
     await loadListSection(RESOURCE_VAULT_CONFIG);
     $("resource-vault-add-form").addEventListener("submit", (e) => { e.preventDefault(); addCustomResourceVaultItem(); });
@@ -628,13 +637,6 @@
 
     await loadDocuments();
     await loadResearchQuestions();
-
-    // Which of the two entry points on the Engagement Workspace page got
-    // clicked -- "Add Research" (?view=research, the default) or "Modify
-    // EG Resources" (?view=vault) -- decides which panel shows first. Both
-    // stay reachable from the tabs once here, this just sets the landing tab.
-    const viewParam = new URLSearchParams(location.search).get("view");
-    setResearchView(viewParam === "vault" ? "vault" : "research");
   }
 
   function setResearchView(view) {
