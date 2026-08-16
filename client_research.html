@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Research &amp; Resource Vault</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  .hidden { display: none !important; }
+
+  header { background: var(--navy); color: #fff; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 16.5px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 12px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  #userbox { display: flex; align-items: center; gap: 14px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  button { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: var(--danger-dark); }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12.5px; }
+  button:disabled { opacity: 0.55; cursor: default; }
+
+  .page-shell { max-width: 900px; margin: 24px auto; padding: 0 20px 80px; }
+
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+
+  .badge { font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; padding: 3px 9px; border-radius: 999px; }
+  .badge-accepted { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-in_progress { background: #e7eef7; color: var(--navy-light); }
+  .badge-on_hold { background: #fdf1dc; color: var(--amber); }
+  .badge-closed { background: #eef1f4; color: var(--muted); }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 22px 26px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
+  .card h2 { margin-top: 0; font-size: 16px; color: var(--navy); }
+  .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  .card-hint { font-size: 12.5px; color: var(--muted); margin: -4px 0 16px; }
+  .meta-line { font-size: 13.5px; color: var(--muted); margin: 4px 0; }
+  .meta-line a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
+  .meta-line a:hover { text-decoration: underline; }
+  .overview-top-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
+  .field input[type="text"], .field input[type="url"], .field input[type="email"], .field textarea, .field select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit;
+  }
+  .field-hint { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+
+  /* Accordion sections -- same look as the Dashboard Wizard's former
+     accordion cards, reused here for Resource Vault and each Research Area. */
+  .accordion-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; gap: 12px; }
+  .accordion-header h2 { display: flex; align-items: center; gap: 10px; font-size: 16px; }
+  .accordion-count {
+    font-size: 11.5px; font-weight: 700; color: var(--navy-light); background: #eef3f9;
+    padding: 3px 10px; border-radius: 999px; flex-shrink: 0;
+  }
+  .accordion-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .accordion-chevron { font-size: 13px; color: var(--muted); transition: transform 0.15s ease; flex-shrink: 0; }
+  .accordion-header.open .accordion-chevron { transform: rotate(90deg); }
+  .accordion-body { display: none; margin-top: 14px; }
+  .accordion-body.open { display: block; }
+
+  .list-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f0f2f4; }
+  .list-row:last-child { border-bottom: none; }
+  .list-row-main { font-size: 13.5px; }
+  .list-row-main .lr-title { font-weight: 600; }
+  .list-row-main .lr-sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .list-empty { color: var(--muted); font-size: 13.5px; padding: 8px 0; }
+
+  .list-row-edit { display: flex; align-items: flex-end; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0f2f4; }
+  .list-row-edit:first-child { padding-top: 0; }
+  .lre-fields { display: flex; gap: 16px; flex-wrap: wrap; flex: 1; }
+  .lre-fields .field { margin-bottom: 0; flex: 1; min-width: 140px; }
+  .lre-fields label { font-size: 11px; }
+  .rv-readonly { font-size: 13.5px; padding: 8px 0 4px; color: var(--text); }
+  .rv-shared-badge { display: inline-block; background: #eef1f4; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; padding: 2px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
+  .rv-tpl-delete-all { background: none; border: none; color: var(--danger); font-size: 11.5px; text-decoration: underline; cursor: pointer; padding: 2px 0; font-weight: 600; }
+  .rv-tpl-delete-all:hover { color: var(--danger-dark); }
+  .rv-file-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; }
+  .rv-file-link:hover { text-decoration: underline; }
+
+  /* Research Questions (nested under each research area) */
+  .rq-question { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; background: #fafbfc; }
+  .rq-question-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 10px; }
+  .rq-question-header .rq-label { font-weight: 700; font-size: 13px; color: var(--text); }
+  .rq-question input[type="text"] { width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; margin-bottom: 12px; font-family: inherit; }
+  .rq-docs-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; }
+  .rq-doc-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .rq-doc-row .rq-doc-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; flex: 1; }
+  .rq-doc-row .rq-doc-link:hover { text-decoration: underline; }
+  .rq-area-empty { color: var(--muted); font-size: 13px; padding: 6px 0 14px; }
+
+  .icon-btn { padding: 4px 8px; font-size: 13px; line-height: 1; flex-shrink: 0; }
+
+  .add-row-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); align-items: flex-end; }
+  .add-row-form .field { margin-bottom: 0; flex: 1; min-width: 140px; }
+  .add-row-form label { font-size: 11px; }
+
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+  .no-client-note { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 14px; }
+  header .brand-row { display: flex; align-items: center; gap: 12px; }
+  .brand-badge { background: #fff; border-radius: 7px; padding: 4px 8px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 20px; display: block; }
+
+  /* ---------- Top nav + Ask AI (same pattern as every other internal page) ---------- */
+  header .site-nav { display: flex; align-items: center; gap: 4px; }
+  header .nav-link { color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 8px 12px; border-radius: 6px; position: relative; }
+  header .nav-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  header .nav-link.active { color: #fff; }
+  header .nav-link.active::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -14px; height: 2px; background: #fff; }
+  @media (max-width: 980px) { header .site-nav { display: none; } }
+
+  .ask-ai-btn {
+    display: inline-flex; align-items: center; gap: 6px; background: rgba(124,63,196,0.18); color: #d9c8f5;
+    border: 1px solid rgba(124,63,196,0.5); padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  }
+  .ask-ai-btn:hover { background: rgba(124,63,196,0.3); color: #fff; }
+  .ask-ai-btn svg { width: 14px; height: 14px; }
+  .ask-ai-wrap { position: relative; }
+  .ai-nudge { position: absolute; top: calc(100% + 12px); right: 0; width: 220px; background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.22); padding: 12px 26px 12px 14px; font-size: 12.5px; line-height: 1.45; z-index: 95; }
+  .ai-nudge.hidden { display: none; }
+  .ai-nudge::before { content: ""; position: absolute; top: -6px; right: 22px; width: 11px; height: 11px; background: #fff; border-left: 1px solid var(--border); border-top: 1px solid var(--border); transform: rotate(45deg); }
+  .ai-nudge-close { position: absolute; top: 6px; right: 8px; background: transparent; border: none; color: var(--muted); font-size: 15px; line-height: 1; padding: 2px; cursor: pointer; }
+
+  .ai-drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.25); z-index: 90; }
+  .ai-drawer-overlay.open { display: block; }
+  .ai-drawer {
+    position: fixed; top: 0; right: -460px; width: 440px; max-width: 92vw; height: 100vh; background: #fff;
+    box-shadow: -8px 0 28px rgba(20,48,77,0.18); z-index: 91; display: flex; flex-direction: column; transition: right 0.22s ease;
+  }
+  .ai-drawer.open { right: 0; }
+  .ai-drawer-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 20px 22px 14px; border-bottom: 1px solid var(--border); }
+  .ai-drawer-header h3 { margin: 0; font-size: 18px; color: var(--navy); display: flex; align-items: center; gap: 8px; }
+  .ai-drawer-header h3 svg { color: #7c3fc4; width: 19px; height: 19px; }
+  .ai-drawer-header .card-hint { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+  .ai-drawer-close { background: transparent; border: none; color: var(--muted); font-size: 20px; padding: 4px; cursor: pointer; line-height: 1; }
+  .ai-drawer-close:hover { color: var(--text); }
+  .ai-drawer-body { flex: 1; overflow-y: auto; padding: 18px 22px; }
+  .ai-context-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; }
+  .ai-context-chip { display: flex; align-items: center; gap: 8px; background: #f4f6f8; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--text); margin-bottom: 18px; }
+  .ai-context-chip svg { color: var(--navy-light); flex-shrink: 0; width: 15px; height: 15px; }
+  .ai-greeting-bubble { background: #f4f0fb; color: var(--text); border: 1px solid #e3d5f7; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.5; margin-bottom: 18px; }
+  .ai-ask-label { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+  .ai-ask-row { display: flex; gap: 8px; margin-bottom: 18px; }
+  .ai-ask-row input { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13.5px; font-family: inherit; }
+  .ai-ask-row input:focus { outline: none; border-color: #7c3fc4; }
+  .ai-ask-send { width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #7c3fc4; color: #fff; border-radius: 8px; }
+  .ai-ask-send:hover { background: #6528a3; }
+  .ai-ask-send svg { width: 17px; height: 17px; }
+  .ai-suggested-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 8px; }
+  .ai-suggested-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 20px; }
+  .ai-suggested-chip { text-align: left; background: #f4f0fb; color: #5a2494; border: 1px solid #e3d5f7; border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; width: 100%; }
+  .ai-suggested-chip:hover { background: #ecdffa; }
+  .ai-suggested-chip svg { width: 13px; height: 13px; flex-shrink: 0; color: #7c3fc4; }
+  .ai-answer-block { border-top: 1px solid var(--border); padding-top: 16px; }
+  .ai-answer-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .ai-answer-meta .ai-answer-title { font-size: 13px; font-weight: 700; color: var(--navy); }
+  .ai-answer-meta .ai-answer-time { font-size: 11.5px; color: var(--muted); }
+  .ai-answer-card { background: #f4f0fb; border-radius: 10px; padding: 14px 16px; font-size: 13.5px; line-height: 1.55; color: var(--text); }
+  .ai-answer-card ul { margin: 8px 0; padding-left: 18px; }
+  .ai-answer-card li { margin-bottom: 3px; }
+  .ai-answer-card strong { color: var(--navy); }
+  .ai-answer-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .ai-answer-actions button { background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; color: var(--muted); font-size: 12px; }
+  .ai-answer-actions button:hover { color: var(--text); background: #f4f6f8; }
+  .ai-drawer-footer { padding: 12px 22px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <div class="brand-row">
+      <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
+      <div>
+      <h1>Research &amp; Resource Vault</h1>
+      <div class="sub"><a class="back-link" id="header-back-link" href="index.html">← Engagement Workspace</a></div>
+    </div>
+    </div>
+    <nav class="site-nav">
+      <a class="nav-link active" href="index.html">Engagements</a>
+      <a class="nav-link" href="econ_dev_partners_admin.html">Programs</a>
+      <a class="nav-link" href="team_directory.html">Team</a>
+      <a class="nav-link" href="invoicing_report.html">Invoicing</a>
+    </nav>
+    <div id="userbox">
+      <div class="ask-ai-wrap">
+        <button class="ask-ai-btn" id="ask-ai-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6L12 2z"/><path d="M19 15l.9 2.6L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.4L19 15z"/></svg>
+          Ask AI
+        </button>
+        <div class="ai-nudge hidden" id="ai-nudge">
+          <button type="button" class="ai-nudge-close" id="ai-nudge-close" aria-label="Dismiss">&times;</button>
+          I'm here if you have any questions — just click <strong>Ask AI</strong> any time.
+        </div>
+      </div>
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span>
+      <button class="btn-ghost" id="signout-btn">Sign out</button>
+    </div>
+  </header>
+
+  <div class="ai-drawer-overlay" id="ai-drawer-overlay"></div>
+  <aside class="ai-drawer" id="ai-drawer">
+    <div class="ai-drawer-header">
+      <div>
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6L12 2z"/><path d="M19 15l.9 2.6L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.4L19 15z"/></svg>
+          Ask AI
+        </h3>
+        <div class="card-hint">Ask about this page or anything across EG Group.</div>
+      </div>
+      <button class="ai-drawer-close" id="ai-drawer-close">&times;</button>
+    </div>
+    <div class="ai-drawer-body">
+      <div class="ai-context-label">Context</div>
+      <div class="ai-context-chip" id="ai-context-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span id="ai-context-text">Research &amp; Resource Vault</span>
+      </div>
+      <div class="ai-greeting-bubble">Hi! I'm your EG Group assistant. Ask me anything about this engagement's research or resources, or about other engagements, applications, hours, and team data across the app.</div>
+      <div class="ai-ask-label">Ask a question</div>
+      <div class="ai-ask-row">
+        <input type="text" id="ai-question-input" placeholder="e.g. What research is still missing?" />
+        <button class="ai-ask-send" id="ai-ask-send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div class="ai-suggested-label">Suggested questions</div>
+      <div class="ai-suggested-list" id="ai-suggested-list"></div>
+      <div class="ai-answer-block hidden" id="ai-answer-block">
+        <div class="ai-answer-meta">
+          <span class="ai-answer-title">Answer</span>
+          <span class="ai-answer-time" id="ai-answer-time"></span>
+        </div>
+        <div class="ai-answer-card" id="ai-answer-card"></div>
+        <div class="ai-answer-actions">
+          <button id="ai-copy-answer">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="ai-drawer-footer">Answers are AI-generated from EG Group data and may not always be accurate.</div>
+  </aside>
+
+  <div class="page-shell">
+    <div id="banner"></div>
+
+    <div id="no-client-view" class="no-client-note hidden">
+      Open a client from <a href="client_workspace.html">the Workspace</a> first, then use the "Research" link on its Engagement Workspace page to get here.
+    </div>
+
+    <div id="research-view" class="hidden">
+      <div class="card" id="sec-overview">
+        <div class="overview-top-row">
+          <div>
+            <div class="card-header" style="margin-bottom:2px;">
+              <h2 id="p-name" style="margin:0;"></h2>
+              <span class="badge" id="p-lifecycle-badge"></span>
+            </div>
+            <div class="meta-line">
+              <a href="#" id="p-profile-link">&larr; Dashboard Wizard</a>
+              &nbsp;&middot;&nbsp;
+              <a href="#" id="p-workspace-link">Assignments &amp; Hours &rarr;</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Resource Vault ===== -->
+      <div class="card">
+        <div class="accordion-header open" data-accordion="resource_vault">
+          <h2>Resource Vault</h2>
+          <div class="accordion-header-right">
+            <span class="accordion-count" id="resource_vault-count"></span>
+            <span class="accordion-chevron">&#9656;</span>
+          </div>
+        </div>
+        <div class="accordion-body open" id="resource_vault-body">
+          <div class="field-hint" style="margin-bottom:10px;">Each resource can be a Link URL (opens in a new tab — a video, quiz, external doc, etc.) or an uploaded file (downloads), whichever fits. Rows marked "Shared" show for every client — Admins can edit those right here and the change applies everywhere. Add anything client-specific below.</div>
+          <div id="resource_vault-list"></div>
+
+          <div id="rv-template-add-wrap" class="hidden" style="margin-top:14px; padding:12px; background:#f8fafb; border:1px dashed var(--border); border-radius:8px;">
+            <div class="field-hint" style="margin-bottom:8px;"><strong>Shared resource</strong> — appears in every client's Resource Vault right away.</div>
+            <form class="add-row-form" id="rv-template-add-form">
+              <div class="field">
+                <label for="rv-tpl-new-title">Title</label>
+                <input type="text" id="rv-tpl-new-title" required />
+              </div>
+              <div class="field">
+                <label for="rv-tpl-new-description">Description (shows below icon)</label>
+                <input type="text" id="rv-tpl-new-description" />
+              </div>
+              <div class="field">
+                <label for="rv-tpl-new-url">Link URL (optional)</label>
+                <input type="text" id="rv-tpl-new-url" placeholder="https://…" />
+              </div>
+              <div class="field">
+                <label for="rv-tpl-new-file">File (optional)</label>
+                <input type="file" id="rv-tpl-new-file" />
+              </div>
+              <div class="field-hint" style="margin-bottom:10px;">Use one or the other — a link URL opens in a new tab, a file downloads. If both are set, the link wins.</div>
+              <button type="submit" class="btn-secondary btn-sm">+ Add Shared Resource</button>
+            </form>
+          </div>
+
+          <form class="add-row-form" id="resource-vault-add-form">
+            <div class="field">
+              <label for="rv-new-title">Title</label>
+              <input type="text" id="rv-new-title" required />
+            </div>
+            <div class="field">
+              <label for="rv-new-description">Description (shows below icon)</label>
+              <input type="text" id="rv-new-description" />
+            </div>
+            <div class="field">
+              <label for="rv-new-url">Link URL (optional)</label>
+              <input type="text" id="rv-new-url" placeholder="https://…" />
+            </div>
+            <div class="field">
+              <label for="rv-new-file">File (optional)</label>
+              <input type="file" id="rv-new-file" />
+            </div>
+            <div class="field-hint" style="margin-bottom:10px;">Use one or the other — a link URL opens in a new tab, a file downloads. If both are set, the link wins.</div>
+            <button type="submit" class="btn-secondary btn-sm">+ Add Resource (this client only)</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- ===== Economic Gardening Research Reports ===== -->
+      <div class="card">
+        <h2>Economic Gardening Research Reports</h2>
+        <div class="field-hint" style="margin-bottom:10px;">Each item becomes a link in the Preview Dashboard.</div>
+        <div id="research-areas-sections"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentUser = null;
+  let isSuperAdmin = false;
+  let currentClient = null;
+
+  const $ = (id) => document.getElementById(id);
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
+  function redirectToLogin() {
+    const dest = location.pathname.split("/").pop() + location.search;
+    location.href = "index.html?return=" + encodeURIComponent(dest);
+  }
+  const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
+  const sanitizeFilename = (name) => name.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+  /* ---------- Ask AI ---------- */
+  let AI_CONTEXT_LABEL = "Research & Resource Vault";
+  const AI_PAGE_KEY = "research";
+  const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/eg-dashboard-ai`;
+  let aiHistory = [];
+
+  function aiSuggestedQuestions() {
+    return [
+      "What research areas still need documents?",
+      "What's in the Resource Vault for this client?",
+      "How do I add a shared resource for every client?",
+      "What research questions haven't been answered yet?",
+    ];
+  }
+
+  function initAskAi() {
+    const btn = $("ask-ai-btn");
+    if (!btn) return;
+    renderAiSuggested();
+    btn.addEventListener("click", openAiDrawer);
+    $("ai-drawer-close").addEventListener("click", closeAiDrawer);
+    $("ai-drawer-overlay").addEventListener("click", closeAiDrawer);
+    $("ai-ask-send").addEventListener("click", submitAiQuestion);
+    $("ai-question-input").addEventListener("keydown", (e) => { if (e.key === "Enter") submitAiQuestion(); });
+    $("ai-copy-answer").addEventListener("click", () => {
+      const text = $("ai-answer-card").innerText;
+      navigator.clipboard?.writeText(text);
+    });
+  }
+
+  function renderAiSuggested() {
+    const list = $("ai-suggested-list");
+    const questions = aiSuggestedQuestions();
+    list.innerHTML = questions.map((q, i) => `
+      <button class="ai-suggested-chip" data-idx="${i}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"/><path d="M12 17h.01"/></svg>
+        ${escapeHtml(q)}
+      </button>
+    `).join("");
+    list.querySelectorAll(".ai-suggested-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const q = questions[Number(chip.dataset.idx)];
+        $("ai-question-input").value = q;
+        askAi(q);
+      });
+    });
+  }
+
+  function openAiDrawer() {
+    $("ai-context-text").textContent = AI_CONTEXT_LABEL;
+    renderAiSuggested();
+    $("ai-drawer-overlay").classList.add("open");
+    $("ai-drawer").classList.add("open");
+  }
+
+  function closeAiDrawer() {
+    $("ai-drawer-overlay").classList.remove("open");
+    $("ai-drawer").classList.remove("open");
+  }
+
+  function submitAiQuestion() {
+    const q = $("ai-question-input").value.trim();
+    if (!q) return;
+    askAi(q);
+  }
+
+  function renderAiMarkup(text) {
+    const escaped = escapeHtml(text || "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    return escaped.split(/\n\n+/).map((block) => {
+      const lines = block.split("\n").filter((l) => l.trim());
+      if (lines.length && lines.every((l) => /^\s*-\s+/.test(l))) {
+        return `<ul>${lines.map((l) => `<li>${l.replace(/^\s*-\s+/, "")}</li>`).join("")}</ul>`;
+      }
+      return `<p>${lines.join("<br>")}</p>`;
+    }).join("");
+  }
+
+  async function askAi(question) {
+    $("ai-answer-block").classList.remove("hidden");
+    $("ai-answer-card").innerHTML = `<p style="color:var(--muted);">Thinking…</p>`;
+    $("ai-answer-time").textContent = "";
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error("No active session");
+      const res = await fetch(AI_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": SUPABASE_ANON_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question,
+          pageKey: AI_PAGE_KEY,
+          pageContext: AI_CONTEXT_LABEL,
+          clientId: currentClient ? currentClient.id : undefined,
+          history: aiHistory,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || `Request failed (${res.status})`);
+      showAiAnswer(renderAiMarkup(data.answer));
+      aiHistory.push({ role: "user", content: question }, { role: "assistant", content: data.answer });
+      aiHistory = aiHistory.slice(-6);
+    } catch (err) {
+      console.error("Ask AI error:", err);
+      showAiAnswer(`<p>Sorry, I couldn't reach the AI service just now. Try again in a moment.</p>`);
+    }
+  }
+
+  function showAiAnswer(html) {
+    $("ai-answer-card").innerHTML = html;
+    $("ai-answer-block").classList.remove("hidden");
+    $("ai-answer-time").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  initAskAi();
+
+  function maybeShowAiNudge() {
+    if (localStorage.getItem("eg_ai_nudge_seen")) return;
+    localStorage.setItem("eg_ai_nudge_seen", "1");
+    setTimeout(() => {
+      const nudge = $("ai-nudge");
+      if (!nudge) return;
+      nudge.classList.remove("hidden");
+      const hide = () => nudge.classList.add("hidden");
+      $("ai-nudge-close").addEventListener("click", hide);
+      $("ask-ai-btn").addEventListener("click", hide, { once: true });
+      setTimeout(hide, 10000);
+    }, 900);
+  }
+
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 4000);
+  }
+
+  // ---------- Auth ----------
+  $("signout-btn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    redirectToLogin();
+  });
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users")
+      .select("id, full_name, role, organization_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      await sb.auth.signOut();
+      redirectToLogin();
+      return;
+    }
+
+    currentUser = profile;
+    isSuperAdmin = profile.role === "super_admin";
+
+    $("loading-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+    maybeShowAiNudge();
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = roleLabel(profile.role);
+
+    const clientId = new URLSearchParams(location.search).get("client");
+    if (clientId) {
+      await loadClient(clientId);
+    } else {
+      location.href = "index.html";
+    }
+  }
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      afterSignIn();
+    } else {
+      redirectToLogin();
+    }
+  });
+
+  async function loadClient(clientId) {
+    const { data: client, error } = await sb.from("clients").select("*").eq("id", clientId).single();
+    if (error || !client) {
+      $("no-client-view").classList.remove("hidden");
+      showBanner("Couldn't load that client — you may not be assigned to it.", "error");
+      return;
+    }
+    currentClient = client;
+
+    $("research-view").classList.remove("hidden");
+    $("p-name").textContent = client.name;
+    AI_CONTEXT_LABEL = `${client.name} — Research & Resource Vault`;
+    $("header-back-link").href = `client_control_center.html?client=${client.id}`;
+    $("header-back-link").textContent = `← Engagement Workspace`;
+    $("p-lifecycle-badge").className = `badge badge-${client.project_status}`;
+    $("p-lifecycle-badge").textContent = client.project_status;
+    $("p-profile-link").href = `client_profile.html?client=${client.id}`;
+    $("p-workspace-link").href = `client_workspace.html?client=${client.id}`;
+
+    $("rv-template-add-wrap").classList.toggle("hidden", !isSuperAdmin);
+
+    wireAccordionHeaders();
+    await loadListSection(RESOURCE_VAULT_CONFIG);
+    $("resource-vault-add-form").addEventListener("submit", (e) => { e.preventDefault(); addCustomResourceVaultItem(); });
+    if (isSuperAdmin) {
+      $("rv-template-add-form").addEventListener("submit", (e) => { e.preventDefault(); addSharedTemplate(); });
+    }
+
+    await loadDocuments();
+    await loadResearchQuestions();
+
+    // Deep link from the home page's "Add Research" quick action
+    // (?section=research) lands here directly; nothing further to do once
+    // the page itself has loaded, so this is just a no-op guard kept for
+    // parity with the old client_profile.html behavior.
+  }
+
+  function wireAccordionHeaders() {
+    document.querySelectorAll("[data-accordion]").forEach((hdr) => {
+      hdr.addEventListener("click", () => {
+        const body = $(`${hdr.dataset.accordion}-body`);
+        const isOpen = hdr.classList.toggle("open");
+        body.classList.toggle("open", isOpen);
+      });
+    });
+  }
+
+  // ---------- Resource Vault ----------
+  // Resource Vault is a hybrid: the 8 standard EG resources are shared
+  // "templates" (one row in resource_vault_templates, org-wide) linked into
+  // every client; title/description/file always resolve live from the
+  // template. Super Admins can edit those templates right here — inline,
+  // per any client's Resource Vault — and the change applies everywhere,
+  // rather than needing a separate standalone admin page. A client can ALSO
+  // have its own custom resources on top of those 8, which stay fully
+  // editable (including their own uploaded file) right on this page.
+  const RESOURCE_VAULT_CONFIG = {
+    key: "resource_vault", title: "Resource Vault",
+    customLoad: async (clientId) => {
+      const { data, error } = await sb
+        .from("client_resource_vault_items")
+        .select("id, title, description, url, storage_path, template_id, sort_order, resource_vault_templates(title, description, url, storage_path)")
+        .eq("client_id", clientId)
+        .order("sort_order")
+        .order("created_at");
+      if (error) { showBanner("Couldn't load Resource Vault: " + error.message, "error"); return []; }
+      return data.map((r) => ({
+        id: r.id,
+        isTemplate: !!r.template_id,
+        templateId: r.template_id,
+        title: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.title) || "") : (r.title || ""),
+        description: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.description) || "") : (r.description || ""),
+        url: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.url) || null) : (r.url || null),
+        storagePath: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.storage_path) || null) : (r.storage_path || null),
+      }));
+    },
+  };
+  const listData = {};
+
+  async function loadListSection(cfg) {
+    listData[cfg.key] = await cfg.customLoad(currentClient.id);
+    renderListRows(cfg);
+  }
+
+  function renderListRows(cfg) {
+    const rows = listData[cfg.key] || [];
+    const countLabel = rows.length ? `${rows.length} item${rows.length === 1 ? "" : "s"}` : "";
+    $(`${cfg.key}-count`).textContent = countLabel;
+    const list = $(`${cfg.key}-list`);
+    if (!rows.length) {
+      list.innerHTML = `<div class="list-empty">Nothing added yet.</div>`;
+      return;
+    }
+    renderResourceVaultRows(rows);
+  }
+
+  // Best-effort human-friendly file name from a storage path like
+  // clients/{id}/resource-vault/1699999999-my_file.pdf -> "my_file.pdf".
+  function fileNameFromPath(path) {
+    if (!path) return "";
+    const last = path.split("/").pop();
+    return last.replace(/^\d+-/, "");
+  }
+
+  const FILE_TYPE_ICONS = {
+    pdf: "\u{1F4D5}",
+    doc: "\u{1F4D8}", docx: "\u{1F4D8}",
+    xls: "\u{1F4D7}", xlsx: "\u{1F4D7}", csv: "\u{1F4D7}",
+    ppt: "\u{1F4D9}", pptx: "\u{1F4D9}",
+    png: "\u{1F5BC}\u{FE0F}", jpg: "\u{1F5BC}\u{FE0F}", jpeg: "\u{1F5BC}\u{FE0F}", gif: "\u{1F5BC}\u{FE0F}",
+    zip: "\u{1F5C3}\u{FE0F}",
+  };
+  function fileIconFor(path) {
+    const name = (path.split("/").pop() || "").toLowerCase();
+    const dot = name.lastIndexOf(".");
+    const ext = dot === -1 ? "" : name.slice(dot + 1);
+    return FILE_TYPE_ICONS[ext] || "\u{1F4C4}";
+  }
+
+  function renderResourceVaultRows(rows) {
+    const list = $("resource_vault-list");
+    list.innerHTML = rows.map((r) => {
+      const fileHtml = r.storagePath
+        ? `<span class="rv-file-link" data-path="${escapeHtml(r.storagePath)}">${fileIconFor(r.storagePath)} ${escapeHtml(fileNameFromPath(r.storagePath))}</span>`
+        : `<span class="field-hint">No file uploaded yet${r.isTemplate ? " — add one from Resource Templates." : "."}</span>`;
+      // A link takes priority over an uploaded file when both are set —
+      // matches how the client-facing dashboard resolves it.
+      const resolvedHtml = r.url
+        ? `<a class="rv-file-link" href="${escapeHtml(r.url)}" target="_blank" rel="noopener">&#128279; ${escapeHtml(r.url)}</a>`
+        : fileHtml;
+
+      if (r.isTemplate && isSuperAdmin) {
+        return `
+          <div class="list-row-edit">
+            <div class="lre-fields">
+              <div class="field">
+                <label>Title <span class="rv-shared-badge">Shared</span></label>
+                <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="title" value="${escapeHtml(r.title)}" required />
+              </div>
+              <div class="field">
+                <label>Description (shows below icon)</label>
+                <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="description" value="${escapeHtml(r.description || "")}" />
+              </div>
+              <div class="field">
+                <label>Link URL <span class="field-hint" style="display:inline;">(wins over a file if both are set)</span></label>
+                <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="url" value="${escapeHtml(r.url || "")}" placeholder="https://…" />
+              </div>
+              <div class="field">
+                <label>File</label>
+                ${r.storagePath
+                  ? `<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">${fileHtml}<button type="button" class="btn-secondary btn-sm" data-rv-tpl-replace="${r.templateId}">Replace</button></div>`
+                  : `<label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload file<input type="file" class="rv-tpl-upload-input" data-tpl-id="${r.templateId}" style="display:none;" /></label>`}
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
+              <button type="button" class="btn-danger icon-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
+              <button type="button" class="rv-tpl-delete-all" data-rv-tpl-delete="${r.templateId}" data-rv-tpl-title="${escapeHtml(r.title)}">Delete for all clients</button>
+            </div>
+          </div>
+        `;
+      }
+
+      if (r.isTemplate) {
+        return `
+          <div class="list-row-edit">
+            <div class="lre-fields">
+              <div class="field"><label>Title <span class="rv-shared-badge">Shared</span></label><div class="rv-readonly">${escapeHtml(r.title)}</div></div>
+              <div class="field"><label>Description (shows below icon)</label><div class="rv-readonly">${escapeHtml(r.description || "—")}</div></div>
+              <div class="field"><label>Link / File</label>${resolvedHtml}</div>
+            </div>
+            <button type="button" class="btn-danger icon-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="list-row-edit">
+          <div class="lre-fields">
+            <div class="field">
+              <label>Title</label>
+              <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="title" value="${escapeHtml(r.title)}" required />
+            </div>
+            <div class="field">
+              <label>Description (shows below icon)</label>
+              <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="description" value="${escapeHtml(r.description || "")}" />
+            </div>
+            <div class="field">
+              <label>Link URL <span class="field-hint" style="display:inline;">(wins over a file if both are set)</span></label>
+              <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="url" value="${escapeHtml(r.url || "")}" placeholder="https://…" />
+            </div>
+            <div class="field">
+              <label>File</label>
+              ${r.storagePath
+                ? `<div style="display:flex; align-items:center; gap:10px;">${fileHtml}<button type="button" class="btn-secondary btn-sm" data-remove-file="${r.id}">Remove</button></div>`
+                : `<label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload file<input type="file" class="rv-upload-input" data-row-id="${r.id}" style="display:none;" /></label>`}
+            </div>
+          </div>
+          <button type="button" class="btn-danger icon-btn" data-delete-id="${r.id}" title="Delete">&times;</button>
+        </div>
+      `;
+    }).join("");
+
+    list.querySelectorAll(".row-input-edit[data-rv-field]").forEach((inp) => {
+      const original = inp.value;
+      inp.addEventListener("blur", async () => {
+        const value = inp.value.trim();
+        const rowId = inp.dataset.rvRowId;
+        const fieldName = inp.dataset.rvField;
+        if (value === original) return;
+        if (fieldName === "title" && !value) {
+          showBanner("Title can't be empty.", "error");
+          inp.value = original;
+          return;
+        }
+        const { error } = await sb.from("client_resource_vault_items").update({ [fieldName]: value || null }).eq("id", rowId);
+        if (error) {
+          showBanner("Couldn't save: " + error.message, "error");
+          inp.value = original;
+          return;
+        }
+      });
+    });
+
+    list.querySelectorAll(".rv-file-link").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(el.dataset.path, 60);
+        if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+        window.open(data.signedUrl, "_blank");
+      });
+    });
+
+    list.querySelectorAll("[data-unlink-id]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const { error } = await sb.from("client_resource_vault_items").delete().eq("id", btn.dataset.unlinkId);
+        if (error) { showBanner("Couldn't remove: " + error.message, "error"); return; }
+        await loadListSection(RESOURCE_VAULT_CONFIG);
+      });
+    });
+
+    list.querySelectorAll("[data-delete-id]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const row = (listData.resource_vault || []).find((x) => x.id === btn.dataset.deleteId);
+        if (row && row.storagePath) await sb.storage.from("client-documents").remove([row.storagePath]);
+        const { error } = await sb.from("client_resource_vault_items").delete().eq("id", btn.dataset.deleteId);
+        if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
+        await loadListSection(RESOURCE_VAULT_CONFIG);
+      });
+    });
+
+    list.querySelectorAll("[data-remove-file]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const rowId = btn.dataset.removeFile;
+        const row = (listData.resource_vault || []).find((x) => x.id === rowId);
+        if (row && row.storagePath) await sb.storage.from("client-documents").remove([row.storagePath]);
+        const { error } = await sb.from("client_resource_vault_items").update({ storage_path: null }).eq("id", rowId);
+        if (error) { showBanner("Couldn't remove file: " + error.message, "error"); return; }
+        await loadListSection(RESOURCE_VAULT_CONFIG);
+      });
+    });
+
+    list.querySelectorAll(".rv-upload-input").forEach((input) => {
+      input.addEventListener("change", async () => {
+        if (!input.files.length) return;
+        const file = input.files[0];
+        const rowId = input.dataset.rowId;
+        input.disabled = true;
+        const path = `clients/${currentClient.id}/resource-vault/${Date.now()}-${sanitizeFilename(file.name)}`;
+        const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+        if (uploadErr) {
+          showBanner("Couldn't upload file: " + uploadErr.message, "error");
+          input.disabled = false;
+          return;
+        }
+        const { error } = await sb.from("client_resource_vault_items").update({ storage_path: path }).eq("id", rowId);
+        if (error) { showBanner("Couldn't save file: " + error.message, "error"); input.disabled = false; return; }
+        await loadListSection(RESOURCE_VAULT_CONFIG);
+      });
+    });
+
+    // ---- Shared-template editing (Super Admin only) — writes to
+    // resource_vault_templates, not client_resource_vault_items, so the
+    // change is visible from every client's Resource Vault, not just this one.
+    list.querySelectorAll(".row-input-edit[data-rv-tpl-field]").forEach((inp) => {
+      const original = inp.value;
+      inp.addEventListener("blur", async () => {
+        const value = inp.value.trim();
+        const templateId = inp.dataset.rvTplId;
+        const fieldName = inp.dataset.rvTplField;
+        if (value === original) return;
+        if (fieldName === "title" && !value) {
+          showBanner("Title can't be empty.", "error");
+          inp.value = original;
+          return;
+        }
+        const { error } = await sb.from("resource_vault_templates").update({ [fieldName]: value || null }).eq("id", templateId);
+        if (error) {
+          showBanner("Couldn't save: " + error.message, "error");
+          inp.value = original;
+          return;
+        }
+        showBanner("Saved — updated for every client.", "success");
+      });
+    });
+
+    list.querySelectorAll(".rv-tpl-upload-input").forEach((input) => {
+      input.addEventListener("change", () => handleTemplateFileUpload(input.dataset.tplId, input.files[0]));
+    });
+
+    list.querySelectorAll("[data-rv-tpl-replace]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const picker = document.createElement("input");
+        picker.type = "file";
+        picker.addEventListener("change", () => handleTemplateFileUpload(btn.dataset.rvTplReplace, picker.files[0]));
+        picker.click();
+      });
+    });
+
+    list.querySelectorAll("[data-rv-tpl-delete]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const templateId = btn.dataset.rvTplDelete;
+        if (!confirm(`Delete "${btn.dataset.rvTplTitle}"? This removes it from every client's Resource Vault, not just this one.`)) return;
+        const row = (listData.resource_vault || []).find((x) => x.templateId === templateId);
+        if (row && row.storagePath) await sb.storage.from("client-documents").remove([row.storagePath]);
+        const { error } = await sb.from("resource_vault_templates").delete().eq("id", templateId);
+        if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
+        showBanner("Shared resource deleted for every client.", "success");
+        await loadListSection(RESOURCE_VAULT_CONFIG);
+      });
+    });
+  }
+
+  async function handleTemplateFileUpload(templateId, file) {
+    if (!file) return;
+    const row = (listData.resource_vault || []).find((x) => x.templateId === templateId);
+    const oldPath = row ? row.storagePath : null;
+    const path = `resource-templates/${currentClient.organization_id}/${Date.now()}-${sanitizeFilename(file.name)}`;
+    const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+    if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    const { error } = await sb.from("resource_vault_templates").update({ storage_path: path }).eq("id", templateId);
+    if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
+    if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
+    showBanner("File uploaded — updated for every client.", "success");
+    await loadListSection(RESOURCE_VAULT_CONFIG);
+  }
+
+  async function addCustomResourceVaultItem() {
+    const title = $("rv-new-title").value.trim();
+    const description = $("rv-new-description").value.trim();
+    const url = $("rv-new-url").value.trim();
+    const fileInput = $("rv-new-file");
+    if (!title) { showBanner("Title is required.", "error"); return; }
+
+    let storagePath = null;
+    if (fileInput.files.length) {
+      const file = fileInput.files[0];
+      storagePath = `clients/${currentClient.id}/resource-vault/${Date.now()}-${sanitizeFilename(file.name)}`;
+      const { error: uploadErr } = await sb.storage.from("client-documents").upload(storagePath, file);
+      if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    }
+
+    const sortOrder = (listData.resource_vault || []).length + 1;
+    const { error } = await sb.from("client_resource_vault_items").insert({
+      client_id: currentClient.id,
+      title,
+      description: description || null,
+      url: url || null,
+      storage_path: storagePath,
+      sort_order: sortOrder,
+    });
+    if (error) { showBanner("Couldn't add resource: " + error.message, "error"); return; }
+    $("resource-vault-add-form").reset();
+    showBanner("Resource added.", "success");
+    await loadListSection(RESOURCE_VAULT_CONFIG);
+  }
+
+  // A "Shared resource" — one row in resource_vault_templates, org-wide.
+  // An existing DB trigger auto-links it into every client's Resource
+  // Vault as soon as it's inserted, so nothing else needs to happen here.
+  async function addSharedTemplate() {
+    const title = $("rv-tpl-new-title").value.trim();
+    const description = $("rv-tpl-new-description").value.trim();
+    const url = $("rv-tpl-new-url").value.trim();
+    const fileInput = $("rv-tpl-new-file");
+    if (!title) { showBanner("Title is required.", "error"); return; }
+
+    let storagePath = null;
+    if (fileInput.files.length) {
+      const file = fileInput.files[0];
+      storagePath = `resource-templates/${currentClient.organization_id}/${Date.now()}-${sanitizeFilename(file.name)}`;
+      const { error: uploadErr } = await sb.storage.from("client-documents").upload(storagePath, file);
+      if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    }
+
+    const { error } = await sb.from("resource_vault_templates").insert({
+      organization_id: currentClient.organization_id,
+      title,
+      description: description || null,
+      url: url || null,
+      storage_path: storagePath,
+    });
+    if (error) { showBanner("Couldn't add shared resource: " + error.message, "error"); return; }
+    $("rv-template-add-form").reset();
+    showBanner("Shared resource added — now shows for every client.", "success");
+    await loadListSection(RESOURCE_VAULT_CONFIG);
+  }
+
+  // ---------- Economic Gardening Research Reports (Questions + Documents, per area) ----------
+  const RESEARCH_AREAS = [
+    ["market_dynamics", "Market Dynamics Research"],
+    ["outbound", "Outbound Marketing"],
+    ["inbound", "Inbound Marketing"],
+    ["watering_holes", "Watering Holes"],
+  ];
+  let allDocuments = [];
+  let researchQuestions = [];
+  // renderResearchAreaSections() rebuilds the whole accordion group from
+  // scratch every time a question is added/deleted (simplest way to keep
+  // sort order/render logic in one place) — track which area was open so
+  // that rebuild doesn't visually collapse it out from under the consultant.
+  let openResearchArea = null;
+
+  async function loadDocuments() {
+    const { data, error } = await sb.from("documents").select("*").eq("client_id", currentClient.id).order("uploaded_at", { ascending: false });
+    if (error) { showBanner("Couldn't load documents: " + error.message, "error"); return; }
+    allDocuments = data;
+  }
+
+  async function loadResearchQuestions() {
+    const { data, error } = await sb
+      .from("client_research_questions")
+      .select("*")
+      .eq("client_id", currentClient.id)
+      .order("sort_order")
+      .order("created_at");
+    if (error) { showBanner("Couldn't load research questions: " + error.message, "error"); return; }
+    researchQuestions = data;
+    renderResearchAreaSections();
+  }
+
+  function renderResearchAreaSections() {
+    const container = $("research-areas-sections");
+    container.innerHTML = RESEARCH_AREAS.map(([key, label]) => {
+      const isOpen = openResearchArea === key;
+      return `
+      <div class="card" style="margin-bottom:12px;">
+        <div class="accordion-header ${isOpen ? "open" : ""}" data-ra-accordion="${key}">
+          <h2><span class="accordion-chevron">&#9656;</span> ${escapeHtml(label)}</h2>
+        </div>
+        <div class="accordion-body ${isOpen ? "open" : ""}" id="ra-${key}-body">
+          <div id="ra-${key}-questions"></div>
+          <button type="button" class="btn-secondary btn-sm" data-add-question="${key}">+ Add Question</button>
+        </div>
+      </div>
+    `;
+    }).join("");
+
+    container.querySelectorAll("[data-ra-accordion]").forEach((hdr) => {
+      hdr.addEventListener("click", async () => {
+        const wasOpen = hdr.classList.contains("open");
+        container.querySelectorAll("[data-ra-accordion]").forEach((h) => {
+          h.classList.remove("open");
+          $(`ra-${h.dataset.raAccordion}-body`).classList.remove("open");
+        });
+        if (!wasOpen) {
+          hdr.classList.add("open");
+          $(`ra-${hdr.dataset.raAccordion}-body`).classList.add("open");
+          openResearchArea = hdr.dataset.raAccordion;
+          // Opening a totally empty area (no questions, nothing uploaded
+          // the old flat way either) should land on a ready-to-type
+          // Question 1 immediately — not an empty state that makes the
+          // consultant click "+ Add Question" before they can do anything.
+          await ensureFirstQuestion(hdr.dataset.raAccordion);
+        } else {
+          openResearchArea = null;
+        }
+      });
+    });
+
+    container.querySelectorAll("[data-add-question]").forEach((btn) => {
+      btn.addEventListener("click", () => addResearchQuestion(btn.dataset.addQuestion));
+    });
+
+    RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
+  }
+
+  function renderQuestionsForArea(area) {
+    const el = $(`ra-${area}-questions`);
+    const questions = researchQuestions.filter((q) => q.research_area === area);
+    // Docs uploaded the old way (tagged with an area, no question) still
+    // show, in an "(Unsorted)" bucket at the end, rather than disappearing.
+    const unsorted = allDocuments.filter((d) => d.research_area === area && !d.question_id);
+
+    if (!questions.length && !unsorted.length) {
+      el.innerHTML = `<div class="rq-area-empty">No questions yet — use "+ Add Question" below.</div>`;
+      return;
+    }
+
+    el.innerHTML = questions.map((q, i) => renderQuestionCard(q, i + 1)).join("")
+      + (unsorted.length ? renderUnsortedCard(area, unsorted) : "");
+
+    questions.forEach((q) => wireQuestionCard(q));
+    if (unsorted.length) wireUnsortedCard(area);
+  }
+
+  function renderQuestionCard(q, num) {
+    const docs = allDocuments.filter((d) => d.question_id === q.id);
+    return `
+      <div class="rq-question" data-question-card="${q.id}">
+        <div class="rq-question-header">
+          <span class="rq-label">Question ${num}</span>
+          <button type="button" class="btn-danger icon-btn" data-delete-question="${q.id}" title="Delete question">&times;</button>
+        </div>
+        <input type="text" data-question-input="${q.id}" placeholder="Enter the research question…" value="${escapeHtml(q.question || "")}" />
+        <div class="rq-docs-label">Documents</div>
+        <div id="rq-docs-${q.id}">${renderQuestionDocs(docs)}</div>
+        <button type="button" class="btn-secondary btn-sm" data-question-add-doc="${q.id}" style="margin-top:6px;">+ Add Document</button>
+      </div>
+    `;
+  }
+
+  function renderQuestionDocs(docs) {
+    if (!docs.length) return `<div class="field-hint" style="margin-bottom:6px;">No files uploaded yet.</div>`;
+    return docs.map((d) => `
+      <div class="rq-doc-row">
+        <span class="rq-doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(d.file_name)}</span>
+        <button type="button" class="btn-secondary icon-btn rq-visibility-toggle" data-id="${d.id}" data-visibility="${d.visibility}">
+          ${d.visibility === "client_facing" ? "Client-facing" : "Internal"}
+        </button>
+        <button type="button" class="btn-danger icon-btn" data-delete-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}" title="Delete">&times;</button>
+      </div>
+    `).join("");
+  }
+
+  function renderUnsortedCard(area, docs) {
+    return `
+      <div class="rq-question" data-unsorted-card="${area}">
+        <div class="rq-question-header"><span class="rq-label">(Unsorted — uploaded before Questions existed)</span></div>
+        <div class="rq-docs-label">Documents</div>
+        <div>${renderQuestionDocs(docs)}</div>
+      </div>
+    `;
+  }
+
+  function wireQuestionCard(q) {
+    const card = document.querySelector(`[data-question-card="${q.id}"]`);
+    const input = card.querySelector(`[data-question-input="${q.id}"]`);
+    const original = input.value;
+    input.addEventListener("blur", async () => {
+      const value = input.value.trim();
+      if (value === original) return;
+      const { error } = await sb.from("client_research_questions").update({ question: value || null }).eq("id", q.id);
+      if (error) { showBanner("Couldn't save the question: " + error.message, "error"); input.value = original; return; }
+    });
+
+    card.querySelector(`[data-delete-question="${q.id}"]`).addEventListener("click", () => deleteResearchQuestion(q.id));
+
+    // Built fresh each click, same pattern as elsewhere in the app —
+    // clicking the visible button spawns a real <input type="file"> in JS
+    // and clicks it immediately, rather than relying on a hidden <input>
+    // tucked inside a <label> that gets torn down and rebuilt every time
+    // this card re-renders (after every upload, delete, etc.). This is
+    // always usable — every click opens a fresh file picker, so a
+    // question can end up with any number of documents, one upload (or
+    // one multi-select) at a time.
+    card.querySelector(`[data-question-add-doc="${q.id}"]`).addEventListener("click", () => pickQuestionDocuments(q.id));
+
+    wireDocRowHandlers(card);
+  }
+
+  function wireUnsortedCard(area) {
+    const card = document.querySelector(`[data-unsorted-card="${area}"]`);
+    wireDocRowHandlers(card);
+  }
+
+  function wireDocRowHandlers(scopeEl) {
+    scopeEl.querySelectorAll(".rq-doc-link").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(el.dataset.path, 60);
+        if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+        window.open(data.signedUrl, "_blank");
+      });
+    });
+    scopeEl.querySelectorAll(".rq-visibility-toggle").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const next = btn.dataset.visibility === "client_facing" ? "internal" : "client_facing";
+        const { error } = await sb.from("documents").update({ visibility: next }).eq("id", btn.dataset.id);
+        if (error) { showBanner("Couldn't update visibility: " + error.message, "error"); return; }
+        await loadDocuments();
+        RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
+      });
+    });
+    scopeEl.querySelectorAll("[data-delete-doc]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await sb.storage.from("client-documents").remove([btn.dataset.path]);
+        const { error } = await sb.from("documents").delete().eq("id", btn.dataset.deleteDoc);
+        if (error) { showBanner("Couldn't delete file: " + error.message, "error"); return; }
+        await loadDocuments();
+        RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
+      });
+    });
+  }
+
+  async function addResearchQuestion(area) {
+    const existing = researchQuestions.filter((q) => q.research_area === area);
+    const { error } = await sb.from("client_research_questions").insert({
+      client_id: currentClient.id,
+      research_area: area,
+      sort_order: existing.length + 1,
+    });
+    if (error) { showBanner("Couldn't add question: " + error.message, "error"); return; }
+    await loadResearchQuestions();
+  }
+
+  // Runs once, right when an area's accordion is first opened. If it's
+  // completely empty — no questions, and nothing left over from the old
+  // flat-upload days either — silently create a blank Question 1 so it's
+  // already there to type into. Once it exists (even blank), this is a
+  // no-op on every later open — it never adds a second one on its own,
+  // and a blank one left untouched never shows on the client dashboard
+  // (see 034_hide_blank_research_questions.sql).
+  async function ensureFirstQuestion(area) {
+    const hasQuestions = researchQuestions.some((q) => q.research_area === area);
+    const hasUnsorted = allDocuments.some((d) => d.research_area === area && !d.question_id);
+    if (hasQuestions || hasUnsorted) return;
+    await addResearchQuestion(area);
+  }
+
+  async function deleteResearchQuestion(id) {
+    if (!confirm("Delete this question? Any documents uploaded under it will be deleted too.")) return;
+    const docsToRemove = allDocuments.filter((d) => d.question_id === id).map((d) => d.storage_path);
+    if (docsToRemove.length) await sb.storage.from("client-documents").remove(docsToRemove);
+    const { error } = await sb.from("client_research_questions").delete().eq("id", id);
+    if (error) { showBanner("Couldn't delete question: " + error.message, "error"); return; }
+    await loadDocuments();
+    await loadResearchQuestions();
+  }
+
+  function pickQuestionDocuments(questionId) {
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.multiple = true;
+    picker.addEventListener("change", () => { if (picker.files.length) uploadQuestionDocuments(questionId, picker.files); });
+    picker.click();
+  }
+
+  // A question can have any number of documents attached — this always
+  // takes a FileList (even a single-file selection is a FileList of 1) so
+  // one trip through the file picker can attach several at once.
+  async function uploadQuestionDocuments(questionId, fileList) {
+    const q = researchQuestions.find((x) => x.id === questionId);
+    const errors = [];
+    for (const file of Array.from(fileList)) {
+      const path = `clients/${currentClient.id}/questions/${questionId}/${Date.now()}-${sanitizeFilename(file.name)}`;
+      const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+      if (uploadErr) { errors.push(`${file.name}: ${uploadErr.message}`); continue; }
+      const { error: rowErr } = await sb.from("documents").insert({
+        client_id: currentClient.id,
+        question_id: questionId,
+        research_area: q ? q.research_area : null,
+        file_name: file.name,
+        storage_path: path,
+        visibility: "internal",
+        uploaded_by: currentUser.id,
+      });
+      if (rowErr) errors.push(`${file.name}: ${rowErr.message}`);
+    }
+    if (errors.length) showBanner("Some files didn't upload: " + errors.join("; "), "error");
+    await loadDocuments();
+    if (q) renderQuestionsForArea(q.research_area);
+  }
+</script>
+</body>
+</html>
