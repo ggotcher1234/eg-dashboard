@@ -636,6 +636,19 @@
       </div>
     </form>
 
+    <div id="set-password-section" class="hidden" style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border);">
+      <label style="margin-top:0;">Set Password <span style="font-weight:400; text-transform:none;">(Admin only)</span></label>
+      <div class="field-hint" style="margin-bottom:8px;">
+        Sets this person's login password directly — no email sent, nothing to hit Supabase's email rate limit.
+        Share the new password with them yourself (Slack, text, in person).
+      </div>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="set-password-new" placeholder="New password (min 6 characters)" style="flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13.5px;" />
+        <button type="button" class="btn-secondary btn-sm" id="set-password-btn">Set Password</button>
+      </div>
+      <div id="set-password-error" style="color:var(--danger); font-size:12.5px; margin-top:8px; display:none;"></div>
+    </div>
+
     <div id="relink-section" class="hidden" style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border);">
       <label style="margin-top:0;">Relink Login <span style="font-weight:400; text-transform:none;">(Admin only)</span></label>
       <div class="field-hint" style="margin-bottom:8px;">
@@ -1105,6 +1118,22 @@
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || "Couldn't delete this person.");
+    return result;
+  }
+
+  async function callSetPassword(userId, password) {
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-create-team-member`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`,
+        "apikey": SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ user_id: userId, password }),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || "Couldn't set the password.");
     return result;
   }
 
@@ -1835,6 +1864,10 @@
     $("relink-new-id").value = "";
     $("relink-error").style.display = "none";
 
+    $("set-password-section").classList.toggle("hidden", !isSuperAdmin);
+    $("set-password-new").value = "";
+    $("set-password-error").style.display = "none";
+
     $("profile-overlay").classList.add("open");
   }
 
@@ -1880,6 +1913,42 @@
     closeProfile();
     showBanner(`Relinked ${u.full_name}'s profile to the new login.`, "success");
     await loadUsers();
+  });
+
+  // ---------- Set Password (Super Admin) ----------
+  // Bypasses Supabase's built-in email sender entirely (its default relay
+  // is rate-limited to a handful of emails/hour -- fine for testing, not
+  // for onboarding real staff). This sets the login password directly via
+  // the edge function's service-role client; Greg shares the new password
+  // with the person himself.
+  $("set-password-btn").addEventListener("click", async () => {
+    const u = allUsers.find((x) => x.id === openProfileId);
+    if (!u) return;
+
+    const password = $("set-password-new").value.trim();
+    $("set-password-error").style.display = "none";
+    if (!password || password.length < 6) {
+      $("set-password-error").textContent = "Enter a password of at least 6 characters.";
+      $("set-password-error").style.display = "block";
+      return;
+    }
+
+    const btn = $("set-password-btn");
+    btn.disabled = true;
+    btn.textContent = "Setting…";
+
+    try {
+      await callSetPassword(u.id, password);
+      $("set-password-new").value = "";
+      closeProfile();
+      showBanner(`Password set for ${u.full_name}.`, "success");
+    } catch (err) {
+      $("set-password-error").textContent = err.message;
+      $("set-password-error").style.display = "block";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Set Password";
+    }
   });
 
   $("profile-form").addEventListener("submit", async (e) => {
