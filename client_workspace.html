@@ -489,13 +489,27 @@
     location.href = "index.html?return=" + encodeURIComponent(dest);
   }
   const usersById = () => Object.fromEntries(allUsers.map((u) => [u.id, u]));
+  let userSpecialties = {}; // user_id -> array of specialty keys, from user_specialties
+  function specialtyDescriptor(u) {
+    const specs = (userSpecialties[u.id] || []).map((s) => SPECIALTY_LABELS[s] || s);
+    return specs.length ? specs.join(", ") : roleLabel(u.role);
+  }
   // Two staff members can share a full name (rare, but real -- e.g. two
-  // "Chris Gibbons" entries). Only append the email for names that actually
-  // collide, so the common case still reads as a plain name.
+  // "Chris Gibbons" entries, two "Greg Gotcher" logins). An email address
+  // technically disambiguates them but doesn't mean anything at a glance --
+  // their specialties (or account role, if none are set) is what a Team
+  // Lead is actually trying to tell apart when picking who fills a slot.
   function userLabel(u) {
     if (!u) return "";
     const collides = allUsers.filter((x) => x.full_name === u.full_name).length > 1;
-    return collides && u.email ? `${u.full_name} (${u.email})` : u.full_name;
+    if (!collides) return u.full_name;
+    const descriptor = specialtyDescriptor(u);
+    const label = `${u.full_name} — ${descriptor}`;
+    // Extremely rare fallback: two same-named accounts with the exact same
+    // specialties/role would still look identical -- fall back to email so
+    // the dropdown never shows two literally indistinguishable options.
+    const stillCollides = allUsers.filter((x) => x.full_name === u.full_name && specialtyDescriptor(x) === descriptor).length > 1;
+    return stillCollides && u.email ? `${label} (${u.email})` : label;
   }
   const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
 
@@ -731,9 +745,18 @@
   });
 
   async function loadUsers() {
-    const { data, error } = await sb.from("users").select("id, full_name, role, email").order("full_name");
+    const [{ data, error }, { data: specialtyRows, error: specErr }] = await Promise.all([
+      sb.from("users").select("id, full_name, role, email").order("full_name"),
+      sb.from("user_specialties").select("user_id, specialty"),
+    ]);
     if (error) { showBanner("Couldn't load the staff directory: " + error.message, "error"); return; }
     allUsers = data;
+    userSpecialties = {};
+    if (!specErr) {
+      (specialtyRows || []).forEach((r) => {
+        (userSpecialties[r.user_id] = userSpecialties[r.user_id] || []).push(r.specialty);
+      });
+    }
   }
 
   async function loadClients() {
