@@ -352,6 +352,20 @@
   .tasks-due-row .tdr-client { font-size: 12px; color: var(--muted); margin-top: 1px; }
   .tasks-due-row .tdr-open { font-size: 12.5px; font-weight: 700; color: var(--navy-light); white-space: nowrap; }
 
+  #my-history-list { max-height: 420px; overflow-y: auto; }
+  .mh-assignment { border-bottom: 1px solid var(--border); padding: 4px 0; }
+  .mh-assignment:last-child { border-bottom: none; }
+  .mh-assignment summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; cursor: pointer; list-style: none; }
+  .mh-assignment summary::-webkit-details-marker { display: none; }
+  .mh-assignment summary .tdr-label { font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .mh-assignment summary .tdr-client { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .mh-assignment summary .mh-summary-figures { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+  .mh-month { padding: 8px 0 0 4px; }
+  .mh-month-row { display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 700; color: var(--text); }
+  .mh-month-meta { font-size: 11.5px; color: var(--muted); font-weight: 400; }
+  .mh-entry { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--muted); padding: 3px 0 0 8px; }
+  .mh-empty { text-align: center; color: var(--muted); font-size: 13.5px; padding: 16px 0; }
+
   .attention-list { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 28px; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
   .attention-empty-strip {
     display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 18px;
@@ -572,6 +586,11 @@
     <div class="tasks-due-panel hidden" id="tasks-due-panel">
       <div class="tasks-due-panel-label">Your due tasks</div>
       <div id="tasks-due-list"></div>
+    </div>
+
+    <div class="tasks-due-panel hidden" id="my-history-panel">
+      <div class="tasks-due-panel-label">My Billing History — every engagement, month by month</div>
+      <div id="my-history-list"></div>
     </div>
 
     <div id="attention-section">
@@ -1386,7 +1405,7 @@
       { value: myClientIds.size, label: "My Engagements", tint: "stat-navy", key: "my_engagements" },
       { value: attentionCount, label: "Needs Attention", tint: "stat-coral" },
       { value: tasksDue, label: "Tasks Due", tint: "stat-amber", key: "tasks_due" },
-      { value: hoursDisplay, label: "Billable Hours MTD", tint: "stat-accent" },
+      { value: hoursDisplay, label: "Billable Hours MTD", tint: "stat-accent", key: "my_hours" },
     ];
     $("personal-stat-grid").innerHTML = stats.map((s) => `
       <div class="stat-card ${s.tint} ${s.key ? "stat-clickable" : ""}" ${s.key ? `data-personal-stat="${s.key}"` : ""}>
@@ -1395,6 +1414,7 @@
       </div>
     `).join("");
     document.querySelector('[data-personal-stat="tasks_due"]').addEventListener("click", toggleTasksDuePanel);
+    document.querySelector('[data-personal-stat="my_hours"]').addEventListener("click", toggleMyHistoryPanel);
     document.querySelector('[data-personal-stat="my_engagements"]').addEventListener("click", () => {
       setEngagementScope("mine");
       setEngagementTab("all");
@@ -1444,6 +1464,98 @@
         window.location.href = myTasksDueItems[Number(row.dataset.tdi)].url;
       });
     });
+  }
+
+  // ---------- My Billing History ----------
+  // Every one of my own assignments (across every engagement), each
+  // expandable into a month-by-month ledger: hours billed that month,
+  // running cumulative total, and hours remaining against the budget
+  // (hours_allotted). No new tables -- just time_entries grouped by the
+  // calendar month of entry_date, same convention Invoicing Report already
+  // uses for its MTD/YTD math.
+  function round2(n) { return Math.round(n * 100) / 100; }
+
+  function groupEntriesByMonth(entries) {
+    const sorted = [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+    const months = {};
+    for (const e of sorted) {
+      const key = e.entry_date.slice(0, 7);
+      (months[key] ||= { total: 0, entries: [] });
+      months[key].total += Number(e.hours);
+      months[key].entries.push(e);
+    }
+    let cumulative = 0;
+    return Object.keys(months).sort().map((key) => {
+      cumulative += months[key].total;
+      return { monthKey: key, total: round2(months[key].total), cumulative: round2(cumulative), entries: months[key].entries };
+    });
+  }
+
+  function monthKeyLabel(key) {
+    const d = new Date(key + "-02"); // avoid TZ edge cases landing on prior day
+    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+
+  let myHistoryPanelOpen = false;
+  let myHistoryLoaded = false;
+  async function toggleMyHistoryPanel() {
+    myHistoryPanelOpen = !myHistoryPanelOpen;
+    $("my-history-panel").classList.toggle("hidden", !myHistoryPanelOpen);
+    if (myHistoryPanelOpen && !myHistoryLoaded) await renderMyHistoryPanel();
+  }
+  async function renderMyHistoryPanel() {
+    const byId = Object.fromEntries(allClients.map((c) => [c.id, c]));
+    const trackedRows = myAssignmentRows.filter((a) => !SUNK_COST_SPECIALTIES.includes(a.specialty_type));
+    if (!trackedRows.length) {
+      $("my-history-list").innerHTML = `<div class="mh-empty">No billable assignments yet.</div>`;
+      myHistoryLoaded = true;
+      return;
+    }
+    $("my-history-list").innerHTML = `<div class="mh-empty">Loading…</div>`;
+    const { data: entries, error } = await sb.from("time_entries").select("assignment_id, hours, entry_date, note").in("assignment_id", trackedRows.map((a) => a.id));
+    if (error) {
+      $("my-history-list").innerHTML = `<div class="mh-empty">Couldn't load billing history: ${escapeHtml(error.message)}</div>`;
+      return;
+    }
+    const entriesByAssignment = {};
+    for (const e of entries || []) (entriesByAssignment[e.assignment_id] ||= []).push(e);
+
+    $("my-history-list").innerHTML = trackedRows.map((a) => {
+      const client = byId[a.client_id];
+      const specialtyLabel = SPECIALTY_LABELS[a.specialty_type] || a.specialty_type;
+      const allotted = Number(a.hours_allotted) || 0;
+      const assignmentEntries = entriesByAssignment[a.id] || [];
+      const billed = round2(assignmentEntries.reduce((sum, e) => sum + Number(e.hours), 0));
+      const remaining = round2(allotted - billed);
+      const months = groupEntriesByMonth(assignmentEntries).reverse();
+      const monthsHtml = months.length ? months.map((m) => `
+        <div class="mh-month">
+          <div class="mh-month-row">
+            <span>${monthKeyLabel(m.monthKey)} — ${m.total} hrs</span>
+            <span class="mh-month-meta">Cumulative ${m.cumulative} / ${allotted} · Remaining ${round2(allotted - m.cumulative)}</span>
+          </div>
+          ${m.entries.slice().sort((x, y) => y.entry_date.localeCompare(x.entry_date)).map((e) => `
+            <div class="mh-entry">
+              <span>${e.entry_date} — ${e.hours} hrs</span>
+              <span>${e.note ? escapeHtml(e.note) : ""}</span>
+            </div>
+          `).join("")}
+        </div>
+      `).join("") : `<div class="mh-empty">No hours logged yet.</div>`;
+      return `
+        <details class="mh-assignment">
+          <summary>
+            <div>
+              <div class="tdr-label">${escapeHtml(specialtyLabel)}</div>
+              <div class="tdr-client">${client ? escapeHtml(client.name) : "—"}</div>
+            </div>
+            <span class="mh-summary-figures">${billed} / ${allotted} hrs &middot; ${remaining} left</span>
+          </summary>
+          ${monthsHtml}
+        </details>
+      `;
+    }).join("");
+    myHistoryLoaded = true;
   }
 
   // ---------- Needs Attention ----------

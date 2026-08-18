@@ -262,8 +262,27 @@
   .sp-name { font-weight: 700; font-size: 14px; color: var(--navy); line-height: 1.3; }
   .sp-role { font-size: 12px; color: var(--muted); margin-top: 1px; }
 
+  .eng-name-btn { background: none; border: none; padding: 0; font: inherit; text-align: left; cursor: pointer; color: var(--text); }
+  .eng-name-btn:hover .eng-name { color: var(--navy-light); text-decoration: underline; }
   .eng-name { font-size: 13.5px; font-weight: 600; color: var(--text); line-height: 1.3; }
   .eng-role { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 50; }
+  .overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 10px; width: 460px; max-width: 92vw; padding: 26px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
+  .modal h3 { margin: 0 0 10px; font-size: 16.5px; }
+  .modal .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .history-summary { display: flex; gap: 18px; flex-wrap: wrap; background: #f4f6f8; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
+  .history-summary strong { display: block; font-size: 15px; color: var(--text); }
+  .history-summary span { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .history-list { max-height: 380px; overflow-y: auto; }
+  .history-month { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .history-month:last-child { border-bottom: none; }
+  .history-month-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13.5px; font-weight: 700; }
+  .history-month-meta { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .history-entry { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); padding: 4px 0 0 4px; }
+  .history-entry-note { color: var(--muted); font-style: italic; }
+  .history-empty { text-align: center; color: var(--muted); font-size: 13.5px; padding: 20px 0; }
 
   .hours-month { font-size: 13.5px; font-weight: 700; color: var(--navy); white-space: nowrap; }
   .hours-month .over-flag { display: block; margin: 3px 0 0; }
@@ -440,6 +459,18 @@
       <button class="btn-ghost" id="signout-btn">Sign out</button>
     </div>
   </header>
+
+  <!-- Billing history -->
+  <div class="overlay" id="history-overlay">
+    <div class="modal">
+      <h3 id="history-title">Billing History</h3>
+      <div class="history-summary" id="history-summary"></div>
+      <div class="history-list" id="history-list"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="history-close">Close</button>
+      </div>
+    </div>
+  </div>
 
   <div class="ai-drawer-overlay" id="ai-drawer-overlay"></div>
   <aside class="ai-drawer" id="ai-drawer">
@@ -1050,7 +1081,7 @@
       sb.from("client_assignments")
         .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name))")
         .not("user_id", "is", null),
-      sb.from("time_entries").select("assignment_id, hours, entry_date"),
+      sb.from("time_entries").select("assignment_id, hours, entry_date, note"),
       sb.from("users").select("id, full_name, role"),
     ]);
 
@@ -1157,6 +1188,68 @@
   }
 
   function round2(n) { return Math.round(n * 100) / 100; }
+
+  // ---------- Billing history drill-down ----------
+  // Every assignment's full entries array is already sitting in reportRows
+  // (loaded once for the whole org) -- grouping into months here is just
+  // reshaping data already in memory, no extra round trip to Supabase.
+  function groupEntriesByMonth(entries) {
+    const sorted = [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+    const months = {};
+    for (const e of sorted) {
+      const key = e.entry_date.slice(0, 7);
+      (months[key] ||= { total: 0, entries: [] });
+      months[key].total += Number(e.hours);
+      months[key].entries.push(e);
+    }
+    let cumulative = 0;
+    return Object.keys(months).sort().map((key) => {
+      cumulative += months[key].total;
+      return { monthKey: key, total: round2(months[key].total), cumulative: round2(cumulative), entries: months[key].entries };
+    });
+  }
+
+  function monthKeyLabel(key) {
+    const d = new Date(key + "-02"); // avoid TZ edge cases landing on prior day
+    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+
+  function openHistory(assignmentId) {
+    const r = reportRows.find((x) => x.assignmentId === assignmentId);
+    if (!r) return;
+    $("history-title").textContent = `Billing History — ${r.role} · ${r.client}`;
+
+    const allotted = r.hoursAllotted;
+    const totalBilled = round2((r.entries || []).reduce((sum, e) => sum + Number(e.hours), 0));
+    const remaining = round2(allotted - totalBilled);
+    $("history-summary").innerHTML = `
+      <div><strong>${allotted}</strong><span>Budget (hrs)</span></div>
+      <div><strong>${totalBilled}</strong><span>Billed to date</span></div>
+      <div><strong>${remaining}</strong><span>Remaining</span></div>
+    `;
+
+    if (!r.entries || !r.entries.length) {
+      $("history-list").innerHTML = `<div class="history-empty">No hours logged yet.</div>`;
+    } else {
+      const months = groupEntriesByMonth(r.entries).reverse(); // most recent month first
+      $("history-list").innerHTML = months.map((m) => `
+        <div class="history-month">
+          <div class="history-month-row">
+            <span>${monthKeyLabel(m.monthKey)} — ${m.total} hrs</span>
+            <span class="history-month-meta">Cumulative ${m.cumulative} / ${allotted} · Remaining ${round2(allotted - m.cumulative)}</span>
+          </div>
+          ${m.entries.slice().sort((a, b) => b.entry_date.localeCompare(a.entry_date)).map((e) => `
+            <div class="history-entry">
+              <span>${e.entry_date} — ${e.hours} hrs</span>
+              <span class="history-entry-note">${e.note ? escapeHtml(e.note) : ""}</span>
+            </div>
+          `).join("")}
+        </div>
+      `).join("");
+    }
+    $("history-overlay").classList.add("open");
+  }
+  $("history-close").addEventListener("click", () => { $("history-overlay").classList.remove("open"); });
 
   // Each specialist gets one accent color, reused for their avatar initials
   // and every usage bar on their row(s) -- makes a long roster scannable by
@@ -1322,8 +1415,10 @@
         <tr class="${j === 0 ? "group-start" : ""}">
           ${j === 0 ? specialistCell : ""}
           <td>
-            <div class="eng-name">${escapeHtml(r.client)}</div>
-            <div class="eng-role">${escapeHtml(r.role)}</div>
+            <button type="button" class="eng-name-btn" data-history="${r.assignmentId}" title="View billing history">
+              <div class="eng-name">${escapeHtml(r.client)}</div>
+              <div class="eng-role">${escapeHtml(r.role)}</div>
+            </button>
           </td>
           <td>
             <div class="hours-month">${r.hoursThisMonth} hrs${r.isOver ? '<span class="over-flag">Over</span>' : ""}</div>
@@ -1342,6 +1437,9 @@
     });
 
     $("monthly-groups").innerHTML = html;
+    $("monthly-groups").querySelectorAll("[data-history]").forEach((btn) => {
+      btn.addEventListener("click", () => openHistory(btn.dataset.history));
+    });
 
     const shownFrom = totalGroups === 0 ? 0 : startIdx + 1;
     const shownTo = Math.min(startIdx + spPageSize, totalGroups);

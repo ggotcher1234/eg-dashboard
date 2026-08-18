@@ -114,6 +114,20 @@
   .hidden { display: none !important; }
   #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
 
+  .spent-link { background: none; border: none; padding: 0; font: inherit; color: var(--navy-light); cursor: pointer; text-decoration: underline; text-decoration-style: dotted; }
+  .spent-link:hover { color: var(--navy); }
+  .history-summary { display: flex; gap: 18px; flex-wrap: wrap; background: #f4f6f8; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
+  .history-summary strong { display: block; font-size: 15px; color: var(--text); }
+  .history-summary span { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .history-list { max-height: 380px; overflow-y: auto; }
+  .history-month { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .history-month:last-child { border-bottom: none; }
+  .history-month-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13.5px; font-weight: 700; }
+  .history-month-meta { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .history-entry { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); padding: 4px 0 0 4px; }
+  .history-entry-note { color: var(--muted); font-style: italic; }
+  .history-empty { text-align: center; color: var(--muted); font-size: 13.5px; padding: 20px 0; }
+
   .locked-note { background: #fdf1dc; border: 1px solid #f0dca6; color: #7a5c17; font-size: 13px; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
 
   /* Same bold, colorful treatment as the Engagement Workspace action cards
@@ -443,6 +457,18 @@
         <button type="submit" class="btn-primary" id="log-hours-submit">Log hours</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Billing history -->
+<div class="overlay" id="history-overlay">
+  <div class="modal" style="width:460px;">
+    <h3 id="history-title">Billing History</h3>
+    <div class="history-summary" id="history-summary"></div>
+    <div class="history-list" id="history-list"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="history-close">Close</button>
+    </div>
   </div>
 </div>
 
@@ -982,7 +1008,11 @@
       // sunk costs (spent = allotted automatically) so there's nothing to log.
       const isSunkCost = SUNK_COST_SPECIALTIES.includes(r.specialty_type);
       const canLogHours = !isSunkCost && !!person && (isSuperAdmin || person.id === currentUser.id);
-      const spentCell = `<div class="spent-cell"><span>${r.hoursSpent}</span><span class="spent-action">${canLogHours ? `<button class="btn-secondary icon-btn" data-log="${r.id}" title="Log hours">+</button>` : ""}</span></div>`;
+      const canViewHistory = !isSunkCost && !!person;
+      const spentDisplay = canViewHistory
+        ? `<button type="button" class="spent-link" data-history="${r.id}" title="View billing history">${r.hoursSpent}</button>`
+        : `<span>${r.hoursSpent}</span>`;
+      const spentCell = `<div class="spent-cell">${spentDisplay}<span class="spent-action">${canLogHours ? `<button class="btn-secondary icon-btn" data-log="${r.id}" title="Log hours">+</button>` : ""}</span></div>`;
       tr.innerHTML = `
         <td>${escapeHtml(label)}</td>
         <td>${consultantCell}</td>
@@ -1044,6 +1074,9 @@
     });
     document.querySelectorAll("[data-log]").forEach((btn) => {
       btn.addEventListener("click", () => openLogHours(btn.dataset.log));
+    });
+    document.querySelectorAll("[data-history]").forEach((btn) => {
+      btn.addEventListener("click", () => openHistory(btn.dataset.history));
     });
 
     const total = currentAssignments.reduce((sum, r) => sum + Number(r.hours_allotted), 0);
@@ -1181,6 +1214,83 @@
     $("log-hours-overlay").classList.add("open");
   }
   $("log-hours-cancel").addEventListener("click", () => { $("log-hours-overlay").classList.remove("open"); pendingLogAssignmentId = null; });
+
+  // ---------- Billing history ----------
+  // Groups an assignment's time_entries into calendar-month buckets and
+  // shows a running cumulative total against hours_allotted (the budget for
+  // that slot) -- e.g. "billed 4 hrs in June, 3 hrs in July, 4 hrs remaining."
+  // No new tables needed: entry_date + hours + note on time_entries and
+  // hours_allotted on client_assignments already carry everything this needs.
+  function round2(n) { return Math.round(n * 100) / 100; }
+
+  function groupEntriesByMonth(entries) {
+    const sorted = [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+    const months = {};
+    for (const e of sorted) {
+      const key = e.entry_date.slice(0, 7);
+      (months[key] ||= { total: 0, entries: [] });
+      months[key].total += Number(e.hours);
+      months[key].entries.push(e);
+    }
+    let cumulative = 0;
+    return Object.keys(months).sort().map((key) => {
+      cumulative += months[key].total;
+      return { monthKey: key, total: round2(months[key].total), cumulative: round2(cumulative), entries: months[key].entries };
+    });
+  }
+
+  function monthKeyLabel(key) {
+    const d = new Date(key + "-02"); // avoid TZ edge cases landing on prior day
+    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+
+  async function openHistory(assignmentId) {
+    const r = currentAssignments.find((x) => x.id === assignmentId);
+    if (!r) return;
+    const person = usersById()[r.user_id];
+    const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
+    $("history-title").textContent = `Billing History — ${label}${person ? " · " + userLabel(person) : ""}`;
+    $("history-summary").innerHTML = "";
+    $("history-list").innerHTML = `<div class="history-empty">Loading…</div>`;
+    $("history-overlay").classList.add("open");
+
+    const { data: entries, error } = await sb.from("time_entries").select("hours, entry_date, note").eq("assignment_id", assignmentId);
+    if (error) {
+      $("history-list").innerHTML = `<div class="history-empty">Couldn't load billing history: ${escapeHtml(error.message)}</div>`;
+      return;
+    }
+
+    const allotted = Number(r.hours_allotted) || 0;
+    const totalBilled = round2((entries || []).reduce((sum, e) => sum + Number(e.hours), 0));
+    const remaining = round2(allotted - totalBilled);
+    $("history-summary").innerHTML = `
+      <div><strong>${allotted}</strong><span>Budget (hrs)</span></div>
+      <div><strong>${totalBilled}</strong><span>Billed to date</span></div>
+      <div><strong>${remaining}</strong><span>Remaining</span></div>
+    `;
+
+    if (!entries || !entries.length) {
+      $("history-list").innerHTML = `<div class="history-empty">No hours logged yet.</div>`;
+      return;
+    }
+
+    const months = groupEntriesByMonth(entries).reverse(); // most recent month first
+    $("history-list").innerHTML = months.map((m) => `
+      <div class="history-month">
+        <div class="history-month-row">
+          <span>${monthKeyLabel(m.monthKey)} — ${m.total} hrs</span>
+          <span class="history-month-meta">Cumulative ${m.cumulative} / ${allotted} · Remaining ${round2(allotted - m.cumulative)}</span>
+        </div>
+        ${m.entries.slice().sort((a, b) => b.entry_date.localeCompare(a.entry_date)).map((e) => `
+          <div class="history-entry">
+            <span>${e.entry_date} — ${e.hours} hrs</span>
+            <span class="history-entry-note">${e.note ? escapeHtml(e.note) : ""}</span>
+          </div>
+        `).join("")}
+      </div>
+    `).join("");
+  }
+  $("history-close").addEventListener("click", () => { $("history-overlay").classList.remove("open"); });
 
   $("log-hours-form").addEventListener("submit", async (e) => {
     e.preventDefault();
