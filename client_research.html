@@ -85,6 +85,22 @@
     font-size: 11.5px; font-weight: 700; color: var(--navy-light); background: #eef3f9;
     padding: 3px 10px; border-radius: 999px; flex-shrink: 0;
   }
+
+  /* Percentage of research questions answered -- "answered" means the
+     question has at least one document attached, since that's the only
+     signal the data model has. Greg (8/18/26). Overall summary sits above
+     the accordion list; each area also gets its own compact badge so a
+     consultant can see at a glance which area needs more work. */
+  .research-progress-overall { margin: 2px 0 16px; }
+  .research-progress-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+  .research-progress-label { font-size: 13px; font-weight: 600; color: var(--text); }
+  .research-progress-pct { font-size: 13px; font-weight: 700; color: var(--accent-dark); }
+  .research-progress-track { height: 8px; border-radius: 999px; background: #eef1f4; overflow: hidden; }
+  .research-progress-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.2s ease; }
+  .ra-progress-badge {
+    font-size: 11.5px; font-weight: 700; color: var(--accent-dark); background: #e9f5ee;
+    padding: 3px 10px; border-radius: 999px; flex-shrink: 0;
+  }
   .accordion-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .accordion-chevron { font-size: 13px; color: var(--muted); transition: transform 0.15s ease; flex-shrink: 0; }
   .accordion-header.open .accordion-chevron { transform: rotate(90deg); }
@@ -321,6 +337,7 @@
         <div class="card">
           <h2>Economic Gardening Research Reports</h2>
           <div class="field-hint" style="margin-bottom:10px;">Each item becomes a link in the Preview Dashboard.</div>
+          <div class="research-progress-overall" id="research-progress-overall"></div>
           <div id="research-areas-sections"></div>
         </div>
       </div>
@@ -1064,6 +1081,7 @@
       <div class="card" style="margin-bottom:12px;">
         <div class="accordion-header ${isOpen ? "open" : ""}" data-ra-accordion="${key}">
           <h2><span class="accordion-chevron">&#9656;</span> ${escapeHtml(label)}</h2>
+          <span class="ra-progress-badge hidden" id="ra-${key}-progress"></span>
         </div>
         <div class="accordion-body ${isOpen ? "open" : ""}" id="ra-${key}-body">
           <div id="ra-${key}-questions"></div>
@@ -1100,6 +1118,52 @@
     });
 
     RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
+    renderResearchProgress();
+  }
+
+  // ---------- Percentage of research questions answered ----------
+  // "Answered" = the question has at least one document attached (there's
+  // no separate answered/unanswered flag in the data model, so a document
+  // is the actual signal that the question got researched). A blank
+  // question with zero documents counts toward the denominator but not
+  // the numerator, same as it should — it's still open work.
+  function researchProgressForArea(area) {
+    const questions = researchQuestions.filter((q) => q.research_area === area);
+    const total = questions.length;
+    const answered = questions.filter((q) => allDocuments.some((d) => d.question_id === q.id)).length;
+    return { answered, total };
+  }
+
+  function renderResearchProgress() {
+    let totalAll = 0, answeredAll = 0;
+    RESEARCH_AREAS.forEach(([key]) => {
+      const { answered, total } = researchProgressForArea(key);
+      totalAll += total;
+      answeredAll += answered;
+      const badge = $(`ra-${key}-progress`);
+      if (!badge) return;
+      if (!total) {
+        badge.classList.add("hidden");
+        return;
+      }
+      badge.classList.remove("hidden");
+      badge.textContent = `${answered}/${total} answered`;
+    });
+
+    const overall = $("research-progress-overall");
+    if (!overall) return;
+    if (!totalAll) {
+      overall.innerHTML = `<div class="field-hint">No research questions yet — add one below to start tracking progress.</div>`;
+      return;
+    }
+    const pct = Math.round((answeredAll / totalAll) * 100);
+    overall.innerHTML = `
+      <div class="research-progress-row">
+        <span class="research-progress-label">${answeredAll} of ${totalAll} questions answered</span>
+        <span class="research-progress-pct">${pct}%</span>
+      </div>
+      <div class="research-progress-track"><div class="research-progress-fill" style="width:${pct}%"></div></div>
+    `;
   }
 
   function renderQuestionsForArea(area) {
@@ -1206,6 +1270,7 @@
         if (error) { showBanner("Couldn't update visibility: " + error.message, "error"); return; }
         await loadDocuments();
         RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
+        renderResearchProgress();
       });
     });
     scopeEl.querySelectorAll("[data-delete-doc]").forEach((btn) => {
@@ -1215,6 +1280,7 @@
         if (error) { showBanner("Couldn't delete file: " + error.message, "error"); return; }
         await loadDocuments();
         RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
+        renderResearchProgress();
       });
     });
   }
@@ -1286,6 +1352,7 @@
     if (errors.length) showBanner("Some files didn't upload: " + errors.join("; "), "error");
     await loadDocuments();
     if (q) renderQuestionsForArea(q.research_area);
+    renderResearchProgress();
   }
 </script>
 </body>
