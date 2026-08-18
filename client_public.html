@@ -106,16 +106,28 @@
   .action-row .ar-sub a { color: var(--accent-dark); text-decoration: none; }
   .action-row.done .ar-title { text-decoration: line-through; color: var(--muted); }
 
-  .mini-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  /* Fixed layout so a handful of very long tracking-parameter URLs in the
+     Website column can't blow the table wider than the card -- each column
+     gets a hard percentage cap and long content truncates/wraps inside it
+     instead of pushing later columns off to the right. Greg (8/18/26). */
+  .mini-table { width: 100%; border-collapse: collapse; font-size: 13.5px; table-layout: fixed; }
   .mini-table th {
     text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px;
     color: var(--muted); font-weight: 700; padding: 0 14px 7px 0; border-bottom: 1px solid var(--border);
   }
-  .mini-table td { padding: 9px 14px 9px 0; border-bottom: 1px solid #f0f2f4; vertical-align: top; }
+  .mini-table td { padding: 9px 14px 9px 0; border-bottom: 1px solid #f0f2f4; vertical-align: top; overflow: hidden; }
   .mini-table tr:last-child td { border-bottom: none; }
+  .mini-table th:nth-child(1), .mini-table td:nth-child(1) { width: 22%; word-break: break-word; }
+  .mini-table th:nth-child(2), .mini-table td:nth-child(2) { width: 36%; }
+  .mini-table th:nth-child(3), .mini-table td:nth-child(3) { width: 20%; word-break: break-word; }
+  .mini-table th:nth-child(4), .mini-table td:nth-child(4) { width: 22%; word-break: break-word; }
   .mini-table td.mt-name { font-weight: 600; }
   .mini-table a { color: var(--accent-dark); text-decoration: none; }
   .mini-table a:hover { text-decoration: underline; }
+  /* Website links truncate to one line with an ellipsis rather than
+     wrapping raw URLs across the row -- the full address is still in the
+     href and shows on hover via the title attribute. */
+  .mini-table td:nth-child(2) a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .workflow-tracker { display: flex; margin: 4px 0; }
   .wf-step {
@@ -563,7 +575,7 @@
             ${rows.map((r) => `
               <tr>
                 <td class="mt-name">${escapeHtml(r.name)}</td>
-                <td>${r.website_url ? `<a href="${escapeHtml(r.website_url)}" target="_blank" rel="noopener">${escapeHtml(r.website_url)}</a>` : "—"}</td>
+                <td>${r.website_url ? `<a href="${escapeHtml(r.website_url)}" target="_blank" rel="noopener" title="${escapeHtml(r.website_url)}">${escapeHtml(r.website_url)}</a>` : "—"}</td>
                 <td>${escapeHtml(r.location || "—")}</td>
                 <td>${escapeHtml(r.notes || "—")}</td>
               </tr>
