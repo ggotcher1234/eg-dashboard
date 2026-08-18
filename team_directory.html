@@ -147,6 +147,19 @@
   .stat-card-sublabel { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
   @media (max-width: 640px) { .stats-row { grid-template-columns: 1fr 1fr; } }
 
+  /* Team Lead Workload -- admin-only. Rita used to track this by hand;
+     the count is every non-closed engagement (Accepted/In Progress/On
+     Hold) where that person is flagged as the team lead, per Greg
+     (8/18/26). Policy caps a lead at 4 at once. */
+  .workload-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+  .workload-card-title { font-size: 15px; font-weight: 700; }
+  .workload-card-hint { font-size: 12px; color: var(--muted); margin-top: 2px; margin-bottom: 12px; }
+  .workload-count-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; }
+  .workload-count-pill.wl-ok { background: #e9f5ee; color: var(--accent-dark); }
+  .workload-count-pill.wl-limit { background: #fdf1dc; color: #8f4f08; }
+  .workload-count-pill.wl-over { background: #fbe9e9; color: var(--danger-dark); }
+  .workload-empty { font-size: 13px; color: var(--muted); padding: 6px 2px 0; }
+
   #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
   #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
   #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
@@ -486,6 +499,24 @@
           <div class="stat-card-sublabel">Areas of expertise</div>
         </div>
       </div>
+    </div>
+
+    <div class="workload-card hidden" id="workload-section">
+      <div class="workload-card-title">Team Lead Workload</div>
+      <div class="workload-card-hint">Active engagements (Accepted, In Progress, On Hold) per team lead. Policy caps each lead at 4 at a time.</div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Team Lead</th>
+              <th style="width:170px;">Active Engagements</th>
+              <th style="width:120px;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="workload-tbody"></tbody>
+        </table>
+      </div>
+      <div class="workload-empty hidden" id="workload-empty">No team leads found.</div>
     </div>
 
     <div class="table-scroll">
@@ -1069,8 +1100,10 @@
     $("user-role").textContent = roleLabel(profile.role);
     $("add-btn").classList.toggle("hidden", !isSuperAdmin);
     $("import-menu-btn").classList.toggle("hidden", !isSuperAdmin);
+    $("workload-section").classList.toggle("hidden", !isSuperAdmin);
 
     await loadUsers();
+    if (isSuperAdmin) await loadTeamLeadWorkload();
   }
 
   // Shared by the single "Add Team Member" form and the bulk importer —
@@ -1269,6 +1302,67 @@
     $("stat-leads").textContent = allUsers.filter((u) => u.role === "team_lead").length;
     $("stat-specialists").textContent = allUsers.filter((u) => u.role === "consultant").length;
     $("stat-specialties").textContent = SPECIALTY_FILTER_KEYS.length;
+  }
+
+  // ---------- Team Lead Workload (admin-only) ----------
+  // "Active" = any engagement not Closed -- Accepted, In Progress, and On
+  // Hold all still count against the cap, since the team lead is still on
+  // the hook for it. Counts by who's actually flagged is_team_lead on the
+  // assignment (not by account role), so it stays correct even for the
+  // rare case of someone leading an engagement outside their usual role.
+  const TEAM_LEAD_CAP = 4;
+
+  async function loadTeamLeadWorkload() {
+    const { data, error } = await sb
+      .from("client_assignments")
+      .select("user_id, users(full_name), clients(project_status)")
+      .eq("is_team_lead", true)
+      .not("user_id", "is", null);
+    if (error) {
+      showBanner("Couldn't load team lead workload: " + error.message, "error");
+      return;
+    }
+    const countsByUser = {};
+    const namesByUser = {};
+    (data || []).forEach((r) => {
+      if (!r.user_id || !r.users) return;
+      namesByUser[r.user_id] = r.users.full_name;
+      if (r.clients && r.clients.project_status === "closed") return;
+      countsByUser[r.user_id] = (countsByUser[r.user_id] || 0) + 1;
+    });
+    renderTeamLeadWorkload(countsByUser, namesByUser);
+  }
+
+  function renderTeamLeadWorkload(countsByUser, namesByUser) {
+    // Union of everyone currently in the Team Lead role (so admins can see
+    // who's free, at 0) plus anyone with an active is_team_lead assignment
+    // even if their account role has since changed.
+    const ids = new Set([
+      ...allUsers.filter((u) => u.role === "team_lead").map((u) => u.id),
+      ...Object.keys(countsByUser),
+    ]);
+    const rows = [...ids].map((id) => {
+      const fromDirectory = allUsers.find((u) => u.id === id);
+      return {
+        id,
+        name: (fromDirectory && fromDirectory.full_name) || namesByUser[id] || "Unknown",
+        count: countsByUser[id] || 0,
+      };
+    });
+    rows.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+    $("workload-empty").classList.toggle("hidden", rows.length > 0);
+    $("workload-tbody").innerHTML = rows.map((r) => {
+      const tier = r.count > TEAM_LEAD_CAP ? "over" : r.count === TEAM_LEAD_CAP ? "limit" : "ok";
+      const label = tier === "over" ? "Over limit" : tier === "limit" ? "At limit" : "OK";
+      return `
+        <tr>
+          <td>${escapeHtml(r.name)}</td>
+          <td>${r.count} / ${TEAM_LEAD_CAP}</td>
+          <td><span class="workload-count-pill wl-${tier}">${label}</span></td>
+        </tr>
+      `;
+    }).join("");
   }
 
   function renderList() {
