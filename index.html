@@ -194,6 +194,16 @@
   .section-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
   .section-header a { font-size: 12.5px; color: var(--navy-light); text-decoration: none; font-weight: 600; }
   .section-header a:hover { text-decoration: underline; }
+  #attention-header.accordion-header { cursor: pointer; user-select: none; }
+  .accordion-header-right { display: flex; align-items: center; gap: 8px; }
+  .accordion-count {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 6px;
+    border-radius: 999px; background: #fbe9e9; color: var(--danger-dark); font-size: 11.5px; font-weight: 700;
+  }
+  .accordion-chevron { font-size: 13px; color: var(--muted); transition: transform 0.15s ease; }
+  .accordion-header.open .accordion-chevron { transform: rotate(90deg); }
+  .accordion-body { display: none; }
+  .accordion-body.open { display: block; }
   .subsection-label {
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700;
     margin: 0 0 10px;
@@ -605,10 +615,16 @@
     </div>
 
     <div id="attention-section">
-      <div class="section-header" id="attention-header">
+      <div class="section-header accordion-header" id="attention-header" data-accordion="attention">
         <h2 class="section-title">Needs Attention</h2>
+        <div class="accordion-header-right">
+          <span class="accordion-count" id="attention-count"></span>
+          <span class="accordion-chevron">&#9656;</span>
+        </div>
       </div>
-      <div class="attention-list" id="attention-list"></div>
+      <div class="accordion-body" id="attention-body">
+        <div class="attention-list" id="attention-list"></div>
+      </div>
       <div class="attention-empty-strip hidden" id="attention-empty-strip">
         <span class="ae-check">&#10003;</span> Nothing needs attention right now.
       </div>
@@ -1612,10 +1628,14 @@
     // When nothing needs attention, collapse the full card down to a slim
     // status strip instead of an empty-feeling full-height section -- keeps
     // My Engagements from getting pushed unnecessarily far down the page.
+    // When there are items, this is a closed-by-default accordion (Greg,
+    // 8/18/26) -- click the header to expand instead of always showing the
+    // full list.
     $("attention-header").classList.toggle("hidden", !hasItems);
-    $("attention-list").classList.toggle("hidden", !hasItems);
+    $("attention-body").classList.toggle("hidden", !hasItems);
     $("attention-empty-strip").classList.toggle("hidden", hasItems);
     if (!hasItems) return;
+    $("attention-count").textContent = items.length;
     $("attention-list").innerHTML = items.map((it) => `
       <div class="attention-row" data-client-id="${it.client.id}">
         <span class="attention-dot sev-${it.severity}"></span>
@@ -1630,6 +1650,12 @@
       row.addEventListener("click", () => { window.location.href = `client_control_center.html?client=${row.dataset.clientId}`; });
     });
   }
+
+  // Needs Attention accordion -- closed by default on page load.
+  $("attention-header").addEventListener("click", () => {
+    const isOpen = $("attention-header").classList.toggle("open");
+    $("attention-body").classList.toggle("open", isOpen);
+  });
 
   // ---------- My Engagements (tabs + Mine/All scope) ----------
   // Overdue engagement dot: green <30 days, yellow <60, red 60+ since
