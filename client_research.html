@@ -153,9 +153,14 @@
   .rq-question input[type="text"] { width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; margin-bottom: 12px; font-family: inherit; }
   .rq-docs-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; }
   .rq-doc-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
-  .rq-doc-row .rq-doc-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; flex: 1; }
+  .rq-doc-row .rq-doc-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; flex: 1; text-decoration: none; }
   .rq-doc-row .rq-doc-link:hover { text-decoration: underline; }
   .rq-area-empty { color: var(--muted); font-size: 13px; padding: 6px 0 14px; }
+  .rq-add-row { display: flex; gap: 8px; margin-top: 6px; }
+  .rq-link-form { display: none; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); align-items: flex-end; }
+  .rq-link-form.open { display: flex; }
+  .rq-link-form .field { margin-bottom: 0; flex: 1; min-width: 160px; }
+  .rq-link-form label { font-size: 11px; }
 
   .icon-btn { padding: 4px 8px; font-size: 13px; line-height: 1; flex-shrink: 0; }
 
@@ -1230,24 +1235,49 @@
           <button type="button" class="btn-danger icon-btn" data-delete-question="${q.id}" title="Delete question">&times;</button>
         </div>
         <input type="text" data-question-input="${q.id}" placeholder="Enter the research question…" value="${escapeHtml(q.question || "")}" />
-        <div class="rq-docs-label">Documents</div>
+        <div class="rq-docs-label">Documents &amp; Links</div>
         <div id="rq-docs-${q.id}">${renderQuestionDocs(docs)}</div>
-        <button type="button" class="btn-secondary btn-sm" data-question-add-doc="${q.id}" style="margin-top:6px;">+ Add Document</button>
+        <div class="rq-add-row">
+          <button type="button" class="btn-secondary btn-sm" data-question-add-doc="${q.id}">+ Add Document</button>
+          <button type="button" class="btn-secondary btn-sm" data-question-add-link="${q.id}">+ Add Link</button>
+        </div>
+        <div class="rq-link-form" id="rq-link-form-${q.id}">
+          <div class="field">
+            <label for="rq-link-label-${q.id}">Label</label>
+            <input type="text" id="rq-link-label-${q.id}" placeholder="e.g. Listening Post" />
+          </div>
+          <div class="field">
+            <label for="rq-link-url-${q.id}">URL</label>
+            <input type="text" id="rq-link-url-${q.id}" placeholder="https://…" />
+          </div>
+          <button type="button" class="btn-primary btn-sm" data-question-save-link="${q.id}">Save Link</button>
+          <button type="button" class="btn-secondary btn-sm" data-question-cancel-link="${q.id}">Cancel</button>
+        </div>
       </div>
     `;
   }
 
   function renderQuestionDocs(docs) {
-    if (!docs.length) return `<div class="field-hint" style="margin-bottom:6px;">No files uploaded yet.</div>`;
-    return docs.map((d) => `
+    if (!docs.length) return `<div class="field-hint" style="margin-bottom:6px;">No files or links added yet.</div>`;
+    return docs.map((d) => {
+      // A row is either an uploaded file (storage_path -- opens via a
+      // signed URL, same as always) or a link (url -- a plain <a>, no
+      // storage involved). The two never both render for the same row in
+      // this app's UI, but if a row somehow has both, the link wins, same
+      // priority Resource Vault already uses.
+      const linkHtml = d.url
+        ? `<a class="rq-doc-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">&#128279; ${escapeHtml(d.file_name || d.url)}</a>`
+        : `<span class="rq-doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(d.file_name)}</span>`;
+      return `
       <div class="rq-doc-row">
-        <span class="rq-doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(d.file_name)}</span>
+        ${linkHtml}
         <button type="button" class="btn-secondary icon-btn rq-visibility-toggle" data-id="${d.id}" data-visibility="${d.visibility}">
           ${d.visibility === "client_facing" ? "Client-facing" : "Internal"}
         </button>
-        <button type="button" class="btn-danger icon-btn" data-delete-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}" title="Delete">&times;</button>
+        <button type="button" class="btn-danger icon-btn" data-delete-doc="${d.id}" data-path="${escapeHtml(d.storage_path || "")}" title="Delete">&times;</button>
       </div>
-    `).join("");
+    `;
+    }).join("");
   }
 
   function renderUnsortedCard(area, docs) {
@@ -1283,6 +1313,20 @@
     // one multi-select) at a time.
     card.querySelector(`[data-question-add-doc="${q.id}"]`).addEventListener("click", () => pickQuestionDocuments(q.id));
 
+    // Add Link -- toggles the small inline form open/closed rather than
+    // opening a file picker, since a link has no file to select.
+    const linkForm = card.querySelector(`#rq-link-form-${q.id}`);
+    card.querySelector(`[data-question-add-link="${q.id}"]`).addEventListener("click", () => {
+      linkForm.classList.toggle("open");
+      if (linkForm.classList.contains("open")) card.querySelector(`#rq-link-label-${q.id}`).focus();
+    });
+    card.querySelector(`[data-question-cancel-link="${q.id}"]`).addEventListener("click", () => {
+      linkForm.classList.remove("open");
+      card.querySelector(`#rq-link-label-${q.id}`).value = "";
+      card.querySelector(`#rq-link-url-${q.id}`).value = "";
+    });
+    card.querySelector(`[data-question-save-link="${q.id}"]`).addEventListener("click", () => saveQuestionLink(q.id));
+
     wireDocRowHandlers(card);
   }
 
@@ -1292,7 +1336,10 @@
   }
 
   function wireDocRowHandlers(scopeEl) {
-    scopeEl.querySelectorAll(".rq-doc-link").forEach((el) => {
+    // Only file rows (rendered as a <span data-path>) need this -- link
+    // rows render as a real <a href> and open on their own, no signed URL
+    // to fetch.
+    scopeEl.querySelectorAll(".rq-doc-link[data-path]").forEach((el) => {
       el.addEventListener("click", async () => {
         const { data, error } = await sb.storage.from("client-documents").createSignedUrl(el.dataset.path, 60);
         if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
@@ -1311,9 +1358,10 @@
     });
     scopeEl.querySelectorAll("[data-delete-doc]").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        await sb.storage.from("client-documents").remove([btn.dataset.path]);
+        // A link row has no storage_path -- nothing to remove from storage.
+        if (btn.dataset.path) await sb.storage.from("client-documents").remove([btn.dataset.path]);
         const { error } = await sb.from("documents").delete().eq("id", btn.dataset.deleteDoc);
-        if (error) { showBanner("Couldn't delete file: " + error.message, "error"); return; }
+        if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
         await loadDocuments();
         RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
         renderResearchProgress();
@@ -1386,6 +1434,39 @@
       if (rowErr) errors.push(`${file.name}: ${rowErr.message}`);
     }
     if (errors.length) showBanner("Some files didn't upload: " + errors.join("; "), "error");
+    await loadDocuments();
+    if (q) renderQuestionsForArea(q.research_area);
+    renderResearchProgress();
+  }
+
+  // A question's answer can be a link instead of (or alongside) an
+  // uploaded file -- Greg (8/18/26): "some answers are pages inside this
+  // app itself, like the Listening Post, not a document to upload." Stored
+  // as a documents row same as a file, just with url set and storage_path
+  // left null, so it counts toward "answered" the same way a file does.
+  async function saveQuestionLink(questionId) {
+    const q = researchQuestions.find((x) => x.id === questionId);
+    const labelInput = $(`rq-link-label-${questionId}`);
+    const urlInput = $(`rq-link-url-${questionId}`);
+    let url = urlInput.value.trim();
+    if (!url) { showBanner("Enter a URL first.", "error"); return; }
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    const label = labelInput.value.trim() || url;
+
+    const { error } = await sb.from("documents").insert({
+      client_id: currentClient.id,
+      question_id: questionId,
+      research_area: q ? q.research_area : null,
+      file_name: label,
+      storage_path: null,
+      url,
+      visibility: "internal",
+      uploaded_by: currentUser.id,
+    });
+    if (error) { showBanner("Couldn't add link: " + error.message, "error"); return; }
+
+    labelInput.value = "";
+    urlInput.value = "";
     await loadDocuments();
     if (q) renderQuestionsForArea(q.research_area);
     renderResearchProgress();

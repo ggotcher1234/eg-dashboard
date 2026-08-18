@@ -399,11 +399,16 @@
 
   function renderDocLinks(docs) {
     if (!docs || !docs.length) return `<div class="rc-empty">No files shared yet.</div>`;
-    return docs.map((d) => `<a class="doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(d.file_name)}</a>`).join("");
+    // A doc is either an uploaded file (storage_path -- opens via a signed
+    // URL) or a link (url -- opens directly, it isn't in our storage).
+    return docs.map((d) => d.url
+      ? `<a class="doc-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">&#128279; ${escapeHtml(d.file_name || d.url)}</a>`
+      : `<a class="doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(d.file_name)}</a>`
+    ).join("");
   }
 
   function wireDocLinks(container) {
-    container.querySelectorAll(".doc-link").forEach((el) => {
+    container.querySelectorAll(".doc-link[data-path]").forEach((el) => {
       el.addEventListener("click", (e) => { e.preventDefault(); openSignedDoc(el.dataset.path)(); });
     });
   }
