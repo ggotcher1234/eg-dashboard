@@ -176,6 +176,11 @@
   .workload-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
   .workload-card-title { font-size: 15px; font-weight: 700; }
   .workload-card-hint { font-size: 12px; color: var(--muted); margin-top: 2px; margin-bottom: 12px; }
+  .workload-card .accordion-header { cursor: pointer; user-select: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .workload-card .accordion-chevron { font-size: 13px; color: var(--muted); transition: transform 0.15s ease; flex-shrink: 0; margin-top: 3px; }
+  .workload-card .accordion-header.open .accordion-chevron { transform: rotate(90deg); }
+  .workload-card .accordion-body { display: none; }
+  .workload-card .accordion-body.open { display: block; }
   .workload-count-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; }
   .workload-count-pill.wl-ok { background: #e9f5ee; color: var(--accent-dark); }
   .workload-count-pill.wl-limit { background: #fdf1dc; color: #8f4f08; }
@@ -532,21 +537,28 @@
     </div>
 
     <div class="workload-card hidden" id="workload-section">
-      <div class="workload-card-title">Team Lead Workload</div>
-      <div class="workload-card-hint">Active engagements (Accepted, In Progress, On Hold) per team lead. Policy caps each lead at 4 at a time.</div>
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Team Lead</th>
-              <th style="width:170px;">Active Engagements</th>
-              <th style="width:120px;">Status</th>
-            </tr>
-          </thead>
-          <tbody id="workload-tbody"></tbody>
-        </table>
+      <div class="accordion-header" data-accordion="workload">
+        <div>
+          <div class="workload-card-title">Team Lead Workload</div>
+          <div class="workload-card-hint" style="margin-bottom:0;">Active engagements (Accepted, In Progress, On Hold) per team lead. Policy caps each lead at 4 at a time.</div>
+        </div>
+        <span class="accordion-chevron">&#9656;</span>
       </div>
-      <div class="workload-empty hidden" id="workload-empty">No team leads found.</div>
+      <div class="accordion-body" id="workload-body">
+        <div class="table-scroll" style="margin-top:12px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Team Lead</th>
+                <th style="width:170px;">Active Engagements</th>
+                <th style="width:120px;">Status</th>
+              </tr>
+            </thead>
+            <tbody id="workload-tbody"></tbody>
+          </table>
+        </div>
+        <div class="workload-empty hidden" id="workload-empty">No team leads found.</div>
+      </div>
     </div>
 
     <div class="table-scroll">
@@ -1143,6 +1155,16 @@
     await loadUsers();
     if (isSuperAdmin) await loadTeamLeadWorkload();
   }
+
+  // Closed-by-default accordion for the Team Lead Workload panel — click
+  // the header to expand/collapse, per Greg (8/18/26).
+  document.querySelectorAll("[data-accordion]").forEach((hdr) => {
+    hdr.addEventListener("click", () => {
+      const body = $(`${hdr.dataset.accordion}-body`);
+      const isOpen = hdr.classList.toggle("open");
+      body.classList.toggle("open", isOpen);
+    });
+  });
 
   // Shared by the single "Add Team Member" form and the bulk importer —
   // calls the admin-create-team-member edge function with the signed-in
