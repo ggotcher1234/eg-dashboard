@@ -643,6 +643,7 @@
             <div style="display:flex; gap:8px; margin-bottom:14px;">
               <button type="button" class="btn-secondary btn-sm" data-csv-import="competitors">&#8593; Import CSV</button>
               <button type="button" class="btn-secondary btn-sm" data-csv-export="competitors">&#8595; Export CSV</button>
+              <button type="button" class="btn-danger btn-sm" data-csv-clear="competitors">Clear Contents</button>
               <input type="file" accept=".csv,text/csv" id="competitors-csv-file" style="display:none;" />
             </div>
             <span class="accordion-count" id="competitors-count" style="display:inline-block; margin-bottom:10px;"></span>
@@ -657,6 +658,7 @@
             <div style="display:flex; gap:8px; margin-bottom:14px;">
               <button type="button" class="btn-secondary btn-sm" data-csv-import="top_customers">&#8593; Import CSV</button>
               <button type="button" class="btn-secondary btn-sm" data-csv-export="top_customers">&#8595; Export CSV</button>
+              <button type="button" class="btn-danger btn-sm" data-csv-clear="top_customers">Clear Contents</button>
               <input type="file" accept=".csv,text/csv" id="top_customers-csv-file" style="display:none;" />
             </div>
             <span class="accordion-count" id="top_customers-count" style="display:inline-block; margin-bottom:10px;"></span>
@@ -1623,6 +1625,7 @@
         document.querySelector(`[data-csv-import="${cfg.key}"]`).addEventListener("click", () => fileInput.click());
         fileInput.addEventListener("change", () => importCsvRows(cfg, fileInput.files[0]));
         document.querySelector(`[data-csv-export="${cfg.key}"]`).addEventListener("click", () => exportCsvRows(cfg));
+        document.querySelector(`[data-csv-clear="${cfg.key}"]`).addEventListener("click", () => clearCsvRows(cfg));
       }
     }
   }
@@ -1706,6 +1709,20 @@
     fileInput.value = "";
     if (error) { showBanner(`Couldn't import CSV: ` + error.message, "error"); return; }
     showBanner(`Imported ${values.length} row${values.length === 1 ? "" : "s"} into ${cfg.title}.`, "success");
+    await loadListSection(cfg);
+  }
+
+  // Wipes every row in this list for the current client in one shot --
+  // handy after an Import CSV mistake, or to start a spreadsheet over from
+  // scratch instead of clicking the row-delete (&times;) button one row at
+  // a time. Greg (8/18/26). Confirmed first since there's no undo.
+  async function clearCsvRows(cfg) {
+    const rows = listData[cfg.key] || [];
+    if (!rows.length) return;
+    if (!confirm(`Clear all ${rows.length} row${rows.length === 1 ? "" : "s"} from ${cfg.title}? This can't be undone.`)) return;
+    const { error } = await sb.from(cfg.table).delete().eq("client_id", currentClient.id);
+    if (error) { showBanner(`Couldn't clear ${cfg.title}: ` + error.message, "error"); return; }
+    showBanner(`Cleared ${cfg.title}.`, "success");
     await loadListSection(cfg);
   }
 
