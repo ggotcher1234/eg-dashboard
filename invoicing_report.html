@@ -108,6 +108,26 @@
   header .btn-ghost { color: #c9d6e3; }
   header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
 
+  /* Account menu -- Change Password + Sign out tucked into one dropdown
+     instead of sitting in the top bar as separate buttons, per Chris's
+     "slim it down" request (8/18/26). */
+  #profile-wrap, #profile-wrap2 { position: relative; }
+  #profile-btn, #profile-btn2 { display: flex; align-items: center; gap: 4px; padding: 4px 6px; }
+  #profile-btn .avatar-icon, #profile-btn2 .avatar-icon {
+    width: 24px; height: 24px; border-radius: 999px; background: rgba(255,255,255,0.14);
+    display: flex; align-items: center; justify-content: center; color: #c9d6e3;
+  }
+  #profile-btn .avatar-icon svg, #profile-btn2 .avatar-icon svg { width: 14px; height: 14px; }
+  #profile-btn .chevron, #profile-btn2 .chevron { font-size: 9px; color: #c9d6e3; }
+  .profile-dropdown {
+    position: absolute; top: 40px; right: 0; width: 150px; padding: 6px; background: #fff; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60;
+  }
+  .profile-dropdown button, header .profile-dropdown button {
+    width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--text);
+  }
+  .profile-dropdown button:hover, header .profile-dropdown button:hover { background: #eef1f4; color: var(--text); }
+
   main { max-width: 1160px; margin: 28px auto; padding: 0 20px 70px; }
   .hidden { display: none !important; }
   #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
@@ -427,7 +447,18 @@
       <a class="nav-link" href="team_directory.html">Team</a>
       <a class="nav-link active" href="invoicing_report.html">Invoicing</a>
     </nav>
-    <div id="userbox2"><button class="btn-ghost" id="change-password-btn2">Change Password</button><button class="btn-ghost" id="signout-btn2">Sign out</button></div>
+    <div id="userbox2">
+      <div id="profile-wrap2">
+        <button class="btn-ghost" id="profile-btn2" title="Account menu">
+          <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="chevron">&#9662;</span>
+        </button>
+        <div id="profile-dropdown2" class="profile-dropdown hidden">
+          <button class="btn-ghost" id="change-password-btn2">Change Password</button>
+          <button class="btn-ghost" id="signout-btn2">Sign out</button>
+        </div>
+      </div>
+    </div>
   </header>
   <div id="not-admin-note">This page is Admin only. Ask an Admin to pull the monthly invoicing report.</div>
 </div>
@@ -460,8 +491,16 @@
       </div>
       <span id="user-name"></span>
       <span class="role-pill" id="user-role"></span>
-      <button class="btn-ghost" id="change-password-btn">Change Password</button>
-      <button class="btn-ghost" id="signout-btn">Sign out</button>
+      <div id="profile-wrap">
+        <button class="btn-ghost" id="profile-btn" title="Account menu">
+          <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="chevron">&#9662;</span>
+        </button>
+        <div id="profile-dropdown" class="profile-dropdown hidden">
+          <button class="btn-ghost" id="change-password-btn">Change Password</button>
+          <button class="btn-ghost" id="signout-btn">Sign out</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -942,6 +981,19 @@
   }
   $("change-password-btn").addEventListener("click", changePassword);
   $("change-password-btn2").addEventListener("click", changePassword);
+
+  $("profile-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("profile-dropdown").classList.toggle("hidden");
+  });
+  $("profile-btn2").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("profile-dropdown2").classList.toggle("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!$("profile-wrap").contains(e.target)) $("profile-dropdown").classList.add("hidden");
+    if (!$("profile-wrap2").contains(e.target)) $("profile-dropdown2").classList.add("hidden");
+  });
 
   async function afterSignIn() {
     const { data: { user } } = await sb.auth.getUser();

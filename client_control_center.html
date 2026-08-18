@@ -47,6 +47,26 @@
   header .btn-ghost { color: #c9d6e3; }
   header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
 
+  /* Account menu -- Change Password + Sign out tucked into one dropdown
+     instead of sitting in the top bar as separate buttons, per Chris's
+     "slim it down" request (8/18/26). */
+  #profile-wrap { position: relative; }
+  #profile-btn { display: flex; align-items: center; gap: 4px; padding: 4px 6px; }
+  #profile-btn .avatar-icon {
+    width: 24px; height: 24px; border-radius: 999px; background: rgba(255,255,255,0.14);
+    display: flex; align-items: center; justify-content: center; color: #c9d6e3;
+  }
+  #profile-btn .avatar-icon svg { width: 14px; height: 14px; }
+  #profile-btn .chevron { font-size: 9px; color: #c9d6e3; }
+  .profile-dropdown {
+    position: absolute; top: 40px; right: 0; width: 150px; padding: 6px; background: #fff; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60;
+  }
+  .profile-dropdown button, header .profile-dropdown button {
+    width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--text);
+  }
+  .profile-dropdown button:hover, header .profile-dropdown button:hover { background: #eef1f4; color: var(--text); }
+
   main { max-width: 780px; margin: 0 auto; padding: 28px 20px 80px; }
   .hidden { display: none !important; }
   #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
@@ -298,8 +318,16 @@
       </div>
       <span id="user-name"></span>
       <span class="role-pill" id="user-role"></span>
-      <button class="btn-ghost" id="change-password-btn">Change Password</button>
-      <button class="btn-ghost" id="signout-btn">Sign out</button>
+      <div id="profile-wrap">
+        <button class="btn-ghost" id="profile-btn" title="Account menu">
+          <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="chevron">&#9662;</span>
+        </button>
+        <div id="profile-dropdown" class="profile-dropdown hidden">
+          <button class="btn-ghost" id="change-password-btn">Change Password</button>
+          <button class="btn-ghost" id="signout-btn">Sign out</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -665,6 +693,14 @@
     currentUser = null;
     $("app-view").classList.add("hidden");
     redirectToLogin();
+  });
+
+  $("profile-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("profile-dropdown").classList.toggle("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!$("profile-wrap").contains(e.target)) $("profile-dropdown").classList.add("hidden");
   });
 
   // Profile and client both only depend on IDs already in hand (the signed-in
