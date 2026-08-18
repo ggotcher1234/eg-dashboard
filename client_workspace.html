@@ -384,7 +384,7 @@
 
     <!-- ===== WORKSPACE ===== -->
     <div id="view-workspace" class="hidden">
-      <button class="btn-ghost" id="workspace-back" style="margin-bottom:12px; padding-left:0;">&larr; Back to my clients</button>
+      <button class="btn-ghost" id="workspace-back" style="margin-bottom:12px; padding-left:0;">&larr; Engagement Workspace</button>
 
       <div class="card">
         <div class="card-header">
@@ -882,7 +882,15 @@
   }
 
   // ---------- Workspace view ----------
-  $("workspace-back").addEventListener("click", showPickerView);
+  // Both "back" links on this page go to the current client's Engagement
+  // Workspace (CCC) now, not the multi-client picker -- Greg already has
+  // "Engagements" in the top nav to get all the way back home (8/18/26).
+  // The picker view still exists and still opens automatically if this
+  // page is reached with no ?client= param.
+  $("workspace-back").addEventListener("click", () => {
+    if (currentClient) location.href = `client_control_center.html?client=${currentClient.id}`;
+    else showPickerView();
+  });
 
   async function openClient(clientId) {
     const { data: client, error } = await sb
@@ -939,9 +947,11 @@
 
     $("ws-name").textContent = c.name;
     AI_CONTEXT_LABEL = `${c.name} — Assignments & Hours`;
-    // Breadcrumb: back to the home Engagements list, per Greg's request.
-    $("header-back-link").href = `index.html`;
-    $("header-back-link").textContent = `← Back to Engagements`;
+    // Breadcrumb: back to this client's Engagement Workspace (CCC), not the
+    // home Engagements list -- Greg already has "Engagements" in the top
+    // nav for that (8/18/26).
+    $("header-back-link").href = `client_control_center.html?client=${c.id}`;
+    $("header-back-link").textContent = `← Engagement Workspace`;
     $("ws-address").textContent = `${c.slug}.egdashboardbuilder.com`;
     $("ws-lifecycle-badge").className = `badge badge-${c.status}`;
     $("ws-lifecycle-badge").textContent = c.status;
