@@ -1571,11 +1571,20 @@
 
   // ---------- Needs Attention ----------
   // Real signals only: an engagement that's On Hold, or one that's
-  // Accepted/In Progress but hasn't been touched (clients.updated_at) in a
-  // week. This deliberately skips "deliverable due tomorrow" / "awaiting
-  // client input" style reasons -- there's no due-date field on Project Next
-  // Steps and no client-response-tracking table yet, so a reason like that
-  // would just be a made-up label next to a real client name.
+  // Accepted/In Progress but hasn't been touched (clients.last_activity_at)
+  // in a week. This deliberately skips "deliverable due tomorrow" /
+  // "awaiting client input" style reasons -- there's no due-date field on
+  // Project Next Steps and no client-response-tracking table yet, so a
+  // reason like that would just be a made-up label next to a real client
+  // name.
+  //
+  // last_activity_at (053_client_activity_tracking.sql) is kept current by
+  // DB triggers across research answers, next steps, documents, resource
+  // vault, competitors/customers, contacts, assignments, and logged hours --
+  // not just clients.updated_at, which only moved on a direct edit to the
+  // client record itself (status, company info, logo). Greg was getting
+  // flagged for engagements he worked in daily because that day-to-day work
+  // never touched updated_at (8/18/26).
   const STALE_DAYS = 7;
   function daysSince(iso) {
     if (!iso) return Infinity;
@@ -1588,11 +1597,11 @@
       if (c.project_status === "on_hold") {
         items.push({ client: c, reason: "On Hold", severity: "med" });
       } else if (["accepted", "in_progress"].includes(c.project_status)) {
-        const d = daysSince(c.updated_at);
+        const d = daysSince(c.last_activity_at || c.updated_at);
         if (d >= STALE_DAYS) items.push({ client: c, reason: `No activity in ${d} days`, severity: d >= 14 ? "high" : "med" });
       }
     }
-    items.sort((a, b) => (b.severity === "high") - (a.severity === "high") || new Date(a.client.updated_at) - new Date(b.client.updated_at));
+    items.sort((a, b) => (b.severity === "high") - (a.severity === "high") || new Date(a.client.last_activity_at || a.client.updated_at) - new Date(b.client.last_activity_at || b.client.updated_at));
     return items;
   }
 
@@ -1644,7 +1653,7 @@
         <div class="eng-icon-sq" style="background:${color.bg};color:${color.fg};">${escapeHtml(initials(c.name))}</div>
         <div>
           <div class="cr-name">${escapeHtml(c.name)}</div>
-          <div class="cr-meta">${partner ? escapeHtml(partner.code) : "—"} &middot; Last activity: ${formatLastActivity(c.updated_at)}</div>
+          <div class="cr-meta">${partner ? escapeHtml(partner.code) : "—"} &middot; Last activity: ${formatLastActivity(c.last_activity_at || c.updated_at)}</div>
         </div>
         <div class="eng-tl-block">
           ${teamLead ? `<div><div class="eng-tl-caption">Team Lead</div><div class="eng-tl-name-row"><div class="avatar-sm">${teamLeadAvatar ? `<img src="${escapeHtml(teamLeadAvatar)}" alt="" />` : escapeHtml(initials(teamLead))}</div><span class="eng-tl-name">${escapeHtml(teamLead)}</span></div></div>` : `<span class="cr-meta">No Team Lead</span>`}
@@ -1709,7 +1718,7 @@
     } else if (engagementTab === "recent") {
       // "Recent" picks its top 10 by last activity first -- the sort dropdown
       // below only reorders *within* that set, it doesn't change which 10 show.
-      pool = [...pool].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)).slice(0, 10);
+      pool = [...pool].sort((a, b) => new Date(b.last_activity_at || b.updated_at) - new Date(a.last_activity_at || a.updated_at)).slice(0, 10);
     }
     pool = sortEngagementPool(pool);
 
@@ -1818,7 +1827,7 @@
     const byId = Object.fromEntries(allClients.map((c) => [c.id, c]));
     const rows = recents.map((r) => byId[r.id]).filter((c) => c && myClientIds.has(c.id)).slice(0, 5);
     $("recent-activity-list").innerHTML = rows.length
-      ? rows.map((c) => `<div class="mini-activity-row" data-client-id="${c.id}"><span class="ma-name">${escapeHtml(c.name)}</span><span class="ma-time">${formatLastActivity(c.updated_at)}</span></div>`).join("")
+      ? rows.map((c) => `<div class="mini-activity-row" data-client-id="${c.id}"><span class="ma-name">${escapeHtml(c.name)}</span><span class="ma-time">${formatLastActivity(c.last_activity_at || c.updated_at)}</span></div>`).join("")
       : `<div class="notif-empty" style="padding:14px 0;">No recent activity yet — engagements you open will show up here.</div>`;
     $("recent-activity-list").querySelectorAll(".mini-activity-row").forEach((row) => {
       row.addEventListener("click", () => { window.location.href = `client_control_center.html?client=${row.dataset.clientId}`; });
