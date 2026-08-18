@@ -81,6 +81,27 @@
   #cm-status-strip { font-size: 13px; color: var(--muted); margin-top: 10px; }
   #cm-status-strip strong { color: var(--text); font-weight: 700; }
 
+  /* Status-age dot -- green under 30 days in the current status, yellow
+     under 60, red 60+. Only ever shown for In Progress, since that's the
+     status "overdue" actually means anything for (Accepted/On Hold/Closed
+     don't have a "should be moving faster" expectation the same way). */
+  .status-badge-wrap { display: flex; align-items: center; gap: 7px; }
+  .status-dot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; }
+  .status-dot-green { background: var(--accent); }
+  .status-dot-yellow { background: var(--amber); }
+  .status-dot-red { background: var(--danger); }
+
+  .delay-note { margin-top: 12px; padding: 12px 14px; border-radius: 8px; background: #f4f6f8; border: 1px solid var(--border); }
+  .delay-note.delay-yellow { background: #fdf7ec; border-color: #f0dca6; }
+  .delay-note.delay-red { background: #fbe9e9; border-color: #f0c2c0; }
+  .delay-note-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; }
+  .delay-note textarea {
+    width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13px; font-family: inherit; resize: vertical; box-sizing: border-box;
+  }
+  .delay-note-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .delay-note-saved { font-size: 12px; color: var(--accent-dark); display: none; }
+
   .ccc-divider { border-top: 1px solid var(--border); margin: 0 4px 18px; }
   .ccc-section-label {
     font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
@@ -332,10 +353,21 @@
       <div class="ccc-summary">
         <div class="ccc-summary-top">
           <h2 id="cm-name"></h2>
-          <span class="badge" id="cm-status-badge"></span>
+          <span class="status-badge-wrap">
+            <span class="status-dot hidden" id="cm-status-dot" title=""></span>
+            <span class="badge" id="cm-status-badge"></span>
+          </span>
         </div>
         <div id="cm-meta"></div>
         <div id="cm-status-strip">Loading status…</div>
+        <div class="delay-note hidden" id="cm-delay-note">
+          <div class="delay-note-label" id="cm-delay-note-label">Why is this taking longer than expected?</div>
+          <textarea id="cm-delay-reason" maxlength="300" placeholder="e.g. Waiting on a closing call to get on the client's calendar"></textarea>
+          <div class="delay-note-actions">
+            <button type="button" class="btn-secondary" id="cm-delay-save" style="padding:6px 14px; font-size:12.5px;">Save</button>
+            <span class="delay-note-saved" id="cm-delay-saved">Saved</span>
+          </div>
+        </div>
       </div>
       <div class="ccc-divider"></div>
       <div class="ccc-section-label">Manage Engagement</div>
@@ -704,6 +736,7 @@
     // admin-level lifecycle field and was redundant to show alongside it.
     $("cm-status-badge").className = `badge badge-${client.project_status}`;
     $("cm-status-badge").textContent = PROJECT_STATUS_LABELS[client.project_status] || client.project_status;
+    renderStatusAge(client);
 
     const { data: assignRows } = await sb
       .from("client_assignments")
@@ -748,6 +781,66 @@
   // strip's total matches the workspace's total instead of only summing
   // logged time_entries.
   const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+
+  // ---------- Status age (overdue indicator + delay reason) ----------
+  // Greg (8/18/26): flag engagements that have sat In Progress too long --
+  // usually because a closing call can't get scheduled -- with a place to
+  // note why, so nobody has to ask and nobody has to re-explain it. Only
+  // shown for In Progress; the other statuses don't carry the same
+  // "should be moving" expectation. status_since is kept current by a
+  // database trigger (051_engagement_status_tracking.sql) that resets it
+  // whenever project_status actually changes.
+  function daysSince(iso) {
+    if (!iso) return 0;
+    return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24)));
+  }
+  function statusAgeTier(days) {
+    if (days >= 60) return "red";
+    if (days >= 30) return "yellow";
+    return "green";
+  }
+
+  function renderStatusAge(client) {
+    const dot = $("cm-status-dot");
+    const note = $("cm-delay-note");
+    if (client.project_status !== "in_progress") {
+      dot.classList.add("hidden");
+      note.classList.add("hidden");
+      return;
+    }
+
+    const days = daysSince(client.status_since);
+    const tier = statusAgeTier(days);
+    dot.className = `status-dot status-dot-${tier}`;
+    dot.title = `In Progress for ${days} day${days === 1 ? "" : "s"}`;
+
+    note.classList.remove("hidden", "delay-yellow", "delay-red");
+    if (tier === "yellow") note.classList.add("delay-yellow");
+    if (tier === "red") note.classList.add("delay-red");
+    $("cm-delay-note-label").textContent =
+      tier === "green"
+        ? `In Progress for ${days} day${days === 1 ? "" : "s"}`
+        : `In Progress for ${days} days — why is it taking longer than expected?`;
+    $("cm-delay-reason").value = client.delay_reason || "";
+    $("cm-delay-saved").style.display = "none";
+  }
+
+  $("cm-delay-save").addEventListener("click", async () => {
+    if (!activeClient) return;
+    const reason = $("cm-delay-reason").value.trim();
+    const btn = $("cm-delay-save");
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    const { error } = await sb.from("clients").update({ delay_reason: reason || null }).eq("id", activeClient.id);
+    btn.disabled = false;
+    btn.textContent = "Save";
+    if (error) {
+      showBanner("Couldn't save that note: " + error.message, "error");
+      return;
+    }
+    activeClient.delay_reason = reason || null;
+    $("cm-delay-saved").style.display = "inline";
+  });
 
   async function loadStatusStrip(client) {
     const strip = $("cm-status-strip");
