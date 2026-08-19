@@ -697,32 +697,29 @@
           <!-- Step 8: Workflow Documents -->
           <div class="wizard-panel-card wizard-panel hidden" data-step="8">
             <h3>EG Workflow Documents</h3>
-            <div class="wizard-panel-hint">Discovery, Controlling, and Close-Out are client-specific files — upload them directly. Research Review links out to the Fathom call recording instead.</div>
-            <form id="workflow-form">
-              <div class="field-grid">
-                <div>
-                  <div class="field">
-                    <label>1. Discovery Document</label>
-                    <div id="wf-discovery-file"></div>
-                  </div>
-                  <div class="field">
-                    <label>2. Controlling Document</label>
-                    <div id="wf-controlling-file"></div>
-                  </div>
+            <div class="wizard-panel-hint">Discovery, Controlling, Research Review, and Close-Out can each be an uploaded file or a link — whichever's easier.</div>
+            <div class="field-grid">
+              <div>
+                <div class="field">
+                  <label>1. Discovery Document</label>
+                  <div id="wf-discovery-file"></div>
                 </div>
-                <div>
-                  <div class="field">
-                    <label for="wf-review">3. Research Review Recording URL</label>
-                    <input type="url" id="wf-review" placeholder="https://fathom.video/share/…" />
-                  </div>
-                  <div class="field">
-                    <label>4. Close-Out Survey</label>
-                    <div id="wf-closeout-file"></div>
-                  </div>
+                <div class="field">
+                  <label>2. Controlling Document</label>
+                  <div id="wf-controlling-file"></div>
                 </div>
               </div>
-              <button type="submit" class="btn-primary btn-sm" id="workflow-save-btn">Save Research Review Link</button>
-            </form>
+              <div>
+                <div class="field">
+                  <label>3. Research Review Recording</label>
+                  <div id="wf-review-file"></div>
+                </div>
+                <div class="field">
+                  <label>4. Close-Out Survey</label>
+                  <div id="wf-closeout-file"></div>
+                </div>
+              </div>
+            </div>
           </div>
 
         </div>
@@ -1426,29 +1423,33 @@
   }
 
   // ---------- EG Workflow Documents ----------
-  // Discovery/Controlling/Close-Out are client-unique files the Team Lead
-  // uploads directly (same upload-only pattern used elsewhere) — no more
-  // pasting a URL for these three. Research Review stays a URL field: it's
-  // a link to an externally-hosted Fathom call recording, not a document
-  // to upload.
-  const WORKFLOW_FILE_FIELDS = [
-    { key: "discovery", label: "Discovery Document", column: "discovery_doc_storage_path" },
-    { key: "controlling", label: "Controlling Document", column: "controlling_doc_storage_path" },
-    { key: "closeout", label: "Close-Out Survey", column: "closeout_survey_storage_path" },
+  // All four (Discovery, Controlling, Research Review, Close-Out) can each
+  // be either an uploaded file OR a link -- specialist's choice per client,
+  // per document (Greg, 8/18/26; Research Review used to be link-only with
+  // Fathom-specific placeholder copy, since that's Greg's own call-recording
+  // tool -- not assumed for every EG specialist, so that wording is gone
+  // too). Same "one or the other, uploading clears any saved link and vice
+  // versa" rule Resource Vault and Research Question links already use.
+  const WORKFLOW_FIELDS = [
+    { key: "discovery", label: "Discovery Document", pathColumn: "discovery_doc_storage_path", urlColumn: "discovery_doc_url" },
+    { key: "controlling", label: "Controlling Document", pathColumn: "controlling_doc_storage_path", urlColumn: "controlling_doc_url" },
+    { key: "review", label: "Research Review Recording", pathColumn: "research_review_storage_path", urlColumn: "research_review_url" },
+    { key: "closeout", label: "Close-Out Survey", pathColumn: "closeout_survey_storage_path", urlColumn: "closeout_survey_url" },
   ];
   let workflowData = null;
 
   async function loadWorkflowLinks(clientId) {
     const { data, error } = await sb.from("client_content").select("*").eq("client_id", clientId).maybeSingle();
-    if (error) { showBanner("Couldn't load workflow links: " + error.message, "error"); return; }
+    if (error) { showBanner("Couldn't load workflow documents: " + error.message, "error"); return; }
     workflowData = data || {};
-    $("wf-review").value = workflowData.research_review_url || "";
-    WORKFLOW_FILE_FIELDS.forEach(renderWorkflowFileField);
+    WORKFLOW_FIELDS.forEach(renderWorkflowFileField);
   }
 
   function renderWorkflowFileField(f) {
     const container = $(`wf-${f.key}-file`);
-    const path = workflowData && workflowData[f.column];
+    const path = workflowData && workflowData[f.pathColumn];
+    const url = workflowData && workflowData[f.urlColumn];
+
     if (path) {
       container.innerHTML = `
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -1463,13 +1464,58 @@
         window.open(data.signedUrl, "_blank");
       });
       container.querySelector("[data-wf-replace]").addEventListener("click", () => pickWorkflowFile(f));
-      container.querySelector("[data-wf-remove]").addEventListener("click", () => removeWorkflowFile(f));
-    } else {
-      container.innerHTML = `<label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload file<input type="file" class="wf-upload-input" style="display:none;" /></label>`;
-      container.querySelector(".wf-upload-input").addEventListener("change", (e) => {
-        if (e.target.files.length) uploadWorkflowFile(f, e.target.files[0]);
-      });
+      container.querySelector("[data-wf-remove]").addEventListener("click", () => removeWorkflowItem(f));
+      return;
     }
+
+    if (url) {
+      container.innerHTML = `
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="color:var(--navy-light); font-weight:600; font-size:13px; text-decoration:none; word-break:break-all;">&#128279; ${escapeHtml(url)}</a>
+          <button type="button" class="btn-secondary btn-sm" data-wf-change-link>Change link</button>
+          <button type="button" class="btn-secondary btn-sm" data-wf-remove>Remove</button>
+        </div>
+      `;
+      container.querySelector("[data-wf-change-link]").addEventListener("click", () => renderWorkflowLinkForm(f, url));
+      container.querySelector("[data-wf-remove]").addEventListener("click", () => removeWorkflowItem(f));
+      return;
+    }
+
+    container.innerHTML = `
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload file<input type="file" class="wf-upload-input" style="display:none;" /></label>
+        <button type="button" class="btn-secondary btn-sm" data-wf-add-link>Add link</button>
+      </div>
+    `;
+    container.querySelector(".wf-upload-input").addEventListener("change", (e) => {
+      if (e.target.files.length) uploadWorkflowFile(f, e.target.files[0]);
+    });
+    container.querySelector("[data-wf-add-link]").addEventListener("click", () => renderWorkflowLinkForm(f, ""));
+  }
+
+  function renderWorkflowLinkForm(f, currentUrl) {
+    const container = $(`wf-${f.key}-file`);
+    container.innerHTML = `
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <input type="url" class="wf-link-input" value="${escapeHtml(currentUrl)}" placeholder="https://…" style="flex:1; min-width:200px; padding:7px 9px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit;" />
+        <button type="button" class="btn-primary btn-sm" data-wf-save-link>Save</button>
+        <button type="button" class="btn-secondary btn-sm" data-wf-cancel-link>Cancel</button>
+      </div>
+    `;
+    const input = container.querySelector(".wf-link-input");
+    input.focus();
+    container.querySelector("[data-wf-save-link]").addEventListener("click", () => saveWorkflowLink(f, input.value.trim()));
+    container.querySelector("[data-wf-cancel-link]").addEventListener("click", () => renderWorkflowFileField(f));
+  }
+
+  async function saveWorkflowLink(f, url) {
+    if (!url) { showBanner("Enter a URL first.", "error"); return; }
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    const { error } = await sb.from("client_content").update({ [f.urlColumn]: url }).eq("client_id", currentClient.id);
+    if (error) { showBanner("Couldn't save the link: " + error.message, "error"); return; }
+    workflowData[f.urlColumn] = url;
+    renderWorkflowFileField(f);
+    showBanner(`${f.label} link saved.`, "success");
   }
 
   function pickWorkflowFile(f) {
@@ -1480,42 +1526,31 @@
   }
 
   async function uploadWorkflowFile(f, file) {
-    const oldPath = workflowData && workflowData[f.column];
+    const oldPath = workflowData && workflowData[f.pathColumn];
     const path = `clients/${currentClient.id}/workflow/${f.key}-${Date.now()}-${sanitizeFilename(file.name)}`;
     const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
     if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
-    const { error } = await sb.from("client_content").update({ [f.column]: path }).eq("client_id", currentClient.id);
+    // A field is one or the other -- uploading a file clears any link
+    // previously saved in this same slot, same rule Resource Vault uses.
+    const { error } = await sb.from("client_content").update({ [f.pathColumn]: path, [f.urlColumn]: null }).eq("client_id", currentClient.id);
     if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
-    workflowData[f.column] = path;
+    workflowData[f.pathColumn] = path;
+    workflowData[f.urlColumn] = null;
     renderWorkflowFileField(f);
     showBanner(`${f.label} uploaded.`, "success");
   }
 
-  async function removeWorkflowFile(f) {
-    const oldPath = workflowData && workflowData[f.column];
-    const { error } = await sb.from("client_content").update({ [f.column]: null }).eq("client_id", currentClient.id);
-    if (error) { showBanner("Couldn't remove file: " + error.message, "error"); return; }
+  async function removeWorkflowItem(f) {
+    const oldPath = workflowData && workflowData[f.pathColumn];
+    const { error } = await sb.from("client_content").update({ [f.pathColumn]: null, [f.urlColumn]: null }).eq("client_id", currentClient.id);
+    if (error) { showBanner("Couldn't remove it: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
-    workflowData[f.column] = null;
+    workflowData[f.pathColumn] = null;
+    workflowData[f.urlColumn] = null;
     renderWorkflowFileField(f);
     showBanner(`${f.label} removed.`, "success");
   }
-
-  $("workflow-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const btn = $("workflow-save-btn");
-    btn.disabled = true;
-    btn.textContent = "Saving…";
-    const { error } = await sb.from("client_content").update({
-      research_review_url: $("wf-review").value.trim() || null,
-    }).eq("client_id", currentClient.id);
-    btn.disabled = false;
-    btn.textContent = "Save Research Review Link";
-    if (error) { showBanner("Couldn't save the Research Review link: " + error.message, "error"); return; }
-    if (workflowData) workflowData.research_review_url = $("wf-review").value.trim() || null;
-    showBanner("Research Review link saved.", "success");
-  });
 
   // ---------- Generic list sections (Next Steps, Contacts, Team, Competitors, Top Customers) ----------
   // Each of these now lives on its own dedicated wizard step instead of a
