@@ -471,12 +471,20 @@
         <input type="text" id="ed-cc" readonly />
       </div>
       <div class="field">
+        <label>Research question</label>
+        <select id="ed-question"></select>
+      </div>
+      <div class="field">
+        <label>Brief answer <span style="text-transform:none; font-weight:400;">(a sentence or two -- the full write-up is the attached document)</span></label>
+        <textarea id="ed-answer" rows="3" placeholder="e.g. The specialty coffee market is growing fastest among 25-39 year olds who favor subscription models and transparent sourcing…"></textarea>
+      </div>
+      <div class="field">
         <label>Subject</label>
         <input type="text" id="ed-subject" />
       </div>
       <div class="field">
         <label>Body</label>
-        <textarea id="ed-body" rows="12"></textarea>
+        <textarea id="ed-body" rows="14"></textarea>
       </div>
       <div id="ed-no-contacts" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
         This client has no contact emails on file yet — add one in Files &amp; Data &rarr; Contacts before sending.
@@ -717,7 +725,7 @@
     const clientId = new URLSearchParams(location.search).get("client");
 
     const [{ data: profile, error: profileErr }] = await Promise.all([
-      sb.from("users").select("id, full_name, role, organization_id").eq("id", user.id).single(),
+      sb.from("users").select("id, full_name, role, organization_id, email, phone").eq("id", user.id).single(),
       clientId ? loadClient(clientId) : Promise.resolve(),
     ]);
 
@@ -912,12 +920,34 @@
   }
 
   // ---------- Draft Update Email ----------
-  // Composes an update email — recipients from Contacts, recently added
-  // client-facing files, and the Dashboard View link — for the consultant to
-  // review, edit, and send from their OWN email client. Nothing is sent from
-  // here; there's no email-sending service wired into this app, and this
-  // keeps the message coming from a real person's inbox rather than a
-  // generic system address.
+  // Composes a research-question update email -- the standard shape a
+  // specialist sends a client after answering one question from the
+  // controlling document: explain which question this is (for the client's
+  // big picture), a brief answer, and point to the full report attached.
+  // Modeled directly on Mary Ellen Bates' example (Greg, 8/18/26). Recipients
+  // come from Contacts, the question's own client-facing documents, and the
+  // Dashboard View link -- for the specialist to review, edit, and send from
+  // their OWN email client. Nothing is sent from here; there's no
+  // email-sending service wired into this app, and this keeps the message
+  // coming from a real person's inbox rather than a generic system address.
+  const RESEARCH_AREAS = [
+    ["market_dynamics", "Market Dynamics Research"],
+    ["outbound", "Outbound Marketing"],
+    ["inbound", "Inbound Marketing"],
+    ["watering_holes", "Watering Holes"],
+  ];
+  const RESEARCH_AREA_LABELS = Object.fromEntries(RESEARCH_AREAS);
+  const SPECIALTY_LABELS = {
+    team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
+    gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
+  };
+
+  let emailContacts = [];
+  let emailQuestions = [];
+  let emailQuestionDocs = {}; // question id -> [{file_name, url}]
+  let emailSpecialtyLabel = "";
+  let emailTeamLeadName = "";
+
   $("cm-email-btn").addEventListener("click", () => {
     if (activeClient) openEmailDraftModal(activeClient);
   });
@@ -934,6 +964,12 @@
   }
   $("ed-subject").addEventListener("input", updateMailtoHref);
   $("ed-body").addEventListener("input", updateMailtoHref);
+  $("ed-answer").addEventListener("input", () => { composeEmailBody(); updateMailtoHref(); });
+  $("ed-question").addEventListener("change", async () => {
+    await loadDocsForSelectedQuestion();
+    composeEmailBody();
+    updateMailtoHref();
+  });
 
   $("ed-copy-btn").addEventListener("click", async () => {
     const ccLine = $("ed-cc").value ? `\nCc: ${$("ed-cc").value}` : "";
@@ -949,58 +985,121 @@
   async function openEmailDraftModal(client) {
     $("ed-to").value = "Loading…";
     $("ed-cc").value = "Loading…";
+    $("ed-question").innerHTML = "";
+    $("ed-answer").value = "";
     $("ed-subject").value = "";
     $("ed-body").value = "";
     $("ed-no-contacts").classList.add("hidden");
     $("email-draft-overlay").classList.add("open");
 
-    const [{ data: contacts }, { data: docs }, { data: team }] = await Promise.all([
+    const [{ data: contacts }, { data: questions }, { data: team }] = await Promise.all([
       sb.from("client_contacts").select("name, email").eq("client_id", client.id),
-      sb.from("documents")
-        .select("file_name, uploaded_at")
+      sb.from("client_research_questions")
+        .select("id, research_area, question")
         .eq("client_id", client.id)
-        .eq("visibility", "client_facing")
-        .order("uploaded_at", { ascending: false })
-        .limit(10),
+        .order("research_area")
+        .order("sort_order"),
       // Same EG Team roster shown in the Dashboard Edit "Team Members"
       // accordion -- whoever's actually assigned via client_assignments.
       sb.from("client_assignments")
-        .select("users(email)")
+        .select("users(id, email, full_name), is_team_lead, specialty_type, user_id")
         .eq("client_id", client.id)
         .not("user_id", "is", null),
     ]);
 
-    const emails = (contacts || []).map((c) => c.email).filter(Boolean);
+    emailContacts = contacts || [];
+    const emails = emailContacts.map((c) => c.email).filter(Boolean);
     $("ed-to").value = emails.join(", ");
     $("ed-no-contacts").classList.toggle("hidden", emails.length > 0);
 
-    const teamEmails = [...new Set((team || []).map((r) => r.users && r.users.email).filter(Boolean))];
+    const teamRows = team || [];
+    const teamEmails = [...new Set(teamRows.map((r) => r.users && r.users.email).filter(Boolean))];
     $("ed-cc").value = teamEmails.join(", ");
 
-    const dashboardLink = client.slug
-      ? new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href
-      : "(this client doesn't have a dashboard link set up yet)";
-    const firstContactName = contacts && contacts[0] && contacts[0].name ? contacts[0].name.split(" ")[0] : "there";
-    const fileLines = (docs || []).length
-      ? docs.map((d) => `- ${d.file_name}`).join("\n")
-      : "- (no client-facing files uploaded yet — add some in Dashboard Edit first)";
+    const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
+    emailTeamLeadName = leadRow ? leadRow.users.full_name : "";
+    const mySlot = currentUser ? teamRows.find((r) => r.user_id === currentUser.id) : null;
+    emailSpecialtyLabel = mySlot ? (SPECIALTY_LABELS[mySlot.specialty_type] || mySlot.specialty_type) : "";
 
-    $("ed-subject").value = `Update on your Economic Gardening research — ${client.name}`;
-    $("ed-body").value = `Hi ${firstContactName},
+    emailQuestions = (questions || []).filter((q) => (q.question || "").trim());
+    if (emailQuestions.length) {
+      $("ed-question").innerHTML = emailQuestions.map((q) => {
+        const areaLabel = RESEARCH_AREA_LABELS[q.research_area] || q.research_area;
+        const preview = q.question.length > 70 ? q.question.slice(0, 70) + "…" : q.question;
+        return `<option value="${q.id}">${escapeHtml(areaLabel)}: ${escapeHtml(preview)}</option>`;
+      }).join("");
+      await loadDocsForSelectedQuestion();
+    } else {
+      $("ed-question").innerHTML = `<option value="">(no research questions yet — add one on the Research page first)</option>`;
+      emailQuestionDocs = {};
+    }
 
-Wanted to share a quick update on your Economic Gardening engagement. We've recently added the following to your dashboard:
+    composeEmailBody();
+    updateMailtoHref();
+  }
 
-${fileLines}
+  async function loadDocsForSelectedQuestion() {
+    const qid = $("ed-question").value;
+    if (!qid || emailQuestionDocs[qid]) return;
+    const { data: docs } = await sb.from("documents")
+      .select("file_name, url")
+      .eq("question_id", qid)
+      .eq("visibility", "client_facing");
+    emailQuestionDocs[qid] = docs || [];
+  }
 
-You can view everything anytime here:
-${dashboardLink}
+  // Rebuilds Subject + Body from the selected question, the typed-in brief
+  // answer, and that question's own attached client-facing documents/links --
+  // NOT a generic "recently added files" list, so the attachment mentioned
+  // in the email always matches the question actually being discussed.
+  function composeEmailBody() {
+    if (!activeClient) return;
+    const q = emailQuestions.find((q) => q.id === $("ed-question").value);
+    const firstContactName = emailContacts[0] && emailContacts[0].name ? emailContacts[0].name.split(" ")[0] : "there";
+    const specialistLabel = emailSpecialtyLabel ? `${emailSpecialtyLabel} specialist` : "specialist";
+    const introBy = emailTeamLeadName ? `As ${emailTeamLeadName} mentioned, ` : "";
+    const areaLabel = q ? (RESEARCH_AREA_LABELS[q.research_area] || q.research_area) : "";
+    const answer = $("ed-answer").value.trim();
+    const docs = q ? (emailQuestionDocs[q.id] || []) : [];
+    const contactBits = [currentUser && currentUser.email, currentUser && currentUser.phone].filter(Boolean).join(" or ");
+
+    $("ed-subject").value = q ? `${areaLabel} update — ${activeClient.name}` : `Update on your Economic Gardening research — ${activeClient.name}`;
+
+    if (!q) {
+      $("ed-body").value = `Hi ${firstContactName},
+
+Wanted to share a quick update on your Economic Gardening engagement.
+
+${answer || "(brief summary goes here)"}
 
 Let us know if you have any questions.
 
 Best,
 ${currentUser ? currentUser.full_name : ""}`;
+      return;
+    }
 
-    updateMailtoHref();
+    const attachLine = docs.length
+      ? `Attached is the full report${docs.length > 1 ? ", along with the supporting links below" : ""}:\n${docs.map((d) => `- ${d.url ? d.url : d.file_name}`).join("\n")}`
+      : "The full report is attached for your review — add it to this question on the Research page first if it isn't there yet.";
+
+    $("ed-body").value = `Hi ${firstContactName}:
+
+${introBy}I'm the ${specialistLabel} working on your ${areaLabel.toLowerCase()} in this Economic Gardening engagement.
+
+The question I've been researching:
+"${q.question}"
+
+My brief answer:
+${answer || "(a sentence or two goes here — see the Brief answer box above)"}
+
+${attachLine}
+
+If you have any immediate questions about this material once you've had a chance to review it, please feel free to reach out${contactBits ? ` (${contactBits})` : ""}. Otherwise, I look forward to talking with you about this on our upcoming research review call.
+
+-${currentUser ? currentUser.full_name.split(" ")[0] : ""}
+
+${currentUser ? currentUser.full_name : ""}${currentUser && currentUser.email ? `\n${currentUser.email}` : ""}${currentUser && currentUser.phone ? `\n${currentUser.phone}` : ""}`;
   }
 </script>
 </body>
