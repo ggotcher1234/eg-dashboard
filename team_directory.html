@@ -230,27 +230,10 @@
   .contact-link:hover { text-decoration: underline; }
   .contact-link svg { opacity: 0.65; flex-shrink: 0; }
 
-  .manage-btn { background: #eef1f4; color: var(--text); }
-  .manage-btn:hover { background: #e2e6ea; }
-  .manage-dropdown {
-    /* position: fixed (not absolute) and top/right set via JS
-       (positionOpenManageDropdown()) -- table/.table-scroll both clip
-       overflow for other reasons (rounded corners, mobile horizontal
-       scroll), which was cutting this dropdown off for rows near the
-       bottom of the table. Fixed positioning escapes that clipping. */
-    display: none; position: fixed; min-width: 170px;
-    background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 20px rgba(20,48,77,0.14);
-    padding: 6px; z-index: 60; text-align: left;
-  }
-  .manage-dropdown.open { display: block; }
-  .manage-dropdown button {
-    display: block; width: 100%; text-align: left; background: transparent; border: none; border-radius: 6px;
-    padding: 8px 10px; font-size: 13px; font-weight: 500; color: var(--text); cursor: pointer;
-  }
-  .manage-dropdown button:hover { background: #eef1f4; }
-  .manage-dropdown button.danger-item { color: var(--danger-dark); }
-  .manage-dropdown button.danger-item:hover { background: #fbe9e9; }
-  .manage-dropdown .menu-divider { border-top: 1px solid var(--border); margin: 5px 2px; }
+  /* Manage dropdown replaced (Greg, 8/19/26) with a plain Edit button plus
+     a minimal delete icon, matching the Programs page pattern. */
+  .delete-row-btn { background: transparent; border: none; color: var(--muted); font-size: 17px; padding: 4px 8px; line-height: 1; cursor: pointer; }
+  .delete-row-btn:hover { color: var(--danger-dark); }
   .avatar-sm {
     width: 28px; height: 28px; border-radius: 50%; background: var(--navy-light); color: #fff;
     display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; flex-shrink: 0;
@@ -471,7 +454,12 @@
           </svg>
           <input type="text" id="search-box" placeholder="Search team members by name or specialty…" />
         </div>
-        <div class="dropdown-wrap">
+        <!-- Filters, row count, and Import moved out of view (Greg, 8/19/26) --
+             only Search and Add Team Member stay in the toolbar. The elements
+             are kept in the DOM (display:none) rather than removed so the
+             existing filter/import logic keeps working if this is turned
+             back on later. -->
+        <div class="dropdown-wrap" style="display:none;">
           <button type="button" class="btn-secondary filter-btn" id="filter-btn">&#9776; Filters</button>
           <div class="dropdown-panel left" id="filter-dropdown">
             <div class="dropdown-label">Role</div>
@@ -486,8 +474,8 @@
         </div>
       </div>
       <div class="toolbar-right">
-        <span class="count" id="row-count"></span>
-        <div class="dropdown-wrap">
+        <span class="count" id="row-count" style="display:none;"></span>
+        <div class="dropdown-wrap" style="display:none;">
           <button class="btn-secondary hidden" id="import-menu-btn">Import &#9662;</button>
           <div class="dropdown-panel" id="import-dropdown">
             <button type="button" id="import-menu-eg">Import EG Team List</button>
@@ -501,39 +489,15 @@
       </div>
     </div>
 
-    <div class="stats-row">
-      <div class="stat-card stat-blue">
-        <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-        <div>
-          <div class="stat-card-value" id="stat-total">0</div>
-          <div class="stat-card-label">Team Members</div>
-          <div class="stat-card-sublabel">Total</div>
-        </div>
-      </div>
-      <div class="stat-card stat-green">
-        <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg></div>
-        <div>
-          <div class="stat-card-value" id="stat-leads">0</div>
-          <div class="stat-card-label">Team Leads</div>
-          <div class="stat-card-sublabel">Leads</div>
-        </div>
-      </div>
-      <div class="stat-card stat-amber">
-        <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M21.5 21v-2a3 3 0 0 0-2-2.83M17 3.35a3 3 0 0 1 0 5.3"/></svg></div>
-        <div>
-          <div class="stat-card-value" id="stat-specialists">0</div>
-          <div class="stat-card-label">Specialists</div>
-          <div class="stat-card-sublabel">Specialists</div>
-        </div>
-      </div>
-      <div class="stat-card stat-purple">
-        <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L3 3v6.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.82 0l4.6-4.6a2 2 0 0 0 0-2.82z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></div>
-        <div>
-          <div class="stat-card-value" id="stat-specialties">0</div>
-          <div class="stat-card-label">Specialties</div>
-          <div class="stat-card-sublabel">Areas of expertise</div>
-        </div>
-      </div>
+    <!-- Summary stat cards removed from view (Greg, 8/19/26) -- "reduce
+         summary reports" -- but renderStats() still computes these counts
+         each render, so the value holders stay in the DOM (hidden) rather
+         than being deleted, in case the cards come back later. -->
+    <div style="display:none;">
+      <span id="stat-total">0</span>
+      <span id="stat-leads">0</span>
+      <span id="stat-specialists">0</span>
+      <span id="stat-specialties">0</span>
     </div>
 
     <div class="workload-card hidden" id="workload-section">
@@ -630,7 +594,7 @@
     <h3 style="margin:0 0 4px; font-size:16.5px;">Add Team Member</h3>
     <div style="font-size:12.5px; color:var(--muted); margin-bottom:6px;">Creates a login account (no email is sent) and their directory profile in one step.</div>
     <form id="add-form">
-      <label for="add-name">Full Name</label>
+      <label for="add-name">Name</label>
       <input type="text" id="add-name" required />
 
       <label for="add-email">Email</label>
@@ -748,13 +712,16 @@
   // kept, since a person's account role and what they're capable of on a
   // given engagement aren't the same thing -- an Admin-role account can
   // still be Team Lead on one engagement and Digital Marketing on another.
+  // Quality Control removed from this catalog (Greg, 8/19/26) -- it's no
+  // longer shown as a role/specialty on the Team Directory. Anyone still
+  // tagged quality_control in the database keeps that row (harmless,
+  // just won't render a matching chip label) -- no data was touched.
   const SPECIALTY_LABELS = {
     team_lead: "Team Lead",
     market_research: "Market Research",
     digital_marketing: "Digital Marketing",
     gis: "GIS",
     watering_holes: "Watering Holes",
-    quality_control: "Quality Control",
   };
   const ROLE_LABELS = { super_admin: "Admin", team_lead: "Team Lead", consultant: "Specialist" };
 
@@ -798,7 +765,6 @@
   let openProfileId = null;
   let roleFilter = "all"; // all | team_lead | consultant
   let specialtyFilter = "all"; // all | <specialty key>
-  let openManageId = null; // which row's "Manage" dropdown is open (one at a time)
 
   // The full Specialty catalog -- also doubles as the fixed "N Specialties"
   // count in the summary row, so that number doesn't wobble based on who
@@ -1092,17 +1058,7 @@
       $("filter-dropdown").classList.remove("open");
       $("import-dropdown").classList.remove("open");
     }
-    if (!e.target.closest(".manage-dropdown") && !e.target.closest("[data-toggle-manage]")) {
-      if (openManageId) { openManageId = null; renderList(); }
-    }
   });
-
-  // The dropdown is position:fixed relative to the viewport, so it won't
-  // track the button if the page scrolls while it's open -- just close it
-  // instead of trying to keep it glued in place.
-  window.addEventListener("scroll", () => {
-    if (openManageId) { openManageId = null; renderList(); }
-  }, true);
 
   // ---------- Auth ----------
   $("change-password-btn").addEventListener("click", () => {
@@ -1240,7 +1196,6 @@
   window.openDelete = function (id) {
     const u = allUsers.find((x) => x.id === id);
     if (!u || !isSuperAdmin) return;
-    openManageId = null;
     pendingDeleteId = id;
     $("delete-name").textContent = u.full_name;
     $("delete-error").style.display = "none";
@@ -1312,10 +1267,27 @@
   // flip to descending. Blank values (e.g. no Title set) always sort to the
   // bottom regardless of direction, so sorting never buries real data under
   // a wall of dashes.
-  let sortField = "name";
+  // Default sort matches the National Team Roster's grouping (Greg,
+  // 8/19/26): Team Leads first, then Market Research, Digital Marketing,
+  // GIS, Watering Holes, then everyone else. Clicking a column header (see
+  // below) switches away from this to a normal alphabetical sort on that
+  // column; there's no header for "roster" itself, so it's only ever the
+  // starting view.
+  const ROSTER_GROUP_ORDER = ["market_research", "digital_marketing", "gis", "watering_holes"];
+  function rosterRank(u) {
+    if (u.role === "team_lead") return 1;
+    const specialties = u.specialties || [];
+    for (let i = 0; i < ROSTER_GROUP_ORDER.length; i++) {
+      if (specialties.includes(ROSTER_GROUP_ORDER[i])) return i + 2;
+    }
+    return ROSTER_GROUP_ORDER.length + 2;
+  }
+
+  let sortField = "roster";
   let sortDir = 1; // 1 = A→Z, -1 = Z→A
 
   function sortValue(u, field) {
+    if (field === "roster") return rosterRank(u);
     if (field === "name") return (u.full_name || "").toLowerCase();
     if (field === "specialty") return specialtiesSortValue(u);
     if (field === "role") return (ROLE_LABELS[u.role] || u.role || "").toLowerCase();
@@ -1329,7 +1301,11 @@
       if (!va && vb) return 1;
       if (va && !vb) return -1;
       if (!va && !vb) return 0;
-      return va < vb ? -1 * sortDir : va > vb ? 1 * sortDir : 0;
+      if (va < vb) return -1 * sortDir;
+      if (va > vb) return 1 * sortDir;
+      // Tie-break alphabetically by name so people within the same roster
+      // group (e.g. all Team Leads) still land in a stable, readable order.
+      return (a.full_name || "").toLowerCase().localeCompare((b.full_name || "").toLowerCase());
     });
   }
 
@@ -1418,7 +1394,7 @@
       return `
         <tr>
           <td>${escapeHtml(r.name)}</td>
-          <td>${r.count} / ${TEAM_LEAD_CAP}</td>
+          <td>${r.count}</td>
           <td><span class="workload-count-pill wl-${tier}">${label}</span></td>
         </tr>
       `;
@@ -1451,16 +1427,13 @@
       const tr = document.createElement("tr");
       const canEditThis = isSuperAdmin || u.id === currentUser.id;
       const phoneDisplay = formatPhoneDisplay(u.phone);
-      const isManageOpen = openManageId === u.id;
 
+      // Manage dropdown replaced (Greg, 8/19/26) with a plain Edit button
+      // plus a minimal delete icon, matching the Programs page pattern.
       const actionsCell = isSuperAdmin
         ? `
-          <button type="button" class="btn-secondary btn-sm manage-btn" data-toggle-manage="${u.id}">Manage &#9662;</button>
-          <div class="manage-dropdown ${isManageOpen ? "open" : ""}">
-            <button type="button" onclick="openProfile('${u.id}')">Edit</button>
-            <div class="menu-divider"></div>
-            <button type="button" class="danger-item" onclick="openDelete('${u.id}')">Delete</button>
-          </div>
+          <button type="button" class="btn-secondary btn-sm" onclick="openProfile('${u.id}')">Edit</button>
+          <button type="button" class="delete-row-btn" onclick="openDelete('${u.id}')" title="Delete">&times;</button>
         `
         : `<button class="btn-secondary btn-sm" onclick="openProfile('${u.id}')">${canEditThis ? "Edit" : "View"}</button>`;
 
@@ -1483,42 +1456,6 @@
         <td class="actions">${actionsCell}</td>
       `;
       tbody.appendChild(tr);
-    }
-
-    if (isSuperAdmin) {
-      tbody.querySelectorAll("[data-toggle-manage]").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const id = btn.dataset.toggleManage;
-          openManageId = openManageId === id ? null : id;
-          renderList();
-        });
-      });
-    }
-
-    positionOpenManageDropdown();
-  }
-
-  // The dropdown is position:fixed (see .manage-dropdown CSS comment) so
-  // it isn't clipped by the table's own overflow -- but that means its
-  // coordinates have to be set here in JS relative to the trigger button,
-  // instead of just "top: 100%" in CSS. Flips upward automatically when
-  // there isn't room below (e.g. the last row or two in the table).
-  function positionOpenManageDropdown() {
-    if (!openManageId) return;
-    const btn = document.querySelector(`[data-toggle-manage="${openManageId}"]`);
-    const dropdown = document.querySelector(".manage-dropdown.open");
-    if (!btn || !dropdown) return;
-    const rect = btn.getBoundingClientRect();
-    const dropdownHeight = dropdown.offsetHeight;
-    const openUpward = window.innerHeight - rect.bottom < dropdownHeight + 10 && rect.top > dropdownHeight;
-    dropdown.style.right = Math.max(8, window.innerWidth - rect.right) + "px";
-    if (openUpward) {
-      dropdown.style.top = "";
-      dropdown.style.bottom = (window.innerHeight - rect.top + 4) + "px";
-    } else {
-      dropdown.style.bottom = "";
-      dropdown.style.top = (rect.bottom + 4) + "px";
     }
   }
 
@@ -1714,7 +1651,7 @@
   // Rules: one email can have multiple specialties). This priority order
   // is only used to pick ONE representative specialty for the auto-filled
   // Title and the Team-Lead role-upgrade check below, not to drop the rest.
-  const SPECIALTY_PRIORITY = ["team_lead", "market_research", "digital_marketing", "gis", "watering_holes", "quality_control"];
+  const SPECIALTY_PRIORITY = ["team_lead", "market_research", "digital_marketing", "gis", "watering_holes"];
 
   function normalizePosition(pos) {
     return (pos || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -1988,7 +1925,6 @@
   function openProfile(id) {
     const u = allUsers.find((x) => x.id === id);
     if (!u) return;
-    openManageId = null;
     openProfileId = id;
 
     const canEdit = isSuperAdmin || u.id === currentUser.id;
