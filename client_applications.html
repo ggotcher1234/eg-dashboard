@@ -601,6 +601,11 @@
                   <div class="field-hint" style="margin-top:5px;">Choose the program this engagement is part of.</div>
                 </div>
                 <div class="field">
+                  <label>Program Contact</label>
+                  <select id="f-program-contact"><option value="">Select a program first…</option></select>
+                  <div class="field-hint" style="margin-top:5px;">Who at this program should EG coordinate with on this engagement?</div>
+                </div>
+                <div class="field">
                   <label>Website</label>
                   <input type="url" id="f-website" placeholder="https://www.example.com" />
                 </div>
@@ -991,6 +996,7 @@
   let allApplications = [];
   let allPartners = [];
   let allUsers = [];
+  let allPartnerContacts = [];
   let clientsByApp = {};   // application id -> { id, status, project_status } for accepted applications
   let activeTab = "all"; // default filter when this page opens — may change later
   let reviewingAppId = null;
@@ -1206,7 +1212,7 @@
       document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.status === statusParam));
     }
 
-    await Promise.all([loadPartners(), loadUsers(), loadDrafts()]);
+    await Promise.all([loadPartners(), loadUsers(), loadPartnerContacts(), loadDrafts()]);
     await loadApplications();
 
     // Deep link from Client Workspace's "View Application Info" link —
@@ -1245,6 +1251,33 @@
     sel.innerHTML = '<option value="">Select an EG program…</option>' +
       allPartners.map((p) => `<option value="${p.id}">${escapeHtml(p.code)} — ${escapeHtml(p.name)}</option>`).join("");
   }
+
+  async function loadPartnerContacts() {
+    const { data, error } = await sb.from("econ_dev_partner_contacts").select("*").eq("active", true).order("sort_order");
+    if (error) { showBanner("Couldn't load program contacts: " + error.message, "error"); return; }
+    allPartnerContacts = data;
+  }
+
+  // Rebuilds the Program Contact dropdown to only show contacts for the
+  // currently selected EG Program -- keeps the current selection if it's
+  // still valid for that program, otherwise resets to blank rather than
+  // silently keeping a contact from a different program selected.
+  function refreshProgramContactOptions() {
+    const partnerId = $("f-econ-dev").value;
+    const sel = $("f-program-contact");
+    const prevValue = sel.value;
+    if (!partnerId) {
+      sel.innerHTML = `<option value="">Select a program first…</option>`;
+      return;
+    }
+    const contacts = allPartnerContacts.filter((c) => c.partner_id === partnerId);
+    sel.innerHTML = `<option value="">Unspecified</option>` +
+      (contacts.length
+        ? contacts.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}${c.title ? " — " + escapeHtml(c.title) : ""}</option>`).join("")
+        : `<option value="" disabled>(no contacts on file for this program yet — add one in Programs)</option>`);
+    if (contacts.some((c) => c.id === prevValue)) sel.value = prevValue;
+  }
+  $("f-econ-dev").addEventListener("change", refreshProgramContactOptions);
 
   async function loadUsers() {
     const { data, error } = await sb.from("users").select("id, full_name, role").order("full_name");
@@ -1586,14 +1619,11 @@
 
   function wizGoToStep(n) {
     if (n < 1 || n > WIZARD_STEPS.length) return;
-    // Only step 1's two required fields gate forward progress -- everything
-    // past that is optional, so there's nothing else worth blocking on.
-    if (n > wizStep && wizStep === 1) {
-      if (!$("f-company-name").value.trim() || !$("f-econ-dev").value || !$("f-is-private").value) {
-        showBanner("Engagement Name, EG Program, and Ownership are required before continuing.", "error");
-        return;
-      }
-    }
+    // An Admin can move freely between every section in any order (Greg,
+    // 8/18/26) -- nothing here blocks forward/backward navigation. Draft
+    // saves are unrestricted too; the only gate left is on final Submit
+    // (see the "new-app-form" submit handler below), which is where it
+    // actually matters that the record is complete.
     wizStep = n;
     document.querySelectorAll(".wizard-panel").forEach((panel) => {
       panel.classList.toggle("hidden", Number(panel.dataset.step) !== wizStep);
@@ -1618,6 +1648,8 @@
 
     const partnerSel = $("f-econ-dev");
     const partnerLabel = partnerSel.value ? partnerSel.options[partnerSel.selectedIndex].textContent : "";
+    const contactSel = $("f-program-contact");
+    const programContactLabel = contactSel.value ? contactSel.options[contactSel.selectedIndex].textContent : "";
     const ownership = $("f-is-private").value === "" ? "" : ($("f-is-private").value === "true" ? "Private" : "Public");
 
     const contactBlock = (label, prefix, hasTemperament) => {
@@ -1649,6 +1681,7 @@
           ${reviewGrid([
             reviewItem("Engagement Name", val("f-company-name")),
             reviewItem("EG Program", partnerLabel),
+            reviewItem("Program Contact", programContactLabel),
             reviewItem("Website", val("f-website")),
             reviewItem("Phone", val("f-phone")),
             reviewItem("Year Founded", val("f-year-founded")),
@@ -1731,6 +1764,12 @@
     wizStep = 1;
     currentDraftId = draft ? draft.id : null;
     if (draft) wizRestore(draft.data);
+    // f-program-contact's options only exist for whichever program is
+    // selected, so the generic wizRestore() pass above couldn't select a
+    // saved value yet -- rebuild the list now that f-econ-dev is set, then
+    // re-apply it.
+    refreshProgramContactOptions();
+    if (draft && draft.data && draft.data["f-program-contact"]) $("f-program-contact").value = draft.data["f-program-contact"];
 
     document.querySelectorAll(".wizard-panel").forEach((panel) => {
       panel.classList.toggle("hidden", Number(panel.dataset.step) !== 1);
@@ -1758,12 +1797,6 @@
 
     const companyName = $("f-company-name").value.trim();
     const econDevId = $("f-econ-dev").value;
-    if (!companyName || !econDevId) {
-      showBanner("Engagement Name and EG Program are required.", "error");
-      wizGoToStep(1);
-      return;
-    }
-
     const address = {
       street: $("f-street").value.trim() || undefined,
       city: $("f-city").value.trim() || undefined,
@@ -1772,6 +1805,17 @@
       county: $("f-county").value.trim() || undefined,
     };
     const hasAddress = Object.values(address).some((v) => v);
+
+    // Free navigation between steps means this is the one real gate left in
+    // the whole wizard (Greg, 8/18/26): a draft can be saved with nothing
+    // filled in, but Submit needs a company name, an address, and an EG
+    // Program -- the minimum a Team Lead needs to actually work the account.
+    if (!companyName || !econDevId || !hasAddress) {
+      const missing = [!companyName && "Engagement Name", !hasAddress && "an Address", !econDevId && "EG Program"].filter(Boolean).join(", ");
+      showBanner(`${missing} required before submitting.`, "error");
+      wizGoToStep(!companyName || !econDevId ? 1 : 2);
+      return;
+    }
 
     const toLines = (id) => {
       const raw = $(id).value.trim();
@@ -1788,6 +1832,7 @@
     const payload = {
       organization_id: currentUser.organization_id,
       econ_dev_company_id: econDevId,
+      program_contact_id: $("f-program-contact").value || null,
       company_name: companyName,
       address: hasAddress ? address : null,
       phone: $("f-phone").value.trim() || null,
