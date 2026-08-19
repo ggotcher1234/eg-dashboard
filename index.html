@@ -465,6 +465,36 @@
   .quicklink-compact .ql-icon svg { width: 16px; height: 16px; }
   .quicklink-compact .ql-title { font-size: 13px; }
   .quicklink-compact .ql-sub { font-size: 11.5px; }
+
+  /* ---------- Create Invoice ---------- */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 95; padding: 24px; }
+  .overlay.open { display: flex; }
+  .inv-modal { background: #fff; border-radius: 12px; width: 720px; max-width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 16px 40px rgba(0,0,0,0.22); }
+  .inv-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: #fff; z-index: 2; }
+  .inv-modal-header h3 { margin: 0; font-size: 17px; }
+  .inv-modal-close { background: none; border: none; font-size: 20px; line-height: 1; color: var(--muted); cursor: pointer; padding: 4px; }
+  .inv-modal-body { padding: 22px 24px; }
+  .inv-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+  .inv-field { flex: 1; min-width: 150px; }
+  .inv-field label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 4px; }
+  .inv-field input, .inv-field select { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; font-size: 13.5px; font-family: inherit; }
+  .inv-field input:focus, .inv-field select:focus { outline: none; border-color: var(--navy-light); }
+  .inv-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin: 20px 0 8px; }
+  .inv-billfrom, .inv-billto { background: #f8fafb; border-radius: 8px; padding: 12px 14px; }
+  .inv-lines-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  .inv-lines-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); padding: 6px 6px; border-bottom: 1px solid var(--border); }
+  .inv-lines-table td { padding: 6px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .inv-lines-table td.inv-amt { text-align: right; font-weight: 600; white-space: nowrap; }
+  .inv-lines-table input { width: 100%; padding: 6px 7px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; font-family: inherit; }
+  .inv-lines-table input.inv-qty, .inv-lines-table input.inv-rate { width: 64px; text-align: right; }
+  .inv-line-del { background: none; border: none; color: var(--danger-dark); cursor: pointer; font-size: 15px; padding: 2px 4px; }
+  .inv-total-row { display: flex; justify-content: flex-end; gap: 18px; padding: 12px 6px 0; font-size: 15px; font-weight: 700; color: var(--navy); }
+  .inv-add-line { margin-top: 8px; }
+  .inv-hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .inv-actions { display: flex; gap: 10px; flex-wrap: wrap; padding: 16px 24px; border-top: 1px solid var(--border); position: sticky; bottom: 0; background: #fff; }
+  .inv-actions .spacer { flex: 1; }
+  .inv-status { font-size: 12.5px; color: var(--accent-dark); align-self: center; }
+  .inv-status.error { color: var(--danger-dark); }
 </style>
 </head>
 <body>
@@ -730,6 +760,91 @@
       </div>
     </div>
   </main>
+</div>
+
+<!-- Create Invoice -->
+<div class="overlay" id="inv-overlay">
+  <div class="inv-modal">
+    <div class="inv-modal-header">
+      <h3>Create Invoice</h3>
+      <button type="button" class="inv-modal-close" id="inv-close">&times;</button>
+    </div>
+    <div class="inv-modal-body">
+      <div class="inv-row">
+        <div class="inv-field">
+          <label for="inv-month">Month</label>
+          <select id="inv-month"></select>
+        </div>
+        <div class="inv-field">
+          <label for="inv-number">Invoice no.</label>
+          <input type="text" id="inv-number" />
+        </div>
+        <div class="inv-field">
+          <label for="inv-date">Invoice date</label>
+          <input type="date" id="inv-date" />
+        </div>
+        <div class="inv-field">
+          <label for="inv-due">Due date</label>
+          <input type="date" id="inv-due" />
+        </div>
+        <div class="inv-field">
+          <label for="inv-terms">Terms</label>
+          <input type="text" id="inv-terms" value="Due on receipt" />
+        </div>
+      </div>
+
+      <div class="inv-row" style="margin-bottom:6px;">
+        <div class="inv-field" style="flex:1 1 100%;">
+          <div class="inv-section-label" style="margin-top:0;">From</div>
+          <div class="inv-billfrom">
+            <div class="inv-row" style="margin-bottom:8px;">
+              <div class="inv-field"><label for="inv-from-name">Business name</label><input type="text" id="inv-from-name" /></div>
+              <div class="inv-field"><label for="inv-from-dba">DBA / tagline <span style="text-transform:none; font-weight:400;">(optional)</span></label><input type="text" id="inv-from-dba" /></div>
+            </div>
+            <div class="inv-row" style="margin-bottom:8px;">
+              <div class="inv-field" style="flex:1 1 100%;"><label for="inv-from-address">Address</label><input type="text" id="inv-from-address" /></div>
+            </div>
+            <div class="inv-row" style="margin-bottom:0;">
+              <div class="inv-field"><label for="inv-from-email">Email</label><input type="text" id="inv-from-email" /></div>
+              <div class="inv-field"><label for="inv-from-phone">Phone</label><input type="text" id="inv-from-phone" /></div>
+              <div class="inv-field"><label for="inv-from-website">Website</label><input type="text" id="inv-from-website" /></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="inv-row" style="margin-bottom:6px;">
+        <div class="inv-field" style="flex:1 1 100%;">
+          <div class="inv-section-label" style="margin-top:0;">Bill to</div>
+          <div class="inv-billto">
+            <input type="text" id="inv-to" style="border:none; background:transparent; padding:0; width:100%; font-size:13.5px;" />
+          </div>
+        </div>
+      </div>
+
+      <div class="inv-section-label">Line items</div>
+      <table class="inv-lines-table">
+        <thead>
+          <tr><th>Description</th><th style="width:70px;">Hours</th><th style="width:80px;">Rate</th><th style="width:90px;">Amount</th><th style="width:24px;"></th></tr>
+        </thead>
+        <tbody id="inv-lines-body"></tbody>
+      </table>
+      <button type="button" class="btn-secondary btn-sm inv-add-line" id="inv-add-line">+ Add Line</button>
+      <div class="inv-hint" id="inv-lines-hint"></div>
+
+      <div class="inv-total-row">
+        <span>Total</span>
+        <span id="inv-total">$0.00</span>
+      </div>
+    </div>
+    <div class="inv-actions">
+      <button type="button" class="btn-secondary" id="inv-copy">Copy for Outlook</button>
+      <button type="button" class="btn-secondary" id="inv-email-rita">Email to Rita</button>
+      <span class="inv-status" id="inv-status"></span>
+      <div class="spacer"></div>
+      <button type="button" class="btn-primary" id="inv-done">Done</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -1305,11 +1420,11 @@
   }
 
   // ---------- My assignments / next steps / hours (personalization) ----------
-  let myAssignmentRows = []; // client_assignments where user_id = me: id, client_id, specialty_type, hours_allotted
+  let myAssignmentRows = []; // client_assignments where user_id = me: id, client_id, specialty_type, hours_allotted, slot_number
   async function loadMyAssignments() {
     const { data, error } = await sb
       .from("client_assignments")
-      .select("id, client_id, specialty_type, hours_allotted")
+      .select("id, client_id, specialty_type, hours_allotted, slot_number")
       .eq("user_id", currentUser.id);
     myAssignmentRows = error ? [] : (data || []);
     myClientIds = new Set(myAssignmentRows.map((r) => r.client_id));
@@ -1887,8 +2002,11 @@
     return myClientIds.size ? allClients.filter((c) => myClientIds.has(c.id)) : allClients;
   }
   function renderQuickActions() {
+    // Ask AI dropped from this list (8/18/26) -- it's still one click away
+    // via the header icon and global search, so it didn't need a seat here
+    // too. Create Invoice took its place.
     const actions = [
-      { label: "Ask AI", icon: "M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z", onClick: openAiDrawer },
+      { label: "Create Invoice", icon: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h8M8 9h2", onClick: openInvoiceModal },
     ];
     if (engagementPickerPool().length) {
       actions.push({ label: "Add Research", icon: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.35-4.35", onClick: () => toggleQaPicker("research") });
@@ -1966,6 +2084,327 @@
   document.addEventListener("click", (e) => {
     if (qaPickerOpen && !$("qa-picker").contains(e.target) && !e.target.closest('[data-qa]')) closeQaPicker();
   });
+
+  // ---------- Create Invoice ----------
+  // Gathers this specialist's own logged hours for a chosen month, grouped
+  // by engagement + role (same "Role N" convention as invoicing_report.html
+  // and the Assignments table), at the org's hourly_rate. Greg fills in his
+  // own letterhead once -- it's remembered in localStorage for next time,
+  // same pattern as RECENTS_KEY above. Rita's email is resolved live from
+  // the users table rather than hardcoded, so it stays correct if she ever
+  // changes. (8/18/26, replacing "Ask AI" in Quick Actions.)
+  const INV_STORAGE_KEY = "eg_invoice_prefs";
+  let invLines = [];
+  let invRitaEmail = "";
+
+  function loadInvoicePrefs() {
+    try { return JSON.parse(localStorage.getItem(INV_STORAGE_KEY)) || {}; } catch { return {}; }
+  }
+  function saveInvoicePrefs(patch) {
+    const prefs = loadInvoicePrefs();
+    Object.assign(prefs, patch);
+    localStorage.setItem(INV_STORAGE_KEY, JSON.stringify(prefs));
+  }
+
+  function invMonthOptions() {
+    const opts = [];
+    const now = new Date();
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      opts.push({
+        value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+        label: d.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+      });
+    }
+    return opts;
+  }
+  function invoiceMonthLabel(monthKey) {
+    const [y, m] = monthKey.split("-").map(Number);
+    return new Date(y, m - 1, 2).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+  function money(n) {
+    return "$" + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  async function openInvoiceModal() {
+    const prefs = loadInvoicePrefs();
+    const today = new Date().toISOString().slice(0, 10);
+    const monthOpts = invMonthOptions();
+
+    $("inv-month").innerHTML = monthOpts.map((o) => `<option value="${o.value}">${o.label}</option>`).join("");
+    $("inv-month").value = monthOpts[0].value;
+
+    $("inv-number").value = prefs.nextNumber || `INV-${monthOpts[0].value.replace("-", "")}-01`;
+    $("inv-date").value = today;
+    $("inv-due").value = today;
+    $("inv-terms").value = prefs.terms || "Due on receipt";
+
+    // "From" letterhead: seeded once from Greg's own reference invoice, then
+    // whatever he last saved. Everything here is a plain editable field --
+    // nothing here is guessed beyond the business/bill-to names he gave us.
+    $("inv-from-name").value = prefs.fromName ?? "Esplanade Group, LLC";
+    $("inv-from-dba").value = prefs.fromDba ?? "";
+    $("inv-from-address").value = prefs.fromAddress ?? "";
+    $("inv-from-email").value = prefs.fromEmail ?? "";
+    $("inv-from-phone").value = prefs.fromPhone ?? "";
+    $("inv-from-website").value = prefs.fromWebsite ?? "";
+
+    $("inv-to").value = prefs.billTo ?? "National Center for Economic Gardening";
+
+    $("inv-status").textContent = "";
+    $("inv-status").classList.remove("error");
+    $("inv-email-rita").disabled = true;
+    $("inv-overlay").classList.add("open");
+
+    await buildInvoiceLines($("inv-month").value);
+    lookupRitaEmail();
+  }
+
+  $("inv-month").addEventListener("change", () => buildInvoiceLines($("inv-month").value));
+
+  async function buildInvoiceLines(monthKey) {
+    $("inv-lines-hint").textContent = "Loading hours…";
+    const [y, m] = monthKey.split("-").map(Number);
+    const start = `${monthKey}-01`;
+    const end = `${monthKey}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+
+    const trackedRows = myAssignmentRows.filter((a) => !SUNK_COST_SPECIALTIES.includes(a.specialty_type));
+    if (!trackedRows.length) {
+      invLines = [];
+      renderInvoiceLines();
+      $("inv-lines-hint").textContent = "No billable engagements found.";
+      return;
+    }
+
+    const [rateRes, entriesRes] = await Promise.all([
+      sb.from("organization_settings").select("hourly_rate").eq("organization_id", currentUser.organization_id).single(),
+      sb.from("time_entries").select("assignment_id, hours, entry_date")
+        .in("assignment_id", trackedRows.map((a) => a.id))
+        .gte("entry_date", start).lte("entry_date", end),
+    ]);
+
+    if (entriesRes.error) {
+      invLines = [];
+      renderInvoiceLines();
+      $("inv-lines-hint").textContent = "Couldn't load hours: " + entriesRes.error.message;
+      return;
+    }
+
+    const rate = rateRes.error ? 95 : Number(rateRes.data.hourly_rate) || 95;
+    const hoursByAssignment = {};
+    for (const e of entriesRes.data) {
+      hoursByAssignment[e.assignment_id] = (hoursByAssignment[e.assignment_id] || 0) + Number(e.hours);
+    }
+    const clientsById = {};
+    for (const c of allClients) clientsById[c.id] = c;
+
+    invLines = trackedRows
+      .filter((a) => hoursByAssignment[a.id] > 0)
+      .map((a) => {
+        const client = clientsById[a.client_id];
+        // Same "Role N" convention as invoicing_report.html / the
+        // Assignments table -- only appends the slot number when there's
+        // more than one of that specialty on the engagement.
+        const roleLabel = (SPECIALTY_LABELS[a.specialty_type] || a.specialty_type) + (a.slot_number > 1 ? " " + a.slot_number : "");
+        const hours = round2(hoursByAssignment[a.id]);
+        return {
+          description: `${client ? client.name : "Unknown engagement"} — ${roleLabel}`,
+          hours,
+          rate,
+          amount: round2(hours * rate),
+        };
+      })
+      .sort((a, b) => a.description.localeCompare(b.description));
+
+    renderInvoiceLines();
+    $("inv-lines-hint").textContent = invLines.length ? "" : "No hours logged for this month yet.";
+  }
+
+  function renderInvoiceLines() {
+    $("inv-lines-body").innerHTML = invLines.map((l, i) => `
+      <tr data-line="${i}">
+        <td><input type="text" class="inv-desc" value="${escapeHtml(l.description)}" /></td>
+        <td><input type="number" step="0.25" min="0" class="inv-qty" value="${l.hours}" /></td>
+        <td><input type="number" step="0.01" min="0" class="inv-rate" value="${l.rate}" /></td>
+        <td class="inv-amt">${money(l.amount)}</td>
+        <td><button type="button" class="inv-line-del" data-del="${i}" title="Remove line">&times;</button></td>
+      </tr>
+    `).join("");
+
+    $("inv-lines-body").querySelectorAll("tr").forEach((row) => {
+      const i = Number(row.dataset.line);
+      row.querySelector(".inv-desc").addEventListener("input", (e) => { invLines[i].description = e.target.value; });
+      row.querySelector(".inv-qty").addEventListener("input", (e) => { invLines[i].hours = Number(e.target.value) || 0; refreshLineAmount(i); });
+      row.querySelector(".inv-rate").addEventListener("input", (e) => { invLines[i].rate = Number(e.target.value) || 0; refreshLineAmount(i); });
+    });
+    $("inv-lines-body").querySelectorAll("[data-del]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        invLines.splice(Number(btn.dataset.del), 1);
+        renderInvoiceLines();
+      });
+    });
+
+    updateInvoiceTotal();
+  }
+
+  function refreshLineAmount(i) {
+    invLines[i].amount = round2(invLines[i].hours * invLines[i].rate);
+    const row = $("inv-lines-body").querySelector(`tr[data-line="${i}"]`);
+    if (row) row.querySelector(".inv-amt").textContent = money(invLines[i].amount);
+    updateInvoiceTotal();
+  }
+
+  function updateInvoiceTotal() {
+    const total = invLines.reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
+    $("inv-total").textContent = money(round2(total));
+  }
+
+  $("inv-add-line").addEventListener("click", () => {
+    invLines.push({ description: "", hours: 0, rate: invLines[0]?.rate ?? 95, amount: 0 });
+    renderInvoiceLines();
+  });
+
+  // Never guessed or hardcoded -- looked up live so it can't go stale if
+  // Rita's account ever changes. Button stays disabled unless exactly one
+  // match comes back.
+  async function lookupRitaEmail() {
+    invRitaEmail = "";
+    $("inv-email-rita").disabled = true;
+    const { data, error } = await sb.from("users").select("id, full_name, email").ilike("full_name", "Rita%");
+    if (!error && data && data.length === 1 && data[0].email) {
+      invRitaEmail = data[0].email;
+      $("inv-email-rita").disabled = false;
+    }
+  }
+
+  function buildInvoicePlainText() {
+    const fromName = $("inv-from-name").value.trim();
+    const fromDba = $("inv-from-dba").value.trim();
+    const fromAddress = $("inv-from-address").value.trim();
+    const contactBits = [$("inv-from-email").value.trim(), $("inv-from-phone").value.trim(), $("inv-from-website").value.trim()].filter(Boolean);
+
+    const lines = [fromName];
+    if (fromDba) lines.push(fromDba);
+    if (fromAddress) lines.push(fromAddress);
+    if (contactBits.length) lines.push(contactBits.join(" · "));
+    lines.push("");
+    lines.push(`Invoice #: ${$("inv-number").value.trim()}`);
+    lines.push(`Invoice date: ${$("inv-date").value}`);
+    lines.push(`Due date: ${$("inv-due").value}`);
+    lines.push(`Terms: ${$("inv-terms").value.trim()}`);
+    lines.push("");
+    lines.push(`Bill to: ${$("inv-to").value.trim()}`);
+    lines.push(`For: ${invoiceMonthLabel($("inv-month").value)}`);
+    lines.push("");
+    lines.push("Description\tHours\tRate\tAmount");
+    for (const l of invLines) lines.push(`${l.description}\t${l.hours}\t${money(l.rate)}\t${money(l.amount)}`);
+    lines.push("");
+    lines.push(`Total: ${$("inv-total").textContent}`);
+    return lines.join("\n");
+  }
+
+  function buildInvoiceHtml() {
+    const fromName = escapeHtml($("inv-from-name").value.trim());
+    const fromDba = escapeHtml($("inv-from-dba").value.trim());
+    const fromAddress = escapeHtml($("inv-from-address").value.trim());
+    const contactBits = [$("inv-from-email").value.trim(), $("inv-from-phone").value.trim(), $("inv-from-website").value.trim()]
+      .filter(Boolean).map(escapeHtml).join(" &middot; ");
+    const billTo = escapeHtml($("inv-to").value.trim());
+
+    const rows = invLines.map((l) => `
+      <tr>
+        <td style="padding:6px 10px; border-bottom:1px solid #e5e7eb;">${escapeHtml(l.description)}</td>
+        <td style="padding:6px 10px; border-bottom:1px solid #e5e7eb; text-align:right;">${l.hours}</td>
+        <td style="padding:6px 10px; border-bottom:1px solid #e5e7eb; text-align:right;">${money(l.rate)}</td>
+        <td style="padding:6px 10px; border-bottom:1px solid #e5e7eb; text-align:right;">${money(l.amount)}</td>
+      </tr>
+    `).join("");
+
+    return `
+      <div style="font-family:Arial,Helvetica,sans-serif; font-size:13px; color:#1f2937; max-width:640px;">
+        <div style="font-size:16px; font-weight:700;">${fromName}</div>
+        ${fromDba ? `<div>${fromDba}</div>` : ""}
+        ${fromAddress ? `<div>${fromAddress}</div>` : ""}
+        ${contactBits ? `<div>${contactBits}</div>` : ""}
+        <div style="height:14px;"></div>
+        <table style="border-collapse:collapse;">
+          <tr><td style="padding:2px 10px 2px 0; color:#6b7280;">Invoice #</td><td>${escapeHtml($("inv-number").value.trim())}</td></tr>
+          <tr><td style="padding:2px 10px 2px 0; color:#6b7280;">Invoice date</td><td>${$("inv-date").value}</td></tr>
+          <tr><td style="padding:2px 10px 2px 0; color:#6b7280;">Due date</td><td>${$("inv-due").value}</td></tr>
+          <tr><td style="padding:2px 10px 2px 0; color:#6b7280;">Terms</td><td>${escapeHtml($("inv-terms").value.trim())}</td></tr>
+        </table>
+        <div style="height:14px;"></div>
+        <div><strong>Bill to:</strong> ${billTo}</div>
+        <div><strong>For:</strong> ${escapeHtml(invoiceMonthLabel($("inv-month").value))}</div>
+        <div style="height:14px;"></div>
+        <table style="border-collapse:collapse; width:100%;">
+          <thead>
+            <tr style="text-align:left; border-bottom:2px solid #1f2937;">
+              <th style="padding:6px 10px;">Description</th>
+              <th style="padding:6px 10px; text-align:right;">Hours</th>
+              <th style="padding:6px 10px; text-align:right;">Rate</th>
+              <th style="padding:6px 10px; text-align:right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div style="text-align:right; font-weight:700; font-size:14px; padding:10px 10px 0 0;">Total: ${$("inv-total").textContent}</div>
+      </div>
+    `;
+  }
+
+  // Remembers the letterhead + bumps the invoice number so next month's
+  // invoice starts pre-filled -- fires on Copy or Email, i.e. whenever the
+  // invoice actually goes out, not just on Save/Close.
+  function persistInvoicePrefsOnSend() {
+    const current = $("inv-number").value.trim();
+    const bumped = current.replace(/(\d+)(?!.*\d)/, (match) => String(Number(match) + 1).padStart(match.length, "0"));
+    saveInvoicePrefs({
+      fromName: $("inv-from-name").value.trim(),
+      fromDba: $("inv-from-dba").value.trim(),
+      fromAddress: $("inv-from-address").value.trim(),
+      fromEmail: $("inv-from-email").value.trim(),
+      fromPhone: $("inv-from-phone").value.trim(),
+      fromWebsite: $("inv-from-website").value.trim(),
+      billTo: $("inv-to").value.trim(),
+      terms: $("inv-terms").value.trim(),
+      nextNumber: bumped || current,
+    });
+  }
+
+  $("inv-copy").addEventListener("click", async () => {
+    const text = buildInvoicePlainText();
+    const html = buildInvoiceHtml();
+    try {
+      if (window.ClipboardItem) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": new Blob([text], { type: "text/plain" }),
+            "text/html": new Blob([html], { type: "text/html" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
+      persistInvoicePrefsOnSend();
+      $("inv-status").classList.remove("error");
+      $("inv-status").textContent = "Copied — paste into Outlook.";
+    } catch (err) {
+      $("inv-status").classList.add("error");
+      $("inv-status").textContent = "Couldn't copy: " + err.message;
+    }
+  });
+
+  $("inv-email-rita").addEventListener("click", () => {
+    if (!invRitaEmail) return;
+    const subject = `Invoice ${$("inv-number").value.trim()} — ${invoiceMonthLabel($("inv-month").value)}`;
+    persistInvoicePrefsOnSend();
+    window.location.href = `mailto:${encodeURIComponent(invRitaEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(buildInvoicePlainText())}`;
+  });
+
+  $("inv-close").addEventListener("click", () => $("inv-overlay").classList.remove("open"));
+  $("inv-done").addEventListener("click", () => $("inv-overlay").classList.remove("open"));
+  $("inv-overlay").addEventListener("click", (e) => { if (e.target.id === "inv-overlay") $("inv-overlay").classList.remove("open"); });
 
 </script>
 </body>
