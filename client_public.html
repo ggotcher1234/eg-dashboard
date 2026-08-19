@@ -398,10 +398,16 @@
   }
 
   function renderDocLinks(docs) {
-    if (!docs || !docs.length) return `<div class="rc-empty">No files shared yet.</div>`;
+    // Postgres's jsonb_agg() over a correlated subquery with zero matching
+    // rows can come back as a literal JSON null inside the array in some
+    // edge cases (rather than an empty array) -- filter(Boolean) guards
+    // against that so one null entry doesn't crash the whole page (Greg,
+    // 8/19/26 -- this was hanging the Clippard dashboard on "Loading...").
+    const clean = (docs || []).filter(Boolean);
+    if (!clean.length) return `<div class="rc-empty">No files shared yet.</div>`;
     // A doc is either an uploaded file (storage_path -- opens via a signed
     // URL) or a link (url -- opens directly, it isn't in our storage).
-    return docs.map((d) => d.url
+    return clean.map((d) => d.url
       ? `<a class="doc-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">&#128279; ${escapeHtml(d.file_name || d.url)}</a>`
       : `<a class="doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(d.file_name)}</a>`
     ).join("");
@@ -538,7 +544,11 @@
     });
   }
 
-  function renderActionBody(key, rows) {
+  function renderActionBody(key, rowsIn) {
+    // Defensive against a stray null landing in a jsonb_agg() array from
+    // the backend (see renderDocLinks) -- cheap insurance so one bad row
+    // never blanks out this whole section (Greg, 8/19/26).
+    const rows = (rowsIn || []).filter(Boolean);
     if (!rows.length) return `<div class="action-empty">Nothing here yet.</div>`;
     if (key === "contacts") {
       return rows.map((r) => `
@@ -631,8 +641,9 @@
   // rather than a flat file list. A legacy entry with question: null
   // (files tagged with an area before Questions existed) renders as a
   // plain file list with no heading above it.
-  function renderResearchAreaBody(entries) {
-    if (!entries || !entries.length) return `<div class="rc-empty">Nothing here yet.</div>`;
+  function renderResearchAreaBody(entriesIn) {
+    const entries = (entriesIn || []).filter(Boolean);
+    if (!entries.length) return `<div class="rc-empty">Nothing here yet.</div>`;
     return entries.map((entry) => `
       <div class="rc-question-block">
         ${entry.question ? `<div class="rc-question-title">${escapeHtml(entry.question)}</div>` : ""}
