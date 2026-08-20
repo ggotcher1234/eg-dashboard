@@ -531,7 +531,6 @@
         <tr>
           <th class="sortable" data-sort="name" id="th-name">Team Member<span class="sort-arrow"></span></th>
           <th class="sortable" data-sort="specialty" id="th-specialty" title="Sorted alphabetically by each person's combined specialty list">Specialties<span class="sort-arrow"></span></th>
-          <th class="sortable" style="width:110px;" data-sort="role" id="th-role">Role<span class="sort-arrow"></span></th>
           <th style="width:150px; white-space:nowrap;">Phone</th>
           <th>Email</th>
           <th style="width:70px;"></th>
@@ -937,6 +936,20 @@
   function specialtyLabelsForDisplay(u) {
     return (u.specialties || []).map((s) => SPECIALTY_LABELS[s] || s).sort((a, b) => a.localeCompare(b));
   }
+  // Chris's feedback (8/20/26): the roster used to show two overlapping
+  // categories per person -- a generic "Specialist" role badge, plus their
+  // actual tool (GIS, Market Research, etc.) as a separate specialty chip.
+  // Collapse those into one: Team Lead / Admin / Market Research / GIS /
+  // Digital Marketing / Watering Holes, and the word "Specialist" never
+  // shows up in the roster table again. (Team Leads already carry
+  // "team_lead" as one of their own specialties, so specialtyLabelsForDisplay
+  // already returns "Team Lead" for them -- this just also covers Admins,
+  // who have no specialties at all.)
+  function primaryCategoryLabel(u) {
+    if (u.role === "super_admin") return "Admin";
+    const labels = specialtyLabelsForDisplay(u);
+    return labels.length ? labels[0] : "";
+  }
   // Sortable/searchable flat string -- specialties joined alphabetically,
   // e.g. a person tagged Digital Marketing + GIS sorts/searches as
   // "digital marketing, gis". See renderList()'s search and sortValue()
@@ -1290,7 +1303,6 @@
     if (field === "roster") return rosterRank(u);
     if (field === "name") return (u.full_name || "").toLowerCase();
     if (field === "specialty") return specialtiesSortValue(u);
-    if (field === "role") return (ROLE_LABELS[u.role] || u.role || "").toLowerCase();
     return "";
   }
 
@@ -1310,7 +1322,7 @@
   }
 
   function updateSortIndicators() {
-    ["name", "specialty", "role"].forEach((field) => {
+    ["name", "specialty"].forEach((field) => {
       const arrow = $(`th-${field}`).querySelector(".sort-arrow");
       arrow.textContent = field === sortField ? (sortDir === 1 ? "▲" : "▼") : "";
     });
@@ -1443,12 +1455,11 @@
             <div class="avatar-sm">${u.avatar_url ? `<img src="${escapeHtml(u.avatar_url)}" alt="" />` : escapeHtml(initials(u.full_name))}</div>
             <div>
               <div class="member-name">${escapeHtml(u.full_name)}</div>
-              <div class="member-role-sub">${escapeHtml(ROLE_LABELS[u.role] || u.role)}</div>
+              <div class="member-role-sub">${escapeHtml(primaryCategoryLabel(u))}</div>
             </div>
           </div>
         </td>
         <td>${renderSpecialtyChips(u)}</td>
-        <td><span class="role-badge ${u.role}">${ROLE_LABELS[u.role] || u.role}</span></td>
         <td>${phoneDisplay
           ? `<a class="contact-link" href="${telHref(u.phone)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>${escapeHtml(phoneDisplay)}</a>`
           : '<span class="cell-muted">Not provided</span>'}</td>

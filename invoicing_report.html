@@ -594,40 +594,6 @@
 
     <div class="tab-panel-frame">
       <div class="tab-panel" id="panel-hours">
-        <div class="card alert-card" id="alert-card">
-          <div class="alert-header">
-            <div class="alert-icon" id="alert-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></div>
-            <div class="alert-header-body">
-              <h2>Budget Alerts<span class="alert-badge hidden" id="alert-badge">0</span></h2>
-              <div class="card-hint">Cumulative hours logged so far do not exceed the hours allotted — regardless of the month selected.</div>
-            </div>
-            <button type="button" class="alert-toggle hidden" id="alert-toggle-btn" title="Collapse">&#9662;</button>
-          </div>
-          <div id="alert-success-line" class="alert-success-line hidden">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-            No assignments are over budget.
-          </div>
-          <div class="alert-body" id="alert-body">
-            <div id="alert-strip-list"></div>
-            <div class="table-scroll alert-table-scroll hidden" id="alert-table-wrap">
-              <table id="overage-table">
-                <thead>
-                  <tr>
-                    <th>Specialist</th>
-                    <th>Program</th>
-                    <th>Engagement Name</th>
-                    <th>Role</th>
-                    <th class="num">Used</th>
-                    <th class="num">Budget</th>
-                    <th class="num">Over By</th>
-                  </tr>
-                </thead>
-                <tbody id="overage-tbody"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
         <div class="card">
           <h2>Hours by Specialist</h2>
           <div class="card-hint" id="month-label-hint"></div>
@@ -637,13 +603,6 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
               <input type="text" id="sp-search" placeholder="Search specialist…" autocomplete="off" />
             </div>
-            <select id="sp-program-filter"><option value="all">All Programs</option></select>
-            <select id="sp-budget-filter">
-              <option value="all">Budget Status: All</option>
-              <option value="over">Over Budget</option>
-              <option value="near">Near Budget</option>
-              <option value="within">Within Budget</option>
-            </select>
           </div>
 
           <div class="specialist-scroll" id="specialist-scroll">
@@ -652,8 +611,8 @@
                 <tr>
                   <th class="sortable-th" id="sp-sort-name">Specialist <span class="sort-icon" id="sp-sort-icon">&#9650;</span></th>
                   <th>Engagement / Role</th>
-                  <th>Hours (Month)</th>
-                  <th>Used / Budget</th>
+                  <th title="Hours logged in the selected month only.">Hours (Month)</th>
+                  <th title="Total hours logged on this engagement to date, compared against its hours budget -- not limited to the selected month.">Cumulative / Budget</th>
                   <th class="col-remaining">Remaining</th>
                 </tr>
               </thead>
@@ -1199,7 +1158,6 @@
 
     renderSpecialistSetup(rowsWithTotals.filter((r) => r.hoursThisMonth > 0));
     renderSpecialistTable();
-    renderOverage(rowsWithTotals.filter((r) => r.isOver));
     const payrollRows = renderPayrollSummary(rowsWithTotals.filter((r) => r.hoursThisMonth > 0));
     const ytdPayrollRows = renderYtdPayrollSummary(rowsWithTotals.filter((r) => r.hoursYtd > 0));
 
@@ -1294,21 +1252,10 @@
   let currentMonthRows = [];
   let specialistColorByName = {};
   let spSearch = "";
-  let spProgramFilter = "all";
-  let spBudgetFilter = "all";
   let spSortDir = "asc";
   let spPage = 1;
   let spPageSize = 15;
   const collapsedSpecialists = new Set();
-
-  function budgetStatusFor(r) {
-    if (r.isOver) return "over";
-    const pct = r.hoursAllotted > 0 ? r.cumulativeThroughMonth / r.hoursAllotted : 0;
-    // "Near budget" = 80%+ used but not yet over -- a reasonable early-warning
-    // line; nothing in the data model defines this threshold, so it's a
-    // judgment call that can be tuned later if 80% turns out too noisy.
-    return pct >= 0.8 ? "near" : "within";
-  }
 
   function renderSpecialistSetup(rows) {
     currentMonthRows = rows;
@@ -1316,29 +1263,11 @@
     const allNames = [...new Set(rows.map((r) => r.specialistName))].sort((a, b) => a.localeCompare(b));
     specialistColorByName = {};
     allNames.forEach((name, i) => { specialistColorByName[name] = colorForIndex(i); });
-
-    const programs = [...new Set(rows.map((r) => r.program).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-    const sel = $("sp-program-filter");
-    const prevValue = sel.value || "all";
-    sel.innerHTML = `<option value="all">All Programs</option>` +
-      programs.map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
-    sel.value = programs.includes(prevValue) ? prevValue : "all";
-    spProgramFilter = sel.value;
   }
 
   function wireSpecialistControls() {
     $("sp-search").addEventListener("input", () => {
       spSearch = $("sp-search").value.trim().toLowerCase();
-      spPage = 1;
-      renderSpecialistTable();
-    });
-    $("sp-program-filter").addEventListener("change", () => {
-      spProgramFilter = $("sp-program-filter").value;
-      spPage = 1;
-      renderSpecialistTable();
-    });
-    $("sp-budget-filter").addEventListener("change", () => {
-      spBudgetFilter = $("sp-budget-filter").value;
       spPage = 1;
       renderSpecialistTable();
     });
@@ -1372,8 +1301,6 @@
   function renderSpecialistTable() {
     let rows = currentMonthRows;
     if (spSearch) rows = rows.filter((r) => r.specialistName.toLowerCase().includes(spSearch));
-    if (spProgramFilter !== "all") rows = rows.filter((r) => r.program === spProgramFilter);
-    if (spBudgetFilter !== "all") rows = rows.filter((r) => budgetStatusFor(r) === spBudgetFilter);
 
     const noDataAtAll = currentMonthRows.length === 0;
     $("monthly-empty").classList.toggle("hidden", !noDataAtAll);
@@ -1472,84 +1399,6 @@
     $("sp-page-current").textContent = spPage;
     $("sp-page-prev").disabled = spPage <= 1;
     $("sp-page-next").disabled = spPage >= totalPages;
-  }
-
-  let alertsOpen = false;
-  // A handful of overages read fine as a compact strip of one-line
-  // summaries; once there are enough to need real scanning, switch to the
-  // full sortable table with its own internal scroll instead of letting it
-  // grow the page.
-  const ALERT_COMPACT_THRESHOLD = 3;
-
-  function renderOverage(rows) {
-    const hasAlerts = rows.length > 0;
-    const card = $("alert-card");
-    const toggleBtn = $("alert-toggle-btn");
-    const badge = $("alert-badge");
-    card.classList.toggle("has-alerts", hasAlerts);
-    $("alert-success-line").classList.toggle("hidden", hasAlerts);
-    toggleBtn.classList.toggle("hidden", !hasAlerts);
-    badge.classList.toggle("hidden", !hasAlerts);
-    badge.textContent = rows.length;
-
-    if (!hasAlerts) {
-      $("alert-body").classList.add("hidden");
-      return;
-    }
-
-    // Overages always start expanded (per Greg: "expand it automatically
-    // into the table") -- the toggle just lets an Admin collapse a long
-    // list back down without losing the "something needs attention" cue
-    // from the KPI card and icon above.
-    if (!toggleBtn.dataset.wired) {
-      toggleBtn.dataset.wired = "1";
-      toggleBtn.addEventListener("click", () => {
-        alertsOpen = !alertsOpen;
-        $("alert-body").classList.toggle("hidden", !alertsOpen);
-        toggleBtn.classList.toggle("open", alertsOpen);
-      });
-    }
-    $("alert-body").classList.toggle("hidden", !alertsOpen);
-    toggleBtn.classList.toggle("open", alertsOpen);
-
-    rows.sort((a, b) => a.specialistName.localeCompare(b.specialistName));
-
-    const stripWrap = $("alert-strip-list");
-    const tableWrap = $("alert-table-wrap");
-    if (rows.length <= ALERT_COMPACT_THRESHOLD) {
-      stripWrap.classList.remove("hidden");
-      tableWrap.classList.add("hidden");
-      stripWrap.innerHTML = rows.map((r) => `
-        <div class="alert-strip-row">
-          <span class="alert-strip-name">${escapeHtml(r.specialistName)}</span>
-          <span class="sep">&middot;</span>
-          <span>${escapeHtml(r.program)}</span>
-          <span class="sep">&middot;</span>
-          <span>${escapeHtml(r.client)}</span>
-          <span class="sep">&middot;</span>
-          <span>${escapeHtml(r.role)}</span>
-          <span class="sep">&middot;</span>
-          <span>${r.cumulativeThroughMonth} / ${r.hoursAllotted} hrs</span>
-          <span class="sep">&middot;</span>
-          <span class="alert-strip-over">${round2(r.cumulativeThroughMonth - r.hoursAllotted)} hrs over</span>
-        </div>
-      `).join("");
-    } else {
-      stripWrap.classList.add("hidden");
-      tableWrap.classList.remove("hidden");
-      const tbody = $("overage-tbody");
-      tbody.innerHTML = rows.map((r) => `
-        <tr class="overage-row">
-          <td>${escapeHtml(r.specialistName)}</td>
-          <td>${escapeHtml(r.program)}</td>
-          <td>${escapeHtml(r.client)}</td>
-          <td>${escapeHtml(r.role)}</td>
-          <td class="num">${r.cumulativeThroughMonth}</td>
-          <td class="num">${r.hoursAllotted}</td>
-          <td class="num">${round2(r.cumulativeThroughMonth - r.hoursAllotted)}</td>
-        </tr>
-      `).join("");
-    }
   }
 
   // One line per team member, hours from every assignment they logged time
