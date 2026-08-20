@@ -363,6 +363,12 @@
   // already display inline, so those still open directly.
   const OFFICE_VIEWER_EXTENSIONS = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
   function fileExtension(path) {
+    // Guard against null/undefined (Greg, 8/19/26) -- a link-type document
+    // has no storage_path at all, and until 059_document_url_field.sql is
+    // run this can also happen for a link whose url the backend hasn't
+    // started returning yet. Either way, path.split() on null was crashing
+    // renderDocLinks and hanging the whole dashboard on "Loading...".
+    if (!path) return "";
     const name = (path.split("/").pop() || "").toLowerCase();
     const dot = name.lastIndexOf(".");
     return dot === -1 ? "" : name.slice(dot + 1);
@@ -406,11 +412,17 @@
     const clean = (docs || []).filter(Boolean);
     if (!clean.length) return `<div class="rc-empty">No files shared yet.</div>`;
     // A doc is either an uploaded file (storage_path -- opens via a signed
-    // URL) or a link (url -- opens directly, it isn't in our storage).
-    return clean.map((d) => d.url
-      ? `<a class="doc-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">&#128279; ${escapeHtml(d.file_name || d.url)}</a>`
-      : `<a class="doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(d.file_name)}</a>`
-    ).join("");
+    // URL) or a link (url -- opens directly, it isn't in our storage). Until
+    // 059_document_url_field.sql is run, a link-type document may come back
+    // with neither field set (the backend wasn't returning its url yet) --
+    // show it as plain, non-clickable text rather than a dead link (Greg,
+    // 8/19/26; this exact case -- Clippard's "Clippard Listening Post" link
+    // -- is what was crashing the page).
+    return clean.map((d) => {
+      if (d.url) return `<a class="doc-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">&#128279; ${escapeHtml(d.file_name || d.url)}</a>`;
+      if (d.storage_path) return `<a class="doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(d.file_name)}</a>`;
+      return `<div class="doc-link" style="opacity:0.6; cursor:default;">&#128279; ${escapeHtml(d.file_name || "Untitled link")}</div>`;
+    }).join("");
   }
 
   function wireDocLinks(container) {
