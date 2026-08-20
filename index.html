@@ -637,9 +637,7 @@
         </div>
         <div class="global-search-results hidden" id="global-search-results"></div>
       </div>
-      <a class="btn-secondary hidden" id="drafts-pill" href="client_applications.html?drafts=1" title="Jump straight to your saved application drafts">
-        &#128221; <span id="drafts-pill-count">0</span> Draft<span id="drafts-pill-plural">s</span> in progress
-      </a>
+      <a class="btn-secondary hidden" id="drafts-pill" href="client_applications.html">Applications</a>
       <a class="btn-primary hidden" id="add-client-btn" href="client_applications.html?new=1">+ Add Engagement</a>
     </div>
 
@@ -1279,13 +1277,25 @@
       .select("id", { count: "exact", head: true });
     if (error) { console.error("Couldn't load draft count:", error.message); return; }
     draftCount = count || 0;
-    $("drafts-pill-count").textContent = draftCount;
-    $("drafts-pill-plural").textContent = draftCount === 1 ? "" : "s";
     updateDraftsPillVisibility();
   }
 
+  // Greg (8/19/26): the Applications page shows things (Drafts, On Hold,
+  // Closed, Rejected -- every status, not just what shows up in "My
+  // Engagements") that live nowhere else, so this link needs to always be
+  // reachable from Home, not just when there's a draft to jump to. When
+  // there ARE drafts, the button jumps straight to the open Drafts
+  // dropdown as a shortcut; otherwise it's just a plain link to the page.
   function updateDraftsPillVisibility() {
-    $("drafts-pill").classList.toggle("hidden", !isSuperAdminUser || draftCount === 0);
+    const pill = $("drafts-pill");
+    pill.classList.toggle("hidden", !isSuperAdminUser);
+    if (draftCount > 0) {
+      pill.textContent = `\u{1F4DD} ${draftCount} Draft${draftCount === 1 ? "" : "s"} in progress`;
+      pill.href = "client_applications.html?drafts=1";
+    } else {
+      pill.textContent = "Applications";
+      pill.href = "client_applications.html";
+    }
   }
 
   async function loadNotifications() {
