@@ -963,24 +963,52 @@
     return out;
   }
 
-  function richTextFromHtml(el) {
-    const lines = [];
-    el.childNodes.forEach((node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const t = node.textContent.trim();
+  // Walks the editor's DOM recursively looking for block-level content
+  // (paragraphs/divs) and lists, pushing one markdown "line" per block and
+  // one "- " line per <li>. This has to recurse rather than only look at
+  // el's direct children -- Chrome's execCommand("insertUnorderedList") is
+  // inconsistent about whether the <ul> it creates lands as a direct child
+  // of the contenteditable box or gets left nested one level deeper inside
+  // a leftover <div>/<p> wrapper. The previous version only recognized
+  // ul/ol at the top level, so whenever a list ended up nested it fell
+  // through to inlineNodeToMarkdown, which has no ul/li handling and
+  // silently flattened every bullet into one run-on line with no "- "
+  // markers and no separators at all -- Greg (8/20/26): "i added bullet
+  // points in the dashboard wizard but they don't show up in the customer
+  // dashboard." Recursing into any wrapper that contains a nested list
+  // (rather than assuming only the editor root can hold one) fixes that
+  // for good, regardless of which nesting quirk the browser produces.
+  function collectMarkdownLines(node, lines) {
+    node.childNodes.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        const t = child.textContent.trim();
         if (t) lines.push(t);
         return;
       }
-      if (node.nodeType !== Node.ELEMENT_NODE) return;
-      const tag = node.tagName.toLowerCase();
+      if (child.nodeType !== Node.ELEMENT_NODE) return;
+      const tag = child.tagName.toLowerCase();
       if (tag === "ul" || tag === "ol") {
-        node.querySelectorAll(":scope > li").forEach((li) => {
+        child.querySelectorAll("li").forEach((li) => {
           lines.push("- " + inlineNodeToMarkdown(li).trim());
         });
+      } else if (tag === "li") {
+        lines.push("- " + inlineNodeToMarkdown(child).trim());
+      } else if (tag === "p" || tag === "div") {
+        if (child.querySelector("ul, ol, li")) {
+          collectMarkdownLines(child, lines);
+        } else {
+          const text = inlineNodeToMarkdown(child).trim();
+          if (text) lines.push(text);
+        }
       } else if (tag !== "br") {
-        lines.push(inlineNodeToMarkdown(node).trim());
+        collectMarkdownLines(child, lines);
       }
     });
+  }
+
+  function richTextFromHtml(el) {
+    const lines = [];
+    collectMarkdownLines(el, lines);
     return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
   }
 
