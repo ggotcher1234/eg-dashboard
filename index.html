@@ -637,6 +637,9 @@
         </div>
         <div class="global-search-results hidden" id="global-search-results"></div>
       </div>
+      <a class="btn-secondary hidden" id="drafts-pill" href="client_applications.html?drafts=1" title="Jump straight to your saved application drafts">
+        &#128221; <span id="drafts-pill-count">0</span> Draft<span id="drafts-pill-plural">s</span> in progress
+      </a>
       <a class="btn-primary hidden" id="add-client-btn" href="client_applications.html?new=1">+ Add Engagement</a>
     </div>
 
@@ -855,6 +858,7 @@
 
   let currentUser = null;
   let isSuperAdminUser = false;
+  let draftCount = 0; // for the "Drafts in progress" toolbar pill, see loadDraftCount()
   let isTeamLeadUser = false;
   let isRealSuperAdmin = false;         // the signed-in user's ACTUAL role -- never changed by "view as" preview
   let viewAsRole = null;                // null = real role. "team_lead" | "consultant" while previewing
@@ -1149,6 +1153,13 @@
     // figures aren't something a Team Lead/Specialist needs from here.
     document.querySelectorAll(".admin-only-tool").forEach((el) => el.classList.toggle("hidden", !isSuperAdminUser));
 
+    // "I started an engagement draft, how do I get back to it?" (Greg,
+    // 8/19/26) -- the Applications page already has a Drafts dropdown, but
+    // nothing on the Home page pointed at it. This pill only shows up when
+    // there's actually a draft to resume, same Super-Admin-only gating as
+    // the Engagement Applications quicklink itself.
+    if (isSuperAdminUser) await loadDraftCount();
+
     // Only Team Leads and Admins juggle other people's engagements day to
     // day — a Specialist's landing view is just "mine," no toggle needed.
     $("eng-scope-select").classList.toggle("hidden", !(isSuperAdminUser || isTeamLeadUser));
@@ -1217,6 +1228,7 @@
     $("add-client-btn").classList.toggle("hidden", !isSuperAdminUser);
     document.querySelectorAll(".admin-only-tool").forEach((el) => el.classList.toggle("hidden", !isSuperAdminUser));
     $("eng-scope-select").classList.toggle("hidden", !(isSuperAdminUser || isTeamLeadUser));
+    updateDraftsPillVisibility();
 
     engagementScope = isSuperAdminUser ? "all" : "mine";
     engagementTab = "all";
@@ -1254,6 +1266,26 @@
     const hrs = Math.round(mins / 60);
     if (hrs < 24) return `${hrs}h ago`;
     return `${Math.round(hrs / 24)}d ago`;
+  }
+
+  // "Drafts in progress" pill in the toolbar -- points straight at the
+  // Applications page's existing Drafts dropdown, which client_application_
+  // drafts already backs (see client_applications.html). Count-only query
+  // (head: true) so this doesn't pull the drafts' saved form data just to
+  // show a number (Greg, 8/19/26).
+  async function loadDraftCount() {
+    const { count, error } = await sb
+      .from("client_application_drafts")
+      .select("id", { count: "exact", head: true });
+    if (error) { console.error("Couldn't load draft count:", error.message); return; }
+    draftCount = count || 0;
+    $("drafts-pill-count").textContent = draftCount;
+    $("drafts-pill-plural").textContent = draftCount === 1 ? "" : "s";
+    updateDraftsPillVisibility();
+  }
+
+  function updateDraftsPillVisibility() {
+    $("drafts-pill").classList.toggle("hidden", !isSuperAdminUser || draftCount === 0);
   }
 
   async function loadNotifications() {
