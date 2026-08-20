@@ -1598,34 +1598,26 @@
     csv: COMPETITORS_CONFIG.csv,
     render: COMPETITORS_CONFIG.render,
   };
-  // Assignee options for the Next Steps "Assigned To" dropdown -- drawn
-  // from this engagement's own Team Members (listData.team, loaded before
-  // renderListSections() so it's always ready by the time this is called),
-  // deduped by user in case someone holds two specialty slots.
-  function nextStepAssigneeOptions() {
-    const seen = new Map();
-    for (const r of listData.team || []) {
-      if (!r.user_id || !r.users || !r.users.full_name) continue;
-      if (!seen.has(r.user_id)) seen.set(r.user_id, r.users);
-    }
-    // Two team members can share a full name (rare, but real). Only append
-    // the email for names that actually collide, so the common case still
-    // reads as a plain name in the dropdown.
-    const nameCounts = new Map();
-    for (const u of seen.values()) nameCounts.set(u.full_name, (nameCounts.get(u.full_name) || 0) + 1);
-    return [...seen.entries()]
-      .map(([value, u]) => ({
-        value,
-        label: nameCounts.get(u.full_name) > 1 && u.email ? `${u.full_name} (${u.email})` : u.full_name,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+  // Next Steps items (Send EG Invitation Email, Discovery Call, Controlling
+  // Document, etc.) are always the Team Lead's own responsibility, start to
+  // finish -- Greg (8/19/26): "the challenge is that the Team Lead is
+  // responsible for all of these items... the customer who sees these next
+  // steps doesn't need to know about that detail." So there's no per-item
+  // "Assigned To" picker here anymore; assigned_to is still set behind the
+  // scenes (see addListRow) so the Home page's Tasks Due feature keeps
+  // working, it's just no longer something anyone has to choose by hand.
+  // (The real per-specialist assignment need -- who's researching which
+  // question once the Controlling Document is agreed -- is tracked
+  // separately via Team Members/client_assignments, not here.)
+  function currentTeamLeadUserId() {
+    const lead = (listData.team || []).find((r) => r.is_team_lead && r.user_id);
+    return lead ? lead.user_id : null;
   }
   const NEXT_STEPS_CONFIG = {
     key: "next_steps", table: "client_next_steps", title: "Project Next Steps",
     fields: [
       { name: "description", label: "Task", type: "text", required: true },
       { name: "notes", label: "Notes/Date/Time", type: "text" },
-      { name: "assigned_to", label: "Assigned To", type: "select", options: nextStepAssigneeOptions, blankLabel: "Unassigned" },
     ],
     isChecklist: true,
     render: (r) => ({ title: r.description, sub: r.notes || "" }),
@@ -2041,6 +2033,11 @@
       if (f.required && !v) { showBanner(`${f.label} is required.`, "error"); return; }
       values[f.name] = v || null;
     }
+    // Next Steps no longer has an "Assigned To" field for someone to fill
+    // in (see NEXT_STEPS_CONFIG comment) -- it's always this engagement's
+    // Team Lead, set automatically so Tasks Due on the Home page still
+    // knows who a new item belongs to.
+    if (cfg.key === "next_steps") values.assigned_to = currentTeamLeadUserId();
     const { error } = await sb.from(cfg.table).insert(values);
     if (error) { showBanner(`Couldn't add to ${cfg.title}: ` + error.message, "error"); return; }
     $(`${cfg.key}-add-form`).reset();
