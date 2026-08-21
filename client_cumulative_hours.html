@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Cumulative Hours</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+
+  header { background: var(--navy); color: #fff; padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 12.5px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  header .brand-row { display: flex; align-items: center; gap: 14px; }
+  .brand-badge { background: #fff; border-radius: 8px; padding: 5px 10px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 26px; display: block; }
+  #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  header .site-nav { display: flex; align-items: center; gap: 4px; }
+  header .nav-link { color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 8px 12px; border-radius: 6px; position: relative; }
+  header .nav-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  header .nav-link.active { color: #fff; }
+  header .nav-link.active::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -14px; height: 2px; background: #fff; }
+  @media (max-width: 980px) { header .site-nav { display: none; } }
+
+  button { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  button:disabled { opacity: 0.55; cursor: default; }
+
+  #profile-wrap { position: relative; }
+  #profile-btn { display: flex; align-items: center; gap: 4px; padding: 4px 6px; }
+  #profile-btn .avatar-icon {
+    width: 24px; height: 24px; border-radius: 999px; background: rgba(255,255,255,0.14);
+    display: flex; align-items: center; justify-content: center; color: #c9d6e3;
+  }
+  #profile-btn .avatar-icon svg { width: 14px; height: 14px; }
+  #profile-btn .chevron { font-size: 9px; color: #c9d6e3; }
+  .profile-dropdown {
+    position: absolute; top: 40px; right: 0; width: 150px; padding: 6px; background: #fff; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60;
+  }
+  .profile-dropdown button { width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--text); }
+  .profile-dropdown button:hover { background: #eef1f4; color: var(--text); }
+
+  .ask-ai-btn {
+    display: inline-flex; align-items: center; gap: 6px; background: rgba(124,63,196,0.18); color: #d9c8f5;
+    border: 1px solid rgba(124,63,196,0.5); padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  }
+  .ask-ai-btn:hover { background: rgba(124,63,196,0.3); color: #fff; }
+  .ask-ai-btn svg { width: 14px; height: 14px; }
+  .ask-ai-wrap { position: relative; }
+  .ai-nudge { position: absolute; top: calc(100% + 12px); right: 0; width: 220px; background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.22); padding: 12px 26px 12px 14px; font-size: 12.5px; line-height: 1.45; z-index: 95; }
+  .ai-nudge.hidden { display: none; }
+  .ai-nudge::before { content: ""; position: absolute; top: -6px; right: 22px; width: 11px; height: 11px; background: #fff; border-left: 1px solid var(--border); border-top: 1px solid var(--border); transform: rotate(45deg); }
+  .ai-nudge-close { position: absolute; top: 6px; right: 8px; background: transparent; border: none; color: var(--muted); font-size: 15px; line-height: 1; padding: 2px; cursor: pointer; }
+
+  .ai-drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.25); z-index: 90; }
+  .ai-drawer-overlay.open { display: block; }
+  .ai-drawer {
+    position: fixed; top: 0; right: -460px; width: 440px; max-width: 92vw; height: 100vh; background: #fff;
+    box-shadow: -8px 0 28px rgba(20,48,77,0.18); z-index: 91; display: flex; flex-direction: column; transition: right 0.22s ease;
+  }
+  .ai-drawer.open { right: 0; }
+  .ai-drawer-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 20px 22px 14px; border-bottom: 1px solid var(--border); }
+  .ai-drawer-header h3 { margin: 0; font-size: 18px; color: var(--navy); display: flex; align-items: center; gap: 8px; }
+  .ai-drawer-header h3 svg { color: #7c3fc4; width: 19px; height: 19px; }
+  .ai-drawer-header .card-hint { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+  .ai-drawer-close { background: transparent; border: none; color: var(--muted); font-size: 20px; padding: 4px; cursor: pointer; line-height: 1; }
+  .ai-drawer-close:hover { color: var(--text); }
+  .ai-drawer-body { flex: 1; overflow-y: auto; padding: 18px 22px; }
+  .ai-context-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; }
+  .ai-context-chip { display: flex; align-items: center; gap: 8px; background: #f4f6f8; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--text); margin-bottom: 18px; }
+  .ai-context-chip svg { color: var(--navy-light); flex-shrink: 0; width: 15px; height: 15px; }
+  .ai-greeting-bubble { background: #f4f0fb; color: var(--text); border: 1px solid #e3d5f7; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.5; margin-bottom: 18px; }
+  .ai-ask-label { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+  .ai-ask-row { display: flex; gap: 8px; margin-bottom: 18px; }
+  .ai-ask-row input { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13.5px; font-family: inherit; }
+  .ai-ask-row input:focus { outline: none; border-color: #7c3fc4; }
+  .ai-ask-send { width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #7c3fc4; color: #fff; border-radius: 8px; }
+  .ai-ask-send:hover { background: #6528a3; }
+  .ai-ask-send svg { width: 17px; height: 17px; }
+  .ai-suggested-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 8px; }
+  .ai-suggested-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 20px; }
+  .ai-suggested-chip { text-align: left; background: #f4f0fb; color: #5a2494; border: 1px solid #e3d5f7; border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; width: 100%; }
+  .ai-suggested-chip:hover { background: #ecdffa; }
+  .ai-suggested-chip svg { width: 13px; height: 13px; flex-shrink: 0; color: #7c3fc4; }
+  .ai-answer-block { border-top: 1px solid var(--border); padding-top: 16px; }
+  .ai-answer-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .ai-answer-meta .ai-answer-title { font-size: 13px; font-weight: 700; color: var(--navy); }
+  .ai-answer-meta .ai-answer-time { font-size: 11.5px; color: var(--muted); }
+  .ai-answer-card { background: #f4f0fb; border-radius: 10px; padding: 14px 16px; font-size: 13.5px; line-height: 1.55; color: var(--text); }
+  .ai-answer-card ul { margin: 8px 0; padding-left: 18px; }
+  .ai-answer-card li { margin-bottom: 3px; }
+  .ai-answer-card strong { color: var(--navy); }
+  .ai-answer-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .ai-answer-actions button { background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; color: var(--muted); font-size: 12px; }
+  .ai-answer-actions button:hover { color: var(--text); background: #f4f6f8; }
+
+  main { max-width: 1080px; margin: 28px auto; padding: 0 20px 70px; }
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+  .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; }
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+  .hidden { display: none !important; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 24px 28px; margin-bottom: 20px; }
+  .card h2 { margin: 0 0 4px; font-size: 17px; }
+  .card-hint { font-size: 12.5px; color: var(--muted); margin: 0 0 16px; }
+
+  /* ---------- Engagement header card ---------- */
+  .eng-header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .eng-name { font-size: 21px; font-weight: 700; color: var(--navy); margin: 0; }
+  .eng-address { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .eng-meta-row { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 16px; }
+  .eng-meta-field label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 4px; }
+  .eng-meta-field .meta-static { font-size: 14px; color: var(--text); font-weight: 600; }
+  .eng-meta-field .meta-editable-wrap { display: flex; align-items: center; gap: 4px; }
+  .eng-meta-field .meta-editable-wrap .prefix { font-size: 14px; color: var(--muted); }
+  .eng-meta-field input.meta-input {
+    border: 1px solid transparent; background: transparent; border-radius: 5px; padding: 3px 5px;
+    font-size: 14px; font-weight: 600; color: var(--text); font-family: inherit; width: 90px;
+  }
+  .eng-meta-field input.meta-input:hover, .eng-meta-field input.meta-input:focus { border-color: var(--border); background: #fff; }
+  .eng-meta-field input.meta-input:focus { outline: none; border-color: var(--navy-light); }
+  #eng-save-status { font-size: 12px; color: var(--muted); }
+  #eng-save-status.saving { color: var(--navy-light); }
+
+  /* ---------- Cumulative tables ---------- */
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+  table.cum-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  table.cum-table th { text-align: right; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); background: #f8fafb; padding: 10px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.cum-table th:first-child, table.cum-table th:nth-child(2) { text-align: left; }
+  table.cum-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; text-align: right; white-space: nowrap; }
+  table.cum-table td:first-child, table.cum-table td:nth-child(2) { text-align: left; }
+  table.cum-table tbody tr:last-child td { border-bottom: none; }
+  table.cum-table td.zero-cell { color: var(--muted); }
+  table.cum-table td.blank-cell { color: var(--border); }
+  table.cum-table td.remaining-negative { color: var(--danger-dark); font-weight: 700; }
+  table.cum-table .specialty-name { font-weight: 700; color: var(--navy); }
+  table.cum-table .person-name { color: var(--muted); font-size: 12.5px; }
+  table.cum-table tfoot td { padding: 12px 14px; font-size: 13.5px; font-weight: 700; border-top: 2px solid var(--border); background: #f8fafb; text-align: right; }
+  table.cum-table tfoot td:first-child { text-align: left; }
+  table.cum-table .setup-fee-row td { font-style: italic; color: var(--muted); }
+  table.cum-table .setup-fee-row .specialty-name { color: var(--text); font-weight: 600; font-style: normal; }
+
+  @media (max-width: 640px) {
+    .table-scroll table.cum-table { min-width: 620px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <div class="brand-row">
+      <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
+      <div>
+        <h1>Cumulative Hours</h1>
+        <div class="sub">EG Group &nbsp;·&nbsp; <a class="back-link" id="header-back-link" href="index.html">← Home</a></div>
+      </div>
+    </div>
+    <nav class="site-nav">
+      <a class="nav-link" href="index.html">Engagements</a>
+      <a class="nav-link" href="econ_dev_partners_admin.html">Programs</a>
+      <a class="nav-link" href="team_directory.html">Roster</a>
+      <a class="nav-link" href="invoicing_report.html">Invoicing</a>
+    </nav>
+    <div id="userbox">
+      <div class="ask-ai-wrap">
+        <button class="ask-ai-btn" id="ask-ai-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6L12 2z"/><path d="M19 15l.9 2.6L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.4L19 15z"/></svg>
+          Ask AI
+        </button>
+        <div class="ai-nudge hidden" id="ai-nudge">
+          <button type="button" class="ai-nudge-close" id="ai-nudge-close" aria-label="Dismiss">&times;</button>
+          I'm here if you have any questions — just click <strong>Ask AI</strong> any time.
+        </div>
+      </div>
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span>
+      <div id="profile-wrap">
+        <button class="btn-ghost" id="profile-btn" title="Account menu">
+          <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="chevron">&#9662;</span>
+        </button>
+        <div id="profile-dropdown" class="profile-dropdown hidden">
+          <button class="btn-ghost" id="change-password-btn">Change Password</button>
+          <button class="btn-ghost" id="signout-btn">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="ai-drawer-overlay" id="ai-drawer-overlay"></div>
+  <aside class="ai-drawer" id="ai-drawer">
+    <div class="ai-drawer-header">
+      <div>
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6L12 2z"/><path d="M19 15l.9 2.6L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.4L19 15z"/></svg>
+          Ask AI
+        </h3>
+        <div class="card-hint">Ask about this engagement's cumulative hours.</div>
+      </div>
+      <button class="ai-drawer-close" id="ai-drawer-close">&times;</button>
+    </div>
+    <div class="ai-drawer-body">
+      <div class="ai-context-label">Context</div>
+      <div class="ai-context-chip" id="ai-context-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span id="ai-context-text">Cumulative Hours</span>
+      </div>
+      <div class="ai-greeting-bubble">Hi! I'm your EG Group assistant. Ask me anything about this engagement's cumulative hours and billing, or about other engagements across the app.</div>
+      <div class="ai-ask-label">Ask a question</div>
+      <div class="ai-ask-row">
+        <input type="text" id="ai-question-input" placeholder="e.g. Which specialist is closest to their budget?" />
+        <button class="ai-ask-send" id="ai-ask-send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div class="ai-suggested-label">Suggested questions</div>
+      <div class="ai-suggested-list" id="ai-suggested-list"></div>
+      <div class="ai-answer-block hidden" id="ai-answer-block">
+        <div class="ai-answer-meta">
+          <span class="ai-answer-title">Answer</span>
+          <span class="ai-answer-time" id="ai-answer-time"></span>
+        </div>
+        <div class="ai-answer-card" id="ai-answer-card"></div>
+        <div class="ai-answer-actions">
+          <button id="ai-copy-answer">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="ai-drawer-footer">Answers are AI-generated from EG Group data and may not always be accurate.</div>
+  </aside>
+
+  <main>
+    <div id="banner"></div>
+    <button class="btn-ghost" id="back-to-ccc" style="margin-bottom:12px; padding-left:0;">&larr; Engagement</button>
+
+    <div class="card">
+      <div class="eng-header-top">
+        <div>
+          <h2 class="eng-name" id="eng-name"></h2>
+          <div class="eng-address" id="eng-address"></div>
+        </div>
+        <div id="eng-save-status"></div>
+      </div>
+      <div class="eng-meta-row">
+        <div class="eng-meta-field">
+          <label>Opened</label>
+          <div class="meta-static" id="eng-opened">—</div>
+        </div>
+        <div class="eng-meta-field" id="eng-closed-wrap" style="display:none;">
+          <label>Closed</label>
+          <div class="meta-static" id="eng-closed">—</div>
+        </div>
+        <div class="eng-meta-field">
+          <label>Hourly Rate</label>
+          <div class="meta-editable-wrap">
+            <span class="prefix">$</span>
+            <input type="number" class="meta-input" id="eng-rate-input" min="0" step="0.01" />
+          </div>
+        </div>
+        <div class="eng-meta-field">
+          <label>Setup Fee</label>
+          <div class="meta-editable-wrap">
+            <span class="prefix">$</span>
+            <input type="number" class="meta-input" id="eng-setup-fee-input" min="0" step="0.01" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Cumulative Hours by Specialist</h2>
+      <div class="card-hint" id="hours-hint">Only months with logged hours are shown.</div>
+      <div class="table-scroll">
+        <table class="cum-table" id="hours-table">
+          <thead><tr id="hours-thead-row"></tr></thead>
+          <tbody id="hours-tbody"></tbody>
+          <tfoot><tr id="hours-tfoot-row"></tr></tfoot>
+        </table>
+      </div>
+      <div id="hours-empty" class="empty-note hidden">No specialists are assigned to this engagement yet.</div>
+    </div>
+
+    <div class="card">
+      <h2>Cumulative Value by Specialist</h2>
+      <div class="card-hint">Same hours, priced at the hourly rate above, plus the one-time Setup Fee.</div>
+      <div class="table-scroll">
+        <table class="cum-table" id="dollars-table">
+          <thead><tr id="dollars-thead-row"></tr></thead>
+          <tbody id="dollars-tbody"></tbody>
+          <tfoot><tr id="dollars-tfoot-row"></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const $ = (id) => document.getElementById(id);
+  const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
+
+  let currentUser = null;
+  let isSuperAdmin = false;
+  let currentClient = null;
+  let hourlyRate = 95;
+
+  const SPECIALTY_LABELS = {
+    team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
+    gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
+  };
+  // Admin and QC are sunk costs everywhere else in the app -- spent always
+  // equals allotted, from the moment hours are assigned, not logged
+  // hour-by-hour in time_entries (client_workspace.html:937 does the same
+  // thing). This report keeps that same rule for Total/Remaining, and for
+  // display purposes drops their full allotted amount into the earliest
+  // month column that has any real activity -- matching how Chris's own
+  // sample sheet showed Admin/QC/GIS all landing in that first month
+  // together, without pretending there's a real per-entry breakdown that
+  // doesn't exist.
+  const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
+  function redirectToLogin() {
+    const dest = location.pathname.split("/").pop() + location.search;
+    location.href = "index.html?return=" + encodeURIComponent(dest);
+  }
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 4000);
+  }
+  function money(n) {
+    return (Number(n) || 0).toLocaleString(undefined, { style: "currency", currency: "USD" });
+  }
+  function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+  function monthKey(dateStr) { return String(dateStr).slice(0, 7); }
+  function monthLabel(key) {
+    const [y, m] = key.split("-").map(Number);
+    return new Date(y, m - 1, 2).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  }
+
+  // ---------- Auth ----------
+  $("change-password-btn").addEventListener("click", () => { location.href = "reset_password.html"; });
+  $("signout-btn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    redirectToLogin();
+  });
+  $("profile-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("profile-dropdown").classList.toggle("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!$("profile-wrap").contains(e.target)) $("profile-dropdown").classList.add("hidden");
+  });
+
+  $("back-to-ccc").addEventListener("click", () => {
+    const clientId = new URLSearchParams(location.search).get("client");
+    location.href = clientId ? `client_control_center.html?client=${clientId}` : "index.html";
+  });
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users")
+      .select("id, full_name, role, organization_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      await sb.auth.signOut();
+      redirectToLogin();
+      return;
+    }
+
+    currentUser = profile;
+    isSuperAdmin = profile.role === "super_admin";
+
+    $("loading-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+    maybeShowAiNudge();
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = roleLabel(profile.role);
+
+    const clientId = new URLSearchParams(location.search).get("client");
+    if (!clientId) {
+      showBanner("No engagement specified.", "error");
+      return;
+    }
+    await loadOrgSettings(profile.organization_id);
+    await loadData(clientId);
+    wireMetaInputs();
+  }
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) afterSignIn();
+    else redirectToLogin();
+  });
+
+  // ---------- Org hourly rate ----------
+  async function loadOrgSettings(organizationId) {
+    const { data, error } = await sb
+      .from("organization_settings")
+      .select("hourly_rate")
+      .eq("organization_id", organizationId)
+      .single();
+    if (!error && data) hourlyRate = Number(data.hourly_rate) || 95;
+  }
+
+  function wireMetaInputs() {
+    $("eng-rate-input").value = hourlyRate;
+    $("eng-rate-input").addEventListener("change", async () => {
+      const newRate = Number($("eng-rate-input").value);
+      if (!(newRate >= 0)) { $("eng-rate-input").value = hourlyRate; return; }
+      $("eng-save-status").textContent = "Saving…";
+      $("eng-save-status").className = "saving";
+      const { error } = await sb
+        .from("organization_settings")
+        .update({ hourly_rate: newRate, updated_at: new Date().toISOString() })
+        .eq("organization_id", currentUser.organization_id);
+      if (error) { showBanner("Couldn't save hourly rate: " + error.message, "error"); $("eng-save-status").textContent = ""; return; }
+      hourlyRate = newRate;
+      $("eng-save-status").textContent = "Saved";
+      $("eng-save-status").className = "";
+      setTimeout(() => { $("eng-save-status").textContent = ""; }, 2500);
+      renderDollarsTable();
+    });
+
+    $("eng-setup-fee-input").value = currentClient.setup_fee || 0;
+    $("eng-setup-fee-input").addEventListener("change", async () => {
+      const newFee = Number($("eng-setup-fee-input").value);
+      if (!(newFee >= 0)) { $("eng-setup-fee-input").value = currentClient.setup_fee || 0; return; }
+      $("eng-save-status").textContent = "Saving…";
+      $("eng-save-status").className = "saving";
+      const { error } = await sb.from("clients").update({ setup_fee: newFee }).eq("id", currentClient.id);
+      if (error) { showBanner("Couldn't save setup fee: " + error.message, "error"); $("eng-save-status").textContent = ""; return; }
+      currentClient.setup_fee = newFee;
+      $("eng-save-status").textContent = "Saved";
+      $("eng-save-status").className = "";
+      setTimeout(() => { $("eng-save-status").textContent = ""; }, 2500);
+      renderDollarsTable();
+    });
+  }
+
+  // ---------- Data + rendering ----------
+  let reportRows = [];
+  let activeMonths = [];
+
+  async function loadData(clientId) {
+    const [clientRes, assignmentsRes, usersRes] = await Promise.all([
+      sb.from("clients").select("id, name, address, created_at, date_closed, setup_fee").eq("id", clientId).single(),
+      sb.from("client_assignments")
+        .select("id, user_id, specialty_type, slot_number, hours_allotted")
+        .eq("client_id", clientId)
+        .order("specialty_type", { ascending: true })
+        .order("slot_number", { ascending: true }),
+      sb.from("users").select("id, full_name"),
+    ]);
+
+    if (clientRes.error || !clientRes.data) { showBanner("Couldn't load this engagement.", "error"); return; }
+    if (assignmentsRes.error) { showBanner("Couldn't load assignments: " + assignmentsRes.error.message, "error"); return; }
+    if (usersRes.error) { showBanner("Couldn't load specialists: " + usersRes.error.message, "error"); return; }
+
+    currentClient = clientRes.data;
+    $("eng-name").textContent = currentClient.name || "Untitled Engagement";
+    $("eng-address").textContent = currentClient.address || "";
+    $("eng-opened").textContent = currentClient.created_at
+      ? new Date(currentClient.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+      : "—";
+    if (currentClient.date_closed) {
+      $("eng-closed-wrap").style.display = "";
+      $("eng-closed").textContent = new Date(currentClient.date_closed).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    }
+
+    const usersById = {};
+    for (const u of usersRes.data) usersById[u.id] = u;
+
+    const assignmentIds = assignmentsRes.data.map((a) => a.id);
+    let entriesByAssignment = {};
+    if (assignmentIds.length) {
+      const entriesRes = await sb.from("time_entries").select("assignment_id, hours, entry_date").in("assignment_id", assignmentIds);
+      if (entriesRes.error) { showBanner("Couldn't load time entries: " + entriesRes.error.message, "error"); return; }
+      for (const e of entriesRes.data) {
+        (entriesByAssignment[e.assignment_id] ||= []).push(e);
+      }
+    }
+
+    // Union of every calendar month that has any real logged hours,
+    // anywhere in this engagement -- Greg (8/20/26): Chris's sample only
+    // shows months with activity; empty months just aren't columns at all.
+    const monthSet = new Set();
+    for (const a of assignmentsRes.data) {
+      const entries = entriesByAssignment[a.id] || [];
+      for (const e of entries) {
+        if (Number(e.hours) > 0) monthSet.add(monthKey(e.entry_date));
+      }
+    }
+    activeMonths = [...monthSet].sort();
+
+    reportRows = assignmentsRes.data.map((a) => {
+      const person = usersById[a.user_id];
+      const entries = entriesByAssignment[a.id] || [];
+      const isSunk = SUNK_COST_SPECIALTIES.includes(a.specialty_type);
+      const hoursAllotted = Number(a.hours_allotted) || 0;
+
+      const byMonth = {};
+      activeMonths.forEach((m) => { byMonth[m] = 0; });
+      let realLoggedTotal = 0;
+      entries.forEach((e) => {
+        const hrs = Number(e.hours) || 0;
+        realLoggedTotal += hrs;
+        const m = monthKey(e.entry_date);
+        if (m in byMonth) byMonth[m] += hrs;
+      });
+
+      // Sunk-cost rows with no real logged entries yet get their full
+      // allotment placed visually in the earliest active month, so the
+      // grid reads the way Chris's sheet does. If nothing has been logged
+      // anywhere in the whole engagement yet, there's no column to place
+      // it in -- it just won't show a month breakdown, only Total/Remaining.
+      if (isSunk && realLoggedTotal === 0 && activeMonths.length > 0) {
+        byMonth[activeMonths[0]] += hoursAllotted;
+      }
+
+      const total = isSunk ? hoursAllotted : realLoggedTotal;
+      const remaining = round2(hoursAllotted - total);
+
+      return {
+        assignmentId: a.id,
+        specialtyLabel: (SPECIALTY_LABELS[a.specialty_type] || a.specialty_type) + (a.slot_number > 1 ? " #" + a.slot_number : ""),
+        personName: person ? person.full_name : "",
+        hoursAllotted,
+        byMonth,
+        total: round2(total),
+        remaining,
+        isSunk,
+      };
+    });
+
+    renderHoursTable();
+    renderDollarsTable();
+  }
+
+  function renderHoursTable() {
+    const theadRow = $("hours-thead-row");
+    const tbody = $("hours-tbody");
+    const tfootRow = $("hours-tfoot-row");
+
+    if (!reportRows.length) {
+      $("hours-table").classList.add("hidden");
+      $("hours-empty").classList.remove("hidden");
+      $("dollars-table") && ($("dollars-table").classList.add("hidden"));
+      return;
+    }
+    $("hours-table").classList.remove("hidden");
+    $("hours-empty").classList.add("hidden");
+
+    theadRow.innerHTML = `
+      <th>Specialty</th>
+      <th>Allotted</th>
+      ${activeMonths.map((m) => `<th>${escapeHtml(monthLabel(m))}</th>`).join("")}
+      <th>Total</th>
+      <th>Remaining</th>
+    `;
+
+    tbody.innerHTML = reportRows.map((r) => `
+      <tr>
+        <td>
+          <div class="specialty-name">${escapeHtml(r.specialtyLabel)}</div>
+          <div class="person-name">${escapeHtml(r.personName || "Unassigned")}</div>
+        </td>
+        <td>${r.hoursAllotted}</td>
+        ${activeMonths.map((m) => {
+          const v = r.byMonth[m];
+          return v ? `<td>${v}</td>` : `<td class="blank-cell">—</td>`;
+        }).join("")}
+        <td>${r.total}</td>
+        <td${r.remaining < 0 ? ' class="remaining-negative"' : ""}>${r.remaining}</td>
+      </tr>
+    `).join("");
+
+    const totalsByMonth = {};
+    activeMonths.forEach((m) => { totalsByMonth[m] = round2(reportRows.reduce((s, r) => s + (r.byMonth[m] || 0), 0)); });
+    const grandAllotted = round2(reportRows.reduce((s, r) => s + r.hoursAllotted, 0));
+    const grandTotal = round2(reportRows.reduce((s, r) => s + r.total, 0));
+    const grandRemaining = round2(grandAllotted - grandTotal);
+
+    tfootRow.innerHTML = `
+      <td>Totals</td>
+      <td>${grandAllotted}</td>
+      ${activeMonths.map((m) => `<td>${totalsByMonth[m]}</td>`).join("")}
+      <td>${grandTotal}</td>
+      <td${grandRemaining < 0 ? ' class="remaining-negative"' : ""}>${grandRemaining}</td>
+    `;
+  }
+
+  function renderDollarsTable() {
+    if (!reportRows.length) return;
+    $("dollars-table").classList.remove("hidden");
+    const theadRow = $("dollars-thead-row");
+    const tbody = $("dollars-tbody");
+    const tfootRow = $("dollars-tfoot-row");
+
+    theadRow.innerHTML = `
+      <th>Specialty</th>
+      <th>Allotted</th>
+      ${activeMonths.map((m) => `<th>${escapeHtml(monthLabel(m))}</th>`).join("")}
+      <th>Total</th>
+      <th>Remaining</th>
+    `;
+
+    tbody.innerHTML = reportRows.map((r) => `
+      <tr>
+        <td>
+          <div class="specialty-name">${escapeHtml(r.specialtyLabel)}</div>
+          <div class="person-name">${escapeHtml(r.personName || "Unassigned")}</div>
+        </td>
+        <td>${money(r.hoursAllotted * hourlyRate)}</td>
+        ${activeMonths.map((m) => {
+          const v = r.byMonth[m];
+          return v ? `<td>${money(v * hourlyRate)}</td>` : `<td class="blank-cell">—</td>`;
+        }).join("")}
+        <td>${money(r.total * hourlyRate)}</td>
+        <td${r.remaining < 0 ? ' class="remaining-negative"' : ""}>${money(r.remaining * hourlyRate)}</td>
+      </tr>
+    `).join("");
+
+    const setupFee = Number(currentClient.setup_fee) || 0;
+    tbody.innerHTML += `
+      <tr class="setup-fee-row">
+        <td><div class="specialty-name">Setup Fee</div></td>
+        <td class="blank-cell">—</td>
+        ${activeMonths.map(() => `<td class="blank-cell">—</td>`).join("")}
+        <td>${money(setupFee)}</td>
+        <td class="blank-cell">—</td>
+      </tr>
+    `;
+
+    const totalsByMonth = {};
+    activeMonths.forEach((m) => { totalsByMonth[m] = round2(reportRows.reduce((s, r) => s + (r.byMonth[m] || 0), 0)) * hourlyRate; });
+    const grandAllotted = round2(reportRows.reduce((s, r) => s + r.hoursAllotted, 0)) * hourlyRate;
+    const grandHoursTotal = round2(reportRows.reduce((s, r) => s + r.total, 0)) * hourlyRate;
+    const grandTotal = grandHoursTotal + setupFee;
+    const grandRemaining = grandAllotted - grandHoursTotal;
+
+    tfootRow.innerHTML = `
+      <td>Grand Total</td>
+      <td>${money(grandAllotted)}</td>
+      ${activeMonths.map((m) => `<td>${money(totalsByMonth[m])}</td>`).join("")}
+      <td>${money(grandTotal)}</td>
+      <td${grandRemaining < 0 ? ' class="remaining-negative"' : ""}>${money(grandRemaining)}</td>
+    `;
+  }
+
+  /* ---------- Ask AI ---------- */
+  const AI_CONTEXT_LABEL = "Cumulative Hours";
+  const AI_PAGE_KEY = "cumulative_hours";
+  const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/eg-dashboard-ai`;
+  let aiHistory = [];
+
+  function aiSuggestedQuestions() {
+    return [
+      "Which specialist is closest to their hours budget?",
+      "How much has this engagement billed so far?",
+      "Is anyone over budget on this engagement?",
+      "What's the Setup Fee for this engagement?",
+    ];
+  }
+
+  function initAskAi() {
+    const btn = $("ask-ai-btn");
+    if (!btn) return;
+    renderAiSuggested();
+    btn.addEventListener("click", openAiDrawer);
+    $("ai-drawer-close").addEventListener("click", closeAiDrawer);
+    $("ai-drawer-overlay").addEventListener("click", closeAiDrawer);
+    $("ai-ask-send").addEventListener("click", submitAiQuestion);
+    $("ai-question-input").addEventListener("keydown", (e) => { if (e.key === "Enter") submitAiQuestion(); });
+    $("ai-copy-answer").addEventListener("click", () => {
+      const text = $("ai-answer-card").innerText;
+      navigator.clipboard?.writeText(text);
+    });
+  }
+
+  function renderAiSuggested() {
+    const list = $("ai-suggested-list");
+    const questions = aiSuggestedQuestions();
+    list.innerHTML = questions.map((q, i) => `
+      <button class="ai-suggested-chip" data-idx="${i}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"/><path d="M12 17h.01"/></svg>
+        ${escapeHtml(q)}
+      </button>
+    `).join("");
+    list.querySelectorAll(".ai-suggested-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const q = questions[Number(chip.dataset.idx)];
+        $("ai-question-input").value = q;
+        askAi(q);
+      });
+    });
+  }
+
+  function openAiDrawer() {
+    $("ai-context-text").textContent = AI_CONTEXT_LABEL;
+    renderAiSuggested();
+    $("ai-drawer-overlay").classList.add("open");
+    $("ai-drawer").classList.add("open");
+  }
+  function closeAiDrawer() {
+    $("ai-drawer-overlay").classList.remove("open");
+    $("ai-drawer").classList.remove("open");
+  }
+  function submitAiQuestion() {
+    const q = $("ai-question-input").value.trim();
+    if (!q) return;
+    askAi(q);
+  }
+  function renderAiMarkup(text) {
+    const escaped = escapeHtml(text || "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    return escaped.split(/\n\n+/).map((block) => {
+      const lines = block.split("\n").filter((l) => l.trim());
+      if (lines.length && lines.every((l) => /^\s*-\s+/.test(l))) {
+        return `<ul>${lines.map((l) => `<li>${l.replace(/^\s*-\s+/, "")}</li>`).join("")}</ul>`;
+      }
+      return `<p>${lines.join("<br>")}</p>`;
+    }).join("");
+  }
+  async function askAi(question) {
+    $("ai-answer-block").classList.remove("hidden");
+    $("ai-answer-card").innerHTML = `<p style="color:var(--muted);">Thinking…</p>`;
+    $("ai-answer-time").textContent = "";
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error("No active session");
+      const res = await fetch(AI_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": SUPABASE_ANON_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question, pageKey: AI_PAGE_KEY, pageContext: AI_CONTEXT_LABEL,
+          clientId: currentClient ? currentClient.id : undefined,
+          history: aiHistory,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || `Request failed (${res.status})`);
+      showAiAnswer(renderAiMarkup(data.answer));
+      aiHistory.push({ role: "user", content: question }, { role: "assistant", content: data.answer });
+      aiHistory = aiHistory.slice(-6);
+    } catch (err) {
+      console.error("Ask AI error:", err);
+      showAiAnswer(`<p>Sorry, I couldn't reach the AI service just now. Try again in a moment.</p>`);
+    }
+  }
+  function showAiAnswer(html) {
+    $("ai-answer-card").innerHTML = html;
+    $("ai-answer-block").classList.remove("hidden");
+    $("ai-answer-time").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  initAskAi();
+
+  function maybeShowAiNudge() {
+    if (localStorage.getItem("eg_ai_nudge_seen")) return;
+    localStorage.setItem("eg_ai_nudge_seen", "1");
+    setTimeout(() => {
+      const nudge = $("ai-nudge");
+      if (!nudge) return;
+      nudge.classList.remove("hidden");
+      const hide = () => nudge.classList.add("hidden");
+      $("ai-nudge-close").addEventListener("click", hide);
+      $("ask-ai-btn").addEventListener("click", hide, { once: true });
+      setTimeout(hide, 10000);
+    }, 900);
+  }
+</script>
+</body>
+</html>
