@@ -308,7 +308,6 @@
             <th class="sortable" data-sort="team_lead" id="th-team_lead">Team Lead<span class="sort-arrow"></span></th>
             <th class="sortable" data-sort="status" id="th-status">Status<span class="sort-arrow"></span></th>
             <th>Next Step</th>
-            <th>Assigned To</th>
             <th class="sortable num" data-sort="open_count" id="th-open_count">Open Steps<span class="sort-arrow"></span></th>
           </tr></thead>
           <tbody id="eng-tbody"></tbody>
@@ -430,7 +429,7 @@
       sb.from("clients").select("id, name, project_status, econ_dev_companies(name)").order("name", { ascending: true }),
       sb.from("client_assignments").select("client_id, user_id, specialty_type"),
       sb.from("users").select("id, full_name"),
-      sb.from("client_next_steps").select("client_id, description, completed, sort_order, assigned_to").order("sort_order"),
+      sb.from("client_next_steps").select("client_id, description, completed, sort_order").order("sort_order"),
     ]);
 
     if (clientsRes.error) { showBanner("Couldn't load engagements: " + clientsRes.error.message, "error"); return; }
@@ -447,17 +446,16 @@
       if (person) teamLeadByClient[a.client_id] = person.full_name;
     }
 
+    // Next Steps don't carry a separate "assigned to" column here -- in
+    // practice every step is worked by the engagement's Team Lead (Greg,
+    // 8/21/26), so that column was redundant with Team Lead and has been
+    // dropped rather than shown twice.
     const nextStepByClient = {};
-    const assignedByClient = {};
     const openCountByClient = {};
     for (const s of stepsRes.data || []) {
       if (s.completed) continue;
       openCountByClient[s.client_id] = (openCountByClient[s.client_id] || 0) + 1;
-      if (!nextStepByClient[s.client_id]) {
-        nextStepByClient[s.client_id] = s.description;
-        const person = s.assigned_to ? usersById[s.assigned_to] : null;
-        assignedByClient[s.client_id] = person ? person.full_name : "";
-      }
+      if (!nextStepByClient[s.client_id]) nextStepByClient[s.client_id] = s.description;
     }
 
     allRows = (clientsRes.data || []).map((c) => ({
@@ -467,7 +465,6 @@
       program: (c.econ_dev_companies && c.econ_dev_companies.name) || "—",
       teamLead: teamLeadByClient[c.id] || "—",
       nextStep: nextStepByClient[c.id] || "",
-      assignedTo: assignedByClient[c.id] || "",
       openCount: openCountByClient[c.id] || 0,
     }));
   }
@@ -530,7 +527,6 @@
         <td>${escapeHtml(r.teamLead)}</td>
         <td><span class="status-pill status-${escapeHtml(r.status || "")}">${escapeHtml(PROJECT_STATUS_LABELS[r.status] || r.status || "—")}</span></td>
         <td>${r.nextStep ? escapeHtml(r.nextStep) : `<span class="next-step-missing">No open next step</span>`}</td>
-        <td>${escapeHtml(r.assignedTo || "—")}</td>
         <td class="num"><span class="open-count-badge ${r.openCount ? "" : "zero"}">${r.openCount}</span></td>
       </tr>
     `).join("");
@@ -554,12 +550,12 @@
   function exportCsv() {
     const rows = sortRows(filteredRows());
     if (!rows.length) { showBanner("Nothing to export.", "error"); return; }
-    const header = ["Engagement", "Program", "Team Lead", "Status", "Next Step", "Assigned To", "Open Steps"];
+    const header = ["Engagement", "Program", "Team Lead", "Status", "Next Step", "Open Steps"];
     const lines = [header.map(csvField).join(",")];
     for (const r of rows) {
       lines.push([
         r.name, r.program, r.teamLead, PROJECT_STATUS_LABELS[r.status] || r.status || "",
-        r.nextStep || "No open next step", r.assignedTo, r.openCount,
+        r.nextStep || "No open next step", r.openCount,
       ].map(csvField).join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
