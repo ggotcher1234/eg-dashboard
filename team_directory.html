@@ -1721,14 +1721,18 @@
     const allRows = parseCsv(text);
 
     // Find the real header row (title row + blank spacer rows above it in
-    // the source file mean we can't just assume row 0). Look for a row
-    // whose first few cells are POSITION/NAME/EMAIL, case-insensitive.
-    const headerIdx = allRows.findIndex((r) =>
-      (r[0] || "").trim().toLowerCase() === "position" &&
-      (r[1] || "").trim().toLowerCase() === "name"
-    );
+    // the source file mean we can't just assume row 0). Originally this
+    // required "position"/"name" to land in the exact first two columns,
+    // which broke the moment a real export from Excel/Numbers/Sheets added
+    // or dropped a leading column (Greg, 8/21/26) -- now it just looks
+    // anywhere in the row for "name" and "email" cells, case-insensitive,
+    // so column order/count no longer matters here.
+    const headerIdx = allRows.findIndex((r) => {
+      const cells = r.map((c) => (c || "").trim().toLowerCase());
+      return cells.includes("name") && cells.includes("email");
+    });
     if (headerIdx === -1) {
-      showBanner("Couldn't find a POSITION/NAME header row in that file — make sure it's exported from the roster spreadsheet as-is.", "error");
+      showBanner("Couldn't find a header row with Name and Email columns in that file — make sure it's exported from the roster spreadsheet as-is.", "error");
       return;
     }
     const header = allRows[headerIdx].map((h) => (h || "").trim().toLowerCase());
