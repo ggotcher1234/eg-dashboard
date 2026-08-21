@@ -755,6 +755,12 @@
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = roleLabel(profile.role);
 
+    // loadClient() above ran in parallel with the profile fetch (to avoid a
+    // second round trip), so its Cumulative Hours visibility check ran
+    // before currentUser existed and always hid the card. Re-apply it here
+    // now that currentUser is actually set.
+    $("cm-cumulative-link").classList.toggle("hidden", !(currentUser && currentUser.role === "super_admin"));
+
     if (!clientId) {
       $("no-client-note").classList.remove("hidden");
     }
