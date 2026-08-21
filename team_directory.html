@@ -210,6 +210,7 @@
 
   .member-name { font-weight: 700; color: var(--navy); font-size: 13.5px; line-height: 1.3; }
   .member-role-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+  .member-company-sub { font-size: 11px; color: var(--muted); font-style: italic; margin-top: 1px; }
   .cell-muted { color: var(--muted); font-style: italic; }
   .specialty-chip-row { display: flex; flex-wrap: wrap; gap: 4px; }
   .specialty-chip {
@@ -609,6 +610,9 @@
       <label for="add-title">Title <span style="font-weight:400; text-transform:none;">(optional)</span></label>
       <input type="text" id="add-title" placeholder="e.g. GIS Researcher" />
 
+      <label for="add-company">Company <span style="font-weight:400; text-transform:none;">(optional)</span></label>
+      <input type="text" id="add-company" placeholder="e.g. Acme Consulting" />
+
       <label>Specialties <span style="font-weight:400; text-transform:none;">(optional, pick any that apply)</span></label>
       <div class="specialty-checks" id="add-specialties"></div>
 
@@ -644,6 +648,9 @@
 
       <label for="pf-title">Title</label>
       <input type="text" id="pf-title" placeholder="e.g. GIS Researcher" />
+
+      <label for="pf-company">Company</label>
+      <input type="text" id="pf-company" placeholder="e.g. Acme Consulting" />
 
       <label>Specialties <span style="font-weight:400; text-transform:none;">(pick any that apply)</span></label>
       <div class="specialty-checks" id="pf-specialties"></div>
@@ -1254,7 +1261,7 @@
   async function loadUsers() {
     const [{ data, error }, { data: specialtyRows, error: specErr }] = await Promise.all([
       sb.from("users")
-        .select("id, full_name, title, role, email, secondary_email, phone, about, default_specialty, avatar_url")
+        .select("id, full_name, title, company_name, role, email, secondary_email, phone, about, default_specialty, avatar_url")
         .order("full_name", { ascending: true }),
       sb.from("user_specialties").select("user_id, specialty"),
     ]);
@@ -1456,6 +1463,7 @@
             <div>
               <div class="member-name">${escapeHtml(u.full_name)}</div>
               <div class="member-role-sub">${escapeHtml(primaryCategoryLabel(u))}</div>
+              ${u.company_name ? `<div class="member-company-sub">${escapeHtml(u.company_name)}</div>` : ""}
             </div>
           </div>
         </td>
@@ -1490,6 +1498,7 @@
       email: $("add-email").value.trim(),
       role: $("add-role").value,
       title: $("add-title").value.trim(),
+      company_name: $("add-company").value.trim(),
       // Kept for backward compat with the edge function's existing
       // payload shape (first picked specialty, or blank) -- the real,
       // full set is written to user_specialties separately below.
@@ -1708,27 +1717,29 @@
     }
     const header = allRows[headerIdx].map((h) => (h || "").trim().toLowerCase());
     const col = (name) => header.indexOf(name);
-    const iPos = col("position"), iName = col("name"), iEmail = col("email"), iPhone = col("phone");
+    const iPos = col("position"), iName = col("name"), iEmail = col("email"), iPhone = col("phone"), iCompany = col("company");
     if (iName === -1 || iEmail === -1) {
       showBanner("That file is missing a Name or Email column.", "error");
       return;
     }
 
     // Group rows by email — the same person can appear once per specialty.
-    const people = new Map(); // lowercased email -> { full_name, phone, positions:Set }
+    const people = new Map(); // lowercased email -> { full_name, phone, company_name, positions:Set }
     let noEmailCount = 0;
     for (const r of allRows.slice(headerIdx + 1)) {
       const name = (r[iName] || "").trim();
       const emailRaw = (r[iEmail] || "").replace(/ /g, " ").trim().toLowerCase();
       const email = (emailRaw.split(/\s+/)[0] || "").replace(/[<>]/g, "");
       const phone = iPhone !== -1 ? (r[iPhone] || "").trim() : "";
+      const company = iCompany !== -1 ? (r[iCompany] || "").trim() : "";
       const position = iPos !== -1 ? (r[iPos] || "").trim() : "";
       if (!name && !email) continue; // blank spacer row
       if (!email) { noEmailCount++; continue; }
-      if (!people.has(email)) people.set(email, { full_name: name, phone: "", positions: new Set() });
+      if (!people.has(email)) people.set(email, { full_name: name, phone: "", company_name: "", positions: new Set() });
       const person = people.get(email);
       if (name && !person.full_name) person.full_name = name;
       if (phone && !person.phone) person.phone = phone;
+      if (company && !person.company_name) person.company_name = company;
       if (position) person.positions.add(normalizePosition(position));
     }
 
@@ -1752,6 +1763,7 @@
             email,
             role: primary === "team_lead" ? "team_lead" : "consultant",
             title,
+            company_name: p.company_name,
             phone: p.phone,
             default_specialty: primary || "",
           },
@@ -1762,6 +1774,7 @@
       const updates = {};
       if (p.full_name && p.full_name !== existing.full_name) updates.full_name = p.full_name;
       if (p.phone && p.phone !== (existing.phone || "")) updates.phone = p.phone;
+      if (p.company_name && p.company_name !== (existing.company_name || "")) updates.company_name = p.company_name;
       if (title && title !== (existing.title || "")) updates.title = title;
       if (primary && primary !== (existing.default_specialty || "")) updates.default_specialty = primary;
       // Never touch an existing Super Admin's role, and never demote an
@@ -1949,6 +1962,7 @@
 
     $("pf-id").value = u.id;
     $("pf-title").value = u.title || "";
+    $("pf-company").value = u.company_name || "";
     setCheckedSpecialties("pf-specialties", u.specialties, !canEdit);
     $("pf-role").value = u.role;
     $("pf-about").value = u.about || "";
@@ -1958,6 +1972,7 @@
 
     // Lock down fields the viewer isn't allowed to touch
     $("pf-title").disabled = !canEdit;
+    $("pf-company").disabled = !canEdit;
     $("pf-about").disabled = !canEdit;
     $("pf-secondary-email").disabled = !canEdit;
     $("pf-phone").disabled = !canEdit;
@@ -2081,6 +2096,7 @@
     const specialties = getCheckedSpecialties("pf-specialties");
     const payload = {
       title: $("pf-title").value.trim() || null,
+      company_name: $("pf-company").value.trim() || null,
       // Kept in sync with the first checked specialty for backward compat
       // with anything still reading the old single-value column; the real
       // source of truth is now user_specialties, written below.

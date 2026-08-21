@@ -164,6 +164,7 @@ Deno.serve(async (req: Request) => {
     const email = (body.email || "").trim().toLowerCase();
     const full_name = (body.full_name || "").trim();
     const title = (body.title || "").trim() || null;
+    const company_name = (body.company_name || "").trim() || null;
     const phone = (body.phone || "").trim() || null;
     const secondary_email = (body.secondary_email || "").trim() || null;
     const role = body.role;
