@@ -155,6 +155,9 @@
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
   table.pi-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   table.pi-table th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); background: #f8fafb; padding: 10px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.pi-table th.sortable { cursor: pointer; user-select: none; }
+  table.pi-table th.sortable:hover { color: var(--text); }
+  table.pi-table th .sort-arrow { display: inline-block; width: 12px; font-size: 10px; letter-spacing: 0; }
   table.pi-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
   table.pi-table tbody tr:last-child td { border-bottom: none; }
   table.pi-table .client-group-row td { background: #f4f6f8; font-weight: 700; color: var(--navy); padding-top: 12px; }
@@ -370,7 +373,12 @@
       <div class="card-hint">Every Program invoice ever generated. Click one to reopen and print it again.</div>
       <div class="table-scroll">
         <table class="pi-table" id="past-invoices-table">
-          <thead><tr><th>Invoice #</th><th>Program</th><th>Month</th><th>Date</th><th class="num">Total</th><th></th></tr></thead>
+          <thead><tr>
+            <th class="sortable" data-sort="invoice_number" id="th-invoice-number">Invoice #<span class="sort-arrow"></span></th>
+            <th class="sortable" data-sort="program" id="th-program">Program<span class="sort-arrow"></span></th>
+            <th class="sortable" data-sort="month" id="th-month">Month<span class="sort-arrow"></span></th>
+            <th>Date</th><th class="num">Total</th><th></th>
+          </tr></thead>
           <tbody id="past-invoices-tbody"></tbody>
         </table>
       </div>
@@ -829,6 +837,52 @@
     renderPastInvoicesTable();
   }
 
+  // Invoice # sorts as {year, sequence} rather than plain text, so
+  // "2026-2" correctly lands before "2026-10" instead of after it.
+  let pastInvoicesSortField = "invoice_number";
+  let pastInvoicesSortDir = -1; // newest/highest first by default
+
+  function pastInvoiceSortValue(inv, field) {
+    if (field === "invoice_number") {
+      const [year, seq] = String(inv.invoice_number || "").split("-");
+      return (Number(year) || 0) * 100000 + (Number(seq) || 0);
+    }
+    if (field === "program") return ((inv.econ_dev_companies && inv.econ_dev_companies.name) || "").toLowerCase();
+    if (field === "month") return inv.billing_month || "";
+    return "";
+  }
+
+  function sortPastInvoices(rows) {
+    return [...rows].sort((a, b) => {
+      const va = pastInvoiceSortValue(a, pastInvoicesSortField);
+      const vb = pastInvoiceSortValue(b, pastInvoicesSortField);
+      if (va < vb) return -1 * pastInvoicesSortDir;
+      if (va > vb) return 1 * pastInvoicesSortDir;
+      return 0;
+    });
+  }
+
+  function updatePastInvoicesSortIndicators() {
+    ["invoice-number", "program", "month"].forEach((id) => {
+      const field = id === "invoice-number" ? "invoice_number" : id;
+      const arrow = $(`th-${id}`).querySelector(".sort-arrow");
+      arrow.textContent = field === pastInvoicesSortField ? (pastInvoicesSortDir === 1 ? "▲" : "▼") : "";
+    });
+  }
+
+  document.querySelectorAll("#past-invoices-table th.sortable").forEach((th) => {
+    th.addEventListener("click", () => {
+      const field = th.dataset.sort;
+      if (pastInvoicesSortField === field) {
+        pastInvoicesSortDir *= -1;
+      } else {
+        pastInvoicesSortField = field;
+        pastInvoicesSortDir = 1;
+      }
+      renderPastInvoicesTable();
+    });
+  });
+
   function renderPastInvoicesTable() {
     const tbody = $("past-invoices-tbody");
     if (!pastInvoices.length) {
@@ -838,8 +892,9 @@
     }
     $("past-invoices-table").classList.remove("hidden");
     $("past-invoices-empty").classList.add("hidden");
+    updatePastInvoicesSortIndicators();
 
-    tbody.innerHTML = pastInvoices.map((inv) => `
+    tbody.innerHTML = sortPastInvoices(pastInvoices).map((inv) => `
       <tr>
         <td><span class="invoice-number-badge">${escapeHtml(inv.invoice_number)}</span>${inv.voided ? ' <span class="voided-badge">Voided</span>' : ""}</td>
         <td>${escapeHtml((inv.econ_dev_companies && inv.econ_dev_companies.name) || "—")}</td>
