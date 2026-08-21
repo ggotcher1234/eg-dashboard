@@ -199,6 +199,23 @@
   .contacts-add-row input[type="text"] {
     padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; background: #fff;
   }
+
+  /* Engagements toggle + expandable list -- same pill/accordion pattern as
+     Contacts above (Rita, 8/21/26): "Need report/search of engagements for
+     each program? On engagement screen you can search by program but it
+     takes you to the EG Programs screen" -- landing here with nothing but
+     the program record itself wasn't useful, so each program row now
+     expands into the actual list of engagements it funds. */
+  tr.engagements-detail-row td { background: #f8fafb; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+  .engagements-detail-inner { max-width: 780px; }
+  .engagement-row {
+    display: flex; align-items: center; gap: 14px; padding: 7px 0; border-bottom: 1px solid #e7ecf0; font-size: 13px;
+  }
+  .engagement-row:last-of-type { border-bottom: none; }
+  .engagement-row .er-name { flex: 1.6; min-width: 0; font-weight: 600; color: var(--navy); text-decoration: none; }
+  .engagement-row .er-name:hover { text-decoration: underline; }
+  .engagement-row .er-status { flex: 1; color: var(--muted); }
+  .engagements-empty { padding: 10px 0; color: var(--muted); font-size: 13px; }
   .csv-file-input { display: none; }
   .icon-btn { padding: 4px 9px; line-height: 1; font-size: 15px; }
   .readonly-note {
@@ -408,6 +425,7 @@
           <th class="sortable" data-sort="name">Program <span class="sort-arrow">&#8645;</span></th>
           <th>Address</th>
           <th class="sortable" style="width:150px;" data-sort="contacts">Contacts <span class="sort-arrow">&#8645;</span></th>
+          <th class="sortable" style="width:150px;" data-sort="engagements">Engagements <span class="sort-arrow">&#8645;</span></th>
           <th id="actions-header" class="hidden" style="width:40px;"></th>
         </tr>
       </thead>
@@ -464,9 +482,11 @@
   let currentUser = null;   // { id, full_name, role, organization_id }
   let allPartners = [];
   let allContacts = [];     // econ_dev_partner_contacts, all partners
+  let allClients = [];      // clients (engagements), all programs -- for the Engagements column
   let isSuperAdmin = false;
   let pendingDeleteId = null;
   let openContactsPartnerId = null;   // which partner's Contacts row is expanded (accordion-style, one at a time)
+  let openEngagementsPartnerId = null; // which partner's Engagements row is expanded (accordion-style, one at a time)
   let sortField = "name";
   let sortDir = "asc";
 
@@ -478,6 +498,7 @@
   function roleLabel(role) {
     return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
   }
+  const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
   function redirectToLogin() {
     const dest = location.pathname.split("/").pop() + location.search;
     location.href = "index.html?return=" + encodeURIComponent(dest);
@@ -574,7 +595,42 @@
     }
     allPartners = data;
     await loadContacts();
+    await loadClients();
     renderTable();
+    applyProgramDeepLink();
+  }
+
+  async function loadClients() {
+    const { data, error } = await sb
+      .from("clients")
+      .select("id, name, project_status, econ_dev_company_id")
+      .order("name", { ascending: true });
+
+    if (error) {
+      showBanner("Couldn't load engagements: " + error.message, "error");
+      return;
+    }
+    allClients = data;
+  }
+
+  function clientsForPartner(partnerId) {
+    return allClients.filter((c) => c.econ_dev_company_id === partnerId);
+  }
+
+  // Rita (8/21/26): clicking a Program in the Home page's global search
+  // used to just land here with no way to see that program's actual
+  // engagements. A search result now links here with ?program=ID -- on
+  // load, pop that program's Engagements row open and scroll to it so the
+  // search actually resolves to the answer, not just the right screen.
+  function applyProgramDeepLink() {
+    const programId = new URLSearchParams(location.search).get("program");
+    if (!programId || !allPartners.some((p) => p.id === programId)) return;
+    openEngagementsPartnerId = programId;
+    renderTable();
+    requestAnimationFrame(() => {
+      const row = document.querySelector(`[data-toggle-engagements="${programId}"]`);
+      if (row) row.closest("tr")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
   }
 
   async function loadContacts() {
@@ -602,6 +658,9 @@
       if (sortField === "contacts") {
         av = contactsForPartner(a.id).length;
         bv = contactsForPartner(b.id).length;
+      } else if (sortField === "engagements") {
+        av = clientsForPartner(a.id).length;
+        bv = clientsForPartner(b.id).length;
       } else {
         av = (a.name || "").toLowerCase();
         bv = (b.name || "").toLowerCase();
@@ -635,7 +694,7 @@
       $("empty-note").classList.add("hidden");
     }
 
-    const colspan = isSuperAdmin ? 4 : 3;
+    const colspan = isSuperAdmin ? 5 : 4;
 
     for (const p of rows) {
       const tr = document.createElement("tr");
@@ -650,6 +709,12 @@
         ? `<button type="button" class="contacts-toggle ${isOpen ? "open" : ""}" data-toggle-contacts="${p.id}">${partnerContacts.length} contact${partnerContacts.length === 1 ? "" : "s"}</button>`
         : `<button type="button" class="contacts-toggle empty ${isOpen ? "open" : ""}" data-toggle-contacts="${p.id}">+ Add contacts</button>`;
 
+      const partnerClients = clientsForPartner(p.id);
+      const isEngOpen = openEngagementsPartnerId === p.id;
+      const engagementsPillHtml = partnerClients.length
+        ? `<button type="button" class="contacts-toggle ${isEngOpen ? "open" : ""}" data-toggle-engagements="${p.id}">${partnerClients.length} engagement${partnerClients.length === 1 ? "" : "s"}</button>`
+        : `<button type="button" class="contacts-toggle empty ${isEngOpen ? "open" : ""}" data-toggle-engagements="${p.id}">None yet</button>`;
+
       const editableAttrs = isSuperAdmin ? "" : "readonly";
 
       tr.innerHTML = `
@@ -661,6 +726,7 @@
           <input type="text" class="inline-edit-input p-address-input" data-program-id="${p.id}" data-program-field="address" value="${escapeHtml(p.address || "")}" placeholder="—" ${editableAttrs} />
         </td>
         <td>${contactsPillHtml}</td>
+        <td>${engagementsPillHtml}</td>
         ${actionsCell}
       `;
       tbody.appendChild(tr);
@@ -671,12 +737,43 @@
         detailTr.innerHTML = `<td colspan="${colspan}">${renderContactsDetail(p, partnerContacts)}</td>`;
         tbody.appendChild(detailTr);
       }
+
+      if (isEngOpen) {
+        const engTr = document.createElement("tr");
+        engTr.className = "engagements-detail-row";
+        engTr.innerHTML = `<td colspan="${colspan}">${renderEngagementsDetail(partnerClients)}</td>`;
+        tbody.appendChild(engTr);
+      }
     }
 
     wireContactsToggles();
+    wireEngagementsToggles();
     wireProgramInlineEdits();
     wireDeleteButtons();
     if (openContactsPartnerId) wireContactsDetail(openContactsPartnerId);
+  }
+
+  function renderEngagementsDetail(clients) {
+    if (!clients.length) {
+      return `<div class="engagements-empty">No engagements funded by this program yet.</div>`;
+    }
+    const rowsHtml = clients.map((c) => `
+      <div class="engagement-row">
+        <a class="er-name" href="client_control_center.html?client=${c.id}">${escapeHtml(c.name)}</a>
+        <span class="er-status">${escapeHtml(PROJECT_STATUS_LABELS[c.project_status] || c.project_status || "—")}</span>
+      </div>
+    `).join("");
+    return `<div class="engagements-detail-inner">${rowsHtml}</div>`;
+  }
+
+  function wireEngagementsToggles() {
+    document.querySelectorAll("[data-toggle-engagements]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.toggleEngagements;
+        openEngagementsPartnerId = openEngagementsPartnerId === id ? null : id;
+        renderTable();
+      });
+    });
   }
 
   // ---------- Inline edit (Program name / code / address) ----------
