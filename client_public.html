@@ -57,21 +57,6 @@
   .company-description strong { color: var(--navy); text-transform: uppercase; font-size: 12.5px; letter-spacing: 0.3px; }
   .company-description em { font-style: italic; }
 
-  .company-top-issues {
-    font-size: 13.5px; line-height: 1.6; margin-top: 12px; padding: 12px 14px;
-    background: #f8fafb; border: 1px solid var(--border); border-radius: 8px;
-  }
-  .company-top-issues .cti-label {
-    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
-    color: var(--muted); margin-bottom: 6px;
-  }
-  .company-top-issues p { margin: 0 0 8px; }
-  .company-top-issues p:last-child { margin-bottom: 0; }
-  .company-top-issues ul { margin: 0 0 8px; padding-left: 20px; }
-  .company-top-issues ul:last-child { margin-bottom: 0; }
-  .company-top-issues strong { color: var(--navy); font-weight: 700; }
-  .company-top-issues em { font-style: italic; }
-
   .company-naics { font-size: 13px; color: var(--muted); margin-top: 4px; }
   .company-website { display: inline-block; font-size: 13.5px; font-weight: 700; color: var(--accent-dark); text-decoration: none; margin-top: 10px; }
   .company-website:hover { text-decoration: underline; }
@@ -234,8 +219,6 @@
           <div class="company-address" id="company-address"></div>
         </div>
       </div>
-      <div class="company-description" id="company-description"></div>
-      <div class="company-top-issues hidden" id="company-top-issues"></div>
       <div class="company-naics hidden" id="company-naics"></div>
       <a class="company-website hidden" id="company-website" target="_blank" rel="noopener"></a>
       <div class="company-socials" id="company-socials"></div>
@@ -245,6 +228,28 @@
         <div class="action-body" id="detail-top_customers"></div>
         <div class="action-body" id="detail-next_steps"></div>
       </div>
+    </div>
+
+    <!-- Company Info and Top Business Issues used to sit as plain always-
+         visible text inside the masthead card. Greg (8/21/26) asked for
+         them as the same green roll-up accordion bars as Client Contacts /
+         EG Team / Resource Vault below -- same .action-bar/.action-body
+         classes, just wired here directly since their content isn't a
+         list (so they don't fit the ACTION_BAR_DEFS/renderActionBars loop). -->
+    <div id="company-info-bar-wrap" class="hidden">
+      <div class="action-bar" id="bar-company_info">
+        <span>&#127970; Company Info</span>
+        <span class="ab-chevron">&#9656;</span>
+      </div>
+      <div class="action-body" id="bar-company_info-body"></div>
+    </div>
+
+    <div id="top-issues-bar-wrap" class="hidden">
+      <div class="action-bar" id="bar-top_issues">
+        <span>&#9888;&#65039; Top Business Issues</span>
+        <span class="ab-chevron">&#9656;</span>
+      </div>
+      <div class="action-body" id="bar-top_issues-body"></div>
     </div>
 
     <div id="action-bars"></div>
@@ -444,7 +449,7 @@
     }
   }
 
-  function renderCompany(row) {
+  function renderCompany(row, expandAll) {
     const c = row.company || {};
     if (c.logo_url) {
       $("company-logo-wrap").classList.remove("hidden");
@@ -452,11 +457,19 @@
     }
     $("company-name").textContent = row.client_name;
     $("company-address").textContent = c.address || "";
-    $("company-description").innerHTML = renderDescription(c.description);
+
+    if (c.description) {
+      $("company-info-bar-wrap").classList.remove("hidden");
+      $("bar-company_info-body").innerHTML = `<div class="company-description">${renderDescription(c.description)}</div>`;
+      $("bar-company_info").classList.toggle("open", !!expandAll);
+      $("bar-company_info-body").classList.toggle("open", !!expandAll);
+    }
 
     if (c.top_business_issues) {
-      $("company-top-issues").classList.remove("hidden");
-      $("company-top-issues").innerHTML = `<div class="cti-label">Top Business Issues</div>${renderDescription(c.top_business_issues)}`;
+      $("top-issues-bar-wrap").classList.remove("hidden");
+      $("bar-top_issues-body").innerHTML = `<div class="company-description">${renderDescription(c.top_business_issues)}</div>`;
+      $("bar-top_issues").classList.toggle("open", !!expandAll);
+      $("bar-top_issues-body").classList.toggle("open", !!expandAll);
     }
 
     if (c.naics_codes) {
@@ -718,7 +731,7 @@
     if (isFinalized) $("archive-badge-wrap").classList.remove("hidden");
 
     renderBrandHeader(row);
-    renderCompany(row);
+    renderCompany(row, isFinalized);
     renderStatPills(row);
     renderActionBars(row, isFinalized);
     renderWorkflow(row.workflow);
@@ -730,6 +743,16 @@
   }
 
   $("print-btn").addEventListener("click", () => window.print());
+
+  // Company Info / Top Business Issues bars are static markup (not
+  // regenerated per row like the ACTION_BAR_DEFS ones), so they're wired
+  // once here instead of inside renderActionBars.
+  [["bar-company_info", "bar-company_info-body"], ["bar-top_issues", "bar-top_issues-body"]].forEach(([barId, bodyId]) => {
+    $(barId).addEventListener("click", () => {
+      $(barId).classList.toggle("open");
+      $(bodyId).classList.toggle("open");
+    });
+  });
 
   init();
 </script>
