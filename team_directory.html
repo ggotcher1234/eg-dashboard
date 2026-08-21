@@ -620,6 +620,12 @@
       <label for="add-phone">Phone <span style="font-weight:400; text-transform:none;">(optional)</span></label>
       <input type="text" id="add-phone" />
 
+      <label for="add-address">Mailing Address <span style="font-weight:400; text-transform:none;">(optional)</span></label>
+      <input type="text" id="add-address" placeholder="e.g. 123 Main St, Springfield IL 62701" />
+
+      <label for="add-timezone">Time Zone <span style="font-weight:400; text-transform:none;">(optional)</span></label>
+      <input type="text" id="add-timezone" placeholder="e.g. Mountain" />
+
       <div class="field-error" id="add-error" style="display:none;"></div>
 
       <div class="modal-actions">
@@ -674,6 +680,12 @@
 
       <label for="pf-phone">Phone</label>
       <input type="text" id="pf-phone" />
+
+      <label for="pf-address">Mailing Address</label>
+      <input type="text" id="pf-address" placeholder="e.g. 123 Main St, Springfield IL 62701" />
+
+      <label for="pf-timezone">Time Zone</label>
+      <input type="text" id="pf-timezone" placeholder="e.g. Mountain" />
 
       <div class="modal-actions">
         <button type="button" class="btn-secondary" id="profile-cancel">Close</button>
@@ -1262,7 +1274,7 @@
   async function loadUsers() {
     const [{ data, error }, { data: specialtyRows, error: specErr }] = await Promise.all([
       sb.from("users")
-        .select("id, full_name, title, company_name, role, email, secondary_email, phone, about, default_specialty, avatar_url")
+        .select("id, full_name, title, company_name, role, email, secondary_email, phone, address, time_zone, about, default_specialty, avatar_url")
         .order("full_name", { ascending: true }),
       sb.from("user_specialties").select("user_id, specialty"),
     ]);
@@ -1505,6 +1517,8 @@
       // full set is written to user_specialties separately below.
       default_specialty: specialties[0] || "",
       phone: $("add-phone").value.trim(),
+      address: $("add-address").value.trim(),
+      time_zone: $("add-timezone").value.trim(),
     };
 
     const saveBtn = $("add-save");
@@ -1719,28 +1733,33 @@
     const header = allRows[headerIdx].map((h) => (h || "").trim().toLowerCase());
     const col = (name) => header.indexOf(name);
     const iPos = col("position"), iName = col("name"), iEmail = col("email"), iPhone = col("phone"), iCompany = col("company");
+    const iAddress = col("mailing address"), iTimeZone = col("time zone");
     if (iName === -1 || iEmail === -1) {
       showBanner("That file is missing a Name or Email column.", "error");
       return;
     }
 
     // Group rows by email — the same person can appear once per specialty.
-    const people = new Map(); // lowercased email -> { full_name, phone, company_name, positions:Set }
+    const people = new Map(); // lowercased email -> { full_name, phone, company_name, address, time_zone, positions:Set }
     let noEmailCount = 0;
     for (const r of allRows.slice(headerIdx + 1)) {
       const name = (r[iName] || "").trim();
-      const emailRaw = (r[iEmail] || "").replace(/ /g, " ").trim().toLowerCase();
+      const emailRaw = (r[iEmail] || "").replace(/ /g, " ").trim().toLowerCase();
       const email = (emailRaw.split(/\s+/)[0] || "").replace(/[<>]/g, "");
       const phone = iPhone !== -1 ? (r[iPhone] || "").trim() : "";
       const company = iCompany !== -1 ? (r[iCompany] || "").trim() : "";
+      const address = iAddress !== -1 ? (r[iAddress] || "").trim() : "";
+      const timeZone = iTimeZone !== -1 ? (r[iTimeZone] || "").trim() : "";
       const position = iPos !== -1 ? (r[iPos] || "").trim() : "";
       if (!name && !email) continue; // blank spacer row
       if (!email) { noEmailCount++; continue; }
-      if (!people.has(email)) people.set(email, { full_name: name, phone: "", company_name: "", positions: new Set() });
+      if (!people.has(email)) people.set(email, { full_name: name, phone: "", company_name: "", address: "", time_zone: "", positions: new Set() });
       const person = people.get(email);
       if (name && !person.full_name) person.full_name = name;
       if (phone && !person.phone) person.phone = phone;
       if (company && !person.company_name) person.company_name = company;
+      if (address && !person.address) person.address = address;
+      if (timeZone && !person.time_zone) person.time_zone = timeZone;
       if (position) person.positions.add(normalizePosition(position));
     }
 
@@ -1766,6 +1785,8 @@
             title,
             company_name: p.company_name,
             phone: p.phone,
+            address: p.address,
+            time_zone: p.time_zone,
             default_specialty: primary || "",
           },
         });
@@ -1776,6 +1797,8 @@
       if (p.full_name && p.full_name !== existing.full_name) updates.full_name = p.full_name;
       if (p.phone && p.phone !== (existing.phone || "")) updates.phone = p.phone;
       if (p.company_name && p.company_name !== (existing.company_name || "")) updates.company_name = p.company_name;
+      if (p.address && p.address !== (existing.address || "")) updates.address = p.address;
+      if (p.time_zone && p.time_zone !== (existing.time_zone || "")) updates.time_zone = p.time_zone;
       if (title && title !== (existing.title || "")) updates.title = title;
       if (primary && primary !== (existing.default_specialty || "")) updates.default_specialty = primary;
       // Never touch an existing Super Admin's role, and never demote an
@@ -1969,6 +1992,8 @@
     $("pf-about").value = u.about || "";
     $("pf-secondary-email").value = u.secondary_email || "";
     $("pf-phone").value = u.phone || "";
+    $("pf-address").value = u.address || "";
+    $("pf-timezone").value = u.time_zone || "";
     $("pf-email-display").innerHTML = `<a href="mailto:${escapeHtml(u.email)}">${escapeHtml(u.email)}</a>`;
 
     // Lock down fields the viewer isn't allowed to touch
@@ -1977,6 +2002,8 @@
     $("pf-about").disabled = !canEdit;
     $("pf-secondary-email").disabled = !canEdit;
     $("pf-phone").disabled = !canEdit;
+    $("pf-address").disabled = !canEdit;
+    $("pf-timezone").disabled = !canEdit;
     $("pf-role").disabled = !canEditRole;
     $("pf-role-lock-note").textContent = canEditRole ? "" : "(Admin only)";
 
@@ -2105,6 +2132,8 @@
       about: $("pf-about").value.trim() || null,
       secondary_email: $("pf-secondary-email").value.trim() || null,
       phone: $("pf-phone").value.trim() || null,
+      address: $("pf-address").value.trim() || null,
+      time_zone: $("pf-timezone").value.trim() || null,
     };
     if (isSuperAdmin) {
       payload.role = $("pf-role").value;

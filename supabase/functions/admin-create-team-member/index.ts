@@ -167,6 +167,8 @@ Deno.serve(async (req: Request) => {
     const company_name = (body.company_name || "").trim() || null;
     const phone = (body.phone || "").trim() || null;
     const secondary_email = (body.secondary_email || "").trim() || null;
+    const address = (body.address || "").trim() || null;
+    const time_zone = (body.time_zone || "").trim() || null;
     const role = body.role;
     const default_specialty = body.default_specialty || null;
 
@@ -192,9 +194,12 @@ Deno.serve(async (req: Request) => {
       role,
       full_name,
       title,
+      company_name,
       email,
       phone,
       secondary_email,
+      address,
+      time_zone,
       default_specialty,
     });
 
