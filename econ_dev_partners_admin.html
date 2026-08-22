@@ -168,6 +168,13 @@
   }
   .inline-edit-input:focus { outline: none; border-color: var(--navy-light); }
   .inline-edit-input[readonly] { background: #f4f6f8; color: var(--muted); }
+  /* Program Finance holds a whole contact block (name/title, org, mailing
+     address, email, phone) as free-form multi-line text -- some Programs
+     only have a name and email, others a full mailing address, so this
+     isn't broken into separate structured fields (Greg, 8/22/26). Prints
+     straight onto the generated invoice's "Bill To" block in
+     program_invoicing.html (already white-space:pre-line there). */
+  textarea.inline-edit-textarea { min-height: 128px; line-height: 1.5; resize: vertical; }
   .delete-row-btn { background: transparent; border: none; color: var(--muted); font-size: 17px; padding: 4px 8px; line-height: 1; }
   .delete-row-btn:hover { color: var(--danger-dark); }
 
@@ -451,7 +458,7 @@
       <label for="form-name">Full name</label>
       <input type="text" id="form-name" required />
 
-      <div class="field-hint" style="font-size:12px; color:var(--muted); margin-top:10px;">Address and contacts can be added afterward, right in the table.</div>
+      <div class="field-hint" style="font-size:12px; color:var(--muted); margin-top:10px;">Program Finance contact and other contacts can be added afterward, right in the table.</div>
 
       <div class="modal-actions">
         <button type="button" class="btn-secondary" id="modal-cancel">Cancel</button>
@@ -826,8 +833,9 @@
       <label for="pd-code-input">Abbreviation</label>
       <input type="text" class="inline-edit-input" id="pd-code-input" data-program-id="${p.id}" data-program-field="code" value="${escapeHtml(p.code)}" ${editableAttrs} />
 
-      <label for="pd-address-input">Address</label>
-      <input type="text" class="inline-edit-input" id="pd-address-input" data-program-id="${p.id}" data-program-field="address" value="${escapeHtml(p.address || "")}" placeholder="—" ${editableAttrs} />
+      <label for="pd-address-input">Program Finance</label>
+      <div class="field-hint" style="font-size:12px; color:var(--muted); margin:-6px 0 6px;">Who receives EG's invoices for this Program -- name/title, org, mailing address, email, phone. Some Programs are just a name and email.</div>
+      <textarea class="inline-edit-input inline-edit-textarea" id="pd-address-input" data-program-id="${p.id}" data-program-field="address" placeholder="Terrell Ellis, Executive Director&#10;Advantage Valley&#10;P.O. Box 1925&#10;Charleston, WV 25327&#10;terrell@advantagevalley.com&#10;304.352.1165" ${editableAttrs}>${escapeHtml(p.address || "")}</textarea>
 
       <label style="margin-top:18px;">Contacts</label>
       <div id="pd-contacts-inner">${renderContactsDetail(p, contactsForPartner(p.id))}</div>

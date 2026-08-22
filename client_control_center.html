@@ -955,11 +955,26 @@
   // coming from a real person's inbox rather than a generic system address.
   const RESEARCH_AREAS = [
     ["market_dynamics", "Market Dynamics Research"],
+    ["gis", "GIS"],
     ["outbound", "Outbound Marketing"],
     ["inbound", "Inbound Marketing"],
     ["watering_holes", "Watering Holes"],
   ];
   const RESEARCH_AREA_LABELS = Object.fromEntries(RESEARCH_AREAS);
+  // Greg (8/22/26): the actual question text varies client to client, but
+  // it's always one of these 5 fixed categories -- so the dropdown itself
+  // just names the category ("Market Research Question") instead of
+  // previewing the specific question text, which only added noise. The
+  // fuller RESEARCH_AREA_LABELS above are still used for the generated
+  // email's subject/body wording -- this map only shortens what shows up
+  // in the <select>.
+  const EMAIL_QUESTION_DROPDOWN_LABELS = {
+    market_dynamics: "Market Research Question",
+    gis: "GIS Question",
+    outbound: "Outbound Marketing Question",
+    inbound: "Inbound Marketing Question",
+    watering_holes: "Watering Hole Question",
+  };
   const SPECIALTY_LABELS = {
     team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
     gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
@@ -1047,9 +1062,9 @@
     emailQuestions = (questions || []).filter((q) => (q.question || "").trim());
     if (emailQuestions.length) {
       $("ed-question").innerHTML = emailQuestions.map((q) => {
-        const areaLabel = RESEARCH_AREA_LABELS[q.research_area] || q.research_area;
-        const preview = q.question.length > 70 ? q.question.slice(0, 70) + "…" : q.question;
-        return `<option value="${q.id}">${escapeHtml(areaLabel)}: ${escapeHtml(preview)}</option>`;
+        const label = EMAIL_QUESTION_DROPDOWN_LABELS[q.research_area]
+          || `${RESEARCH_AREA_LABELS[q.research_area] || q.research_area} Question`;
+        return `<option value="${q.id}">${escapeHtml(label)}</option>`;
       }).join("");
       await loadDocsForSelectedQuestion();
     } else {
