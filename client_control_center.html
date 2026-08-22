@@ -975,6 +975,18 @@
     inbound: "Inbound Marketing Question",
     watering_holes: "Watering Hole Question",
   };
+  // Matches the firm's internal filing convention for these emails (Greg,
+  // 8/22/26): "(Program Code) Account Name - Market Research Report". Kept
+  // as its own map (rather than reusing RESEARCH_AREA_LABELS, which reads
+  // "Market Dynamics Research" for subject lines elsewhere) since Greg's
+  // filing convention uses the shorter "Market Research" phrasing.
+  const EMAIL_SUBJECT_REPORT_LABELS = {
+    market_dynamics: "Market Research",
+    gis: "GIS",
+    outbound: "Outbound Marketing",
+    inbound: "Inbound Marketing",
+    watering_holes: "Watering Hole",
+  };
   const SPECIALTY_LABELS = {
     team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
     gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
@@ -1115,7 +1127,11 @@
     const docs = q ? (emailQuestionDocs[q.id] || []) : [];
     const contactBits = [currentUser && currentUser.email, currentUser && currentUser.phone].filter(Boolean).join(" or ");
 
-    $("ed-subject").value = q ? `${areaLabel} update — ${activeClient.name}` : `Update on your Economic Gardening research — ${activeClient.name}`;
+    const programCode = activeClient.econ_dev_companies && activeClient.econ_dev_companies.code;
+    const reportLabel = q ? (EMAIL_SUBJECT_REPORT_LABELS[q.research_area] || areaLabel) : "";
+    $("ed-subject").value = q
+      ? `${programCode ? `(${programCode}) ` : ""}${activeClient.name} - ${reportLabel} Report`
+      : `Update on your Economic Gardening research — ${activeClient.name}`;
 
     if (!q) {
       $("ed-body").value = `Hi ${firstContactName},
