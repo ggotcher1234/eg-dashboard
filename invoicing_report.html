@@ -1296,6 +1296,26 @@
 
     populateEngagementFilter();
     render();
+    applyDeepLinkEngagement();
+  }
+
+  // Lets other pages (e.g. the Engagements list) link straight into a single
+  // engagement's Cumulative Hours/Value detail via
+  // invoicing_report.html?engagement=<clientId>, instead of landing on the
+  // flat all-engagements table and making the person hunt it down. Only runs
+  // once per load -- re-running on every loadData() call (e.g. after a
+  // month-nav re-fetch) would re-force the filter even after the person
+  // clears it back to "All Engagements".
+  let deepLinkApplied = false;
+  function applyDeepLinkEngagement() {
+    if (deepLinkApplied) return;
+    deepLinkApplied = true;
+    const engagementId = new URLSearchParams(window.location.search).get("engagement");
+    if (!engagementId) return;
+    const select = $("eng-filter");
+    if (![...select.options].some((o) => o.value === engagementId)) return;
+    select.value = engagementId;
+    applyEngagementFilter();
   }
 
   function monthBounds(monthValue) {
