@@ -53,7 +53,7 @@ function jsonResponse(body: unknown, status = 200) {
 // allowlist, not a blind pass-through of whatever the request body
 // contains, since this endpoint has no authenticated caller to trust.
 const ALLOWED_FIELD_KEYS = [
-  "f-company-name", "f-website", "f-year-founded",
+  "f-company-name", "f-website", "f-year-founded", "f-is-private", "f-program-contact",
   "f-street", "f-city", "f-state", "f-postal", "f-county",
   "f-p-name", "f-p-title", "f-p-email", "f-p-phone",
   "f-s-name", "f-s-title", "f-s-email", "f-s-phone",
@@ -63,9 +63,11 @@ const ALLOWED_FIELD_KEYS = [
   "_secondaryOpen",
 ];
 
+// f-pct-instate is intentionally NOT required (Greg, 8/21/26) -- a CEO may
+// not have that figure handy, and it shouldn't block submitting otherwise.
 const REQUIRED_KEYS = [
-  "f-company-name", "f-street", "f-city", "f-state", "f-county", "f-year-founded",
-  "f-p-name", "f-p-title", "f-p-email", "f-p-phone", "f-top-issues", "f-pct-instate",
+  "f-company-name", "f-street", "f-city", "f-state", "f-county", "f-year-founded", "f-is-private",
+  "f-p-name", "f-p-title", "f-p-email", "f-p-phone", "f-top-issues",
 ];
 
 // Combined attachment size cap -- keeps one submission from blowing past
@@ -214,10 +216,14 @@ Deno.serve(async (req: Request) => {
   }
 });
 
+// Written with .split/.join instead of regex literals -- a bare `/</g` or
+// `/>/g` regex token in this file was tripping up Supabase's deploy-time
+// parser ("Expected '}', got '<eof>'"), most likely misread as an
+// unclosed JSX-like tag. Same result, no regex involved.
 function escapeHtml(str: string) {
   return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .split("&").join("&amp;")
+    .split("<").join("&lt;")
+    .split(">").join("&gt;")
+    .split('"').join("&quot;");
 }

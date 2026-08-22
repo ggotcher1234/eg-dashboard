@@ -145,6 +145,23 @@
         </div>
 
         <div class="field-row">
+          <div class="field">
+            <label>Ownership <span class="req">*</span></label>
+            <select id="f-is-private" required>
+              <option value="">Select ownership type…</option>
+              <option value="true">Private</option>
+              <option value="false">Public</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Program Contact <span style="font-weight:400; text-transform:none;">(optional)</span></label>
+            <select id="f-program-contact">
+              <option value="">Not sure / none</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
           <div class="field full">
             <label>Primary Business &amp; NAICS Code <span style="font-weight:400; text-transform:none;">(if known)</span></label>
             <input type="text" id="f-naics" />
@@ -241,8 +258,8 @@
         </div>
         <div class="field-row">
           <div class="field">
-            <label>Percent of Employees Located In State <span class="req">*</span></label>
-            <input type="number" id="f-pct-instate" min="0" max="100" required />
+            <label>Percent of Employees Located In State <span style="font-weight:400; text-transform:none;">(optional)</span></label>
+            <input type="number" id="f-pct-instate" min="0" max="100" />
           </div>
         </div>
         <div class="field-row">
@@ -326,8 +343,19 @@
       $("program-logo").alt = program.name;
       $("program-logo").classList.remove("hidden");
     }
+    await loadProgramContacts();
     $("loading-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
+  }
+
+  // Program Contact dropdown -- only this Program's own contacts, name +
+  // title only (matches what the internal wizard's own dropdown shows).
+  async function loadProgramContacts() {
+    const { data, error } = await sb.rpc("get_public_program_contacts", { p_program_id: program.id });
+    if (error || !data || !data.length) return;
+    const sel = $("f-program-contact");
+    sel.innerHTML = `<option value="">Not sure / none</option>` +
+      data.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}${c.title ? " — " + escapeHtml(c.title) : ""}</option>`).join("");
   }
 
   // ---------- Attachments (read as base64 client-side, sent inline) ----------
@@ -382,6 +410,8 @@
       "f-company-name": $("f-company-name").value.trim(),
       "f-website": $("f-website").value.trim(),
       "f-year-founded": $("f-year-founded").value,
+      "f-is-private": $("f-is-private").value,
+      "f-program-contact": $("f-program-contact").value,
       "f-street": $("f-street").value.trim(),
       "f-city": $("f-city").value.trim(),
       "f-state": $("f-state").value.trim(),
