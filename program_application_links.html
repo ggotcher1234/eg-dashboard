@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Application Links</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d; --navy-light: #1f4a75; --accent: #5c7248; --accent-dark: #46592f;
+    --bg: #f4f6f8; --card: #ffffff; --border: #dde3e9; --text: #1f2937; --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+
+  header { background: var(--navy); color: #fff; padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 12.5px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  header .brand-row { display: flex; align-items: center; gap: 14px; }
+  .brand-badge { background: #fff; border-radius: 8px; padding: 5px 10px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 26px; display: block; }
+  #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  header .site-nav { display: flex; align-items: center; gap: 4px; }
+  header .nav-link { color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 8px 12px; border-radius: 6px; position: relative; }
+  header .nav-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  header .nav-link.active { color: #fff; }
+  header .nav-link.active::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -14px; height: 2px; background: #fff; }
+  @media (max-width: 980px) { header .site-nav { display: none; } }
+
+  button { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+
+  #profile-wrap { position: relative; }
+  #profile-btn { display: flex; align-items: center; gap: 4px; padding: 4px 6px; }
+  #profile-btn .avatar-icon { width: 24px; height: 24px; border-radius: 999px; background: rgba(255,255,255,0.14); display: flex; align-items: center; justify-content: center; color: #c9d6e3; }
+  #profile-btn .avatar-icon svg { width: 14px; height: 14px; }
+  #profile-btn .chevron { font-size: 9px; color: #c9d6e3; }
+  .profile-dropdown { position: absolute; top: 40px; right: 0; width: 150px; padding: 6px; background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60; }
+  .profile-dropdown button { width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--text); }
+  .profile-dropdown button:hover { background: #eef1f4; color: var(--text); }
+
+  main { max-width: 900px; margin: 28px auto; padding: 0 20px 70px; }
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+  .hidden { display: none !important; }
+
+  .page-intro { font-size: 13px; color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
+  .toolbar { margin-bottom: 14px; }
+  .toolbar input[type="text"] { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13.5px; width: 280px; background: #fff; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .table-scroll { overflow-x: auto; border-radius: 8px; }
+  thead th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); background: #f8fafb; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #fafbfc; }
+  .program-name { font-weight: 700; color: var(--navy); }
+  .program-code { font-size: 11.5px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; }
+  .link-cell { display: flex; align-items: center; gap: 8px; }
+  .link-url { font-size: 12.5px; color: var(--navy-light); font-family: "SF Mono", Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .copy-btn { flex-shrink: 0; }
+  .copy-btn.copied { background: #e9f5ee; color: #24614a; }
+  .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <div class="brand-row">
+      <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
+      <div>
+        <h1>Application Links</h1>
+        <div class="sub">One tailored application link per Program &nbsp;·&nbsp; <a class="back-link" href="econ_dev_partners_admin.html">← Programs</a></div>
+      </div>
+    </div>
+    <nav class="site-nav">
+      <a class="nav-link" href="index.html">Engagements</a>
+      <a class="nav-link active" href="econ_dev_partners_admin.html">Programs</a>
+      <a class="nav-link" href="team_directory.html">Roster</a>
+      <a class="nav-link" href="invoicing_report.html">Invoicing</a>
+    </nav>
+    <div id="userbox">
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span>
+      <div id="profile-wrap">
+        <button class="btn-ghost" id="profile-btn" title="Account menu">
+          <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="chevron">&#9662;</span>
+        </button>
+        <div id="profile-dropdown" class="profile-dropdown hidden">
+          <button class="btn-ghost" id="change-password-btn">Change Password</button>
+          <button class="btn-ghost" id="signout-btn">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="banner"></div>
+    <div class="page-intro">Give a Program's contact the link in their row below — a CEO who fills it out and submits lands as a Draft on the Engagement Applications page, tagged to that Program.</div>
+
+    <div class="toolbar">
+      <input type="text" id="search-box" placeholder="Search programs by name or code…" />
+    </div>
+
+    <div class="table-scroll">
+      <table id="links-table">
+        <thead>
+          <tr>
+            <th>Program</th>
+            <th>Application Link</th>
+            <th style="width:90px;"></th>
+          </tr>
+        </thead>
+        <tbody id="links-tbody"></tbody>
+      </table>
+    </div>
+    <div id="empty-note" class="empty-note hidden">No programs match your search.</div>
+  </main>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const PUBLIC_SITE_BASE = "https://egdb.netlify.app/";
+
+  const $ = (id) => document.getElementById(id);
+  const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
+  function roleLabel(role) { return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role; }
+  function redirectToLogin() {
+    const dest = location.pathname.split("/").pop() + location.search;
+    location.href = "index.html?return=" + encodeURIComponent(dest);
+  }
+
+  let allPartners = [];
+
+  $("change-password-btn").addEventListener("click", () => { location.href = "reset_password.html"; });
+  $("signout-btn").addEventListener("click", async () => { await sb.auth.signOut(); redirectToLogin(); });
+  $("profile-btn").addEventListener("click", (e) => { e.stopPropagation(); $("profile-dropdown").classList.toggle("hidden"); });
+  document.addEventListener("click", (e) => { if (!$("profile-wrap").contains(e.target)) $("profile-dropdown").classList.add("hidden"); });
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+    const { data: profile, error } = await sb.from("users").select("id, full_name, role, organization_id").eq("id", user.id).single();
+    if (error || !profile) { await sb.auth.signOut(); redirectToLogin(); return; }
+
+    $("loading-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = roleLabel(profile.role);
+
+    await loadPartners();
+  }
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) afterSignIn(); else redirectToLogin();
+  });
+
+  async function loadPartners() {
+    const { data, error } = await sb.from("econ_dev_companies").select("id, name, code").eq("active", true).order("name");
+    if (error) { console.error("Couldn't load programs:", error.message); return; }
+    allPartners = data;
+    renderTable();
+  }
+
+  function applicationUrl(code) {
+    return `${PUBLIC_SITE_BASE}client_application_public.html?program=${encodeURIComponent(code)}`;
+  }
+
+  function renderTable() {
+    const q = $("search-box").value.trim().toLowerCase();
+    const rows = allPartners.filter((p) => !q || p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q));
+    $("empty-note").classList.toggle("hidden", rows.length > 0);
+
+    $("links-tbody").innerHTML = rows.map((p) => {
+      const url = applicationUrl(p.code);
+      return `
+        <tr>
+          <td>
+            <div class="program-name">${escapeHtml(p.name)}</div>
+            <div class="program-code">${escapeHtml(p.code)}</div>
+          </td>
+          <td>
+            <div class="link-cell">
+              <span class="link-url" title="${escapeHtml(url)}">${escapeHtml(url)}</span>
+            </div>
+          </td>
+          <td><button type="button" class="btn-secondary copy-btn" data-copy-url="${escapeHtml(url)}">Copy Link</button></td>
+        </tr>
+      `;
+    }).join("");
+
+    document.querySelectorAll("[data-copy-url]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(btn.dataset.copyUrl);
+          const original = btn.textContent;
+          btn.textContent = "Copied!";
+          btn.classList.add("copied");
+          setTimeout(() => { btn.textContent = original; btn.classList.remove("copied"); }, 1800);
+        } catch (e) {
+          showBanner("Couldn't copy automatically — select and copy the link text instead.");
+        }
+      });
+    });
+  }
+
+  function showBanner(message) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = "success";
+    setTimeout(() => { el.className = ""; }, 3000);
+  }
+
+  $("search-box").addEventListener("input", renderTable);
+</script>
+</body>
+</html>

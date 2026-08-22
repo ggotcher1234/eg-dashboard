@@ -91,6 +91,7 @@
   .draft-row:hover { background: #f4f6f8; }
   .draft-row-name { font-weight: 600; font-size: 13px; color: var(--text); }
   .draft-row-time { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .draft-row-badge { background: #e9f5ee; color: var(--accent-dark); border: 1px solid #bfe3cf; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; padding: 2px 7px; border-radius: 999px; margin-left: 6px; }
   .draft-row-delete { background: transparent; border: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 4px 6px; cursor: pointer; flex-shrink: 0; }
   .draft-row-delete:hover { color: var(--danger); }
   .drafts-empty { padding: 16px 14px; font-size: 12.5px; color: var(--muted); text-align: center; }
@@ -1475,7 +1476,7 @@
   }
   async function loadDrafts() {
     const { data, error } = await sb.from("client_application_drafts")
-      .select("id, engagement_name, data, updated_at")
+      .select("id, engagement_name, data, updated_at, source, econ_dev_company_id")
       .order("updated_at", { ascending: false });
     if (error) { console.error("Couldn't load drafts:", error.message); return; }
     applicationDrafts = data || [];
@@ -1493,15 +1494,25 @@
     $("drafts-count").textContent = applicationDrafts.length;
     $("drafts-count").classList.toggle("hidden", applicationDrafts.length === 0);
     $("drafts-empty").classList.toggle("hidden", applicationDrafts.length > 0);
-    $("drafts-list").innerHTML = applicationDrafts.map((d) => `
+    $("drafts-list").innerHTML = applicationDrafts.map((d) => {
+      // Rita/Chris/Greg's inbox for CEO-submitted applications (Greg,
+      // 8/21/26): a draft that came in through a Program's public link has
+      // source='public_application' and no created_by -- flag it clearly
+      // so it doesn't read as just another staff member's in-progress typing.
+      const partner = d.econ_dev_company_id ? allPartners.find((p) => p.id === d.econ_dev_company_id) : null;
+      const publicBadge = d.source === "public_application"
+        ? `<span class="draft-row-badge">${partner ? escapeHtml(partner.code) + " application" : "Submitted application"}</span>`
+        : "";
+      return `
       <div class="draft-row" data-resume-draft="${d.id}">
         <div>
-          <div class="draft-row-name">${escapeHtml(d.engagement_name || "Untitled draft")}</div>
+          <div class="draft-row-name">${escapeHtml(d.engagement_name || "Untitled draft")} ${publicBadge}</div>
           <div class="draft-row-time">Saved ${wizTimeAgo(d.updated_at)}</div>
         </div>
         <button type="button" class="draft-row-delete" data-delete-draft="${d.id}" title="Delete draft">&times;</button>
       </div>
-    `).join("");
+    `;
+    }).join("");
     document.querySelectorAll("[data-resume-draft]").forEach((el) => {
       el.addEventListener("click", (e) => {
         if (e.target.closest("[data-delete-draft]")) return;
