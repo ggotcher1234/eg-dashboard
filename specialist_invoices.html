@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Specialist Invoices</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  header { background: var(--navy); color: #fff; padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; letter-spacing: 0.2px; }
+  header .sub { font-size: 12.5px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  header .brand-row { display: flex; align-items: center; gap: 14px; }
+  .brand-badge { background: #fff; border-radius: 8px; padding: 5px 10px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 26px; display: block; }
+  header .site-nav { display: flex; align-items: center; gap: 4px; }
+  header .nav-link { color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 8px 12px; border-radius: 6px; position: relative; }
+  header .nav-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  header .nav-link.active { color: #fff; }
+  header .nav-link.active::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -14px; height: 2px; background: #fff; }
+  @media (max-width: 980px) { header .site-nav { display: none; } }
+
+  #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  button, a.btn { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; text-decoration: none; display: inline-block; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  button:disabled { opacity: 0.5; cursor: default; }
+
+  #profile-wrap { position: relative; }
+  #profile-btn { display: flex; align-items: center; gap: 4px; padding: 4px 6px; }
+  #profile-btn .avatar-icon {
+    width: 24px; height: 24px; border-radius: 999px; background: rgba(255,255,255,0.14);
+    display: flex; align-items: center; justify-content: center; color: #c9d6e3;
+  }
+  #profile-btn .avatar-icon svg { width: 14px; height: 14px; }
+  #profile-btn .chevron { font-size: 9px; color: #c9d6e3; }
+  .profile-dropdown {
+    position: absolute; top: 40px; right: 0; width: 150px; padding: 6px; background: #fff; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60;
+  }
+  .profile-dropdown button { width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--text); }
+  .profile-dropdown button:hover { background: #eef1f4; color: var(--text); }
+
+  main { max-width: 1080px; margin: 28px auto; padding: 0 20px 70px; }
+  .hidden { display: none !important; }
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+  #not-admin-note { max-width: 460px; margin: 90px auto; text-align: center; color: var(--muted); font-size: 14px; }
+
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+
+  .testing-note {
+    display: flex; align-items: flex-start; gap: 10px; background: #fdf6e3; border: 1px solid #eed99a;
+    border-radius: 8px; padding: 12px 14px; font-size: 13px; color: #6b5417; margin-bottom: 18px;
+  }
+  .testing-note svg { width: 17px; height: 17px; flex-shrink: 0; margin-top: 1px; color: #a9740f; }
+
+  .toolbar-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    margin: 0 0 20px; background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 16px; box-shadow: 0 1px 3px rgba(20,48,77,0.05);
+  }
+  .month-field { display: flex; align-items: center; gap: 8px; }
+  .month-field label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-right: 2px; }
+  .month-field input[type="month"] { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; background: #f6f8fa; }
+  .month-nav-btn {
+    width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;
+    background: #eef1f4; color: var(--navy); border-radius: 8px; font-size: 16px; line-height: 1;
+  }
+  .month-nav-btn:hover { background: #e2e6ea; }
+  .btn-sm { padding: 8px 12px; font-size: 13px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; margin-bottom: 18px; }
+  .card h2 { margin: 0 0 4px; font-size: 15.5px; }
+  .card .card-hint { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  thead th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted);
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
+  }
+  tbody td { padding: 10px; border-bottom: 1px solid #f0f2f4; font-size: 13.5px; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  th.num, td.num { text-align: right; white-space: nowrap; }
+  .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; }
+
+  .spec-name { font-weight: 700; color: var(--navy); font-size: 14px; }
+  .spec-role { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .pay-figure { font-weight: 700; color: var(--navy); }
+
+  /* ---------- Preview modal ---------- */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 50; padding: 24px; }
+  .overlay.open { display: flex; }
+  .modal-lg { background: #fff; border-radius: 12px; width: 720px; max-width: 100%; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,0.25); }
+  .modal-lg-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+  .modal-lg-header h3 { margin: 0; font-size: 17px; color: var(--navy); }
+  .modal-lg-header .card-hint { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
+  .modal-close { background: transparent; border: none; color: var(--muted); font-size: 20px; padding: 4px; cursor: pointer; line-height: 1; }
+  .modal-close:hover { color: var(--text); }
+  .modal-lg-body { flex: 1; overflow-y: auto; padding: 22px 24px; }
+  .modal-lg-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 24px; border-top: 1px solid var(--border); background: #f8fafb; border-radius: 0 0 12px 12px; }
+  .modal-lg-footer .footer-note { font-size: 11.5px; color: var(--muted); }
+
+  .invoice-table th, .invoice-table td { font-size: 13px; }
+  .invoice-table th.num, .invoice-table td.num { text-align: right; }
+  .invoice-total-row td { font-weight: 700; color: var(--navy); border-top: 2px solid var(--border); padding-top: 12px; }
+
+  .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); margin: 22px 0 8px; }
+  .section-label:first-child { margin-top: 0; }
+
+  .email-frame { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .email-meta-block { background: #f8fafb; border-bottom: 1px solid var(--border); padding: 12px 16px; font-size: 12.5px; }
+  .email-meta-row { display: flex; gap: 8px; padding: 2px 0; }
+  .email-meta-row .em-label { width: 56px; flex-shrink: 0; color: var(--muted); font-weight: 700; }
+  .email-meta-row .em-value { color: var(--text); }
+  .email-body { padding: 18px 20px; font-size: 13.5px; line-height: 1.55; }
+  .email-body p { margin: 0 0 12px; }
+  .email-body table { margin: 10px 0 14px; }
+  .email-body th, .email-body td { font-size: 12.5px; padding: 7px 9px; }
+  .email-body th { background: #f4f6f8; }
+  .email-signoff { color: var(--muted); }
+
+  .preview-not-sent {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--amber); font-weight: 700;
+    background: #fdf6e3; border: 1px solid #eed99a; border-radius: 6px; padding: 6px 10px; margin-bottom: 16px;
+  }
+  .preview-not-sent svg { width: 14px; height: 14px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="not-admin-view" class="hidden">
+  <header>
+    <div class="brand-row">
+      <a class="brand-badge" href="index.html"><img src="/NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
+      <div><h1>Specialist Invoices</h1></div>
+    </div>
+    <nav class="site-nav">
+      <a class="nav-link" href="index.html">Engagements</a>
+      <a class="nav-link" href="econ_dev_partners_admin.html">Programs</a>
+      <a class="nav-link" href="team_directory.html">Roster</a>
+      <a class="nav-link active" href="invoicing_report.html">Invoicing</a>
+    </nav>
+    <div id="userbox2">
+      <div id="profile-wrap2">
+        <button class="btn-ghost" id="profile-btn2" title="Account menu">
+          <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="chevron">&#9662;</span>
+        </button>
+        <div id="profile-dropdown2" class="profile-dropdown hidden">
+          <button class="btn-ghost" id="change-password-btn2">Change Password</button>
+          <button class="btn-ghost" id="signout-btn2">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+  <div id="not-admin-note">This page is Admin only. Ask an Admin to pull specialist pay statements.</div>
+</div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <div class="brand-row">
+      <a class="brand-badge" href="index.html"><img src="/NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
+      <div>
+        <h1>Specialist Invoices</h1>
+        <div class="sub">Per-specialist pay statements &nbsp;·&nbsp; <a class="back-link" href="invoicing_report.html">← Invoicing Report</a></div>
+      </div>
+    </div>
+    <nav class="site-nav">
+      <a class="nav-link" href="index.html">Engagements</a>
+      <a class="nav-link" href="econ_dev_partners_admin.html">Programs</a>
+      <a class="nav-link" href="team_directory.html">Roster</a>
+      <a class="nav-link active" href="invoicing_report.html">Invoicing</a>
+    </nav>
+    <div id="userbox">
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span>
+      <div id="profile-wrap">
+        <button class="btn-ghost" id="profile-btn" title="Account menu">
+          <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="chevron">&#9662;</span>
+        </button>
+        <div id="profile-dropdown" class="profile-dropdown hidden">
+          <button class="btn-ghost" id="change-password-btn">Change Password</button>
+          <button class="btn-ghost" id="signout-btn">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="banner"></div>
+
+    <div class="testing-note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <div>Email sending isn't wired up yet -- everything here is <strong>preview only</strong>. Nothing gets sent to anyone until that's turned on.</div>
+    </div>
+
+    <div class="toolbar-row">
+      <div class="month-field">
+        <label for="inv-month">Month</label>
+        <button type="button" class="month-nav-btn" id="month-prev" title="Previous month" aria-label="Previous month">&#8249;</button>
+        <input type="month" id="inv-month" />
+        <button type="button" class="month-nav-btn" id="month-next" title="Next month" aria-label="Next month">&#8250;</button>
+        <button type="button" class="btn-secondary btn-sm" id="month-today">This Month</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Pay Statements</h2>
+      <div class="card-hint" id="month-label-hint"></div>
+
+      <div class="table-scroll">
+        <table id="specialist-table">
+          <thead>
+            <tr>
+              <th>Specialist</th>
+              <th class="num">Hours</th>
+              <th class="num">Rate</th>
+              <th class="num">Total Pay</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="specialist-tbody"></tbody>
+        </table>
+      </div>
+      <div id="specialist-empty" class="empty-note hidden">No hours logged for this month yet.</div>
+    </div>
+  </main>
+</div>
+
+<!-- Invoice + email preview -->
+<div class="overlay" id="preview-overlay">
+  <div class="modal-lg">
+    <div class="modal-lg-header">
+      <div>
+        <h3 id="preview-title">Pay Statement</h3>
+        <div class="card-hint" id="preview-subtitle"></div>
+      </div>
+      <button class="modal-close" id="preview-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-lg-body">
+      <div class="preview-not-sent">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        Preview only — no email has been sent.
+      </div>
+
+      <div class="section-label">Invoice</div>
+      <div class="table-scroll">
+        <table class="invoice-table" id="invoice-table">
+          <thead>
+            <tr><th>Engagement</th><th>Role</th><th class="num">Hours</th><th class="num">Rate</th><th class="num">Amount</th></tr>
+          </thead>
+          <tbody id="invoice-tbody"></tbody>
+          <tfoot><tr class="invoice-total-row" id="invoice-total-row"></tr></tfoot>
+        </table>
+      </div>
+
+      <div class="section-label">Email Preview</div>
+      <div class="email-frame">
+        <div class="email-meta-block">
+          <div class="email-meta-row"><span class="em-label">To:</span><span class="em-value" id="email-to"></span></div>
+          <div class="email-meta-row"><span class="em-label">From:</span><span class="em-value">EG Dashboard &lt;payroll@economicgardening.org&gt; (not yet configured)</span></div>
+          <div class="email-meta-row"><span class="em-label">Subject:</span><span class="em-value" id="email-subject"></span></div>
+        </div>
+        <div class="email-body" id="email-body"></div>
+      </div>
+    </div>
+    <div class="modal-lg-footer">
+      <div class="footer-note">Email sending isn't enabled yet.</div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn-secondary" id="preview-close-btn">Close</button>
+        <button class="btn-primary" id="send-email-btn" disabled title="Email sending isn't enabled yet">Send Email (Coming Soon)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const $ = (id) => document.getElementById(id);
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+  function money(n) {
+    return "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
+  function redirectToLogin() {
+    const dest = location.pathname.split("/").pop() + location.search;
+    location.href = "index.html?return=" + encodeURIComponent(dest);
+  }
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 3000);
+  }
+
+  let currentUser = null;
+  let reportRows = []; // one row per active, hour-tracked, non-sunk-cost client_assignment
+  let hourlyRate = 95;
+  let specialistGroups = []; // computed for the currently selected month
+
+  const SPECIALTY_LABELS = {
+    team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
+    gis: "GIS", watering_holes: "Watering Holes",
+  };
+  // Admin/Quality Control are a one-time sunk-cost allotment, not hours
+  // logged month to month -- they never show up in time_entries, so they
+  // never contribute to a monthly pay statement anyway. Excluded here the
+  // same way invoicing_report.html's Payroll tabs exclude them.
+  const EXCLUDED_SPECIALTIES = ["admin", "quality_control"];
+
+  // ---------- Auth ----------
+  async function signOut() {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    $("not-admin-view").classList.add("hidden");
+    redirectToLogin();
+  }
+  $("signout-btn").addEventListener("click", signOut);
+  $("signout-btn2").addEventListener("click", signOut);
+  $("change-password-btn").addEventListener("click", () => { location.href = "reset_password.html"; });
+  $("change-password-btn2").addEventListener("click", () => { location.href = "reset_password.html"; });
+  $("profile-btn").addEventListener("click", (e) => { e.stopPropagation(); $("profile-dropdown").classList.toggle("hidden"); });
+  $("profile-btn2").addEventListener("click", (e) => { e.stopPropagation(); $("profile-dropdown2").classList.toggle("hidden"); });
+  document.addEventListener("click", (e) => {
+    if (!$("profile-wrap").contains(e.target)) $("profile-dropdown").classList.add("hidden");
+    if (!$("profile-wrap2").contains(e.target)) $("profile-dropdown2").classList.add("hidden");
+  });
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users")
+      .select("id, full_name, role, organization_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      await sb.auth.signOut();
+      redirectToLogin();
+      return;
+    }
+
+    currentUser = profile;
+    $("loading-view").classList.add("hidden");
+
+    if (profile.role !== "super_admin") {
+      $("not-admin-view").classList.remove("hidden");
+      return;
+    }
+
+    $("app-view").classList.remove("hidden");
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = roleLabel(profile.role);
+
+    const now = new Date();
+    $("inv-month").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    $("inv-month").addEventListener("change", render);
+    wireMonthNav();
+
+    await loadHourlyRate(profile.organization_id);
+    await loadData();
+  }
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) afterSignIn();
+    else redirectToLogin();
+  });
+
+  function wireMonthNav() {
+    $("month-prev").addEventListener("click", () => shiftMonth(-1));
+    $("month-next").addEventListener("click", () => shiftMonth(1));
+    $("month-today").addEventListener("click", () => {
+      const n = new Date();
+      $("inv-month").value = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+      render();
+    });
+  }
+  function shiftMonth(delta) {
+    const [y, m] = $("inv-month").value.split("-").map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    $("inv-month").value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    render();
+  }
+
+  // ---------- Pay rate (organization_settings.hourly_rate) ----------
+  // Same flat payroll rate used on invoicing_report.html's Payroll tabs --
+  // every team member is paid the same rate regardless of role, and it has
+  // nothing to do with what a Program is billed (that's billing_hourly_rate
+  // on econ_dev_companies, handled in program_invoicing.html).
+  async function loadHourlyRate(organizationId) {
+    const { data, error } = await sb
+      .from("organization_settings")
+      .select("hourly_rate")
+      .eq("organization_id", organizationId)
+      .single();
+    if (!error && data) hourlyRate = Number(data.hourly_rate) || 95;
+  }
+
+  // ---------- Data ----------
+  async function loadData() {
+    const [assignmentsRes, entriesRes, usersRes] = await Promise.all([
+      sb.from("client_assignments")
+        .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name))")
+        .not("user_id", "is", null),
+      sb.from("time_entries").select("assignment_id, hours, entry_date"),
+      sb.from("users").select("id, full_name, role, email"),
+    ]);
+
+    if (assignmentsRes.error) { showBanner("Couldn't load assignments: " + assignmentsRes.error.message, "error"); return; }
+    if (entriesRes.error) { showBanner("Couldn't load time entries: " + entriesRes.error.message, "error"); return; }
+    if (usersRes.error) { showBanner("Couldn't load specialists: " + usersRes.error.message, "error"); return; }
+
+    const usersById = {};
+    for (const u of usersRes.data) usersById[u.id] = u;
+
+    const entriesByAssignment = {};
+    for (const e of entriesRes.data) {
+      (entriesByAssignment[e.assignment_id] ||= []).push(e);
+    }
+
+    reportRows = assignmentsRes.data
+      .filter((a) => !EXCLUDED_SPECIALTIES.includes(a.specialty_type))
+      .map((a) => {
+        const person = usersById[a.user_id];
+        return {
+          userId: a.user_id,
+          specialistName: person ? person.full_name : "Unknown",
+          specialistEmail: person ? person.email : "",
+          specialistRoleLabel: person ? roleLabel(person.role) : "",
+          program: (a.clients && a.clients.econ_dev_companies && a.clients.econ_dev_companies.name) || "—",
+          client: (a.clients && a.clients.name) || "—",
+          role: (SPECIALTY_LABELS[a.specialty_type] || a.specialty_type) + (a.slot_number > 1 ? " " + a.slot_number : ""),
+          entries: entriesByAssignment[a.id] || [],
+        };
+      });
+
+    render();
+  }
+
+  function monthBounds(monthValue) {
+    const [y, m] = monthValue.split("-").map(Number);
+    const start = `${monthValue}-01`;
+    const lastDay = new Date(y, m, 0).getDate();
+    const end = `${monthValue}-${String(lastDay).padStart(2, "0")}`;
+    return { start, end };
+  }
+
+  function render() {
+    const monthValue = $("inv-month").value;
+    if (!monthValue) return;
+    const { start, end } = monthBounds(monthValue);
+    const monthDate = new Date(monthValue + "-02");
+    const monthLabel = monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    $("month-label-hint").textContent = "Showing " + monthLabel + " -- one pay statement per specialist who logged hours this month.";
+
+    const monthRows = reportRows.map((r) => {
+      let hours = 0;
+      for (const e of r.entries) {
+        if (e.entry_date >= start && e.entry_date <= end) hours += Number(e.hours);
+      }
+      return { ...r, hoursThisMonth: round2(hours) };
+    }).filter((r) => r.hoursThisMonth > 0);
+
+    const byUser = new Map();
+    for (const r of monthRows) {
+      if (!byUser.has(r.userId)) {
+        byUser.set(r.userId, {
+          userId: r.userId, name: r.specialistName, email: r.specialistEmail,
+          roleLabel: r.specialistRoleLabel, lines: [], totalHours: 0, totalPay: 0,
+        });
+      }
+      const g = byUser.get(r.userId);
+      const amount = round2(r.hoursThisMonth * hourlyRate);
+      g.lines.push({ program: r.program, client: r.client, role: r.role, hours: r.hoursThisMonth, rate: hourlyRate, amount });
+      g.totalHours = round2(g.totalHours + r.hoursThisMonth);
+      g.totalPay = round2(g.totalPay + amount);
+    }
+    specialistGroups = [...byUser.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+    renderList(monthLabel);
+  }
+
+  function renderList(monthLabel) {
+    const tbody = $("specialist-tbody");
+    $("specialist-empty").classList.toggle("hidden", specialistGroups.length !== 0);
+    $("specialist-table").classList.toggle("hidden", specialistGroups.length === 0);
+
+    tbody.innerHTML = specialistGroups.map((g) => `
+      <tr>
+        <td>
+          <div class="spec-name">${escapeHtml(g.name)}</div>
+          <div class="spec-role">${escapeHtml(g.roleLabel)}${g.email ? " · " + escapeHtml(g.email) : ""}</div>
+        </td>
+        <td class="num">${g.totalHours}</td>
+        <td class="num">${money(hourlyRate)}/hr</td>
+        <td class="num pay-figure">${money(g.totalPay)}</td>
+        <td class="num"><button type="button" class="btn-secondary btn-sm" data-preview="${escapeHtml(g.userId)}">Preview Invoice</button></td>
+      </tr>
+    `).join("");
+
+    tbody.querySelectorAll("[data-preview]").forEach((btn) => {
+      btn.addEventListener("click", () => openPreview(btn.dataset.preview, monthLabel));
+    });
+  }
+
+  // ---------- Invoice + email preview ----------
+  function openPreview(userId, monthLabel) {
+    const g = specialistGroups.find((s) => s.userId === userId);
+    if (!g) return;
+
+    $("preview-title").textContent = `Pay Statement — ${g.name}`;
+    $("preview-subtitle").textContent = monthLabel;
+
+    $("invoice-tbody").innerHTML = g.lines.map((l) => `
+      <tr>
+        <td>${escapeHtml(l.client)}<div style="font-size:11.5px; color:var(--muted);">${escapeHtml(l.program)}</div></td>
+        <td>${escapeHtml(l.role)}</td>
+        <td class="num">${l.hours}</td>
+        <td class="num">${money(l.rate)}</td>
+        <td class="num">${money(l.amount)}</td>
+      </tr>
+    `).join("");
+    $("invoice-total-row").innerHTML = `
+      <td colspan="4">Total Due</td>
+      <td class="num">${money(g.totalPay)}</td>
+    `;
+
+    const firstName = (g.name || "").trim().split(/\s+/)[0] || g.name;
+    $("email-to").textContent = g.email || "(no email on file)";
+    $("email-subject").textContent = `Your EG Pay Statement — ${monthLabel}`;
+    $("email-body").innerHTML = `
+      <p>Hi ${escapeHtml(firstName)},</p>
+      <p>Here's a summary of your hours and pay for ${escapeHtml(monthLabel)}:</p>
+      <table style="width:100%; border-collapse:collapse;">
+        <thead><tr><th style="text-align:left;">Engagement</th><th style="text-align:left;">Role</th><th style="text-align:right;">Hours</th><th style="text-align:right;">Amount</th></tr></thead>
+        <tbody>
+          ${g.lines.map((l) => `
+            <tr>
+              <td>${escapeHtml(l.client)}</td>
+              <td>${escapeHtml(l.role)}</td>
+              <td style="text-align:right;">${l.hours}</td>
+              <td style="text-align:right;">${money(l.amount)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+      <p><strong>Total Pay Due: ${money(g.totalPay)}</strong></p>
+      <p class="email-signoff">Thanks for your work this month!<br>EG Group</p>
+    `;
+
+    $("preview-overlay").classList.add("open");
+  }
+
+  $("preview-close").addEventListener("click", () => $("preview-overlay").classList.remove("open"));
+  $("preview-close-btn").addEventListener("click", () => $("preview-overlay").classList.remove("open"));
+  $("preview-overlay").addEventListener("click", (e) => {
+    if (e.target === $("preview-overlay")) $("preview-overlay").classList.remove("open");
+  });
+</script>
+</body>
+</html>
