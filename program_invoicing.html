@@ -158,26 +158,6 @@
   }
   .rate-input-wrap input:disabled { background: #f4f6f8; color: var(--muted); }
 
-  /* Editable Set-Up Fee row inside the preview table (Greg, 8/22/26) -- lets
-     him adjust a client's one-time fee right here instead of needing the
-     Cumulative Hours page first. Given a visible "$" prefix and an accent
-     border (not just the table's default cell styling) so it reads as an
-     actionable input rather than another static data cell. Disabled + a
-     note once it's already been billed on a past invoice, so it can't
-     accidentally get billed twice. */
-  .pi-fee-input-wrap {
-    display: inline-flex; align-items: center; gap: 4px; border: 1.5px solid var(--navy-light);
-    border-radius: 6px; padding: 3px 8px; background: #fff;
-  }
-  .pi-fee-input-wrap.is-disabled { border-color: var(--border); background: #f4f6f8; }
-  .pi-fee-prefix { color: var(--muted); font-size: 12.5px; }
-  .pi-setup-fee-input {
-    width: 70px; padding: 2px 0; border: none; font-size: 13px; font-family: inherit; text-align: right; background: transparent;
-  }
-  .pi-setup-fee-input:focus { outline: none; }
-  .pi-setup-fee-input:disabled { color: var(--muted); }
-  .fee-billed-note { color: var(--muted); font-weight: 400; font-size: 11.5px; text-transform: none; letter-spacing: 0; }
-
   /* ---------- Preview / past-invoices tables ---------- */
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
   table.pi-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
@@ -392,6 +372,19 @@
             <div class="rate-input-wrap">
               <span class="rate-prefix">$</span>
               <input type="number" id="pi-rate" min="0" step="0.01" disabled />
+            </div>
+          </div>
+          <!-- One field for this whole invoice (Greg, 8/22/26), not editable
+               per client row below -- a setup fee only ever applies to
+               whichever engagement(s) are getting their first invoice this
+               month, and it varies invoice to invoice, so it isn't saved
+               anywhere until Generate Invoice actually bills it. Disabled
+               when no engagement in this preview still needs one. -->
+          <div class="field-group">
+            <label for="pi-setup-fee">Setup Fee</label>
+            <div class="rate-input-wrap">
+              <span class="rate-prefix">$</span>
+              <input type="number" id="pi-setup-fee" min="0" step="0.01" disabled />
             </div>
           </div>
           <button type="button" class="btn-primary" id="pi-generate-btn" disabled>Generate Invoice</button>
@@ -683,6 +676,7 @@
       refreshPreview();
     });
     $("pi-rate").addEventListener("change", saveRateForSelectedProgram);
+    $("pi-setup-fee").addEventListener("input", applySetupFeeToPreview);
     $("pi-month").addEventListener("change", refreshPreview);
     $("pi-month-prev").addEventListener("click", () => shiftMonth(-1));
     $("pi-month-next").addEventListener("click", () => shiftMonth(1));
@@ -812,27 +806,65 @@
 
       lines.sort((a, b) => SPECIALTY_ORDER.indexOf(a.specialty_type) - SPECIALTY_ORDER.indexOf(b.specialty_type));
 
-      const includeSetupFee = Number(client.setup_fee) > 0 && !client.setup_fee_billed;
-      const setupFeeAmount = includeSetupFee ? round2(Number(client.setup_fee)) : null;
+      // Shown whenever this client hasn't had a setup fee billed yet, even
+      // with zero hours logged this month -- a brand-new engagement with no
+      // activity yet still needs its one-time fee applied on its first
+      // invoice (Greg, 8/22/26). The actual dollar amount now comes from
+      // the single #pi-setup-fee header field (recomputeSetupFeeAmounts,
+      // below), not from this stored value directly -- setup_fee_raw is
+      // only kept around to pre-fill that header field sensibly.
+      if (!lines.length && client.setup_fee_billed) continue; // nothing left to bill for this client
 
-      if (!lines.length && setupFeeAmount === null) continue; // nothing billable for this client this month
-
-      const subtotal = round2(lines.reduce((s, l) => s + l.amount, 0) + (setupFeeAmount || 0));
+      const subtotal = round2(lines.reduce((s, l) => s + l.amount, 0));
 
       previewClients.push({
         client_id: client.id,
         client_name: client.name,
         lines,
-        setup_fee: setupFeeAmount,           // amount actually contributing to THIS invoice (null if already billed)
-        setup_fee_raw: Number(client.setup_fee) || 0, // raw stored value, shown in the editable input regardless
+        setup_fee: null,                     // set by recomputeSetupFeeAmounts() below, from the header field
+        setup_fee_raw: Number(client.setup_fee) || 0, // raw stored value, used only to pre-fill the header field
         setup_fee_billed: !!client.setup_fee_billed,
         subtotal,
       });
     }
 
-    previewTotalDue = round2(previewClients.reduce((s, c) => s + c.subtotal, 0));
+    syncSetupFeeField();
+    recomputeSetupFeeAmounts();
     renderPreviewTable();
     $("pi-generate-btn").disabled = !previewClients.length;
+  }
+
+  // ---------- Setup Fee (single header field, applies to whichever
+  // engagement(s) in this preview haven't had a setup fee billed yet) ----------
+  function syncSetupFeeField() {
+    const feeInput = $("pi-setup-fee");
+    const eligible = previewClients.filter((c) => !c.setup_fee_billed);
+    if (!eligible.length) {
+      feeInput.disabled = true;
+      feeInput.value = "";
+      return;
+    }
+    feeInput.disabled = false;
+    // Pre-fill from whichever eligible engagement already has a stored,
+    // nonzero fee -- there's normally at most one engagement getting its
+    // first invoice in a given month. Defaults to blank otherwise.
+    const existing = eligible.find((c) => c.setup_fee_raw > 0);
+    feeInput.value = existing ? existing.setup_fee_raw : "";
+  }
+
+  function recomputeSetupFeeAmounts() {
+    const amount = Number($("pi-setup-fee").value) || 0;
+    const eligible = previewClients.filter((c) => !c.setup_fee_billed);
+    for (const c of eligible) {
+      c.setup_fee = amount > 0 ? round2(amount) : null;
+      c.subtotal = round2(c.lines.reduce((s, l) => s + l.amount, 0) + (c.setup_fee || 0));
+    }
+    previewTotalDue = round2(previewClients.reduce((s, c) => s + c.subtotal, 0));
+  }
+
+  function applySetupFeeToPreview() {
+    recomputeSetupFeeAmounts();
+    renderPreviewTable();
   }
 
   function renderPreviewTable() {
@@ -852,41 +884,18 @@
       for (const l of c.lines) {
         rows += `<tr><td style="padding-left:22px;">${escapeHtml(l.label)}</td><td class="num">${l.qty}</td><td class="num">${money(l.rate)}</td><td class="num">${money(l.amount)}</td></tr>`;
       }
-      // Always editable here (Greg, 8/22/26) -- not gated on whether a fee
-      // happens to already be stored, so a client can get its Set-Up Fee
-      // set for the first time right on this screen. Disabled once it's
-      // already been billed on a past invoice, so it can't double-bill.
-      const feeDisabled = c.setup_fee_billed ? "disabled" : "";
-      const feeWrapClass = c.setup_fee_billed ? "pi-fee-input-wrap is-disabled" : "pi-fee-input-wrap";
-      const feeNote = c.setup_fee_billed ? ` <span class="fee-billed-note">(already billed)</span>` : "";
-      rows += `<tr data-setup-fee-row="${c.client_id}">
-        <td style="padding-left:22px;">Set-Up Fee${feeNote}</td>
-        <td class="num">1</td>
-        <td class="num">
-          <span class="${feeWrapClass}" title="${c.setup_fee_billed ? "Already billed on a past invoice" : "Enter this engagement's one-time setup fee"}">
-            <span class="pi-fee-prefix">$</span>
-            <input type="number" class="pi-setup-fee-input" min="0" step="0.01" value="${c.setup_fee_raw}" data-client-id="${c.client_id}" ${feeDisabled} />
-          </span>
-        </td>
-        <td class="num">${money(c.setup_fee || 0)}</td>
-      </tr>`;
+      // Read-only display (Greg, 8/22/26) -- the amount comes from the
+      // single Setup Fee field in the header, not editable per row here.
+      // Shown for any engagement that hasn't had a setup fee billed yet,
+      // even while the header field is still blank/zero, so it's obvious
+      // which engagement(s) the header field is about to apply to.
+      if (!c.setup_fee_billed) {
+        rows += `<tr><td style="padding-left:22px;">Set-Up Fee</td><td class="num">1</td><td class="num">${money(c.setup_fee || 0)}</td><td class="num">${money(c.setup_fee || 0)}</td></tr>`;
+      }
       rows += `<tr class="subtotal-row"><td colspan="4">Subtotal: ${money(c.subtotal)}</td></tr>`;
     }
     tbody.innerHTML = rows;
-    tbody.querySelectorAll(".pi-setup-fee-input").forEach((input) => {
-      input.addEventListener("change", () => saveSetupFee(input.dataset.clientId, input));
-    });
     $("preview-total").textContent = money(previewTotalDue);
-  }
-
-  async function saveSetupFee(clientId, input) {
-    const newFee = Number(input.value);
-    const client = previewClients.find((c) => c.client_id === clientId);
-    if (!(newFee >= 0)) { input.value = client ? client.setup_fee_raw : 0; return; }
-    input.disabled = true;
-    const { error } = await sb.from("clients").update({ setup_fee: newFee }).eq("id", clientId);
-    if (error) { showBanner("Couldn't save the setup fee: " + error.message, "error"); input.disabled = false; return; }
-    await refreshPreview();
   }
 
   // ---------- Generate ----------
@@ -905,6 +914,16 @@
 
     const setupFeeClientIds = previewClients.filter((c) => c.setup_fee !== null).map((c) => c.client_id);
     const sunkCostAssignmentIds = previewClients.flatMap((c) => c.lines.filter((l) => l.is_sunk_cost).map((l) => l.assignment_id));
+
+    // The header Setup Fee field is transient (not saved anywhere until an
+    // invoice is actually generated) -- so THIS is the moment it gets
+    // written to clients.setup_fee for whatever engagement(s) it applied
+    // to, so the historical record matches what was actually billed.
+    for (const c of previewClients) {
+      if (c.setup_fee === null) continue;
+      const { error: feeErr } = await sb.from("clients").update({ setup_fee: c.setup_fee }).eq("id", c.client_id);
+      if (feeErr) { showBanner("Couldn't save the setup fee: " + feeErr.message, "error"); $("confirm-generate-btn").disabled = false; return; }
+    }
 
     const { data, error } = await sb.rpc("generate_program_invoice", {
       p_organization_id: currentUser.organization_id,
