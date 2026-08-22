@@ -466,6 +466,10 @@
      else (header, tabs, AI drawer, month/search controls, pagination,
      the print button itself) is chrome that shouldn't end up on the page. */
   @media print {
+    /* Landscape by default -- the Cumulative Hours/Value tables add one
+       column per active month (an engagement running 6+ months easily
+       outgrows a portrait page), so print wide instead of clipping. */
+    @page { size: landscape; margin: 0.4in; }
     body { background: #fff; }
     header, .ai-drawer-overlay, .ai-drawer, #banner, .sticky-top-wrap, .tab-bar,
     .sp-controls, .sp-pagination, #ts-print-btn, #eng-detail-back,
@@ -475,6 +479,15 @@
     .card { border: none; padding: 0; box-shadow: none; }
     table { border: 1px solid #ccc; }
     .specialist-scroll, .specialist-scroll table { max-height: none; overflow: visible; }
+    /* On screen, .table-scroll clips a too-wide cum-table behind a
+       horizontal scrollbar -- fine for viewing, but a scrollbar can't be
+       printed, so anything past the visible width would silently vanish
+       from the page instead. overflow: visible + a smaller, tighter table
+       lets the real print engine handle the overflow (wrapping to
+       additional pages) rather than losing columns. */
+    .table-scroll { overflow-x: visible; }
+    .cum-table { table-layout: auto; }
+    .cum-table th, .cum-table td { padding: 5px 7px; font-size: 10.5px; }
   }
 </style>
 </head>
@@ -608,7 +621,7 @@
   <main>
     <div id="banner"></div>
 
-    <div class="sticky-top-wrap">
+    <div class="sticky-top-wrap" id="sticky-toolbar">
       <div class="toolbar-row">
         <div class="month-field">
           <label for="report-month">Month</label>
@@ -1119,8 +1132,21 @@
         $("panel-hours").classList.toggle("hidden", tab !== "hours");
         $("panel-payroll-mtd").classList.toggle("hidden", tab !== "payroll-mtd");
         $("panel-payroll-ytd").classList.toggle("hidden", tab !== "payroll-ytd");
+        updateStickyToolbarVisibility();
       });
     });
+  }
+
+  // The Month picker + Export CSV only mean anything for the flat
+  // "All Engagements" table and the Payroll MTD/YTD tabs -- the merged
+  // per-engagement detail view always shows an engagement's FULL history
+  // regardless of month, so the toolbar has nothing to do there and just
+  // reads as broken/unresponsive. Hide it in that one case only; it stays
+  // put for every other tab/view (Greg, 8/22/26).
+  function updateStickyToolbarVisibility() {
+    const hoursTabActive = !$("panel-hours").classList.contains("hidden");
+    const detailShowing = !$("engagement-detail-wrap").classList.contains("hidden");
+    $("sticky-toolbar").classList.toggle("hidden", hoursTabActive && detailShowing);
   }
 
   // ---------- Month navigation ----------
@@ -1497,6 +1523,7 @@
     $("sp-search-wrap").classList.toggle("hidden", isDetail);
     $("engagement-detail-wrap").classList.toggle("hidden", !isDetail);
     if (isDetail) renderEngagementDetail(clientId);
+    updateStickyToolbarVisibility();
   }
 
   function monthKeyOf(dateStr) { return String(dateStr).slice(0, 7); }
