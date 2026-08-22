@@ -341,8 +341,6 @@
   .cum-table .ed-person-name { color: var(--muted); font-size: 12.5px; }
   .cum-table tfoot td { padding: 12px 14px; font-size: 13.5px; font-weight: 700; border-top: 2px solid var(--border); background: #f8fafb; text-align: right; }
   .cum-table tfoot td:first-child { text-align: left; }
-  .cum-table .ed-setup-fee-row td { font-style: italic; color: var(--muted); }
-  .cum-table .ed-setup-fee-row .ed-specialty-name { color: var(--text); font-weight: 600; font-style: normal; }
   .eng-detail-section { margin-top: 22px; }
   .eng-detail-section h3 { margin: 0 0 4px; font-size: 14.5px; }
   .eng-detail-section .card-hint { margin: 0 0 12px; }
@@ -744,10 +742,6 @@
                   <label>Hourly Rate (Pay)</label>
                   <div class="meta-static" id="ed-rate">—</div>
                 </div>
-                <div class="eng-detail-field">
-                  <label>Setup Fee</label>
-                  <div class="meta-static" id="ed-setup-fee">—</div>
-                </div>
               </div>
             </div>
 
@@ -766,7 +760,7 @@
 
             <div class="eng-detail-section">
               <h3>Cumulative Value by Specialist</h3>
-              <div class="card-hint">Same hours, priced at the Pay rate above, plus the one-time Setup Fee.</div>
+              <div class="card-hint">Same hours, priced at the Pay rate above.</div>
               <div class="table-scroll">
                 <table class="cum-table" id="ed-dollars-table">
                   <thead><tr id="ed-dollars-thead"></tr></thead>
@@ -1528,7 +1522,6 @@
       $("ed-closed-wrap").style.display = "none";
     }
     $("ed-rate").textContent = money(hourlyRate) + "/hr";
-    $("ed-setup-fee").textContent = money(Number(client.setup_fee) || 0);
 
     // Union of every calendar month with real logged hours anywhere in this
     // engagement -- same rule client_cumulative_hours.html used: empty
@@ -1563,7 +1556,7 @@
     });
 
     renderEdHoursTable(detailRows, activeMonths);
-    renderEdDollarsTable(detailRows, activeMonths, Number(client.setup_fee) || 0);
+    renderEdDollarsTable(detailRows, activeMonths);
   }
 
   function renderEdHoursTable(rows, activeMonths) {
@@ -1619,7 +1612,7 @@
     `;
   }
 
-  function renderEdDollarsTable(rows, activeMonths, setupFee) {
+  function renderEdDollarsTable(rows, activeMonths) {
     if (!rows.length) return;
     $("ed-dollars-table").classList.remove("hidden");
     const theadRow = $("ed-dollars-thead");
@@ -1650,22 +1643,11 @@
       </tr>
     `).join("");
 
-    tbody.innerHTML += `
-      <tr class="ed-setup-fee-row">
-        <td><div class="ed-specialty-name">Setup Fee</div></td>
-        <td class="blank-cell">—</td>
-        ${activeMonths.map(() => `<td class="blank-cell">—</td>`).join("")}
-        <td>${money(setupFee)}</td>
-        <td class="blank-cell">—</td>
-      </tr>
-    `;
-
     const totalsByMonth = {};
     activeMonths.forEach((m) => { totalsByMonth[m] = round2(rows.reduce((s, r) => s + (r.byMonth[m] || 0), 0)) * hourlyRate; });
     const grandAllotted = round2(rows.reduce((s, r) => s + r.hoursAllotted, 0)) * hourlyRate;
-    const grandHoursTotal = round2(rows.reduce((s, r) => s + r.total, 0)) * hourlyRate;
-    const grandTotal = grandHoursTotal + setupFee;
-    const grandRemaining = grandAllotted - grandHoursTotal;
+    const grandTotal = round2(rows.reduce((s, r) => s + r.total, 0)) * hourlyRate;
+    const grandRemaining = grandAllotted - grandTotal;
 
     tfootRow.innerHTML = `
       <td>Grand Total</td>
