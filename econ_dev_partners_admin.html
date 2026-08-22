@@ -151,20 +151,23 @@
   td.actions { text-align: right; white-space: nowrap; }
   .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; }
 
-  /* Editing happens right in the table -- no separate Edit modal/button.
-     Program name, code, and address are plain inputs styled to look like
-     text until focused; a small "x" replaces the old "Manage" dropdown for
-     the one truly destructive action (Delete). */
-  .inline-edit-input {
-    width: 100%; border: 1px solid transparent; background: transparent; border-radius: 5px;
-    padding: 4px 6px; font-family: inherit; font-size: inherit; color: inherit;
+  /* Program name/code/address/contacts moved off the row into the Program
+     Detail popup (Greg, 8/21/26) -- the table itself just shows the name as
+     a click target plus its code underneath, no inline editing here anymore. */
+  .program-name-link {
+    background: transparent; border: none; padding: 0; font-weight: 700; color: var(--navy);
+    font-size: 14px; cursor: pointer; text-align: left; display: block; font-family: inherit;
   }
-  .inline-edit-input:hover { border-color: var(--border); background: #fff; }
-  .inline-edit-input:focus { outline: none; border-color: var(--navy-light); background: #fff; }
-  .program-cell .p-name-input { font-weight: 700; color: var(--navy); font-size: 14px; }
-  .program-cell .p-code-input { font-size: 11.5px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; margin-top: 2px; width: 140px; }
-  .address-cell .p-address-input { font-size: 13px; color: var(--text); }
-  .address-cell .p-address-input::placeholder { color: var(--muted); }
+  .program-name-link:hover { text-decoration: underline; color: var(--navy-light); }
+  .program-code-label { font-size: 11.5px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; margin-top: 2px; }
+  /* Reused inside the Program Detail modal for the editable name/code/address
+     fields (super admin only -- read-only for everyone else). */
+  .inline-edit-input {
+    width: 100%; border: 1px solid var(--border); background: #fff; border-radius: 6px;
+    padding: 8px 10px; font-family: inherit; font-size: 14px; color: inherit; margin-bottom: 2px;
+  }
+  .inline-edit-input:focus { outline: none; border-color: var(--navy-light); }
+  .inline-edit-input[readonly] { background: #f4f6f8; color: var(--muted); }
   .delete-row-btn { background: transparent; border: none; color: var(--muted); font-size: 17px; padding: 4px 8px; line-height: 1; }
   .delete-row-btn:hover { color: var(--danger-dark); }
 
@@ -423,8 +426,6 @@
       <thead>
         <tr>
           <th class="sortable" data-sort="name">Program <span class="sort-arrow">&#8645;</span></th>
-          <th>Address</th>
-          <th class="sortable" style="width:150px;" data-sort="contacts">Contacts <span class="sort-arrow">&#8645;</span></th>
           <th class="sortable" style="width:150px;" data-sort="engagements">Engagements <span class="sort-arrow">&#8645;</span></th>
           <th id="actions-header" class="hidden" style="width:40px;"></th>
         </tr>
@@ -459,6 +460,21 @@
   </div>
 </div>
 
+<!-- Program Detail modal -- Greg (8/21/26): "make the Programs clickable to
+     open up a page with info on the program... only thing left showing on
+     this page is the Program and the Engagements Column." Name/abbreviation/
+     address/contacts moved off the row and into this popup; clicking the
+     program name in the table opens it. -->
+<div class="overlay" id="program-detail-overlay">
+  <div class="modal" style="width:520px; max-height:82vh; overflow-y:auto;">
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+      <h3 id="pd-modal-title" style="margin:0;">Program</h3>
+      <button type="button" class="ai-drawer-close" id="program-detail-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="program-detail-body"></div>
+  </div>
+</div>
+
 <!-- Delete confirm modal -->
 <div class="overlay" id="delete-overlay">
   <div class="modal" style="width:380px;">
@@ -485,7 +501,6 @@
   let allClients = [];      // clients (engagements), all programs -- for the Engagements column
   let isSuperAdmin = false;
   let pendingDeleteId = null;
-  let openContactsPartnerId = null;   // which partner's Contacts row is expanded (accordion-style, one at a time)
   let openEngagementsPartnerId = null; // which partner's Engagements row is expanded (accordion-style, one at a time)
   let sortField = "name";
   let sortDir = "asc";
@@ -698,7 +713,7 @@
       $("empty-note").classList.add("hidden");
     }
 
-    const colspan = isSuperAdmin ? 5 : 4;
+    const colspan = isSuperAdmin ? 3 : 2;
 
     for (const p of rows) {
       const tr = document.createElement("tr");
@@ -707,40 +722,21 @@
         ? `<td class="actions"><button type="button" class="delete-row-btn" data-delete-program="${p.id}" title="Delete program">&times;</button></td>`
         : "";
 
-      const partnerContacts = contactsForPartner(p.id);
-      const isOpen = openContactsPartnerId === p.id;
-      const contactsPillHtml = partnerContacts.length
-        ? `<button type="button" class="contacts-toggle ${isOpen ? "open" : ""}" data-toggle-contacts="${p.id}">${partnerContacts.length} contact${partnerContacts.length === 1 ? "" : "s"}</button>`
-        : `<button type="button" class="contacts-toggle empty ${isOpen ? "open" : ""}" data-toggle-contacts="${p.id}">+ Add contacts</button>`;
-
       const partnerClients = clientsForPartner(p.id);
       const isEngOpen = openEngagementsPartnerId === p.id;
       const engagementsPillHtml = partnerClients.length
         ? `<button type="button" class="contacts-toggle ${isEngOpen ? "open" : ""}" data-toggle-engagements="${p.id}">${partnerClients.length} engagement${partnerClients.length === 1 ? "" : "s"}</button>`
         : `<button type="button" class="contacts-toggle empty ${isEngOpen ? "open" : ""}" data-toggle-engagements="${p.id}">None yet</button>`;
 
-      const editableAttrs = isSuperAdmin ? "" : "readonly";
-
       tr.innerHTML = `
         <td class="program-cell">
-          <input type="text" class="inline-edit-input p-name-input" data-program-id="${p.id}" data-program-field="name" value="${escapeHtml(p.name)}" ${editableAttrs} />
-          <input type="text" class="inline-edit-input p-code-input" data-program-id="${p.id}" data-program-field="code" value="${escapeHtml(p.code)}" ${editableAttrs} />
+          <button type="button" class="program-name-link" data-open-program="${p.id}">${escapeHtml(p.name)}</button>
+          <div class="program-code-label">${escapeHtml(p.code)}</div>
         </td>
-        <td class="address-cell">
-          <input type="text" class="inline-edit-input p-address-input" data-program-id="${p.id}" data-program-field="address" value="${escapeHtml(p.address || "")}" placeholder="—" ${editableAttrs} />
-        </td>
-        <td>${contactsPillHtml}</td>
         <td>${engagementsPillHtml}</td>
         ${actionsCell}
       `;
       tbody.appendChild(tr);
-
-      if (isOpen) {
-        const detailTr = document.createElement("tr");
-        detailTr.className = "contacts-detail-row";
-        detailTr.innerHTML = `<td colspan="${colspan}">${renderContactsDetail(p, partnerContacts)}</td>`;
-        tbody.appendChild(detailTr);
-      }
 
       if (isEngOpen) {
         const engTr = document.createElement("tr");
@@ -750,11 +746,9 @@
       }
     }
 
-    wireContactsToggles();
     wireEngagementsToggles();
-    wireProgramInlineEdits();
     wireDeleteButtons();
-    if (openContactsPartnerId) wireContactsDetail(openContactsPartnerId);
+    wireProgramDetailLinks();
   }
 
   function renderEngagementsDetail(clients) {
@@ -780,9 +774,11 @@
     });
   }
 
-  // ---------- Inline edit (Program name / code / address) ----------
-  // Editing happens right in the table -- no separate "Edit Program" modal.
-  // Same blur-to-save pattern already used for Contacts below.
+  // ---------- Inline edit (Program name / code / address, inside the
+  // Program Detail popup) ----------
+  // These fields used to be editable right in the table row; they now live
+  // in the popup opened by clicking a program's name (Greg, 8/21/26). Same
+  // blur-to-save pattern already used for Contacts below.
   function wireProgramInlineEdits() {
     document.querySelectorAll("[data-program-id]").forEach((inp) => {
       const original = inp.value;
@@ -807,10 +803,54 @@
         }
         const p = allPartners.find((x) => x.id === id);
         if (p) p[field] = value || null;
+        if (field === "name") $("pd-modal-title").textContent = value;
         if (field === "name" || field === "code") renderTable();
       });
     });
   }
+
+  // ---------- Program Detail popup ----------
+  // Clicking a program's name in the table opens this popup with its full
+  // record: name, abbreviation, address, and contact list. Keeps the main
+  // table down to just Program and Engagements (Greg, 8/21/26).
+  function renderProgramDetailModal(partnerId) {
+    const p = allPartners.find((x) => x.id === partnerId);
+    if (!p) return;
+    const editableAttrs = isSuperAdmin ? "" : "readonly";
+    $("pd-modal-title").textContent = p.name;
+    $("program-detail-body").innerHTML = `
+      <label for="pd-name-input">Full name</label>
+      <input type="text" class="inline-edit-input" id="pd-name-input" data-program-id="${p.id}" data-program-field="name" value="${escapeHtml(p.name)}" ${editableAttrs} />
+
+      <label for="pd-code-input">Abbreviation</label>
+      <input type="text" class="inline-edit-input" id="pd-code-input" data-program-id="${p.id}" data-program-field="code" value="${escapeHtml(p.code)}" ${editableAttrs} />
+
+      <label for="pd-address-input">Address</label>
+      <input type="text" class="inline-edit-input" id="pd-address-input" data-program-id="${p.id}" data-program-field="address" value="${escapeHtml(p.address || "")}" placeholder="—" ${editableAttrs} />
+
+      <label style="margin-top:18px;">Contacts</label>
+      <div id="pd-contacts-inner">${renderContactsDetail(p, contactsForPartner(p.id))}</div>
+    `;
+    wireProgramInlineEdits();
+    wireContactsDetail(p.id);
+  }
+
+  function openProgramDetail(partnerId) {
+    renderProgramDetailModal(partnerId);
+    $("program-detail-overlay").classList.add("open");
+  }
+
+  function closeProgramDetail() {
+    $("program-detail-overlay").classList.remove("open");
+  }
+
+  function wireProgramDetailLinks() {
+    document.querySelectorAll("[data-open-program]").forEach((btn) => {
+      btn.addEventListener("click", () => openProgramDetail(btn.dataset.openProgram));
+    });
+  }
+
+  $("program-detail-close").addEventListener("click", closeProgramDetail);
 
   function wireDeleteButtons() {
     document.querySelectorAll("[data-delete-program]").forEach((btn) => {
@@ -859,16 +899,6 @@
     ` : "";
 
     return `<div class="contacts-detail-inner">${rowsHtml}${addFormHtml}</div>`;
-  }
-
-  function wireContactsToggles() {
-    document.querySelectorAll("[data-toggle-contacts]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.dataset.toggleContacts;
-        openContactsPartnerId = openContactsPartnerId === id ? null : id;
-        renderTable();
-      });
-    });
   }
 
   function wireContactsDetail(partnerId) {
