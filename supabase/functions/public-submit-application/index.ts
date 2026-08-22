@@ -187,7 +187,13 @@ Deno.serve(async (req: Request) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "greggotcher@gmail.com",
+          // greggotcher@gmail.com can't be used as a Resend "from" address --
+          // Resend requires the sender domain be verified via DNS, and Gmail
+          // won't let Greg do that for gmail.com. onboarding@resend.dev is
+          // Resend's own shared, pre-verified sending domain -- no setup
+          // needed, and it can send to any recipient. Swap this for a
+          // verified economicgardening.org address later if wanted.
+          from: "EG Dashboard <onboarding@resend.dev>",
           to: ["cgibbons@economicgardening.org", "rbenson@economicgardening.org", "greggotcher@gmail.com"],
           subject: `New Application: ${companyName} (${program.name})`,
           html: `
