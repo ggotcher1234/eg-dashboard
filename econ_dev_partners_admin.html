@@ -425,6 +425,8 @@
         <button class="btn-secondary btn-sm hidden" id="contacts-csv-export-btn">&#8595; Export CSV</button>
         <button class="btn-secondary btn-sm hidden" id="contacts-csv-import-btn">&#8593; Import CSV</button>
         <input type="file" accept=".csv,text/csv" id="contacts-csv-file" class="csv-file-input" />
+        <button class="btn-secondary btn-sm hidden" id="finance-csv-import-btn" title="Bulk-fill the Program Finance field from a CSV (Program Name, Contact, Title, Organization, Address, Email, Phone, Notes)">&#8593; Import Finance CSV</button>
+        <input type="file" accept=".csv,text/csv" id="finance-csv-file" class="csv-file-input" />
         <button class="btn-primary hidden" id="add-btn">+ Add Program</button>
       </div>
     </div>
@@ -585,12 +587,14 @@
       $("readonly-note").classList.add("hidden");
       $("contacts-csv-export-btn").classList.remove("hidden");
       $("contacts-csv-import-btn").classList.remove("hidden");
+      $("finance-csv-import-btn").classList.remove("hidden");
     } else {
       $("add-btn").classList.add("hidden");
       $("actions-header").classList.add("hidden");
       $("readonly-note").classList.remove("hidden");
       $("contacts-csv-export-btn").classList.add("hidden");
       $("contacts-csv-import-btn").classList.add("hidden");
+      $("finance-csv-import-btn").classList.add("hidden");
     }
 
     await loadPartners();
@@ -1330,6 +1334,127 @@
     let msg = `Imported ${toInsert.length} contact${toInsert.length === 1 ? "" : "s"}.`;
     if (unmatchedLabels.size) msg += ` Skipped ${unmatchedLabels.size} row(s) that didn't match an existing partner (${[...unmatchedLabels].slice(0, 5).join(", ")}).`;
     showBanner(msg, "success");
+    await loadPartners();
+  });
+
+  // ---------- CSV import for Program Finance (Greg, 8/22/26) ----------
+  // A completely separate importer from the Contacts one above -- this one
+  // fills the single free-text "Program Finance" field (econ_dev_companies
+  // .address) from a one-time reference doc covering every Program's
+  // invoice-recipient contact. Header-name based (not fixed column
+  // positions) so the source doc's exact column order doesn't matter, as
+  // long as it has a "Program Name" column plus any of the rest.
+  //
+  // Per Greg: rows with a blank or placeholder ("???"/"??") contact name are
+  // skipped entirely, and a Program that already has something in its
+  // Program Finance field is left alone -- this only fills in the blanks,
+  // never overwrites.
+  const FINANCE_CSV_FIELD_ALIASES = {
+    "program name": "programName",
+    "program finance contact": "contact",
+    "contact": "contact",
+    "title": "title",
+    "organization": "org",
+    "address": "address",
+    "email": "email",
+    "phone": "phone",
+    "additional finance contact / notes": "notes",
+    "notes": "notes",
+  };
+
+  function isPlaceholderText(s) {
+    const v = (s || "").trim();
+    return !v || /^\?+$/.test(v);
+  }
+
+  function buildFinanceBlock({ contact, title, org, address, email, phone, notes }) {
+    const lines = [];
+    if (contact) lines.push(title ? `${contact}, ${title}` : contact);
+    if (org) lines.push(org);
+    if (address) lines.push(address);
+    if (email) lines.push(email);
+    if (phone) lines.push(phone);
+    let block = lines.join("\n");
+    if (notes) block += (block ? "\n\n" : "") + notes;
+    return block;
+  }
+
+  $("finance-csv-import-btn").addEventListener("click", () => $("finance-csv-file").click());
+
+  $("finance-csv-file").addEventListener("change", async () => {
+    const fileInput = $("finance-csv-file");
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const text = await file.text();
+    const allRows = parseCsv(text);
+    fileInput.value = "";
+    if (!allRows.length) { showBanner("That CSV looks empty.", "error"); return; }
+
+    const headerRow = allRows[0].map((h) => (h || "").trim().toLowerCase());
+    const colIndex = {};
+    headerRow.forEach((h, i) => {
+      const key = FINANCE_CSV_FIELD_ALIASES[h];
+      if (key) colIndex[key] = i;
+    });
+    if (colIndex.programName == null) {
+      showBanner('That CSV needs a "Program Name" column to match rows to Programs.', "error");
+      return;
+    }
+    const dataRows = allRows.slice(1);
+
+    const partnerByNormName = {};
+    for (const p of allPartners) partnerByNormName[normalizePartnerName(p.name)] = p;
+
+    const toUpdate = [];
+    const unmatchedNames = new Set();
+    let skippedPlaceholder = 0;
+    let skippedHasData = 0;
+
+    for (const r of dataRows) {
+      const get = (key) => (colIndex[key] != null ? (r[colIndex[key]] || "").trim() : "");
+      const programName = get("programName");
+      const contact = get("contact");
+      if (!programName && !contact) continue; // fully blank row
+
+      if (isPlaceholderText(contact)) { skippedPlaceholder++; continue; }
+
+      const partner = partnerByNormName[normalizePartnerName(programName)];
+      if (!partner) { unmatchedNames.add(programName || "(blank)"); continue; }
+
+      if (partner.address && partner.address.trim()) { skippedHasData++; continue; }
+
+      const block = buildFinanceBlock({
+        contact, title: get("title"), org: get("org"), address: get("address"),
+        email: get("email"), phone: get("phone"), notes: get("notes"),
+      });
+      if (!block) { skippedPlaceholder++; continue; }
+
+      toUpdate.push({ id: partner.id, block });
+    }
+
+    if (!toUpdate.length) {
+      showBanner(
+        unmatchedNames.size
+          ? `Nothing to import — no matching Programs found (${[...unmatchedNames].slice(0, 5).join(", ")}).`
+          : "Nothing to import — every row was blank, a placeholder, or already has Program Finance data.",
+        "error"
+      );
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      toUpdate.map((u) => sb.from("econ_dev_companies").update({ address: u.block }).eq("id", u.id))
+    );
+    const failures = results.filter((r) => r.status === "rejected" || (r.value && r.value.error));
+    const successCount = toUpdate.length - failures.length;
+
+    let msg = `Filled in Program Finance for ${successCount} program${successCount === 1 ? "" : "s"}.`;
+    if (skippedHasData) msg += ` ${skippedHasData} already had data, left unchanged.`;
+    if (skippedPlaceholder) msg += ` ${skippedPlaceholder} skipped (blank or placeholder contact).`;
+    if (unmatchedNames.size) msg += ` ${unmatchedNames.size} unmatched (${[...unmatchedNames].slice(0, 5).join(", ")}).`;
+    if (failures.length) msg += ` ${failures.length} failed to save.`;
+    showBanner(msg, failures.length ? "error" : "success");
     await loadPartners();
   });
 </script>
