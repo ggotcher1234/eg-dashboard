@@ -151,6 +151,23 @@
   .month-nav-btn { background: #eef1f4; color: var(--text); padding: 8px 10px; border-radius: 6px; font-size: 15px; line-height: 1; }
   .month-nav-btn:hover { background: #e2e6ea; }
 
+  .rate-input-wrap { display: flex; align-items: center; gap: 6px; }
+  .rate-input-wrap .rate-prefix { color: var(--muted); font-size: 13.5px; }
+  .rate-input-wrap input {
+    width: 84px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13.5px; font-family: inherit; color: var(--text); background: #fff;
+  }
+  .rate-input-wrap input:disabled { background: #f4f6f8; color: var(--muted); }
+
+  /* Editable Set-Up Fee row inside the preview table (Greg, 8/22/26) -- lets
+     him adjust a client's one-time fee right here instead of needing the
+     Cumulative Hours page first. Disabled + a note once it's already been
+     billed on a past invoice, so it can't accidentally get billed twice. */
+  .pi-setup-fee-input {
+    width: 90px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; font-family: inherit; text-align: right;
+  }
+  .pi-setup-fee-input:disabled { background: #f4f6f8; color: var(--muted); }
+  .fee-billed-note { color: var(--muted); font-weight: 400; font-size: 11.5px; text-transform: none; letter-spacing: 0; }
+
   /* ---------- Preview / past-invoices tables ---------- */
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
   table.pi-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
@@ -354,6 +371,19 @@
               <button type="button" class="month-nav-btn" id="pi-month-next" title="Next month" aria-label="Next month">&#8250;</button>
             </div>
           </div>
+          <!-- Saved per Program (Greg, 8/22/26) -- different Programs bill
+               at different rates ($115 vs $119); this is independent of the
+               org-wide payroll rate. Loads from the selected Program's own
+               billing_hourly_rate, falls back to the org default if that
+               Program hasn't set one yet, and autosaves back to that
+               Program whenever it's changed here. -->
+          <div class="field-group">
+            <label for="pi-rate">Hourly Rate</label>
+            <div class="rate-input-wrap">
+              <span class="rate-prefix">$</span>
+              <input type="number" id="pi-rate" min="0" step="0.01" disabled />
+            </div>
+          </div>
           <button type="button" class="btn-primary" id="pi-generate-btn" disabled>Generate Invoice</button>
         </div>
 
@@ -467,7 +497,7 @@
 
   let currentUser = null;
   let isSuperAdmin = false;
-  let hourlyRate = 95;
+  let orgHourlyRate = 95; // org-wide fallback (organization_settings.hourly_rate) -- used to pre-fill #pi-rate for a Program that hasn't saved its own rate yet
   let programs = [];
   let previewClients = []; // computed per-client line groups for the current Program+Month
   let previewTotalDue = 0;
@@ -601,14 +631,14 @@
       .select("hourly_rate")
       .eq("organization_id", organizationId)
       .single();
-    if (!error && data) hourlyRate = Number(data.hourly_rate) || 95;
+    if (!error && data) orgHourlyRate = Number(data.hourly_rate) || 95;
   }
 
   // ---------- Programs ----------
   async function loadPrograms() {
     const { data, error } = await sb
       .from("econ_dev_companies")
-      .select("id, name, address")
+      .select("id, name, address, billing_hourly_rate")
       .order("name", { ascending: true });
     if (error) { showBanner("Couldn't load Programs: " + error.message, "error"); return; }
     programs = data || [];
@@ -617,8 +647,36 @@
       programs.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
   }
 
+  // Pre-fills #pi-rate from the selected Program's own saved rate, falling
+  // back to the org default if that Program hasn't set one yet. Disabled
+  // with no program picked -- there's nothing to save a rate against yet.
+  function loadRateForSelectedProgram() {
+    const programId = $("pi-program").value;
+    const program = programs.find((p) => p.id === programId);
+    $("pi-rate").disabled = !program;
+    $("pi-rate").value = program
+      ? (program.billing_hourly_rate != null ? Number(program.billing_hourly_rate) : orgHourlyRate)
+      : "";
+  }
+
+  async function saveRateForSelectedProgram() {
+    const programId = $("pi-program").value;
+    if (!programId) return;
+    const newRate = Number($("pi-rate").value);
+    if (!(newRate >= 0)) return;
+    const { error } = await sb.from("econ_dev_companies").update({ billing_hourly_rate: newRate }).eq("id", programId);
+    if (error) { showBanner("Couldn't save the rate: " + error.message, "error"); return; }
+    const program = programs.find((p) => p.id === programId);
+    if (program) program.billing_hourly_rate = newRate;
+    await refreshPreview();
+  }
+
   function wireBuilderControls() {
-    $("pi-program").addEventListener("change", refreshPreview);
+    $("pi-program").addEventListener("change", () => {
+      loadRateForSelectedProgram();
+      refreshPreview();
+    });
+    $("pi-rate").addEventListener("change", saveRateForSelectedProgram);
     $("pi-month").addEventListener("change", refreshPreview);
     $("pi-month-prev").addEventListener("click", () => shiftMonth(-1));
     $("pi-month-next").addEventListener("click", () => shiftMonth(1));
@@ -656,6 +714,10 @@
     }
 
     const { start, end } = monthBounds(monthValue);
+
+    // Falls back to the org default if #pi-rate is somehow empty (e.g. no
+    // Program picked yet -- refreshPreview bails before this point anyway).
+    const rate = Number($("pi-rate").value) || orgHourlyRate;
 
     const { data: clients, error: clientsErr } = await sb
       .from("clients")
@@ -714,7 +776,7 @@
         lines.push({
           specialty_type: specialtyType,
           label: SPECIALTY_LABELS[specialtyType] || specialtyType,
-          qty, rate: hourlyRate, amount: round2(qty * hourlyRate),
+          qty, rate, amount: round2(qty * rate),
           is_sunk_cost: false,
         });
       }
@@ -731,7 +793,7 @@
         lines.push({
           specialty_type: a.specialty_type,
           label: SPECIALTY_LABELS[a.specialty_type] || a.specialty_type,
-          qty, rate: hourlyRate, amount: round2(qty * hourlyRate),
+          qty, rate, amount: round2(qty * rate),
           is_sunk_cost: true, assignment_id: a.id,
         });
       }
@@ -749,7 +811,9 @@
         client_id: client.id,
         client_name: client.name,
         lines,
-        setup_fee: setupFeeAmount,
+        setup_fee: setupFeeAmount,           // amount actually contributing to THIS invoice (null if already billed)
+        setup_fee_raw: Number(client.setup_fee) || 0, // raw stored value, shown in the editable input regardless
+        setup_fee_billed: !!client.setup_fee_billed,
         subtotal,
       });
     }
@@ -776,13 +840,35 @@
       for (const l of c.lines) {
         rows += `<tr><td style="padding-left:22px;">${escapeHtml(l.label)}</td><td class="num">${l.qty}</td><td class="num">${money(l.rate)}</td><td class="num">${money(l.amount)}</td></tr>`;
       }
-      if (c.setup_fee !== null) {
-        rows += `<tr><td style="padding-left:22px;">Set-Up Fees</td><td class="num">1</td><td class="num">${money(c.setup_fee)}</td><td class="num">${money(c.setup_fee)}</td></tr>`;
-      }
+      // Always editable here (Greg, 8/22/26) -- not gated on whether a fee
+      // happens to already be stored, so a client can get its Set-Up Fee
+      // set for the first time right on this screen. Disabled once it's
+      // already been billed on a past invoice, so it can't double-bill.
+      const feeDisabled = c.setup_fee_billed ? "disabled" : "";
+      const feeNote = c.setup_fee_billed ? ` <span class="fee-billed-note">(already billed)</span>` : "";
+      rows += `<tr data-setup-fee-row="${c.client_id}">
+        <td style="padding-left:22px;">Set-Up Fee${feeNote}</td>
+        <td class="num">1</td>
+        <td class="num"><input type="number" class="pi-setup-fee-input" min="0" step="0.01" value="${c.setup_fee_raw}" data-client-id="${c.client_id}" ${feeDisabled} /></td>
+        <td class="num">${money(c.setup_fee || 0)}</td>
+      </tr>`;
       rows += `<tr class="subtotal-row"><td colspan="4">Subtotal: ${money(c.subtotal)}</td></tr>`;
     }
     tbody.innerHTML = rows;
+    tbody.querySelectorAll(".pi-setup-fee-input").forEach((input) => {
+      input.addEventListener("change", () => saveSetupFee(input.dataset.clientId, input));
+    });
     $("preview-total").textContent = money(previewTotalDue);
+  }
+
+  async function saveSetupFee(clientId, input) {
+    const newFee = Number(input.value);
+    const client = previewClients.find((c) => c.client_id === clientId);
+    if (!(newFee >= 0)) { input.value = client ? client.setup_fee_raw : 0; return; }
+    input.disabled = true;
+    const { error } = await sb.from("clients").update({ setup_fee: newFee }).eq("id", clientId);
+    if (error) { showBanner("Couldn't save the setup fee: " + error.message, "error"); input.disabled = false; return; }
+    await refreshPreview();
   }
 
   // ---------- Generate ----------
