@@ -371,12 +371,12 @@
               <button type="button" class="month-nav-btn" id="pi-month-next" title="Next month" aria-label="Next month">&#8250;</button>
             </div>
           </div>
-          <!-- Saved per Program (Greg, 8/22/26) -- different Programs bill
-               at different rates ($115 vs $119); this is independent of the
-               org-wide payroll rate. Loads from the selected Program's own
-               billing_hourly_rate, falls back to the org default if that
-               Program hasn't set one yet, and autosaves back to that
-               Program whenever it's changed here. -->
+          <!-- Saved per Program (Greg, 8/22/26) -- Programs bill at $115/hr
+               by default (GRE bills at $119) -- a completely separate
+               number from the $95/hr EG pays Team Leads/Specialists.
+               Loads from the selected Program's own billing_hourly_rate,
+               defaults to $115 if that Program hasn't set one yet, and
+               autosaves back to that Program whenever it's changed here. -->
           <div class="field-group">
             <label for="pi-rate">Hourly Rate</label>
             <div class="rate-input-wrap">
@@ -497,7 +497,13 @@
 
   let currentUser = null;
   let isSuperAdmin = false;
-  let orgHourlyRate = 95; // org-wide fallback (organization_settings.hourly_rate) -- used to pre-fill #pi-rate for a Program that hasn't saved its own rate yet
+  // Billing rate ($115, $119 for GRE, etc.) is a completely different number
+  // from organization_settings.hourly_rate, which is what EG pays Team
+  // Leads/Specialists ($95) -- that's payroll cost, this is Program
+  // revenue, and they must never fall back to each other (Greg, 8/22/26).
+  // A Program with no billing_hourly_rate of its own yet defaults to this
+  // constant, never to the payroll rate.
+  const DEFAULT_BILLING_RATE = 115;
   let programs = [];
   let previewClients = []; // computed per-client line groups for the current Program+Month
   let previewTotalDue = 0;
@@ -610,7 +616,6 @@
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = roleLabel(profile.role);
 
-    await loadOrgSettings(profile.organization_id);
     await loadPrograms();
     await loadPastInvoices();
 
@@ -624,15 +629,6 @@
     if (session) afterSignIn();
     else redirectToLogin();
   });
-
-  async function loadOrgSettings(organizationId) {
-    const { data, error } = await sb
-      .from("organization_settings")
-      .select("hourly_rate")
-      .eq("organization_id", organizationId)
-      .single();
-    if (!error && data) orgHourlyRate = Number(data.hourly_rate) || 95;
-  }
 
   // ---------- Programs ----------
   async function loadPrograms() {
@@ -655,7 +651,7 @@
     const program = programs.find((p) => p.id === programId);
     $("pi-rate").disabled = !program;
     $("pi-rate").value = program
-      ? (program.billing_hourly_rate != null ? Number(program.billing_hourly_rate) : orgHourlyRate)
+      ? (program.billing_hourly_rate != null ? Number(program.billing_hourly_rate) : DEFAULT_BILLING_RATE)
       : "";
   }
 
@@ -717,7 +713,7 @@
 
     // Falls back to the org default if #pi-rate is somehow empty (e.g. no
     // Program picked yet -- refreshPreview bails before this point anyway).
-    const rate = Number($("pi-rate").value) || orgHourlyRate;
+    const rate = Number($("pi-rate").value) || DEFAULT_BILLING_RATE;
 
     const { data: clients, error: clientsErr } = await sb
       .from("clients")
