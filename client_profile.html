@@ -722,6 +722,20 @@
             </div>
           </div>
 
+          <!-- Step 9: Research Questions -- a fast way to seed the first
+               question or two per category (usually copied straight out of
+               the Controlling Document above) without leaving the Wizard.
+               The full Research page (client_research.html) is still where
+               documents get attached and questions get managed in depth --
+               this is just quick capture (Greg, 8/22/26). GIS is folded
+               into Outbound Marketing, not its own category, per Greg's
+               8/22/26 note. -->
+          <div class="wizard-panel-card wizard-panel hidden" data-step="9">
+            <h3>Research Questions</h3>
+            <div class="wizard-panel-hint">One or two questions per category, usually straight from the Controlling Document above. For deeper work -- attaching documents, adding more than two -- use the full <a href="#" id="wiz-research-page-link">Research page</a>.</div>
+            <div class="field-grid" id="wiz-research-areas"></div>
+          </div>
+
         </div>
       </div>
 
@@ -1123,6 +1137,7 @@
     $("p-workspace-link").href = `client_workspace.html?client=${client.id}`;
     $("p-app-info-link").href = `client_applications.html?client=${client.id}`;
     $("p-research-link").href = `client_research.html?client=${client.id}`;
+    $("wiz-research-page-link").href = `client_research.html?client=${client.id}`;
     renderShareLink(client);
 
     renderStatusToggle(client);
@@ -1137,6 +1152,7 @@
     renderListSections();
     await Promise.all(LIST_CONFIGS.map((cfg) => loadListSection(cfg)));
     await loadPartnerContactsSection();
+    await loadWizardResearchQuestions(client.id);
 
     // Deep links from other pages (?section=next_steps, ?section=contacts,
     // etc.) land directly on the wizard step that now holds that content,
@@ -1578,6 +1594,78 @@
     workflowData[f.urlColumn] = null;
     renderWorkflowFileField(f);
     showBanner(`${f.label} removed.`, "success");
+  }
+
+  // ---------- Research Questions (quick-add, Step 9) ----------
+  // GIS is folded into Outbound Marketing, not its own category (Greg,
+  // 8/22/26) -- same 4 categories as everywhere else research areas show
+  // up. Only tracks the first TWO questions per area here -- "could be one
+  // or two questions for each category" -- a client that needs more than
+  // that uses the full Research page (client_research.html), which has no
+  // such limit.
+  const WIZ_RESEARCH_AREAS = [
+    ["market_dynamics", "Market Research"],
+    ["outbound", "Outbound Marketing"],
+    ["inbound", "Inbound Marketing"],
+    ["watering_holes", "Watering Holes"],
+  ];
+  let wizResearchQuestions = [];
+
+  async function loadWizardResearchQuestions(clientId) {
+    const { data, error } = await sb
+      .from("client_research_questions")
+      .select("id, research_area, question, sort_order")
+      .eq("client_id", clientId)
+      .order("research_area")
+      .order("sort_order");
+    if (error) { showBanner("Couldn't load research questions: " + error.message, "error"); return; }
+    wizResearchQuestions = data || [];
+    renderWizResearchQuestions();
+  }
+
+  function renderWizResearchQuestions() {
+    $("wiz-research-areas").innerHTML = WIZ_RESEARCH_AREAS.map(([area, label]) => {
+      const rows = wizResearchQuestions
+        .filter((q) => q.research_area === area)
+        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+      const slot1 = rows[0] || null;
+      const slot2 = rows[1] || null;
+      return `
+        <div class="field">
+          <label>${escapeHtml(label)}</label>
+          <textarea class="wiz-research-q" data-area="${area}" data-slot="1" data-id="${slot1 ? slot1.id : ""}" placeholder="Question 1 — usually straight from the Controlling Document" style="min-height:60px;">${escapeHtml((slot1 && slot1.question) || "")}</textarea>
+          <textarea class="wiz-research-q" data-area="${area}" data-slot="2" data-id="${slot2 ? slot2.id : ""}" placeholder="Question 2 (optional)" style="min-height:60px; margin-top:8px;">${escapeHtml((slot2 && slot2.question) || "")}</textarea>
+        </div>
+      `;
+    }).join("");
+    $("wiz-research-areas").querySelectorAll(".wiz-research-q").forEach((el) => {
+      el.addEventListener("blur", () => saveWizResearchQuestion(el));
+    });
+  }
+
+  async function saveWizResearchQuestion(el) {
+    const area = el.dataset.area;
+    const slot = Number(el.dataset.slot);
+    const value = el.value.trim();
+    const id = el.dataset.id;
+
+    if (id) {
+      const { error } = await sb.from("client_research_questions").update({ question: value || null }).eq("id", id);
+      if (error) { showBanner("Couldn't save question: " + error.message, "error"); return; }
+      const row = wizResearchQuestions.find((q) => q.id === id);
+      if (row) row.question = value || null;
+      return;
+    }
+    if (!value) return; // nothing typed into a slot that has no row yet -- nothing to save
+    const { data, error } = await sb.from("client_research_questions").insert({
+      client_id: currentClient.id,
+      research_area: area,
+      question: value,
+      sort_order: slot,
+    }).select("id").single();
+    if (error) { showBanner("Couldn't save question: " + error.message, "error"); return; }
+    wizResearchQuestions.push({ id: data.id, research_area: area, question: value, sort_order: slot });
+    el.dataset.id = data.id;
   }
 
   // ---------- Generic list sections (Next Steps, Contacts, Team, Competitors, Top Customers) ----------
@@ -2100,6 +2188,7 @@
     { n: 6, key: "competitors", label: "Competitors" },
     { n: 7, key: "top_customers", label: "Customers" },
     { n: 8, key: "workflow", label: "Documents" },
+    { n: 9, key: "research", label: "Research" },
   ];
   let wizStep = 1;
 
