@@ -571,17 +571,22 @@
           <button type="button" class="btn-secondary btn-sm" id="month-today">This Month</button>
         </div>
         <div class="toolbar-actions">
-          <a class="btn-secondary" href="program_invoicing.html" style="text-decoration:none; display:inline-flex; align-items:center;">Program Invoices</a>
           <button class="btn-secondary" id="export-csv-btn">Export CSV</button>
         </div>
       </div>
 
     </div>
 
+    <!-- Time Sheets vs Invoices are now two clearly separate areas (Chris,
+         8/22/26) -- Invoices was previously a small link tucked into the
+         toolbar; it's now a first-class tab alongside Time Sheets and
+         Payroll, even though it hands off to program_invoicing.html rather
+         than rendering its own panel here (that page already owns the full
+         Create/Void/Print invoice flow -- no need to duplicate it). -->
     <div class="tab-bar" id="report-tabs">
       <button type="button" class="tab-btn active" data-tab="hours" id="tab-hours">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-        Hours &amp; Budgets
+        Time Sheets
       </button>
       <button type="button" class="tab-btn" data-tab="payroll-mtd" id="tab-payroll-mtd">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
@@ -591,18 +596,26 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
         Payroll YTD
       </button>
+      <a class="tab-btn" href="program_invoicing.html" id="tab-invoices" style="text-decoration:none; margin-left:auto;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l2 2 4-4"/><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>
+        Invoices
+      </a>
     </div>
 
     <div class="tab-panel-frame">
       <div class="tab-panel" id="panel-hours">
         <div class="card">
-          <h2>Hours by Specialist</h2>
+          <h2>Time Sheets</h2>
+          <!-- Grouped by Program + Engagement, not Specialist (Chris,
+               8/22/26) -- matches how the actual invoice document itself
+               groups line items, so this table reads like a preview of
+               what's about to get billed. -->
           <div class="card-hint" id="month-label-hint"></div>
 
           <div class="sp-controls">
             <div class="sp-search-wrap">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-              <input type="text" id="sp-search" placeholder="Search specialist…" autocomplete="off" />
+              <input type="text" id="sp-search" placeholder="Search engagement or specialist…" autocomplete="off" />
             </div>
           </div>
 
@@ -610,8 +623,8 @@
             <table id="specialist-table" class="specialist-table">
               <thead>
                 <tr>
-                  <th class="sortable-th" id="sp-sort-name">Specialist <span class="sort-icon" id="sp-sort-icon">&#9650;</span></th>
-                  <th>Engagement / Role</th>
+                  <th class="sortable-th" id="sp-sort-name">Engagement <span class="sort-icon" id="sp-sort-icon">&#9650;</span></th>
+                  <th>Specialist / Role</th>
                   <th title="Hours logged in the selected month only.">Hours (Month)</th>
                   <th title="Total hours logged on this engagement to date, compared against its hours budget -- not limited to the selected month.">Cumulative / Budget</th>
                   <th class="col-remaining">Remaining</th>
@@ -971,9 +984,13 @@
 
   // ---------- Tabs ----------
   function wireTabs() {
-    document.querySelectorAll(".tab-btn").forEach((btn) => {
+    // Only wires the real in-page tabs -- #tab-invoices is a plain link out
+    // to program_invoicing.html (a distinct page, not a panel here), so it's
+    // deliberately excluded from this toggle logic and left to navigate
+    // normally.
+    document.querySelectorAll(".tab-btn[data-tab]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+        document.querySelectorAll(".tab-btn[data-tab]").forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         const tab = btn.dataset.tab;
         $("panel-hours").classList.toggle("hidden", tab !== "hours");
@@ -1245,18 +1262,23 @@
     return ((parts[0]?.[0] || "") + (parts[parts.length - 1]?.[0] || "")).toUpperCase();
   }
 
-  // ---------- Hours by Specialist: search/filter/sort/paginate/collapse ----------
+  // ---------- Time Sheets: search/filter/sort/paginate/collapse ----------
   // currentMonthRows holds the full, unfiltered set of this-month rows so
   // filters/search/pagination can all operate client-side without another
   // round trip; specialistColorByName is keyed off that same full set so a
   // person's color stays put even as filters narrow what's on screen.
+  //
+  // Grouped by Engagement (not Specialist) per Chris's "organize by program
+  // and engagement" / "use invoicing format for above" note (8/22/26) -- one
+  // specialist can still appear under several engagements, they just show up
+  // as separate detail rows now instead of anchoring the group.
   let currentMonthRows = [];
   let specialistColorByName = {};
   let spSearch = "";
   let spSortDir = "asc";
   let spPage = 1;
   let spPageSize = 15;
-  const collapsedSpecialists = new Set();
+  const collapsedEngagements = new Set();
 
   function renderSpecialistSetup(rows) {
     currentMonthRows = rows;
@@ -1291,17 +1313,23 @@
     });
     // Delegated so newly-rendered rows' toggle buttons work without rewiring.
     $("monthly-groups").addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-toggle-specialist]");
+      const btn = e.target.closest("[data-toggle-engagement]");
       if (!btn) return;
-      const name = btn.dataset.toggleSpecialist;
-      if (collapsedSpecialists.has(name)) collapsedSpecialists.delete(name); else collapsedSpecialists.add(name);
+      const key = btn.dataset.toggleEngagement;
+      if (collapsedEngagements.has(key)) collapsedEngagements.delete(key); else collapsedEngagements.add(key);
       renderSpecialistTable();
     });
   }
 
   function renderSpecialistTable() {
     let rows = currentMonthRows;
-    if (spSearch) rows = rows.filter((r) => r.specialistName.toLowerCase().includes(spSearch));
+    if (spSearch) {
+      rows = rows.filter((r) =>
+        r.client.toLowerCase().includes(spSearch) ||
+        r.specialistName.toLowerCase().includes(spSearch) ||
+        r.program.toLowerCase().includes(spSearch)
+      );
+    }
 
     const noDataAtAll = currentMonthRows.length === 0;
     $("monthly-empty").classList.toggle("hidden", !noDataAtAll);
@@ -1309,40 +1337,45 @@
     $("specialist-scroll").classList.toggle("hidden", rows.length === 0);
     $("sp-pagination").classList.toggle("hidden", rows.length === 0);
 
-    const bySpecialist = {};
-    for (const r of rows) (bySpecialist[r.specialistName] ||= []).push(r);
-    let names = Object.keys(bySpecialist).sort((a, b) => a.localeCompare(b));
-    if (spSortDir === "desc") names.reverse();
+    // Key by program+client (not just client) so two different Programs
+    // that happen to share an engagement name never merge into one group.
+    const engagementKey = (r) => `${r.program} :: ${r.client}`;
+    const byEngagement = {};
+    for (const r of rows) (byEngagement[engagementKey(r)] ||= []).push(r);
+    let keys = Object.keys(byEngagement).sort((a, b) => {
+      const ra = byEngagement[a][0], rb = byEngagement[b][0];
+      return ra.client.localeCompare(rb.client);
+    });
+    if (spSortDir === "desc") keys.reverse();
     $("sp-sort-icon").innerHTML = spSortDir === "asc" ? "&#9650;" : "&#9660;";
 
-    const totalGroups = names.length;
+    const totalGroups = keys.length;
     const totalPages = Math.max(1, Math.ceil(totalGroups / spPageSize));
     if (spPage > totalPages) spPage = totalPages;
     if (spPage < 1) spPage = 1;
     const startIdx = (spPage - 1) * spPageSize;
-    const pageNames = names.slice(startIdx, startIdx + spPageSize);
+    const pageKeys = keys.slice(startIdx, startIdx + spPageSize);
 
     let html = "";
-    pageNames.forEach((name) => {
-      const group = bySpecialist[name];
-      const color = specialistColorByName[name] || colorForIndex(0);
-      const collapsed = collapsedSpecialists.has(name);
+    pageKeys.forEach((key) => {
+      const group = byEngagement[key];
+      const collapsed = collapsedEngagements.has(key);
       const totalHrs = round2(group.reduce((sum, r) => sum + r.hoursThisMonth, 0));
       const hasOver = group.some((r) => r.isOver);
+      const first = group[0];
 
       const chevron = `
-        <button type="button" class="sp-toggle${collapsed ? " collapsed" : ""}" data-toggle-specialist="${escapeHtml(name)}" title="${collapsed ? "Expand" : "Collapse"}" aria-label="${collapsed ? "Expand" : "Collapse"}">
+        <button type="button" class="sp-toggle${collapsed ? " collapsed" : ""}" data-toggle-engagement="${escapeHtml(key)}" title="${collapsed ? "Expand" : "Collapse"}" aria-label="${collapsed ? "Expand" : "Collapse"}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
         </button>`;
 
-      const specialistCell = `
+      const engagementCell = `
         <td rowspan="${collapsed ? 1 : group.length}">
           <div class="sp-cell">
             ${chevron}
-            <span class="specialist-avatar" style="background:${color};">${escapeHtml(initialsFor(name))}</span>
             <div>
-              <div class="sp-name">${escapeHtml(name)}</div>
-              <div class="sp-role">${escapeHtml(group[0].specialistRoleLabel)}</div>
+              <div class="sp-name">${escapeHtml(first.client)}</div>
+              <div class="sp-role">${escapeHtml(first.program)}</div>
             </div>
           </div>
         </td>
@@ -1351,10 +1384,10 @@
       if (collapsed) {
         html += `
         <tr class="group-start">
-          ${specialistCell}
+          ${engagementCell}
           <td colspan="4">
             <div class="sp-collapsed-summary">
-              <strong>${totalHrs} hrs</strong> this month across ${group.length} engagement${group.length === 1 ? "" : "s"}${hasOver ? '<span class="over-flag">Over</span>' : ""}
+              <strong>${totalHrs} hrs</strong> this month across ${group.length} specialist${group.length === 1 ? "" : "s"}${hasOver ? '<span class="over-flag">Over</span>' : ""}
             </div>
           </td>
         </tr>`;
@@ -1364,12 +1397,13 @@
       group.forEach((r, j) => {
         const remaining = round2(r.hoursAllotted - r.cumulativeThroughMonth);
         const pct = r.hoursAllotted > 0 ? Math.min(100, Math.round((r.cumulativeThroughMonth / r.hoursAllotted) * 100)) : 0;
+        const color = specialistColorByName[r.specialistName] || colorForIndex(0);
         html += `
         <tr class="${j === 0 ? "group-start" : ""}">
-          ${j === 0 ? specialistCell : ""}
+          ${j === 0 ? engagementCell : ""}
           <td>
             <button type="button" class="eng-name-btn" data-history="${r.assignmentId}" title="View billing history">
-              <div class="eng-name">${escapeHtml(r.client)}<svg class="eng-name-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 3.5"/></svg></div>
+              <div class="eng-name">${escapeHtml(r.specialistName)}<svg class="eng-name-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 3.5"/></svg></div>
               <div class="eng-role">${escapeHtml(r.role)}</div>
             </button>
           </td>
@@ -1396,7 +1430,7 @@
 
     const shownFrom = totalGroups === 0 ? 0 : startIdx + 1;
     const shownTo = Math.min(startIdx + spPageSize, totalGroups);
-    $("sp-pagination-info").textContent = `Showing ${shownFrom} to ${shownTo} of ${totalGroups} specialist${totalGroups === 1 ? "" : "s"}`;
+    $("sp-pagination-info").textContent = `Showing ${shownFrom} to ${shownTo} of ${totalGroups} engagement${totalGroups === 1 ? "" : "s"}`;
     $("sp-page-current").textContent = spPage;
     $("sp-page-prev").disabled = spPage <= 1;
     $("sp-page-next").disabled = spPage >= totalPages;
