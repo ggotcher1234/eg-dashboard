@@ -160,12 +160,22 @@
 
   /* Editable Set-Up Fee row inside the preview table (Greg, 8/22/26) -- lets
      him adjust a client's one-time fee right here instead of needing the
-     Cumulative Hours page first. Disabled + a note once it's already been
-     billed on a past invoice, so it can't accidentally get billed twice. */
-  .pi-setup-fee-input {
-    width: 90px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; font-family: inherit; text-align: right;
+     Cumulative Hours page first. Given a visible "$" prefix and an accent
+     border (not just the table's default cell styling) so it reads as an
+     actionable input rather than another static data cell. Disabled + a
+     note once it's already been billed on a past invoice, so it can't
+     accidentally get billed twice. */
+  .pi-fee-input-wrap {
+    display: inline-flex; align-items: center; gap: 4px; border: 1.5px solid var(--navy-light);
+    border-radius: 6px; padding: 3px 8px; background: #fff;
   }
-  .pi-setup-fee-input:disabled { background: #f4f6f8; color: var(--muted); }
+  .pi-fee-input-wrap.is-disabled { border-color: var(--border); background: #f4f6f8; }
+  .pi-fee-prefix { color: var(--muted); font-size: 12.5px; }
+  .pi-setup-fee-input {
+    width: 70px; padding: 2px 0; border: none; font-size: 13px; font-family: inherit; text-align: right; background: transparent;
+  }
+  .pi-setup-fee-input:focus { outline: none; }
+  .pi-setup-fee-input:disabled { color: var(--muted); }
   .fee-billed-note { color: var(--muted); font-weight: 400; font-size: 11.5px; text-transform: none; letter-spacing: 0; }
 
   /* ---------- Preview / past-invoices tables ---------- */
@@ -644,7 +654,7 @@
   }
 
   // Pre-fills #pi-rate from the selected Program's own saved rate, falling
-  // back to the org default if that Program hasn't set one yet. Disabled
+  // back to the $115 default if that Program hasn't set one yet. Disabled
   // with no program picked -- there's nothing to save a rate against yet.
   function loadRateForSelectedProgram() {
     const programId = $("pi-program").value;
@@ -703,6 +713,15 @@
     previewClients = [];
     previewTotalDue = 0;
 
+    // Force #pi-rate to match the *selected Program's* saved rate (or the
+    // $115 default) on every refresh -- not just when the dropdown fires a
+    // "change" event. Browsers can restore a <select>/<input>'s previous
+    // value on a plain page reload before any of our JS runs, which was
+    // silently leaving a stale rate (e.g. an old $95 test value) sitting in
+    // the field with no real "change" event ever firing to correct it
+    // (Greg, 8/22/26 bug report).
+    loadRateForSelectedProgram();
+
     if (!programId || !monthValue) {
       renderPreviewTable();
       $("pi-generate-btn").disabled = true;
@@ -710,9 +729,6 @@
     }
 
     const { start, end } = monthBounds(monthValue);
-
-    // Falls back to the org default if #pi-rate is somehow empty (e.g. no
-    // Program picked yet -- refreshPreview bails before this point anyway).
     const rate = Number($("pi-rate").value) || DEFAULT_BILLING_RATE;
 
     const { data: clients, error: clientsErr } = await sb
@@ -841,11 +857,17 @@
       // set for the first time right on this screen. Disabled once it's
       // already been billed on a past invoice, so it can't double-bill.
       const feeDisabled = c.setup_fee_billed ? "disabled" : "";
+      const feeWrapClass = c.setup_fee_billed ? "pi-fee-input-wrap is-disabled" : "pi-fee-input-wrap";
       const feeNote = c.setup_fee_billed ? ` <span class="fee-billed-note">(already billed)</span>` : "";
       rows += `<tr data-setup-fee-row="${c.client_id}">
         <td style="padding-left:22px;">Set-Up Fee${feeNote}</td>
         <td class="num">1</td>
-        <td class="num"><input type="number" class="pi-setup-fee-input" min="0" step="0.01" value="${c.setup_fee_raw}" data-client-id="${c.client_id}" ${feeDisabled} /></td>
+        <td class="num">
+          <span class="${feeWrapClass}" title="${c.setup_fee_billed ? "Already billed on a past invoice" : "Enter this engagement's one-time setup fee"}">
+            <span class="pi-fee-prefix">$</span>
+            <input type="number" class="pi-setup-fee-input" min="0" step="0.01" value="${c.setup_fee_raw}" data-client-id="${c.client_id}" ${feeDisabled} />
+          </span>
+        </td>
         <td class="num">${money(c.setup_fee || 0)}</td>
       </tr>`;
       rows += `<tr class="subtotal-row"><td colspan="4">Subtotal: ${money(c.subtotal)}</td></tr>`;
