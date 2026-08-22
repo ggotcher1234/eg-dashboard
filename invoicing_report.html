@@ -288,6 +288,8 @@
 
   .eng-name-btn { background: none; border: none; padding: 0; font: inherit; text-align: left; cursor: pointer; color: var(--text); }
   .eng-name-btn:hover .eng-name { color: var(--navy); }
+  .eng-open-btn { background: none; border: none; padding: 0; margin: 0; font: inherit; text-align: left; cursor: pointer; color: var(--text); }
+  .eng-open-btn:hover .sp-name { color: var(--navy-light); text-decoration: underline; }
   .eng-name { font-size: 13.5px; font-weight: 600; color: var(--navy-light); text-decoration: underline; line-height: 1.3; display: inline-flex; align-items: center; gap: 4px; }
   .eng-name-icon { width: 12px; height: 12px; flex-shrink: 0; }
   .eng-role { font-size: 12px; color: var(--muted); margin-top: 1px; }
@@ -457,6 +459,25 @@
 
   .ytd-total-figure { font-size: 22px; font-weight: 800; color: var(--navy); white-space: nowrap; }
   .ytd-total-figure .ytd-total-label { display: block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-top: 2px; }
+
+  /* ---------- Print / Save as PDF ----------
+     Prints whatever is currently on screen in the Time Sheets panel --
+     either the flat "All Engagements" table or the merged per-engagement
+     detail view, whichever is visible (the other already carries the
+     .hidden class, so display:none takes care of the rest). Everything
+     else (header, tabs, AI drawer, month/search controls, pagination,
+     the print button itself) is chrome that shouldn't end up on the page. */
+  @media print {
+    body { background: #fff; }
+    header, .ai-drawer-overlay, .ai-drawer, #banner, .sticky-top-wrap, .tab-bar,
+    .sp-controls, .sp-pagination, #ts-print-btn, #eng-detail-back,
+    #panel-payroll-mtd, #panel-payroll-ytd { display: none !important; }
+    main { max-width: none; margin: 0; padding: 0; }
+    .tab-panel-frame { border: none; padding: 0; margin: 0; box-shadow: none; }
+    .card { border: none; padding: 0; box-shadow: none; }
+    table { border: 1px solid #ccc; }
+    .specialist-scroll, .specialist-scroll table { max-height: none; overflow: visible; }
+  }
 </style>
 </head>
 <body>
@@ -633,12 +654,19 @@
     <div class="tab-panel-frame">
       <div class="tab-panel" id="panel-hours">
         <div class="card">
-          <h2>Time Sheets</h2>
-          <!-- Grouped by Program + Engagement, not Specialist (Chris,
-               8/22/26) -- matches how the actual invoice document itself
-               groups line items, so this table reads like a preview of
-               what's about to get billed. -->
-          <div class="card-hint" id="month-label-hint"></div>
+          <div class="card-header-row">
+            <div>
+              <h2>Time Sheets</h2>
+              <!-- Grouped by Program + Engagement, not Specialist (Chris,
+                   8/22/26) -- matches how the actual invoice document itself
+                   groups line items, so this table reads like a preview of
+                   what's about to get billed. -->
+              <div class="card-hint" id="month-label-hint"></div>
+            </div>
+            <div class="card-header-actions">
+              <button class="btn-secondary" id="ts-print-btn">Print / Save as PDF</button>
+            </div>
+          </div>
 
           <div class="sp-controls">
             <div class="eng-filter-wrap">
@@ -1282,7 +1310,7 @@
     const monthDate = new Date(monthValue + "-02"); // avoid TZ edge cases landing on prior day
     const monthLabel = monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
     const monthShortLabel = monthDate.toLocaleDateString(undefined, { month: "short", year: "numeric" });
-    $("month-label-hint").textContent = "Showing " + monthLabel + ". Click any engagement below to see its full billing history.";
+    $("month-label-hint").textContent = "Showing " + monthLabel + ". Click an engagement name below for its full combined report, or a specialist's name for their billing history.";
     $("ytd-label-hint").textContent =
       `Cumulative pay by team member, January 1 – ${monthLabel} — handy for 1099 prep at year end.`;
     $("payroll-mtd-title").textContent = "Payroll — " + monthLabel;
@@ -1427,6 +1455,12 @@
     });
     // Delegated so newly-rendered rows' toggle buttons work without rewiring.
     $("monthly-groups").addEventListener("click", (e) => {
+      const openBtn = e.target.closest("[data-open-engagement]");
+      if (openBtn) {
+        $("eng-filter").value = openBtn.dataset.openEngagement;
+        applyEngagementFilter();
+        return;
+      }
       const btn = e.target.closest("[data-toggle-engagement]");
       if (!btn) return;
       const key = btn.dataset.toggleEngagement;
@@ -1439,6 +1473,7 @@
       $("eng-filter").value = "";
       applyEngagementFilter();
     });
+    $("ts-print-btn").addEventListener("click", () => window.print());
   }
 
   // ---------- Engagement dropdown + merged per-engagement detail view ----------
@@ -1693,10 +1728,10 @@
         <td rowspan="${collapsed ? 1 : group.length}">
           <div class="sp-cell">
             ${chevron}
-            <div>
+            <button type="button" class="eng-open-btn" data-open-engagement="${escapeHtml(first.clientId)}" title="View full engagement report">
               <div class="sp-name">${escapeHtml(first.client)}</div>
               <div class="sp-role">${escapeHtml(first.program)}</div>
-            </div>
+            </button>
           </div>
         </td>
       `;
