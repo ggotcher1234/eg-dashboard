@@ -1059,7 +1059,21 @@
     const mySlot = currentUser ? teamRows.find((r) => r.user_id === currentUser.id) : null;
     emailSpecialtyLabel = mySlot ? (SPECIALTY_LABELS[mySlot.specialty_type] || mySlot.specialty_type) : "";
 
-    emailQuestions = (questions || []).filter((q) => (q.question || "").trim());
+    // Collapse to at most ONE dropdown entry per research area (Greg,
+    // 8/22/26: "we don't need two inbound and two outbound selections --
+    // it's one or the other") -- a client can have more than one question
+    // row saved under the same area, but the dropdown only ever names the
+    // category ("Outbound Marketing Question"), so two rows in the same
+    // area rendered as two identical-looking options. Keeps the first one
+    // per area in the query's existing sort_order.
+    const seenAreas = new Set();
+    emailQuestions = (questions || [])
+      .filter((q) => (q.question || "").trim())
+      .filter((q) => {
+        if (seenAreas.has(q.research_area)) return false;
+        seenAreas.add(q.research_area);
+        return true;
+      });
     if (emailQuestions.length) {
       $("ed-question").innerHTML = emailQuestions.map((q) => {
         const label = EMAIL_QUESTION_DROPDOWN_LABELS[q.research_area]
@@ -1117,9 +1131,14 @@ ${currentUser ? currentUser.full_name : ""}`;
       return;
     }
 
+    // Points to their EG Dashboard instead of claiming a literal email
+    // attachment (Greg, 8/22/26) -- the document actually lives on the
+    // client-facing Dashboard (client_public.html) under this question's
+    // research area, not as a file bolted onto this message.
+    const shareUrl = activeClient.slug ? new URL(`c/${encodeURIComponent(activeClient.slug)}`, PUBLIC_SITE_BASE).href : "";
     const attachLine = docs.length
-      ? `Attached is the full report${docs.length > 1 ? ", along with the supporting links below" : ""}:\n${docs.map((d) => `- ${d.url ? d.url : d.file_name}`).join("\n")}`
-      : "The full report is attached for your review — add it to this question on the Research page first if it isn't there yet.";
+      ? `I've uploaded the research document${docs.length > 1 ? "s" : ""} to your EG Dashboard for you to review${shareUrl ? `:\n${shareUrl}` : "."}`
+      : `I've uploaded the research document to your EG Dashboard for you to review${shareUrl ? ` (${shareUrl})` : ""} — add it to this question on the Research page first if it isn't there yet.`;
 
     $("ed-body").value = `Hi ${firstContactName}:
 

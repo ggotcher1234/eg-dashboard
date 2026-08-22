@@ -1,0 +1,22 @@
+-- 072_research_area_gis.sql
+--
+-- Greg (8/22/26): GIS specialists never had their own research category --
+-- research_area_type only had market_dynamics/outbound/inbound/
+-- watering_holes (019_client_profile_content.sql), so there was nowhere on
+-- the Research page for a GIS specialist to log a question/report, and no
+-- "GIS Question" option in the Draft Update Email dropdown.
+--
+-- Adding it as a 5th enum value. Every place that lists research areas
+-- (get_client_public_view(), client_research.html, client_public.html, the
+-- Draft Update Email dropdown in client_control_center.html) already
+-- iterates off this enum type / a hardcoded JS array that's been updated
+-- alongside this migration -- nothing else needs to change in the database.
+--
+-- IMPORTANT: run this statement by itself (not pasted together with other
+-- SQL in the same query) -- Postgres doesn't allow a newly-added enum
+-- value to be used in the same transaction that added it, and some SQL
+-- editors bundle everything you paste into one transaction.
+--
+-- Safe to re-run -- IF NOT EXISTS guards against a duplicate value.
+
+alter type research_area_type add value if not exists 'gis';
