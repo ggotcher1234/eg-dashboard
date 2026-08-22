@@ -313,9 +313,37 @@
   .hours-month .over-flag { display: block; margin: 3px 0 0; }
 
   .ub-text { font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; }
-  .ub-bar-track { height: 6px; border-radius: 999px; background: #eef1f4; margin-top: 6px; overflow: hidden; max-width: 180px; }
-  .ub-bar-fill { height: 100%; border-radius: 999px; transition: width 0.2s ease; }
-  .ub-caption { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* ---------- Engagement detail (merged Cumulative Hours report) ---------- */
+  .eng-filter-wrap { display: flex; align-items: center; gap: 8px; }
+  .eng-filter-wrap label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); }
+  .eng-filter-wrap select { min-width: 220px; }
+
+  .eng-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-bottom: 16px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+  .eng-detail-name { font-size: 19px; font-weight: 700; color: var(--navy); margin: 0; }
+  .eng-detail-address { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .eng-detail-meta-row { display: flex; gap: 26px; flex-wrap: wrap; }
+  .eng-detail-field label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 3px; }
+  .eng-detail-field .meta-static { font-size: 14px; color: var(--text); font-weight: 600; }
+  .eng-detail-back { margin-bottom: 14px; }
+
+  .cum-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .cum-table th { text-align: right; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); background: #f8fafb; padding: 10px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .cum-table th:first-child, .cum-table th:nth-child(2) { text-align: left; }
+  .cum-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; text-align: right; white-space: nowrap; }
+  .cum-table td:first-child, .cum-table td:nth-child(2) { text-align: left; }
+  .cum-table tbody tr:last-child td { border-bottom: none; }
+  .cum-table td.blank-cell { color: var(--border); }
+  .cum-table td.remaining-negative { color: var(--danger-dark); font-weight: 700; }
+  .cum-table .ed-specialty-name { font-weight: 700; color: var(--navy); }
+  .cum-table .ed-person-name { color: var(--muted); font-size: 12.5px; }
+  .cum-table tfoot td { padding: 12px 14px; font-size: 13.5px; font-weight: 700; border-top: 2px solid var(--border); background: #f8fafb; text-align: right; }
+  .cum-table tfoot td:first-child { text-align: left; }
+  .cum-table .ed-setup-fee-row td { font-style: italic; color: var(--muted); }
+  .cum-table .ed-setup-fee-row .ed-specialty-name { color: var(--text); font-weight: 600; font-style: normal; }
+  .eng-detail-section { margin-top: 22px; }
+  .eng-detail-section h3 { margin: 0 0 4px; font-size: 14.5px; }
+  .eng-detail-section .card-hint { margin: 0 0 12px; }
 
   .remaining-value { font-size: 13.5px; font-weight: 700; white-space: nowrap; }
   .remaining-value.negative { color: var(--danger-dark); }
@@ -598,7 +626,7 @@
       </button>
       <a class="tab-btn" href="program_invoicing.html" id="tab-invoices" style="text-decoration:none; margin-left:auto;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l2 2 4-4"/><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>
-        Invoices
+        Program Invoices
       </a>
     </div>
 
@@ -613,43 +641,111 @@
           <div class="card-hint" id="month-label-hint"></div>
 
           <div class="sp-controls">
-            <div class="sp-search-wrap">
+            <div class="eng-filter-wrap">
+              <label for="eng-filter">Engagement</label>
+              <select id="eng-filter">
+                <option value="">All Engagements</option>
+              </select>
+            </div>
+            <div class="sp-search-wrap" id="sp-search-wrap">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
               <input type="text" id="sp-search" placeholder="Search engagement or specialist…" autocomplete="off" />
             </div>
           </div>
 
-          <div class="specialist-scroll" id="specialist-scroll">
-            <table id="specialist-table" class="specialist-table">
-              <thead>
-                <tr>
-                  <th class="sortable-th" id="sp-sort-name">Engagement <span class="sort-icon" id="sp-sort-icon">&#9650;</span></th>
-                  <th>Specialist / Role</th>
-                  <th title="Hours logged in the selected month only.">Hours (Month)</th>
-                  <th title="Total hours logged on this engagement to date, compared against its hours budget -- not limited to the selected month.">Cumulative / Budget</th>
-                  <th class="col-remaining">Remaining</th>
-                </tr>
-              </thead>
-              <tbody id="monthly-groups"></tbody>
-            </table>
-          </div>
-          <div id="monthly-empty" class="empty-note hidden">No hours logged for this month yet.</div>
-          <div id="specialist-filtered-empty" class="empty-note hidden">No specialists match your search or filters.</div>
+          <div id="flat-view-wrap">
+            <div class="specialist-scroll" id="specialist-scroll">
+              <table id="specialist-table" class="specialist-table">
+                <thead>
+                  <tr>
+                    <th class="sortable-th" id="sp-sort-name">Engagement <span class="sort-icon" id="sp-sort-icon">&#9650;</span></th>
+                    <th>Specialist / Role</th>
+                    <th title="Hours logged in the selected month only.">Hours (Month)</th>
+                    <th title="Total hours logged on this engagement to date, compared against its hours budget -- not limited to the selected month.">Cumulative / Budget</th>
+                    <th class="col-remaining">Remaining</th>
+                  </tr>
+                </thead>
+                <tbody id="monthly-groups"></tbody>
+              </table>
+            </div>
+            <div id="monthly-empty" class="empty-note hidden">No hours logged for this month yet.</div>
+            <div id="specialist-filtered-empty" class="empty-note hidden">No specialists match your search or filters.</div>
 
-          <div class="sp-pagination" id="sp-pagination">
-            <div id="sp-pagination-info">Showing 0 to 0 of 0 specialists</div>
-            <div class="sp-pagination-right">
-              <label for="sp-page-size">Rows per page:
-                <select id="sp-page-size">
-                  <option value="10">10</option>
-                  <option value="15" selected>15</option>
-                  <option value="25">25</option>
-                  <option value="50">50</option>
-                </select>
-              </label>
-              <button type="button" class="sp-page-btn" id="sp-page-prev" aria-label="Previous page">&#8249;</button>
-              <span class="sp-page-current" id="sp-page-current">1</span>
-              <button type="button" class="sp-page-btn" id="sp-page-next" aria-label="Next page">&#8250;</button>
+            <div class="sp-pagination" id="sp-pagination">
+              <div id="sp-pagination-info">Showing 0 to 0 of 0 specialists</div>
+              <div class="sp-pagination-right">
+                <label for="sp-page-size">Rows per page:
+                  <select id="sp-page-size">
+                    <option value="10">10</option>
+                    <option value="15" selected>15</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                  </select>
+                </label>
+                <button type="button" class="sp-page-btn" id="sp-page-prev" aria-label="Previous page">&#8249;</button>
+                <span class="sp-page-current" id="sp-page-current">1</span>
+                <button type="button" class="sp-page-btn" id="sp-page-next" aria-label="Next page">&#8250;</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Combined per-engagement report (formerly client_cumulative_hours.html)
+               -- shown instead of the flat table above whenever a single
+               Engagement is picked from the dropdown. Greg (8/22/26): merge
+               the two reports together and drop the separate Cumulative
+               Hours page/button entirely. This view shows full engagement
+               history regardless of the Month picker above, same as the
+               standalone page did. -->
+          <div id="engagement-detail-wrap" class="hidden">
+            <button type="button" class="btn-ghost eng-detail-back" id="eng-detail-back">&larr; All Engagements</button>
+            <div class="eng-detail-header">
+              <div>
+                <div class="eng-detail-name" id="ed-name"></div>
+                <div class="eng-detail-address" id="ed-address"></div>
+              </div>
+              <div class="eng-detail-meta-row">
+                <div class="eng-detail-field">
+                  <label>Opened</label>
+                  <div class="meta-static" id="ed-opened">—</div>
+                </div>
+                <div class="eng-detail-field" id="ed-closed-wrap" style="display:none;">
+                  <label>Closed</label>
+                  <div class="meta-static" id="ed-closed">—</div>
+                </div>
+                <div class="eng-detail-field">
+                  <label>Hourly Rate (Pay)</label>
+                  <div class="meta-static" id="ed-rate">—</div>
+                </div>
+                <div class="eng-detail-field">
+                  <label>Setup Fee</label>
+                  <div class="meta-static" id="ed-setup-fee">—</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="eng-detail-section">
+              <h3>Cumulative Hours by Specialist</h3>
+              <div class="card-hint">Only months with logged hours are shown.</div>
+              <div class="table-scroll">
+                <table class="cum-table" id="ed-hours-table">
+                  <thead><tr id="ed-hours-thead"></tr></thead>
+                  <tbody id="ed-hours-tbody"></tbody>
+                  <tfoot><tr id="ed-hours-tfoot"></tr></tfoot>
+                </table>
+              </div>
+              <div id="ed-hours-empty" class="empty-note hidden">No specialists are assigned to this engagement yet.</div>
+            </div>
+
+            <div class="eng-detail-section">
+              <h3>Cumulative Value by Specialist</h3>
+              <div class="card-hint">Same hours, priced at the Pay rate above, plus the one-time Setup Fee.</div>
+              <div class="table-scroll">
+                <table class="cum-table" id="ed-dollars-table">
+                  <thead><tr id="ed-dollars-thead"></tr></thead>
+                  <tbody id="ed-dollars-tbody"></tbody>
+                  <tfoot><tr id="ed-dollars-tfoot"></tr></tfoot>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -733,6 +829,7 @@
 
   let currentUser = null;
   let reportRows = []; // one row per active, assigned, hour-tracked client_assignment
+  let clientsById = {}; // for the merged per-engagement detail view (Opened/Closed/Setup Fee/address)
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -749,12 +846,16 @@
 
   const SPECIALTY_LABELS = {
     team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
-    gis: "GIS", watering_holes: "Watering Holes",
+    gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
   };
   // Admin and Quality Control hours are a flat sunk-cost allocation, not
   // logged hour-by-hour in time_entries (see client_workspace.html) -- so
-  // there's nothing for this report to summarize or check for those two.
-  const EXCLUDED_SPECIALTIES = ["admin", "quality_control"];
+  // the flat Time Sheets table (grouped by month) still excludes them, same
+  // as before. But the merged per-engagement detail view (formerly
+  // client_cumulative_hours.html) needs them, so loadData() below no longer
+  // drops them at fetch time -- they're just flagged isSunk and filtered
+  // out of the flat-table/payroll inputs instead (Greg, 8/22/26 merge).
+  const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
 
   // Flat rate, same for every team member regardless of role (Team Lead,
   // Market Research, etc.) -- per Greg, 8/12/26. Loaded from
@@ -1085,20 +1186,28 @@
   // per month) this is a small amount of data -- no need for a database
   // function just to add two numbers together.
   async function loadData() {
-    const [assignmentsRes, entriesRes, usersRes] = await Promise.all([
+    const [assignmentsRes, entriesRes, usersRes, clientsRes] = await Promise.all([
       sb.from("client_assignments")
         .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name))")
         .not("user_id", "is", null),
       sb.from("time_entries").select("assignment_id, hours, entry_date, note"),
       sb.from("users").select("id, full_name, role"),
+      // Address/Opened/Closed/Setup Fee for the merged per-engagement detail
+      // view -- not needed by the flat Time Sheets table, but cheap enough
+      // to just load alongside everything else (Greg's org is small).
+      sb.from("clients").select("id, name, address, created_at, date_closed, setup_fee"),
     ]);
 
     if (assignmentsRes.error) { showBanner("Couldn't load assignments: " + assignmentsRes.error.message, "error"); return; }
     if (entriesRes.error) { showBanner("Couldn't load time entries: " + entriesRes.error.message, "error"); return; }
     if (usersRes.error) { showBanner("Couldn't load specialists: " + usersRes.error.message, "error"); return; }
+    if (clientsRes.error) { showBanner("Couldn't load engagements: " + clientsRes.error.message, "error"); return; }
 
     const usersById = {};
     for (const u of usersRes.data) usersById[u.id] = u;
+
+    clientsById = {};
+    for (const c of clientsRes.data) clientsById[c.id] = c;
 
     // Group every logged entry by assignment, split into "this calendar
     // month" buckets so re-rendering for a different month doesn't need
@@ -1108,13 +1217,16 @@
       (entriesByAssignment[e.assignment_id] ||= []).push(e);
     }
 
-    reportRows = assignmentsRes.data
-      .filter((a) => !EXCLUDED_SPECIALTIES.includes(a.specialty_type))
-      .map((a) => {
+    // No longer filtered out at fetch time (see SUNK_COST_SPECIALTIES note
+    // above) -- Admin/Quality Control rows are kept and flagged isSunk so
+    // the merged per-engagement detail view can show them; the flat
+    // Time Sheets table and payroll summaries filter them back out below.
+    reportRows = assignmentsRes.data.map((a) => {
         const person = usersById[a.user_id];
         const entries = entriesByAssignment[a.id] || [];
         return {
           assignmentId: a.id,
+          clientId: a.client_id,
           specialistName: person ? person.full_name : "Unknown",
           specialistRoleLabel: person ? roleLabel(person.role) : "",
           program: (a.clients && a.clients.econ_dev_companies && a.clients.econ_dev_companies.name) || "—",
@@ -1125,10 +1237,12 @@
           // so Rita can tell which slot an invoice line refers to.
           role: (SPECIALTY_LABELS[a.specialty_type] || a.specialty_type) + (a.slot_number > 1 ? " " + a.slot_number : ""),
           hoursAllotted: Number(a.hours_allotted) || 0,
+          isSunk: SUNK_COST_SPECIALTIES.includes(a.specialty_type),
           entries, // [{ hours, entry_date }]
         };
       });
 
+    populateEngagementFilter();
     render();
   }
 
@@ -1174,10 +1288,10 @@
     $("payroll-mtd-title").textContent = "Payroll — " + monthLabel;
     $("payroll-ytd-title").textContent = `YTD Payroll — Jan 1 – ${monthShortLabel}`;
 
-    renderSpecialistSetup(rowsWithTotals.filter((r) => r.hoursThisMonth > 0));
+    renderSpecialistSetup(rowsWithTotals.filter((r) => r.hoursThisMonth > 0 && !r.isSunk));
     renderSpecialistTable();
-    const payrollRows = renderPayrollSummary(rowsWithTotals.filter((r) => r.hoursThisMonth > 0));
-    const ytdPayrollRows = renderYtdPayrollSummary(rowsWithTotals.filter((r) => r.hoursYtd > 0));
+    const payrollRows = renderPayrollSummary(rowsWithTotals.filter((r) => r.hoursThisMonth > 0 && !r.isSunk));
+    const ytdPayrollRows = renderYtdPayrollSummary(rowsWithTotals.filter((r) => r.hoursYtd > 0 && !r.isSunk));
 
     $("ytd-total-figure").innerHTML =
       money(ytdPayrollRows.reduce((sum, p) => sum + p.pay, 0)) + '<span class="ytd-total-label">YTD Payroll</span>';
@@ -1319,6 +1433,212 @@
       if (collapsedEngagements.has(key)) collapsedEngagements.delete(key); else collapsedEngagements.add(key);
       renderSpecialistTable();
     });
+
+    $("eng-filter").addEventListener("change", applyEngagementFilter);
+    $("eng-detail-back").addEventListener("click", () => {
+      $("eng-filter").value = "";
+      applyEngagementFilter();
+    });
+  }
+
+  // ---------- Engagement dropdown + merged per-engagement detail view ----------
+  // Greg (8/22/26): fold client_cumulative_hours.html's per-engagement report
+  // (header + two specialty tables) into this Time Sheets tab, behind an
+  // Engagement picker, instead of a separate page/button. Picking a single
+  // engagement here shows its FULL history (every month ever logged), same
+  // as the standalone page did -- independent of the Month picker above,
+  // which only governs the flat "All Engagements" table.
+  function populateEngagementFilter() {
+    const seen = new Map();
+    for (const r of reportRows) {
+      if (!seen.has(r.clientId)) seen.set(r.clientId, { clientId: r.clientId, client: r.client, program: r.program });
+    }
+    const list = [...seen.values()].sort((a, b) => a.client.localeCompare(b.client));
+    const select = $("eng-filter");
+    const prevValue = select.value;
+    select.innerHTML = `<option value="">All Engagements</option>` +
+      list.map((e) => `<option value="${escapeHtml(e.clientId)}">${escapeHtml(e.client)} (${escapeHtml(e.program)})</option>`).join("");
+    if (prevValue && seen.has(prevValue)) select.value = prevValue;
+  }
+
+  function applyEngagementFilter() {
+    const clientId = $("eng-filter").value;
+    const isDetail = !!clientId;
+    $("flat-view-wrap").classList.toggle("hidden", isDetail);
+    $("sp-search-wrap").classList.toggle("hidden", isDetail);
+    $("engagement-detail-wrap").classList.toggle("hidden", !isDetail);
+    if (isDetail) renderEngagementDetail(clientId);
+  }
+
+  function monthKeyOf(dateStr) { return String(dateStr).slice(0, 7); }
+  function monthLabelFor(key) {
+    const [y, m] = key.split("-").map(Number);
+    return new Date(y, m - 1, 2).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  }
+
+  function renderEngagementDetail(clientId) {
+    const client = clientsById[clientId];
+    const rows = reportRows.filter((r) => r.clientId === clientId);
+    if (!client) return;
+
+    $("ed-name").textContent = client.name || "Untitled Engagement";
+    $("ed-address").textContent = client.address || "";
+    $("ed-opened").textContent = client.created_at
+      ? new Date(client.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+      : "—";
+    if (client.date_closed) {
+      $("ed-closed-wrap").style.display = "";
+      $("ed-closed").textContent = new Date(client.date_closed).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    } else {
+      $("ed-closed-wrap").style.display = "none";
+    }
+    $("ed-rate").textContent = money(hourlyRate) + "/hr";
+    $("ed-setup-fee").textContent = money(Number(client.setup_fee) || 0);
+
+    // Union of every calendar month with real logged hours anywhere in this
+    // engagement -- same rule client_cumulative_hours.html used: empty
+    // months just aren't columns at all.
+    const monthSet = new Set();
+    for (const r of rows) {
+      for (const e of r.entries) {
+        if (Number(e.hours) > 0) monthSet.add(monthKeyOf(e.entry_date));
+      }
+    }
+    const activeMonths = [...monthSet].sort();
+
+    const detailRows = rows.map((r) => {
+      const byMonth = {};
+      activeMonths.forEach((m) => { byMonth[m] = 0; });
+      let realLoggedTotal = 0;
+      for (const e of r.entries) {
+        const hrs = Number(e.hours) || 0;
+        realLoggedTotal += hrs;
+        const m = monthKeyOf(e.entry_date);
+        if (m in byMonth) byMonth[m] += hrs;
+      }
+      // Sunk-cost rows (Admin/Quality Control) with no real logged entries
+      // yet get their full allotment placed visually in the earliest active
+      // month, matching the standalone Cumulative Hours page's convention.
+      if (r.isSunk && realLoggedTotal === 0 && activeMonths.length > 0) {
+        byMonth[activeMonths[0]] += r.hoursAllotted;
+      }
+      const total = r.isSunk ? r.hoursAllotted : realLoggedTotal;
+      const remaining = round2(r.hoursAllotted - total);
+      return { ...r, byMonth, total: round2(total), remaining };
+    });
+
+    renderEdHoursTable(detailRows, activeMonths);
+    renderEdDollarsTable(detailRows, activeMonths, Number(client.setup_fee) || 0);
+  }
+
+  function renderEdHoursTable(rows, activeMonths) {
+    const theadRow = $("ed-hours-thead");
+    const tbody = $("ed-hours-tbody");
+    const tfootRow = $("ed-hours-tfoot");
+
+    if (!rows.length) {
+      $("ed-hours-table").classList.add("hidden");
+      $("ed-hours-empty").classList.remove("hidden");
+      $("ed-dollars-table").classList.add("hidden");
+      return;
+    }
+    $("ed-hours-table").classList.remove("hidden");
+    $("ed-hours-empty").classList.add("hidden");
+
+    theadRow.innerHTML = `
+      <th>Specialty</th>
+      <th>Allotted</th>
+      ${activeMonths.map((m) => `<th>${escapeHtml(monthLabelFor(m))}</th>`).join("")}
+      <th>Total</th>
+      <th>Remaining</th>
+    `;
+
+    tbody.innerHTML = rows.map((r) => `
+      <tr>
+        <td>
+          <div class="ed-specialty-name">${escapeHtml(r.role)}</div>
+          <div class="ed-person-name">${escapeHtml(r.specialistName || "Unassigned")}</div>
+        </td>
+        <td>${r.hoursAllotted}</td>
+        ${activeMonths.map((m) => {
+          const v = r.byMonth[m];
+          return v ? `<td>${v}</td>` : `<td class="blank-cell">—</td>`;
+        }).join("")}
+        <td>${r.total}</td>
+        <td${r.remaining < 0 ? ' class="remaining-negative"' : ""}>${r.remaining}</td>
+      </tr>
+    `).join("");
+
+    const totalsByMonth = {};
+    activeMonths.forEach((m) => { totalsByMonth[m] = round2(rows.reduce((s, r) => s + (r.byMonth[m] || 0), 0)); });
+    const grandAllotted = round2(rows.reduce((s, r) => s + r.hoursAllotted, 0));
+    const grandTotal = round2(rows.reduce((s, r) => s + r.total, 0));
+    const grandRemaining = round2(grandAllotted - grandTotal);
+
+    tfootRow.innerHTML = `
+      <td>Totals</td>
+      <td>${grandAllotted}</td>
+      ${activeMonths.map((m) => `<td>${totalsByMonth[m]}</td>`).join("")}
+      <td>${grandTotal}</td>
+      <td${grandRemaining < 0 ? ' class="remaining-negative"' : ""}>${grandRemaining}</td>
+    `;
+  }
+
+  function renderEdDollarsTable(rows, activeMonths, setupFee) {
+    if (!rows.length) return;
+    $("ed-dollars-table").classList.remove("hidden");
+    const theadRow = $("ed-dollars-thead");
+    const tbody = $("ed-dollars-tbody");
+    const tfootRow = $("ed-dollars-tfoot");
+
+    theadRow.innerHTML = `
+      <th>Specialty</th>
+      <th>Allotted</th>
+      ${activeMonths.map((m) => `<th>${escapeHtml(monthLabelFor(m))}</th>`).join("")}
+      <th>Total</th>
+      <th>Remaining</th>
+    `;
+
+    tbody.innerHTML = rows.map((r) => `
+      <tr>
+        <td>
+          <div class="ed-specialty-name">${escapeHtml(r.role)}</div>
+          <div class="ed-person-name">${escapeHtml(r.specialistName || "Unassigned")}</div>
+        </td>
+        <td>${money(r.hoursAllotted * hourlyRate)}</td>
+        ${activeMonths.map((m) => {
+          const v = r.byMonth[m];
+          return v ? `<td>${money(v * hourlyRate)}</td>` : `<td class="blank-cell">—</td>`;
+        }).join("")}
+        <td>${money(r.total * hourlyRate)}</td>
+        <td${r.remaining < 0 ? ' class="remaining-negative"' : ""}>${money(r.remaining * hourlyRate)}</td>
+      </tr>
+    `).join("");
+
+    tbody.innerHTML += `
+      <tr class="ed-setup-fee-row">
+        <td><div class="ed-specialty-name">Setup Fee</div></td>
+        <td class="blank-cell">—</td>
+        ${activeMonths.map(() => `<td class="blank-cell">—</td>`).join("")}
+        <td>${money(setupFee)}</td>
+        <td class="blank-cell">—</td>
+      </tr>
+    `;
+
+    const totalsByMonth = {};
+    activeMonths.forEach((m) => { totalsByMonth[m] = round2(rows.reduce((s, r) => s + (r.byMonth[m] || 0), 0)) * hourlyRate; });
+    const grandAllotted = round2(rows.reduce((s, r) => s + r.hoursAllotted, 0)) * hourlyRate;
+    const grandHoursTotal = round2(rows.reduce((s, r) => s + r.total, 0)) * hourlyRate;
+    const grandTotal = grandHoursTotal + setupFee;
+    const grandRemaining = grandAllotted - grandHoursTotal;
+
+    tfootRow.innerHTML = `
+      <td>Grand Total</td>
+      <td>${money(grandAllotted)}</td>
+      ${activeMonths.map((m) => `<td>${money(totalsByMonth[m])}</td>`).join("")}
+      <td>${money(grandTotal)}</td>
+      <td${grandRemaining < 0 ? ' class="remaining-negative"' : ""}>${money(grandRemaining)}</td>
+    `;
   }
 
   function renderSpecialistTable() {
@@ -1396,7 +1716,6 @@
 
       group.forEach((r, j) => {
         const remaining = round2(r.hoursAllotted - r.cumulativeThroughMonth);
-        const pct = r.hoursAllotted > 0 ? Math.min(100, Math.round((r.cumulativeThroughMonth / r.hoursAllotted) * 100)) : 0;
         const color = specialistColorByName[r.specialistName] || colorForIndex(0);
         html += `
         <tr class="${j === 0 ? "group-start" : ""}">
@@ -1412,8 +1731,6 @@
           </td>
           <td>
             <div class="ub-text">${r.cumulativeThroughMonth} / ${r.hoursAllotted} hrs</div>
-            <div class="ub-bar-track"><div class="ub-bar-fill" style="width:${pct}%; background:${r.isOver ? "var(--danger)" : color};"></div></div>
-            <div class="ub-caption">${pct}% used</div>
           </td>
           <td class="remaining-cell">
             <div class="remaining-value${remaining < 0 ? " negative" : ""}" style="${remaining < 0 ? "" : `color:${color};`}">${remaining < 0 ? Math.abs(remaining) + " hrs over" : remaining + " hrs"}</div>
@@ -1539,7 +1856,7 @@
   }
 
   $("export-csv-btn").addEventListener("click", () => {
-    const rows = (window._invoicingReportRows || []).filter((r) => r.hoursThisMonth > 0);
+    const rows = (window._invoicingReportRows || []).filter((r) => r.hoursThisMonth > 0 && !r.isSunk);
     if (!rows.length) { showBanner("Nothing to export for this month.", "error"); return; }
     rows.sort((a, b) => a.specialistName.localeCompare(b.specialistName));
     const header = ["Specialist", "Program", "Engagement Name", "Role", "Hours This Month", "Cumulative Hours", "Hours Allotted", "Status"];

@@ -438,13 +438,6 @@
             <div class="mac-sub">Resource Vault</div>
           </div>
         </a>
-        <a class="modal-action-card mac-forest" id="cm-cumulative-link" href="#">
-          <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></div>
-          <div class="mac-body">
-            <div class="mac-title-row"><span class="mac-title">Cumulative Hours</span><span class="mac-arrow">&rarr;</span></div>
-            <div class="mac-sub">Hours &amp; billing by specialist</div>
-          </div>
-        </a>
         <button type="button" class="modal-action-card mac-amber" id="cm-email-btn">
           <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 6 10-6"/></svg></div>
           <div class="mac-body">
@@ -755,12 +748,6 @@
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = roleLabel(profile.role);
 
-    // loadClient() above ran in parallel with the profile fetch (to avoid a
-    // second round trip), so its Cumulative Hours visibility check ran
-    // before currentUser existed and always hid the card. Re-apply it here
-    // now that currentUser is actually set.
-    $("cm-cumulative-link").classList.toggle("hidden", !(currentUser && currentUser.role === "super_admin"));
-
     if (!clientId) {
       $("no-client-note").classList.remove("hidden");
     }
@@ -826,11 +813,6 @@
     $("cm-profile-link").href = `client_profile.html?client=${client.id}`;
     $("cm-research-link").href = `client_research.html?client=${client.id}&view=research`;
     $("cm-resources-link").href = `client_research.html?client=${client.id}&view=vault`;
-    $("cm-cumulative-link").href = `client_cumulative_hours.html?client=${client.id}`;
-    // Greg (8/20/26): Cumulative Hours is Admin only -- hide the card here,
-    // and the page itself also gates on load (defense in depth, same
-    // pattern as invoicing_report.html's not-admin-view).
-    $("cm-cumulative-link").classList.toggle("hidden", !(currentUser && currentUser.role === "super_admin"));
     if (client.slug) {
       $("cm-dashboard-btn").href = new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href;
       $("cm-dashboard-btn").classList.remove("disabled-link");
