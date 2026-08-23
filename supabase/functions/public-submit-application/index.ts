@@ -59,7 +59,7 @@ const ALLOWED_FIELD_KEYS = [
   "f-s-name", "f-s-title", "f-s-email", "f-s-phone",
   "f-naics", "f-fte-range", "f-fte-2025", "f-fte-2024", "f-fte-2023", "f-fte-2022",
   "f-sales-range", "f-rev-2025", "f-rev-2024", "f-rev-2023", "f-rev-2022",
-  "f-sales-external", "f-pct-instate", "f-top-issues", "f-news-links",
+  "f-sales-external", "f-pct-instate", "f-top-issues", "f-news-links", "f-social-links",
   "_secondaryOpen",
 ];
 
