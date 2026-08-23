@@ -831,6 +831,9 @@
     const editableAttrs = isSuperAdmin ? "" : "readonly";
     $("pd-modal-title").textContent = p.name;
     $("program-detail-body").innerHTML = `
+      <label>Logo</label>
+      <div id="pd-logo-file" style="margin-bottom:14px;"></div>
+
       <label for="pd-name-input">Full name</label>
       <input type="text" class="inline-edit-input" id="pd-name-input" data-program-id="${p.id}" data-program-field="name" value="${escapeHtml(p.name)}" ${editableAttrs} />
 
@@ -853,7 +856,84 @@
     `;
     wireProgramInlineEdits();
     wireAdminQcUpfrontToggle();
+    renderProgramLogoField(p);
     wireContactsDetail(p.id);
+  }
+
+  // ---------- Program logo upload (inside Program Detail popup) ----------
+  // Same pattern as the client logo upload in client_profile.html: a
+  // dedicated PUBLIC bucket (program-logos, provisioned in
+  // 066_public_program_applications.sql) so econ_dev_companies.logo_url is
+  // just a normal public image URL -- no signed-URL machinery needed to
+  // show it on the branded public application page. Saves immediately on
+  // upload/remove. Write RLS on that bucket is Super Admin only, path
+  // convention programs/{program_id}/logo/{filename} -- read-only for
+  // everyone else is fine since !isSuperAdmin already makes every other
+  // field in this popup readonly/disabled (Greg, 8/23/26: "let's just build
+  // the real upload UI so I don't have to hand you logos one at a time").
+  const sanitizeFilename = (name) => name.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+  function programLogoPathFromUrl(url) {
+    if (!url) return null;
+    const marker = "/object/public/program-logos/";
+    const idx = url.indexOf(marker);
+    return idx === -1 ? null : url.slice(idx + marker.length);
+  }
+
+  function renderProgramLogoField(p) {
+    const container = $("pd-logo-file");
+    if (!container) return;
+    if (p.logo_url) {
+      container.innerHTML = `
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <img src="${escapeHtml(p.logo_url)}" alt="Logo preview" style="height:40px; max-width:160px; object-fit:contain; border:1px solid var(--border); border-radius:6px; background:#fff; padding:4px;" />
+          ${isSuperAdmin ? `<button type="button" class="btn-secondary btn-sm" data-logo-replace>Replace</button><button type="button" class="btn-secondary btn-sm" data-logo-remove>Remove</button>` : ""}
+        </div>
+      `;
+      if (isSuperAdmin) {
+        container.querySelector("[data-logo-replace]").addEventListener("click", () => pickProgramLogoFile(p));
+        container.querySelector("[data-logo-remove]").addEventListener("click", () => removeProgramLogoFile(p));
+      }
+    } else if (isSuperAdmin) {
+      container.innerHTML = `<label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload logo<input type="file" accept="image/*" class="logo-upload-input" style="display:none;" /></label>`;
+      container.querySelector(".logo-upload-input").addEventListener("change", (e) => {
+        if (e.target.files.length) uploadProgramLogoFile(p, e.target.files[0]);
+      });
+    } else {
+      container.innerHTML = `<span class="field-hint">No logo on file.</span>`;
+    }
+  }
+
+  function pickProgramLogoFile(p) {
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.accept = "image/*";
+    picker.addEventListener("change", () => { if (picker.files.length) uploadProgramLogoFile(p, picker.files[0]); });
+    picker.click();
+  }
+
+  async function uploadProgramLogoFile(p, file) {
+    const oldPath = programLogoPathFromUrl(p.logo_url);
+    const path = `programs/${p.id}/logo/${Date.now()}-${sanitizeFilename(file.name)}`;
+    const { error: uploadErr } = await sb.storage.from("program-logos").upload(path, file);
+    if (uploadErr) { showBanner("Couldn't upload logo: " + uploadErr.message, "error"); return; }
+    const { data } = sb.storage.from("program-logos").getPublicUrl(path);
+    const { error } = await sb.from("econ_dev_companies").update({ logo_url: data.publicUrl }).eq("id", p.id);
+    if (error) { showBanner("Couldn't save logo: " + error.message, "error"); return; }
+    if (oldPath) await sb.storage.from("program-logos").remove([oldPath]);
+    p.logo_url = data.publicUrl;
+    renderProgramLogoField(p);
+    showBanner("Logo uploaded.", "success");
+  }
+
+  async function removeProgramLogoFile(p) {
+    const oldPath = programLogoPathFromUrl(p.logo_url);
+    const { error } = await sb.from("econ_dev_companies").update({ logo_url: null }).eq("id", p.id);
+    if (error) { showBanner("Couldn't remove logo: " + error.message, "error"); return; }
+    if (oldPath) await sb.storage.from("program-logos").remove([oldPath]);
+    p.logo_url = null;
+    renderProgramLogoField(p);
+    showBanner("Logo removed.", "success");
   }
 
   // ---------- Admin/QC billing model toggle (inside Program Detail popup) ----------
