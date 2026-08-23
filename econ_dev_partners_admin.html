@@ -841,11 +841,48 @@
       <div class="field-hint" style="font-size:12px; color:var(--muted); margin:-6px 0 6px;">Who receives EG's invoices for this Program -- name/title, org, mailing address, email, phone. Some Programs are just a name and email.</div>
       <textarea class="inline-edit-input inline-edit-textarea" id="pd-address-input" data-program-id="${p.id}" data-program-field="address" ${editableAttrs}>${escapeHtml(p.address || "")}</textarea>
 
+      <label style="margin-top:18px;">Billing</label>
+      <div class="checkrow" style="margin-top:2px;">
+        <input type="checkbox" id="pd-admin-qc-upfront" data-program-id="${p.id}" ${p.bill_admin_qc_upfront !== false ? "checked" : ""} ${isSuperAdmin ? "" : "disabled"} />
+        <label for="pd-admin-qc-upfront">Bill Admin/QC hours up front</label>
+      </div>
+      <div class="field-hint" style="font-size:12px; color:var(--muted); margin:-4px 0 0;">On (default): Admin and Quality Control hours bill in full the moment they're allotted, same as always. Off: this Program's Admin/QC hours are billed as actually performed, like every other specialty -- specialists log real hours and invoices pull from that.</div>
+
       <label style="margin-top:18px;">Contacts</label>
       <div id="pd-contacts-inner">${renderContactsDetail(p, contactsForPartner(p.id))}</div>
     `;
     wireProgramInlineEdits();
+    wireAdminQcUpfrontToggle();
     wireContactsDetail(p.id);
+  }
+
+  // ---------- Admin/QC billing model toggle (inside Program Detail popup) ----------
+  // Default true everywhere (up-front billing, unchanged behavior); Greg
+  // flips this to false for a Program like GRE that wants Admin/QC billed
+  // as actually performed instead (Greg, 8/23/26). Every file that treats
+  // admin/quality_control as a sunk cost (client_workspace.html,
+  // client_applications.html, program_invoicing.html,
+  // client_cumulative_hours.html, client_control_center.html,
+  // invoicing_report.html, index.html, specialist_invoices.html) checks
+  // this flag before doing so.
+  function wireAdminQcUpfrontToggle() {
+    const box = $("pd-admin-qc-upfront");
+    if (!box) return;
+    box.addEventListener("change", async () => {
+      const id = box.dataset.programId;
+      const value = box.checked;
+      box.disabled = true;
+      const { error } = await sb.from("econ_dev_companies").update({ bill_admin_qc_upfront: value }).eq("id", id);
+      box.disabled = false;
+      if (error) {
+        showBanner("Couldn't save: " + error.message, "error");
+        box.checked = !value;
+        return;
+      }
+      const p = allPartners.find((x) => x.id === id);
+      if (p) p.bill_admin_qc_upfront = value;
+      showBanner(value ? "Admin/QC hours will bill up front for this Program." : "Admin/QC hours will bill as performed for this Program.", "success");
+    });
   }
 
   function openProgramDetail(partnerId) {

@@ -727,7 +727,16 @@
   };
   // Admin and QC are treated as sunk costs — spent always equals allotted,
   // automatically, from the moment hours are assigned. Not logged hour-by-hour.
+  // A Program can opt out of this (Greg, 8/23/26: GRE bills Admin/QC as
+  // actually performed instead) via econ_dev_companies.bill_admin_qc_upfront
+  // -- defaults to true, so every Program keeps today's behavior unless
+  // Greg flips it off for them in EG Programs admin.
   const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+  function isSunkCostSpecialty(specialtyType) {
+    if (!SUNK_COST_SPECIALTIES.includes(specialtyType)) return false;
+    const partner = currentClient && currentClient.econ_dev_companies;
+    return !partner || partner.bill_admin_qc_upfront !== false;
+  }
   const PROJECT_STATUSES = ["accepted", "in_progress", "on_hold", "closed"];
   const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
 
@@ -836,7 +845,7 @@
   async function loadClients() {
     const { data, error } = await sb
       .from("clients")
-      .select("*, econ_dev_companies(code, name)")
+      .select("*, econ_dev_companies(code, name, bill_admin_qc_upfront)")
       .order("name");
     if (error) { showBanner("Couldn't load clients: " + error.message, "error"); return; }
     allClients = data;
@@ -895,7 +904,7 @@
   async function openClient(clientId) {
     const { data: client, error } = await sb
       .from("clients")
-      .select("*, econ_dev_companies(code, name)")
+      .select("*, econ_dev_companies(code, name, bill_admin_qc_upfront)")
       .eq("id", clientId)
       .single();
     if (error) { showBanner("Couldn't open client: " + error.message, "error"); return; }
@@ -934,7 +943,7 @@
     // no logging needed. Everything else still rolls up from time_entries.
     currentAssignments = rows.map((r) => ({
       ...r,
-      hoursSpent: SUNK_COST_SPECIALTIES.includes(r.specialty_type) ? Number(r.hours_allotted) : (hoursByAssignment[r.id] || 0),
+      hoursSpent: isSunkCostSpecialty(r.specialty_type) ? Number(r.hours_allotted) : (hoursByAssignment[r.id] || 0),
     }));
     isTeamLeadHere = currentAssignments.some((r) => r.user_id === currentUser.id && r.is_team_lead);
   }
@@ -1059,7 +1068,7 @@
       // Anyone logs their own time; a Super Admin can log for anyone. Only
       // meaningful once a consultant is actually in the slot. Admin/QC are
       // sunk costs (spent = allotted automatically) so there's nothing to log.
-      const isSunkCost = SUNK_COST_SPECIALTIES.includes(r.specialty_type);
+      const isSunkCost = isSunkCostSpecialty(r.specialty_type);
       const canLogHours = !isSunkCost && !!person && (isSuperAdmin || person.id === currentUser.id);
       const canViewHistory = !isSunkCost && !!person;
       const spentDisplay = canViewHistory

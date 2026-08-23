@@ -782,7 +782,7 @@
   async function loadClient(clientId) {
     const { data: client, error } = await sb
       .from("clients")
-      .select("*, econ_dev_companies(code, name)")
+      .select("*, econ_dev_companies(code, name, bill_admin_qc_upfront)")
       .eq("id", clientId)
       .single();
 
@@ -850,7 +850,14 @@
   // assigned, with no time_entries logging. Mirror that rule here so this
   // strip's total matches the workspace's total instead of only summing
   // logged time_entries.
+  // A Program can opt out via econ_dev_companies.bill_admin_qc_upfront
+  // (Greg, 8/23/26: GRE bills Admin/QC as actually performed instead).
   const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+  function isSunkCostSpecialty(specialtyType, client) {
+    if (!SUNK_COST_SPECIALTIES.includes(specialtyType)) return false;
+    const partner = client && client.econ_dev_companies;
+    return !partner || partner.bill_admin_qc_upfront !== false;
+  }
 
   // ---------- Status age (overdue indicator + delay reason) ----------
   // Greg (8/18/26): flag engagements that have sat In Progress too long --
@@ -923,13 +930,13 @@
 
     let hoursUsed = 0;
     const rows = assignments || [];
-    const loggedIds = rows.filter((a) => !SUNK_COST_SPECIALTIES.includes(a.specialty_type)).map((a) => a.id);
+    const loggedIds = rows.filter((a) => !isSunkCostSpecialty(a.specialty_type, client)).map((a) => a.id);
     let hoursByAssignment = {};
     if (loggedIds.length) {
       const { data: entries } = await sb.from("time_entries").select("assignment_id, hours").in("assignment_id", loggedIds);
       for (const e of entries || []) hoursByAssignment[e.assignment_id] = (hoursByAssignment[e.assignment_id] || 0) + Number(e.hours || 0);
     }
-    hoursUsed = rows.reduce((sum, a) => sum + (SUNK_COST_SPECIALTIES.includes(a.specialty_type) ? Number(a.hours_allotted || 0) : (hoursByAssignment[a.id] || 0)), 0);
+    hoursUsed = rows.reduce((sum, a) => sum + (isSunkCostSpecialty(a.specialty_type, client) ? Number(a.hours_allotted || 0) : (hoursByAssignment[a.id] || 0)), 0);
 
     if (!activeClient || activeClient.id !== client.id) return;
 

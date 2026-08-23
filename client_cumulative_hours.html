@@ -384,7 +384,14 @@
   // sample sheet showed Admin/QC/GIS all landing in that first month
   // together, without pretending there's a real per-entry breakdown that
   // doesn't exist.
+  // A Program can opt out via econ_dev_companies.bill_admin_qc_upfront
+  // (Greg, 8/23/26: GRE bills Admin/QC as actually performed instead).
   const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+  function isSunkCostSpecialty(specialtyType) {
+    if (!SUNK_COST_SPECIALTIES.includes(specialtyType)) return false;
+    const partner = currentClient && currentClient.econ_dev_companies;
+    return !partner || partner.bill_admin_qc_upfront !== false;
+  }
 
   function roleLabel(role) {
     return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
@@ -544,7 +551,7 @@
 
   async function loadData(clientId) {
     const [clientRes, assignmentsRes, usersRes] = await Promise.all([
-      sb.from("clients").select("id, name, address, created_at, date_closed, setup_fee").eq("id", clientId).single(),
+      sb.from("clients").select("id, name, address, created_at, date_closed, setup_fee, econ_dev_companies(bill_admin_qc_upfront)").eq("id", clientId).single(),
       sb.from("client_assignments")
         .select("id, user_id, specialty_type, slot_number, hours_allotted")
         .eq("client_id", clientId)
@@ -596,7 +603,7 @@
     reportRows = assignmentsRes.data.map((a) => {
       const person = usersById[a.user_id];
       const entries = entriesByAssignment[a.id] || [];
-      const isSunk = SUNK_COST_SPECIALTIES.includes(a.specialty_type);
+      const isSunk = isSunkCostSpecialty(a.specialty_type);
       const hoursAllotted = Number(a.hours_allotted) || 0;
 
       const byMonth = {};

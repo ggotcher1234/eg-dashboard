@@ -345,11 +345,19 @@
     team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
     gis: "GIS", watering_holes: "Watering Holes",
   };
-  // Admin/Quality Control are a one-time sunk-cost allotment, not hours
-  // logged month to month -- they never show up in time_entries, so they
-  // never contribute to a monthly pay statement anyway. Excluded here the
-  // same way invoicing_report.html's Payroll tabs exclude them.
+  // Admin/Quality Control are normally a one-time sunk-cost allotment, not
+  // hours logged month to month -- they never show up in time_entries, so
+  // they never contribute to a monthly pay statement anyway. Excluded here
+  // the same way invoicing_report.html's Payroll tabs exclude them. A
+  // Program can opt out via econ_dev_companies.bill_admin_qc_upfront (Greg,
+  // 8/23/26: GRE bills Admin/QC as actually performed instead) -- for those
+  // Programs, Admin/QC hours ARE real logged time_entries and should count
+  // toward the specialist's pay statement like any other specialty.
   const EXCLUDED_SPECIALTIES = ["admin", "quality_control"];
+  function isExcludedSpecialty(specialtyType, partner) {
+    if (!EXCLUDED_SPECIALTIES.includes(specialtyType)) return false;
+    return !partner || partner.bill_admin_qc_upfront !== false;
+  }
 
   // ---------- Auth ----------
   async function signOut() {
@@ -446,7 +454,7 @@
   async function loadData() {
     const [assignmentsRes, entriesRes, usersRes] = await Promise.all([
       sb.from("client_assignments")
-        .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name))")
+        .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name, bill_admin_qc_upfront))")
         .not("user_id", "is", null),
       sb.from("time_entries").select("assignment_id, hours, entry_date"),
       sb.from("users").select("id, full_name, role, email"),
@@ -465,7 +473,7 @@
     }
 
     reportRows = assignmentsRes.data
-      .filter((a) => !EXCLUDED_SPECIALTIES.includes(a.specialty_type))
+      .filter((a) => !isExcludedSpecialty(a.specialty_type, a.clients && a.clients.econ_dev_companies))
       .map((a) => {
         const person = usersById[a.user_id];
         return {

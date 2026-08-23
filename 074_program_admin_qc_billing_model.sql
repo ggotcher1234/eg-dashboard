@@ -1,0 +1,28 @@
+-- 074_program_admin_qc_billing_model.sql
+--
+-- Greg (8/23/26): GRE doesn't want their Admin and Quality Control hours
+-- billed up front (the "sunk cost" model every other Program uses -- the
+-- full hours_allotted bills automatically the moment the slot is created,
+-- with no time logging). GRE wants Admin/QC billed as actually performed,
+-- same as every other specialty (Team Lead, Market Research, Digital
+-- Marketing, etc.): real time_entries, a Log Hours button, invoices built
+-- from actual logged hours.
+--
+-- Rather than ripping out the sunk-cost model everywhere (which would force
+-- every specialist on every OTHER Program to start logging Admin/QC hours
+-- they've never had to log before, and would retroactively contradict how
+-- past invoices were built), this adds a per-Program flag. Every existing
+-- Program defaults to `true` -- up-front billing, exactly today's
+-- behavior -- and Greg can flip it to `false` for GRE (and any future
+-- Program that wants the same) from the EG Programs admin screen.
+--
+-- SUNK_COST_SPECIALTIES = ["admin", "quality_control"] is still hardcoded
+-- identically in 8 files (client_workspace.html, client_applications.html,
+-- program_invoicing.html, client_cumulative_hours.html,
+-- client_control_center.html, invoicing_report.html, index.html,
+-- specialist_invoices.html) -- each of those now also checks this flag
+-- before treating an admin/quality_control assignment as sunk cost.
+--
+-- Safe to re-run.
+
+alter table econ_dev_companies add column if not exists bill_admin_qc_upfront boolean not null default true;

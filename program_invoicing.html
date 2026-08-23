@@ -520,8 +520,13 @@
   // Same rule as client_cumulative_hours.html / client_workspace.html:
   // Admin and Quality Control are sunk costs -- their full hours_allotted
   // is owed once, the first time the engagement is billed, not logged
-  // hour-by-hour like the other specialties.
+  // hour-by-hour like the other specialties. A Program can opt out via
+  // econ_dev_companies.bill_admin_qc_upfront (Greg, 8/23/26: GRE bills
+  // Admin/QC as actually performed, like every other specialty).
   const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+  function isSunkCostSpecialty(specialtyType, billUpfront) {
+    return SUNK_COST_SPECIALTIES.includes(specialtyType) && billUpfront !== false;
+  }
   // Matches Chris's collapsed roster order (8/20/26 feedback batch): Team
   // Lead, Market Research, GIS, Digital Marketing -- Watering Holes and the
   // two sunk-cost specialties follow, Set-Up Fees always last.
@@ -637,7 +642,7 @@
   async function loadPrograms() {
     const { data, error } = await sb
       .from("econ_dev_companies")
-      .select("id, name, address, billing_hourly_rate")
+      .select("id, name, address, billing_hourly_rate, bill_admin_qc_upfront")
       .order("name", { ascending: true });
     if (error) { showBanner("Couldn't load Programs: " + error.message, "error"); return; }
     programs = data || [];
@@ -724,6 +729,8 @@
 
     const { start, end } = monthBounds(monthValue);
     const rate = Number($("pi-rate").value) || DEFAULT_BILLING_RATE;
+    const selectedProgram = programs.find((p) => p.id === programId);
+    const billUpfront = !selectedProgram || selectedProgram.bill_admin_qc_upfront !== false;
 
     const { data: clients, error: clientsErr } = await sb
       .from("clients")
@@ -773,7 +780,7 @@
       // don't need to see EG's internal slot bookkeeping.
       const trackedTotals = {};
       for (const a of clientAssignments) {
-        if (SUNK_COST_SPECIALTIES.includes(a.specialty_type)) continue;
+        if (isSunkCostSpecialty(a.specialty_type, billUpfront)) continue;
         const qty = round2(entriesByAssignment[a.id] || 0);
         if (qty > 0) trackedTotals[a.specialty_type] = round2((trackedTotals[a.specialty_type] || 0) + qty);
       }
@@ -792,7 +799,7 @@
       // rather than merged, so voiding an invoice can precisely un-flip
       // just the assignments it billed).
       for (const a of clientAssignments) {
-        if (!SUNK_COST_SPECIALTIES.includes(a.specialty_type)) continue;
+        if (!isSunkCostSpecialty(a.specialty_type, billUpfront)) continue;
         if (a.sunk_cost_billed) continue;
         const qty = round2(Number(a.hours_allotted) || 0);
         if (qty <= 0) continue;

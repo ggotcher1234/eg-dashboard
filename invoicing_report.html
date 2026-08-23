@@ -894,7 +894,13 @@
   // client_cumulative_hours.html) needs them, so loadData() below no longer
   // drops them at fetch time -- they're just flagged isSunk and filtered
   // out of the flat-table/payroll inputs instead (Greg, 8/22/26 merge).
+  // A Program can opt out via econ_dev_companies.bill_admin_qc_upfront
+  // (Greg, 8/23/26: GRE bills Admin/QC as actually performed instead).
   const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+  function isSunkCostSpecialty(specialtyType, partner) {
+    if (!SUNK_COST_SPECIALTIES.includes(specialtyType)) return false;
+    return !partner || partner.bill_admin_qc_upfront !== false;
+  }
 
   // Flat rate, same for every team member regardless of role (Team Lead,
   // Market Research, etc.) -- per Greg, 8/12/26. Loaded from
@@ -1248,7 +1254,7 @@
   async function loadData() {
     const [assignmentsRes, entriesRes, usersRes, clientsRes] = await Promise.all([
       sb.from("client_assignments")
-        .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name))")
+        .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name, bill_admin_qc_upfront))")
         .not("user_id", "is", null),
       sb.from("time_entries").select("assignment_id, hours, entry_date, note"),
       sb.from("users").select("id, full_name, role"),
@@ -1297,7 +1303,7 @@
           // so Rita can tell which slot an invoice line refers to.
           role: (SPECIALTY_LABELS[a.specialty_type] || a.specialty_type) + (a.slot_number > 1 ? " " + a.slot_number : ""),
           hoursAllotted: Number(a.hours_allotted) || 0,
-          isSunk: SUNK_COST_SPECIALTIES.includes(a.specialty_type),
+          isSunk: isSunkCostSpecialty(a.specialty_type, a.clients && a.clients.econ_dev_companies),
           entries, // [{ hours, entry_date }]
         };
       });

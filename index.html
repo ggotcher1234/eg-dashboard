@@ -1264,7 +1264,7 @@
   });
 
   async function loadClients() {
-    const { data, error } = await sb.from("clients").select("*, econ_dev_companies(code, name)").order("name");
+    const { data, error } = await sb.from("clients").select("*, econ_dev_companies(code, name, bill_admin_qc_upfront)").order("name");
     if (error) { showBanner("Couldn't load clients: " + error.message, "error"); return; }
     allClients = data;
   }
@@ -1349,8 +1349,16 @@
   // Admin and Quality Control are sunk costs (mirrors client_control_center.html
   // and client_workspace.html): those hours count as spent the moment
   // they're allotted, with no time_entries logging expected, so they never
-  // show up as "hours left to bill."
+  // show up as "hours left to bill." A Program can opt out via
+  // econ_dev_companies.bill_admin_qc_upfront (Greg, 8/23/26: GRE bills
+  // Admin/QC as actually performed instead).
   const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+  function isSunkCostSpecialty(specialtyType, clientId) {
+    if (!SUNK_COST_SPECIALTIES.includes(specialtyType)) return false;
+    const client = allClients.find((c) => c.id === clientId);
+    const partner = client && client.econ_dev_companies;
+    return !partner || partner.bill_admin_qc_upfront !== false;
+  }
 
   // Greg: if I'm still holding unbilled hours on a specialty slot -- say
   // Digital Marketing on an active engagement -- that's a task due too, not
@@ -1363,7 +1371,7 @@
     myBillableOpenCount = 0;
     myBillableAssignments = [];
     if (!myAssignmentRows.length) return;
-    const loggedIds = myAssignmentRows.filter((a) => !SUNK_COST_SPECIALTIES.includes(a.specialty_type)).map((a) => a.id);
+    const loggedIds = myAssignmentRows.filter((a) => !isSunkCostSpecialty(a.specialty_type, a.client_id)).map((a) => a.id);
     let hoursByAssignment = {};
     if (loggedIds.length) {
       const { data: entries } = await sb.from("time_entries").select("assignment_id, hours").in("assignment_id", loggedIds);
@@ -1372,7 +1380,7 @@
     const clientStatusById = Object.fromEntries(allClients.map((c) => [c.id, c.project_status]));
     for (const a of myAssignmentRows) {
       if (clientStatusById[a.client_id] === "closed") continue; // wrapped up -- nothing left to bill
-      const used = SUNK_COST_SPECIALTIES.includes(a.specialty_type) ? Number(a.hours_allotted || 0) : (hoursByAssignment[a.id] || 0);
+      const used = isSunkCostSpecialty(a.specialty_type, a.client_id) ? Number(a.hours_allotted || 0) : (hoursByAssignment[a.id] || 0);
       const remaining = Number(a.hours_allotted || 0) - used;
       if (remaining > 0) {
         myBillableOpenCount++;
@@ -1569,7 +1577,7 @@
   }
   async function renderMyHistoryPanel() {
     const byId = Object.fromEntries(allClients.map((c) => [c.id, c]));
-    const trackedRows = myAssignmentRows.filter((a) => !SUNK_COST_SPECIALTIES.includes(a.specialty_type));
+    const trackedRows = myAssignmentRows.filter((a) => !isSunkCostSpecialty(a.specialty_type, a.client_id));
     if (!trackedRows.length) {
       $("my-history-list").innerHTML = `<div class="mh-empty">No billable assignments yet.</div>`;
       myHistoryLoaded = true;
@@ -2091,7 +2099,7 @@
     const start = `${monthKey}-01`;
     const end = `${monthKey}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
 
-    const trackedRows = myAssignmentRows.filter((a) => !SUNK_COST_SPECIALTIES.includes(a.specialty_type));
+    const trackedRows = myAssignmentRows.filter((a) => !isSunkCostSpecialty(a.specialty_type, a.client_id));
     if (!trackedRows.length) {
       invLines = [];
       renderInvoiceLines();

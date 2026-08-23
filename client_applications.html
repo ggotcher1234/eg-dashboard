@@ -1977,15 +1977,20 @@
     gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
   };
   // Admin and QC are sunk costs — spent always equals allotted, automatically.
-  // Kept in sync with the same rule in client_workspace.html.
+  // Kept in sync with the same rule in client_workspace.html. A Program can
+  // opt out via econ_dev_companies.bill_admin_qc_upfront (Greg, 8/23/26).
   const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+  function isSunkCostSpecialty(specialtyType, partner) {
+    if (!SUNK_COST_SPECIALTIES.includes(specialtyType)) return false;
+    return !partner || partner.bill_admin_qc_upfront !== false;
+  }
 
   // Shared hours visibility (Section 4.3/5.3): every assigned consultant —
   // not just the Team Lead — sees everyone's allotted and spent hours once
   // they're on the client. RLS already enforces this (client_assignments_select
   // / time_entries_select both key off is_assigned_to_client), this just
   // renders what the database already allows the current viewer to see.
-  async function fetchAssignmentsAndHours(clientId) {
+  async function fetchAssignmentsAndHours(clientId, partner) {
     const { data: rows, error } = await sb
       .from("client_assignments")
       .select("*")
@@ -2004,7 +2009,7 @@
     }
     return rows.map((r) => ({
       ...r,
-      hoursSpent: SUNK_COST_SPECIALTIES.includes(r.specialty_type) ? Number(r.hours_allotted) : (hoursByAssignment[r.id] || 0),
+      hoursSpent: isSunkCostSpecialty(r.specialty_type, partner) ? Number(r.hours_allotted) : (hoursByAssignment[r.id] || 0),
     }));
   }
 
@@ -2077,7 +2082,7 @@
       ({ client, teamLead } = await fetchClientAndTeamLead(a.client_id));
     }
     const documents = await fetchDocuments(a, client ? client.id : null);
-    const assignments = client ? await fetchAssignmentsAndHours(client.id) : [];
+    const assignments = client ? await fetchAssignmentsAndHours(client.id, partner) : [];
 
     const projectStatuses = ["accepted", "in_progress", "on_hold", "closed"];
     const projectStatusLabels = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
