@@ -155,6 +155,12 @@
   .rq-doc-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
   .rq-doc-row .rq-doc-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; flex: 1; text-decoration: none; }
   .rq-doc-row .rq-doc-link:hover { text-decoration: underline; }
+  /* Up/down reorder controls -- this is the order the client dashboard now
+     shows documents in too (Greg, 8/24/26), so this is the one place that
+     order gets set. */
+  .rq-doc-order-btns { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
+  .rq-move-btn { padding: 0 6px; font-size: 9px; line-height: 1.5; }
+  .rq-move-btn:disabled { opacity: 0.25; cursor: default; }
   .rq-area-empty { color: var(--muted); font-size: 13px; padding: 6px 0 14px; }
   .rq-add-row { display: flex; gap: 8px; margin-top: 6px; }
   .rq-link-form { display: none; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); align-items: flex-end; }
@@ -1086,7 +1092,15 @@
   let openResearchArea = null;
 
   async function loadDocuments() {
-    const { data, error } = await sb.from("documents").select("*").eq("client_id", currentClient.id).order("uploaded_at", { ascending: false });
+    // sort_order is what a specialist can now drag/click-reorder into the
+    // sequence a client should read documents in (Greg, 8/24/26) -- it's
+    // also exactly what get_client_public_view()/finalize_client() use to
+    // order the same documents on the client-facing dashboard, so this
+    // page and that page always agree. uploaded_at is only a tiebreaker
+    // for any row that somehow has no sort_order.
+    const { data, error } = await sb.from("documents").select("*").eq("client_id", currentClient.id)
+      .order("sort_order", { ascending: true })
+      .order("uploaded_at", { ascending: false });
     if (error) { showBanner("Couldn't load documents: " + error.message, "error"); return; }
     allDocuments = data;
   }
@@ -1225,7 +1239,7 @@
         </div>
         <input type="text" data-question-input="${q.id}" placeholder="Enter the research question…" value="${escapeHtml(q.question || "")}" />
         <div class="rq-docs-label">Documents &amp; Links</div>
-        <div id="rq-docs-${q.id}">${renderQuestionDocs(docs)}</div>
+        <div id="rq-docs-${q.id}">${renderQuestionDocs(docs, `question:${q.id}`)}</div>
         <div class="rq-add-row">
           <button type="button" class="btn-secondary btn-sm" data-question-add-doc="${q.id}">+ Add Document</button>
           <button type="button" class="btn-secondary btn-sm" data-question-add-link="${q.id}">+ Add Link</button>
@@ -1246,9 +1260,9 @@
     `;
   }
 
-  function renderQuestionDocs(docs) {
+  function renderQuestionDocs(docs, scope) {
     if (!docs.length) return `<div class="field-hint" style="margin-bottom:6px;">No files or links added yet.</div>`;
-    return docs.map((d) => {
+    return docs.map((d, i) => {
       // A row is either an uploaded file (storage_path -- opens via a
       // signed URL, same as always) or a link (url -- a plain <a>, no
       // storage involved). The two never both render for the same row in
@@ -1259,6 +1273,10 @@
         : `<span class="rq-doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(d.file_name)}</span>`;
       return `
       <div class="rq-doc-row">
+        <div class="rq-doc-order-btns">
+          <button type="button" class="btn-secondary icon-btn rq-move-btn" data-move-doc="${d.id}" data-move-dir="up" data-move-scope="${scope}" ${i === 0 ? "disabled" : ""} title="Move up (this is the order clients see it in)">&#9650;</button>
+          <button type="button" class="btn-secondary icon-btn rq-move-btn" data-move-doc="${d.id}" data-move-dir="down" data-move-scope="${scope}" ${i === docs.length - 1 ? "disabled" : ""} title="Move down">&#9660;</button>
+        </div>
         ${linkHtml}
         <button type="button" class="btn-secondary icon-btn rq-visibility-toggle" data-id="${d.id}" data-visibility="${d.visibility}">
           ${d.visibility === "client_facing" ? "Client-facing" : "Internal"}
@@ -1274,7 +1292,7 @@
       <div class="rq-question" data-unsorted-card="${area}">
         <div class="rq-question-header"><span class="rq-label">(Unsorted — uploaded before Questions existed)</span></div>
         <div class="rq-docs-label">Documents</div>
-        <div>${renderQuestionDocs(docs)}</div>
+        <div>${renderQuestionDocs(docs, `unsorted:${area}`)}</div>
       </div>
     `;
   }
@@ -1356,6 +1374,46 @@
         renderResearchProgress();
       });
     });
+    scopeEl.querySelectorAll(".rq-move-btn").forEach((btn) => {
+      btn.addEventListener("click", () => moveDocument(btn.dataset.moveDoc, btn.dataset.moveDir, btn.dataset.moveScope));
+    });
+  }
+
+  // Docs for a given scope, in their current display order -- allDocuments
+  // is already sorted (sort_order asc, uploaded_at desc) by loadDocuments(),
+  // so filtering it preserves that order without a re-sort.
+  function docsForScope(scope) {
+    const [type, id] = scope.split(":");
+    return type === "question"
+      ? allDocuments.filter((d) => d.question_id === id)
+      : allDocuments.filter((d) => d.research_area === id && !d.question_id);
+  }
+
+  // Swaps sort_order with the adjacent row and re-renders -- this is the
+  // one control that sets the order both this page and the client
+  // dashboard show documents in (Greg, 8/24/26: "the dashboard order
+  // should match the research reports order").
+  async function moveDocument(docId, direction, scope) {
+    const docs = docsForScope(scope);
+    const idx = docs.findIndex((d) => d.id === docId);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= docs.length) return;
+    const a = docs[idx], b = docs[swapIdx];
+    const [r1, r2] = await Promise.all([
+      sb.from("documents").update({ sort_order: b.sort_order }).eq("id", a.id),
+      sb.from("documents").update({ sort_order: a.sort_order }).eq("id", b.id),
+    ]);
+    if (r1.error || r2.error) { showBanner("Couldn't reorder: " + (r1.error || r2.error).message, "error"); return; }
+    await loadDocuments();
+    RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
+  }
+
+  // Next sort_order for a newly added document/link -- appended to the end
+  // of whatever's already there for this question, same as always dropping
+  // a new item at the bottom of a list.
+  function nextSortOrderForQuestion(questionId) {
+    const existing = allDocuments.filter((d) => d.question_id === questionId);
+    return existing.length ? Math.max(...existing.map((d) => d.sort_order || 0)) + 1 : 1;
   }
 
   async function addResearchQuestion(area) {
@@ -1406,6 +1464,7 @@
   // one trip through the file picker can attach several at once.
   async function uploadQuestionDocuments(questionId, fileList) {
     const q = researchQuestions.find((x) => x.id === questionId);
+    let nextSortOrder = nextSortOrderForQuestion(questionId);
     const errors = [];
     for (const file of Array.from(fileList)) {
       const path = `clients/${currentClient.id}/questions/${questionId}/${Date.now()}-${sanitizeFilename(file.name)}`;
@@ -1419,6 +1478,7 @@
         storage_path: path,
         visibility: "internal",
         uploaded_by: currentUser.id,
+        sort_order: nextSortOrder++,
       });
       if (rowErr) errors.push(`${file.name}: ${rowErr.message}`);
     }
@@ -1451,6 +1511,7 @@
       url,
       visibility: "internal",
       uploaded_by: currentUser.id,
+      sort_order: nextSortOrderForQuestion(questionId),
     });
     if (error) { showBanner("Couldn't add link: " + error.message, "error"); return; }
 
