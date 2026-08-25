@@ -715,7 +715,7 @@
           <!-- Step 7 (was 8): Workflow Documents -->
           <div class="wizard-panel-card wizard-panel hidden" data-step="7">
             <h3>EG Workflow Documents</h3>
-            <div class="wizard-panel-hint">Discovery, Controlling, Research Review, and Close-Out can each be an uploaded file or a link — whichever's easier.</div>
+            <div class="wizard-panel-hint">Discovery, Controlling, and Research Review can each be an uploaded file or a link — whichever's easier. Close-Out is handled below via the evaluation link, not a file upload.</div>
             <div class="field-grid">
               <div>
                 <div class="field">
@@ -732,14 +732,10 @@
                   <label>3. Research Review Recording</label>
                   <div id="wf-review-file"></div>
                 </div>
-                <div class="field">
-                  <label>4. Close-Out Survey</label>
-                  <div id="wf-closeout-file"></div>
-                </div>
               </div>
             </div>
             <div class="field" style="margin-top:14px;">
-              <label>5. Close-Out Evaluation Link (for the CEO)</label>
+              <label>4. Close-Out Evaluation Link (for the CEO)</label>
               <div class="field-hint" style="text-transform:none; font-weight:400; margin-bottom:8px;">
                 You don't send this link yourself — enabling it here just turns on the "Complete Your Close-Out Evaluation" button that already appears on the client's own dashboard (the URL at the top of this page). The CEO never sees this raw link; they just use their normal dashboard, click that button, fill out the form, and hit Submit — their answers come straight back here, no email or PDF needed. You'll see the response below once it's in.
               </div>
@@ -1501,11 +1497,16 @@
   // tool -- not assumed for every EG specialist, so that wording is gone
   // too). Same "one or the other, uploading clears any saved link and vice
   // versa" rule Resource Vault and Research Question links already use.
+  // "Close-Out Survey" (closeout_survey_storage_path/_url) used to be a 4th
+  // upload-or-link slot here, same as the other three -- removed from this
+  // list per Greg's 8/25/26 call once the evaluation link + direct-submit
+  // flow made it redundant. The columns and the workflow-tracker's fallback
+  // checks for them are left alone (existing finalized clients may still
+  // have a file there), just nothing in this UI writes to them anymore.
   const WORKFLOW_FIELDS = [
     { key: "discovery", label: "Discovery Document", pathColumn: "discovery_doc_storage_path", urlColumn: "discovery_doc_url" },
     { key: "controlling", label: "Controlling Document", pathColumn: "controlling_doc_storage_path", urlColumn: "controlling_doc_url" },
     { key: "review", label: "Research Review Recording", pathColumn: "research_review_storage_path", urlColumn: "research_review_url" },
-    { key: "closeout", label: "Close-Out Survey", pathColumn: "closeout_survey_storage_path", urlColumn: "closeout_survey_url" },
   ];
   let workflowData = null;
 
@@ -1661,12 +1662,19 @@
     // from the UI instead of leaving Copy Link as the only option.
     const isLegacyUrl = url && !url.includes("evaluation_public.html");
 
+    // Greg (8/25/26): "what we are really doing is enabling the evaluation
+    // form on the dashboard. if everything is working properly i don't
+    // need to see a link, just a message." The raw URL + Copy Link was a
+    // debugging artifact from building this feature, not something a Team
+    // Lead needs day-to-day -- a status line plus an optional Preview Form
+    // button (for QC'ing what the CEO will see) covers the real need
+    // without exposing a link nobody's supposed to hand out.
     let linkHtml;
     if (url && !isLegacyUrl) {
       linkHtml = `
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="color:var(--navy-light); font-weight:600; font-size:13px; text-decoration:none; word-break:break-all;">&#128279; ${escapeHtml(url)}</a>
-          <button type="button" class="btn-secondary btn-sm" id="eval-link-copy-btn">Copy Link</button>
+          <div style="color:var(--navy); font-weight:600; font-size:13.5px;">&#9989; The evaluation form is live on this client's dashboard.</div>
+          <button type="button" class="btn-secondary btn-sm" id="eval-link-preview-btn">Preview Form</button>
         </div>
       `;
     } else if (url && isLegacyUrl) {
@@ -1694,7 +1702,10 @@
           <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">
             ${r.very_useful_count} Very Useful, ${r.partially_useful_count} Partially Useful, ${r.not_useful_count} Not Useful &mdash; Weighted Score ${r.weighted_score}/${r.weighted_max}
           </div>
-          <button type="button" class="btn-secondary btn-sm" id="eval-response-toggle-btn">View Full Response</button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn-secondary btn-sm" id="eval-response-toggle-btn">View Full Response</button>
+            ${isSuperAdmin ? `<button type="button" class="btn-danger btn-sm" id="eval-response-delete-btn">Delete Response</button>` : ""}
+          </div>
           <div id="eval-response-detail" class="hidden" style="margin-top:10px;"></div>
         </div>
       `;
@@ -1703,13 +1714,8 @@
     container.innerHTML = linkHtml + responseHtml;
 
     if (url && !isLegacyUrl) {
-      container.querySelector("#eval-link-copy-btn").addEventListener("click", async () => {
-        try {
-          await navigator.clipboard.writeText(url);
-          showBanner("Evaluation link copied.", "success");
-        } catch (e) {
-          showBanner("Couldn't copy automatically — select and copy the link above.", "error");
-        }
+      container.querySelector("#eval-link-preview-btn").addEventListener("click", () => {
+        window.open(url, "_blank", "noopener");
       });
     } else if (url && isLegacyUrl) {
       container.querySelector("#eval-link-update-btn").addEventListener("click", generateEvalLink);
@@ -1731,7 +1737,25 @@
           toggleBtn.textContent = "View Full Response";
         }
       });
+
+      const deleteBtn = container.querySelector("#eval-response-delete-btn");
+      if (deleteBtn) deleteBtn.addEventListener("click", deleteEvalResponse);
     }
+  }
+
+  // Super-Admin only (081) -- clears a test/duplicate submission so the
+  // client goes back to "not yet submitted" without needing anyone to run
+  // SQL by hand (Greg, 8/25/26: "i just filled out a form for a client and
+  // i need to delete it").
+  async function deleteEvalResponse() {
+    if (!evalResponse) return;
+    if (!confirm("Delete this submitted evaluation response? This cannot be undone.")) return;
+    const { error } = await sb.from("client_evaluation_responses").delete().eq("id", evalResponse.id);
+    if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
+    evalResponse = null;
+    if (workflowData) workflowData.evaluation_response = null;
+    renderEvalLinkField();
+    showBanner("Evaluation response deleted.", "success");
   }
 
   function renderEvalResponseDetail(r) {
