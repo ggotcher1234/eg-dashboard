@@ -222,6 +222,8 @@
   .conditional { display: none; margin-top: 12px; }
   .conditional.visible { display: block; }
 
+  .hidden { display: none !important; }
+
   /* ── PRINT ── */
   @media print {
     /* Force background colors / fills to actually render in the saved PDF.
@@ -233,6 +235,7 @@
     .admin-bar { display: none !important; }
     .form-footer { display: none !important; }
     .progress-bar-wrap { display: none !important; }
+    #footer-submit, #footer-email { display: none !important; }
 
     .section { break-inside: avoid; }
     /* The Q1 table is the one block that's fine to split across a page boundary — letting it
@@ -358,15 +361,17 @@
   <!-- ── ADMIN SETUP BAR (hidden on client version) ── -->
   <div class="admin-bar" id="adminBar">
     <div class="admin-bar-title">Admin Setup</div>
+    <div style="background:rgba(201,162,58,0.12);border:1px solid rgba(201,162,58,0.5);border-radius:8px;padding:14px 18px;margin-bottom:14px;">
+      <div style="color:var(--gold);font-size:0.85rem;line-height:1.6;">
+        <strong>For a real engagement, use client_profile.html's "Generate Link" button instead of this bar</strong> (EG Workflow Documents, Step 8) &mdash; it pulls that client's actual research questions automatically and the CEO's answers write straight back into the dashboard, no email needed. This Admin Setup bar is only for previewing/testing the form by hand; a file downloaded from here has no client on file yet, so it falls back to the older print-and-email flow below.
+      </div>
+    </div>
     <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(201,162,58,0.4);border-radius:8px;padding:14px 18px;margin-bottom:18px;">
-      <div style="color:var(--gold);font-size:0.78rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px;">How to create a client file</div>
+      <div style="color:var(--gold);font-size:0.78rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px;">How to preview/test by hand</div>
       <ol style="color:rgba(255,255,255,0.75);font-size:0.88rem;line-height:1.7;padding-left:18px;margin:0;">
         <li>Fill in the <strong style="color:rgba(255,255,255,0.95);">Client Name</strong>, <strong style="color:rgba(255,255,255,0.95);">Program Sponsor</strong>, and <strong style="color:rgba(255,255,255,0.95);">Research Questions</strong> below</li>
         <li>Click <strong style="color:var(--gold);">Download Client File</strong> &mdash; saves as <code style="background:rgba(255,255,255,0.1);padding:1px 6px;border-radius:4px;font-size:0.85rem;">evaluation.html</code></li>
-        <li>Upload <code style="background:rgba(255,255,255,0.1);padding:1px 6px;border-radius:4px;font-size:0.85rem;">evaluation.html</code> to the client&#39;s Netlify site folder</li>
-        <li>Send the client their Netlify URL to fill out the form</li>
-        <li>When they&#39;re done, visit the URL &mdash; their answers are saved in their browser</li>
-        <li>Ask the client to click <strong style="color:rgba(255,255,255,0.95);">Save as PDF</strong> and email it to you</li>
+        <li>Open it locally to preview &mdash; since it has no client on file, it'll show the print-and-email footer, not the real Submit button</li>
       </ol>
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.4);font-size:0.78rem;">
         &#9888;&#xFE0E; Keep this master file untouched. Always start from this file for each new client.
@@ -531,8 +536,38 @@
     <textarea id="testimonial" rows="4" placeholder="Share your experience with the NCEG program&#8230;"></textarea>
   </div>
 
-  <!-- FOOTER -->
-  <div style="margin:28px 28px 0;padding:20px 24px;background:var(--green-pale);border:2px solid var(--green-mid);border-radius:10px;">
+  <!-- FOOTER: direct-submit path -- shown whenever this file has a real
+       client baked in (generated from client_profile.html's "Generate
+       Link" button). No email, no PDF required -- Submit writes straight
+       into the database (Greg, 8/25/26: "if we can just have a link that
+       the CEO fills out... I don't think we need email"). A PDF download
+       is still offered as an optional personal copy, never as the way the
+       answers get back to EG. -->
+  <div id="footer-submit" class="hidden" style="margin:28px 28px 0;padding:20px 24px;background:var(--green-pale);border:2px solid var(--green-mid);border-radius:10px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <span style="font-size:1.4rem;">&#9989;</span>
+      <span style="font-family:'Merriweather',serif;font-size:1rem;font-weight:700;color:var(--green-dark);">When you are finished, click Submit below.</span>
+    </div>
+    <p style="font-size:0.92rem;color:var(--gray-700);margin-bottom:16px;padding-left:34px;">
+      Your answers go straight to your EG team &mdash; no need to print, save, or email anything.
+    </p>
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-left:34px;">
+      <button class="btn-print" id="submitEvalBtn" onclick="submitEvaluation()" style="font-size:1.05rem;padding:14px 36px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:1.3rem;">&#10148;</span> Submit Evaluation
+      </button>
+      <button onclick="printForm()" style="font-size:0.9rem;color:var(--green-mid);font-weight:600;font-family:inherit;background:var(--white);border:1.5px solid var(--green-mid);border-radius:8px;padding:13px 20px;cursor:pointer;transition:all 0.2s;">
+        &#128424; Save a PDF Copy (optional)
+      </button>
+    </div>
+    <div id="submitEvalError" class="hidden" style="margin-top:12px;padding-left:34px;color:#922B21;font-size:0.88rem;"></div>
+  </div>
+
+  <!-- FOOTER: legacy print-and-email path -- only shown on a file that
+       has NO client baked in (e.g. the master template downloaded straight
+       from the Admin Setup bar rather than generated from
+       client_profile.html), so an already-distributed older file still
+       works exactly as before. -->
+  <div id="footer-email" class="hidden" style="margin:28px 28px 0;padding:20px 24px;background:var(--green-pale);border:2px solid var(--green-mid);border-radius:10px;">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
       <span style="font-size:1.4rem;">&#128203;</span>
       <span style="font-family:'Merriweather',serif;font-size:1rem;font-weight:700;color:var(--green-dark);">When you are finished, please save this form as a PDF and email it to your EG Specialist.</span>
@@ -565,6 +600,13 @@
 
   </div><!-- /clientForm -->
 
+  <!-- SUBMITTED CONFIRMATION (direct-submit path only) -->
+  <div id="submittedView" class="hidden" style="text-align:center;padding:60px 28px;">
+    <div style="font-size:2.6rem;margin-bottom:14px;">&#9989;</div>
+    <div style="font-family:'Merriweather',serif;font-size:1.3rem;font-weight:700;color:var(--green-dark);margin-bottom:8px;">Thank you!</div>
+    <div style="font-size:0.95rem;color:var(--gray-700);max-width:420px;margin:0 auto;">Your evaluation has been submitted. Your EG team has been notified and will follow up if needed.</div>
+  </div>
+
 </div><!-- /form-card -->
 
 <script>
@@ -573,8 +615,18 @@ const BAKED_QUESTIONS = /*QUESTIONS_START*/[]/*QUESTIONS_END*/;
 const BAKED_CLIENT    = /*CLIENT_START*/''/*CLIENT_END*/;
 const BAKED_SPONSOR   = /*SPONSOR_START*/''/*SPONSOR_END*/;
 const IS_CLIENT_FILE  = /*IS_CLIENT_START*/false/*IS_CLIENT_END*/;
+// Baked in by client_profile.html's "Generate Link" flow (077/078) --
+// empty on anything downloaded straight from this file's own Admin Setup
+// bar, which is how init() decides whether to show the direct-Submit
+// footer or fall back to the old print-and-email one (Greg, 8/25/26).
+const BAKED_CLIENT_ID = /*CLIENT_ID_START*/''/*CLIENT_ID_END*/;
 
 const STORE_KEY = 'nceg_eval_' + (BAKED_CLIENT ? BAKED_CLIENT.replace(/\W+/g,'_').toLowerCase() : 'master');
+
+// ── SUBMIT (direct-submit path only) ──
+const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+const SUBMIT_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/public-submit-evaluation`;
 
 // ── STATE ──
 let state = {
@@ -606,6 +658,79 @@ function printForm(){
   }
 }
 
+// ── SUBMIT (direct-submit path only) ──
+// Writes straight into the database via the public-submit-evaluation Edge
+// Function (078) -- no PDF, no email. Uses the same ratings weighting as
+// the on-screen summary box (updateRatingsSummary): Very=3, Partial=2,
+// Not=1.
+async function submitEvaluation(){
+  const btn = document.getElementById('submitEvalBtn');
+  const errBox = document.getElementById('submitEvalError');
+  errBox.classList.add('hidden');
+  errBox.textContent = '';
+
+  const counts = { very: 0, partial: 0, not: 0 };
+  state.q1Rows.forEach(r => { if(r.rating) counts[r.rating]++; });
+  const rated = counts.very + counts.partial + counts.not;
+  if(!rated){
+    errBox.textContent = 'Please rate at least one research question before submitting.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+  const score = counts.very*3 + counts.partial*2 + counts.not*1;
+  const max = rated*3;
+
+  const payload = {
+    clientId: BAKED_CLIENT_ID,
+    data: {
+      respondentName: state.nameTitle,
+      respondentDate: state.date,
+      companyName: state.company,
+      sponsorName: state.sponsor,
+      questionRatings: state.q1Rows.map(r => ({ question: r.q, rating: r.rating || null })),
+      q1Explain: state.q1Explain,
+      prepared: state.q3 || null,
+      preparedExplain: state.q3Explain,
+      improvementSuggestions: state.q4,
+      npsScore: state.q5 || null,
+      npsExplain: state.q5Explain,
+      referrals: state.q6Rows.filter(r => r.name || r.company || r.contact),
+      testimonial: state.testimonial,
+      veryUsefulCount: counts.very,
+      partiallyUsefulCount: counts.partial,
+      notUsefulCount: counts.not,
+      weightedScore: score,
+      weightedMax: max,
+    },
+  };
+
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+  try{
+    const res = await fetch(SUBMIT_FUNCTION_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        apikey: SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    const result = await res.json().catch(() => ({}));
+    if(!res.ok || result.error){
+      throw new Error(result.error || `Server returned ${res.status}`);
+    }
+    if(IS_CLIENT_FILE) localStorage.removeItem(STORE_KEY);
+    document.getElementById('clientForm').classList.add('hidden');
+    document.getElementById('submittedView').classList.remove('hidden');
+  }catch(e){
+    errBox.textContent = "Couldn't submit: " + e.message + ' Please try again, or use "Save a PDF Copy" and email it instead.';
+    errBox.classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = '<span style="font-size:1.3rem;">&#10148;</span> Submit Evaluation';
+  }
+}
+
 // ── INIT ──
 function init(){
   if(IS_CLIENT_FILE){
@@ -631,6 +756,15 @@ function init(){
     restoreQ3();
     restoreQ5();
     setInterval(saveState, 4000);
+  }
+
+  // Direct-submit path only kicks in on a file that actually has a real
+  // client baked in -- an older file generated before this feature existed,
+  // or the raw master template downloaded straight from the Admin Setup
+  // bar, has no BAKED_CLIENT_ID and falls back to the original
+  // print-and-email footer (Greg, 8/25/26).
+  if(IS_CLIENT_FILE){
+    document.getElementById(BAKED_CLIENT_ID ? 'footer-submit' : 'footer-email').classList.remove('hidden');
   }
 
   updateProgress();

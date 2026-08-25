@@ -740,7 +740,7 @@
             <div class="field" style="margin-top:14px;">
               <label>5. Close-Out Evaluation Link (for the CEO)</label>
               <div class="field-hint" style="text-transform:none; font-weight:400; margin-bottom:8px;">
-                Generates this client's evaluation form (with their real research questions baked in) and shows it as a "Complete Your Close-Out Evaluation" link on their own dashboard. The CEO fills it out, saves it as a PDF, and emails it back — you upload that completed PDF into the Close-Out Survey slot above.
+                Generates this client's evaluation form (with their real research questions baked in) and shows it as a "Complete Your Close-Out Evaluation" link on their own dashboard. The CEO fills it out and clicks Submit — their answers come straight back here, no email or PDF needed. You'll see the response below once it's in.
               </div>
               <div id="wf-eval-link"></div>
             </div>
@@ -1167,6 +1167,7 @@
     renderStatusToggle(client);
     fillCompanyForm(client);
     await loadWorkflowLinks(client.id);
+    await loadEvalResponse(client.id);
     // Team Members is loaded first, on its own, because the Project Next
     // Steps "Assigned To" dropdown (built inside renderListSections, right
     // below) needs the engagement's team roster already in hand -- loading
@@ -1632,19 +1633,60 @@
   // get_client_public_view()/finalize_client() (077), which is what makes
   // it show up as a "Complete Your Close-Out Evaluation" button on the
   // client's own dashboard (client_public.html) -- no separate email step.
+  let evalResponse = null;
+
+  async function loadEvalResponse(clientId) {
+    const { data, error } = await sb
+      .from("client_evaluation_responses")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("submitted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) { console.error("Couldn't load evaluation response:", error.message); return; }
+    evalResponse = data || null;
+    renderEvalLinkField();
+  }
+
   function renderEvalLinkField() {
     const container = $("wf-eval-link");
     if (!container) return;
     const url = workflowData && workflowData.evaluation_link_url;
 
+    let linkHtml;
     if (url) {
-      container.innerHTML = `
+      linkHtml = `
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
           <a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="color:var(--navy-light); font-weight:600; font-size:13px; text-decoration:none; word-break:break-all;">&#128279; ${escapeHtml(url)}</a>
           <button type="button" class="btn-secondary btn-sm" id="eval-link-copy-btn">Copy Link</button>
           <button type="button" class="btn-secondary btn-sm" id="eval-link-regen-btn">Regenerate</button>
         </div>
       `;
+    } else {
+      linkHtml = `<button type="button" class="btn-secondary btn-sm" id="eval-link-gen-btn">Generate Link</button>`;
+    }
+
+    let responseHtml = "";
+    if (evalResponse) {
+      const r = evalResponse;
+      const submittedDate = new Date(r.submitted_at).toLocaleDateString();
+      responseHtml = `
+        <div style="margin-top:14px; padding:14px 16px; background:#f3f6f1; border:1px solid var(--border); border-radius:8px;">
+          <div style="font-weight:700; color:var(--navy); margin-bottom:6px;">
+            &#9989; Submitted ${escapeHtml(submittedDate)}${r.respondent_name ? " by " + escapeHtml(r.respondent_name) : ""}
+          </div>
+          <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">
+            ${r.very_useful_count} Very Useful, ${r.partially_useful_count} Partially Useful, ${r.not_useful_count} Not Useful &mdash; Weighted Score ${r.weighted_score}/${r.weighted_max}
+          </div>
+          <button type="button" class="btn-secondary btn-sm" id="eval-response-toggle-btn">View Full Response</button>
+          <div id="eval-response-detail" class="hidden" style="margin-top:10px;"></div>
+        </div>
+      `;
+    }
+
+    container.innerHTML = linkHtml + responseHtml;
+
+    if (url) {
       container.querySelector("#eval-link-copy-btn").addEventListener("click", async () => {
         try {
           await navigator.clipboard.writeText(url);
@@ -1654,11 +1696,45 @@
         }
       });
       container.querySelector("#eval-link-regen-btn").addEventListener("click", generateEvalLink);
-      return;
+    } else {
+      container.querySelector("#eval-link-gen-btn").addEventListener("click", generateEvalLink);
     }
 
-    container.innerHTML = `<button type="button" class="btn-secondary btn-sm" id="eval-link-gen-btn">Generate Link</button>`;
-    container.querySelector("#eval-link-gen-btn").addEventListener("click", generateEvalLink);
+    if (evalResponse) {
+      const toggleBtn = container.querySelector("#eval-response-toggle-btn");
+      const detail = container.querySelector("#eval-response-detail");
+      toggleBtn.addEventListener("click", () => {
+        const isHidden = detail.classList.contains("hidden");
+        if (isHidden) {
+          detail.innerHTML = renderEvalResponseDetail(evalResponse);
+          detail.classList.remove("hidden");
+          toggleBtn.textContent = "Hide Full Response";
+        } else {
+          detail.classList.add("hidden");
+          toggleBtn.textContent = "View Full Response";
+        }
+      });
+    }
+  }
+
+  function renderEvalResponseDetail(r) {
+    const ratings = Array.isArray(r.question_ratings) ? r.question_ratings : [];
+    const referrals = (Array.isArray(r.referrals) ? r.referrals : []).filter((rr) => rr.name || rr.company || rr.contact);
+    const ratingLabel = { very: "Very Useful", partial: "Partially Useful", not: "Not Useful" };
+    return `
+      <div style="font-size:13px; line-height:1.6; color:var(--text);">
+        <div style="font-weight:600; margin-bottom:4px;">Research Question Ratings</div>
+        <ul style="margin:0 0 10px 18px; padding:0;">
+          ${ratings.map((q) => `<li>${escapeHtml(q.question || "(no question text)")}: <strong>${escapeHtml(ratingLabel[q.rating] || "—")}</strong></li>`).join("")}
+        </ul>
+        ${r.q1_explain ? `<div style="margin-bottom:10px;"><em>Explanation:</em> ${escapeHtml(r.q1_explain)}</div>` : ""}
+        <div style="margin-bottom:10px;"><strong>Adequately prepared?</strong> ${r.prepared === "yes" ? "Yes" : r.prepared === "no" ? "No" : "—"}${r.prepared_explain ? " — " + escapeHtml(r.prepared_explain) : ""}</div>
+        ${r.improvement_suggestions ? `<div style="margin-bottom:10px;"><strong>What could we have done better:</strong> ${escapeHtml(r.improvement_suggestions)}</div>` : ""}
+        <div style="margin-bottom:10px;"><strong>Likelihood to recommend (1&ndash;10):</strong> ${r.nps_score ?? "—"}${r.nps_explain ? " — " + escapeHtml(r.nps_explain) : ""}</div>
+        ${referrals.length ? `<div style="margin-bottom:10px;"><strong>Referrals:</strong><ul style="margin:4px 0 0 18px; padding:0;">${referrals.map((rr) => `<li>${escapeHtml(rr.name || "")}${rr.company ? " — " + escapeHtml(rr.company) : ""}${rr.contact ? " (" + escapeHtml(rr.contact) + ")" : ""}</li>`).join("")}</ul></div>` : ""}
+        ${r.testimonial ? `<div><strong>Testimonial:</strong> ${escapeHtml(r.testimonial)}</div>` : ""}
+      </div>
+    `;
   }
 
   async function generateEvalLink() {
@@ -1705,6 +1781,10 @@
     html = html.replace(/\/\*CLIENT_START\*\/[\s\S]*?\/\*CLIENT_END\*\//, "/*CLIENT_START*/" + JSON.stringify(currentClient.name || "") + "/*CLIENT_END*/");
     html = html.replace(/\/\*SPONSOR_START\*\/[\s\S]*?\/\*SPONSOR_END\*\//, "/*SPONSOR_START*/" + JSON.stringify(sponsor) + "/*SPONSOR_END*/");
     html = html.replace(/\/\*IS_CLIENT_START\*\/[\s\S]*?\/\*IS_CLIENT_END\*\//, "/*IS_CLIENT_START*/true/*IS_CLIENT_END*/");
+    // Baked so the generated form can submit its answers directly back to
+    // this client (078) instead of falling back to the print-and-email
+    // footer -- see evaluation.html's BAKED_CLIENT_ID comment.
+    html = html.replace(/\/\*CLIENT_ID_START\*\/[\s\S]*?\/\*CLIENT_ID_END\*\//, "/*CLIENT_ID_START*/" + JSON.stringify(currentClient.id) + "/*CLIENT_ID_END*/");
 
     const path = `clients/${currentClient.id}/evaluation.html`;
     const { error: uploadErr } = await sb.storage.from("client-evaluations").upload(path, new Blob([html], { type: "text/html" }), { upsert: true, contentType: "text/html" });

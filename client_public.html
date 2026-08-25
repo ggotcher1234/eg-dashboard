@@ -690,7 +690,7 @@
     { urlKey: "discovery_doc_url", pathKey: "discovery_doc_storage_path", label: "Discovery Call Notes" },
     { urlKey: "controlling_doc_url", pathKey: "controlling_doc_storage_path", label: "Controlling Document" },
     { urlKey: "research_review_url", pathKey: "research_review_storage_path", label: "Research Review" },
-    { urlKey: "closeout_survey_url", pathKey: "closeout_survey_storage_path", label: "Close-Out Evaluation" },
+    { urlKey: "closeout_survey_url", pathKey: "closeout_survey_storage_path", label: "Close-Out Evaluation", extraFilledKey: "evaluation_submitted_at" },
   ];
 
   function renderWorkflow(workflow) {
@@ -698,12 +698,19 @@
     $("workflow-tracker").innerHTML = WORKFLOW_STEPS.map((step, i) => {
       const path = step.pathKey ? w[step.pathKey] : null;
       const url = w[step.urlKey];
+      const extraFilled = step.extraFilledKey ? w[step.extraFilledKey] : null;
       const colorClass = `wf-step-${i}`;
       if (path) {
         return `<a class="wf-step ${colorClass} filled wf-doc-link" data-path="${escapeHtml(path)}" href="#">${escapeHtml(step.label)}</a>`;
       }
       if (url) {
         return `<a class="wf-step ${colorClass} filled" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(step.label)}</a>`;
+      }
+      // A submitted evaluation response has no doc/link to open here (the
+      // detail lives in client_evaluation_responses, reviewed from
+      // client_profile.html) -- it just lights the step up as done.
+      if (extraFilled) {
+        return `<div class="wf-step ${colorClass} filled" style="cursor:default;">${escapeHtml(step.label)}</div>`;
       }
       return `<div class="wf-step ${colorClass}">${escapeHtml(step.label)}</div>`;
     }).join("");
@@ -721,8 +728,8 @@
   function renderEvalCta(w) {
     const card = $("eval-cta-card");
     const hasEvalLink = !!w.evaluation_link_url;
-    const hasCompletedSurvey = !!(w.closeout_survey_url || w.closeout_survey_storage_path);
-    if (hasEvalLink && !hasCompletedSurvey) {
+    const hasCompleted = !!(w.closeout_survey_url || w.closeout_survey_storage_path || w.evaluation_submitted_at);
+    if (hasEvalLink && !hasCompleted) {
       $("eval-cta-link").href = w.evaluation_link_url;
       card.classList.remove("hidden");
     } else {
