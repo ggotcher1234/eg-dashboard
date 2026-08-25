@@ -698,6 +698,11 @@
               </div>
               <button type="button" class="add-contact-btn" id="add-secondary-contact-btn">+ Add Secondary Contact</button>
 
+              <div class="field" style="margin-top:14px;">
+                <label>Others to Include on Email CC List <span class="field-hint" style="text-transform:none; font-weight:400;">(one email per line)</span></label>
+                <textarea id="f-cc-emails" placeholder="e.g. bookkeeper@company.com"></textarea>
+              </div>
+
               <div class="contact-form-card hidden" id="tertiary-contact-card" style="margin-top:14px;">
                 <button type="button" class="contact-remove-btn" data-remove-contact="tertiary">Remove</button>
                 <div class="contact-form-title">3rd Contact</div>
@@ -903,6 +908,11 @@
             </select>
           </div>
         </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Others to include on email CC list</legend>
+        <div class="field"><label>Emails <span class="hint">(one per line)</span></label><textarea id="e-cc-emails"></textarea></div>
       </fieldset>
 
       <fieldset>
@@ -1688,6 +1698,7 @@
       `;
     };
     const contactCards = [contactBlock("Primary", "p", true), contactBlock("Secondary", "s", true), contactBlock("3rd", "t", false)].filter(Boolean).join("");
+    const ccEmailsList = val("f-cc-emails") ? val("f-cc-emails").split("\n").map((s) => s.trim()).filter(Boolean) : [];
 
     const ynItem = (label, checked) => `<div class="yn-item"><span>${label}</span><span class="yn-badge ${checked ? "yes" : "no"}">${checked ? "Yes" : "No"}</span></div>`;
 
@@ -1732,6 +1743,7 @@
         </div>
         <div class="section-card-body">
           ${contactCards ? `<div class="contacts-grid">${contactCards}</div>` : `<div class="section-card-empty">No contacts entered yet.</div>`}
+          ${ccEmailsList.length ? `<div class="review-item" style="margin-top:10px;"><div class="label">Others on Email CC List</div><div class="value">${ccEmailsList.map(escapeHtml).join(", ")}</div></div>` : ""}
         </div>
       </div>
 
@@ -1876,6 +1888,7 @@
       tertiary_officer_title: strOrNull("f-t-title"),
       tertiary_officer_email: strOrNull("f-t-email"),
       tertiary_officer_phone: strOrNull("f-t-phone"),
+      cc_emails: toLines("f-cc-emails"),
       naics_code: strOrNull("f-naics"),
       fte_range_10_to_100: $("f-fte-range").checked,
       fte_2022: numOrNull("f-fte-2022"),
@@ -2250,9 +2263,10 @@
       buildContactCard("Secondary", a.secondary_officer_name, a.secondary_officer_title, a.secondary_officer_email, a.secondary_officer_phone) || (isSuperAdmin ? addContactPlaceholder("Secondary Contact") : ""),
       buildContactCard("3rd", a.tertiary_officer_name, a.tertiary_officer_title, a.tertiary_officer_email, a.tertiary_officer_phone) || (isSuperAdmin ? addContactPlaceholder("3rd Contact") : ""),
     ].filter(Boolean).join("");
+    const ccEmailsItem = item("Others on Email CC List", (a.cc_emails && a.cc_emails.length) ? a.cc_emails.map(escapeHtml).join(", ") : "", !(a.cc_emails && a.cc_emails.length));
     html += sectionCard(
       "icon-purple", REVIEW_ICONS.users, "Contacts",
-      contactCardsHtml ? `<div class="contacts-grid">${contactCardsHtml}</div>` : `<div class="section-card-empty">No contacts on file yet.</div>`,
+      (contactCardsHtml ? `<div class="contacts-grid">${contactCardsHtml}</div>` : `<div class="section-card-empty">No contacts on file yet.</div>`) + ccEmailsItem,
       isSuperAdmin ? `<button type="button" class="btn-secondary btn-sm" id="edit-contacts-btn">Add Contact</button>` : ""
     );
 
@@ -2564,6 +2578,7 @@
     $("e-s-email").value = a.secondary_officer_email || "";
     $("e-s-phone").value = a.secondary_officer_phone || "";
     $("e-s-temperament").value = a.secondary_officer_temperament || "";
+    $("e-cc-emails").value = (a.cc_emails || []).join("\n");
     $("e-t-name").value = a.tertiary_officer_name || "";
     $("e-t-title").value = a.tertiary_officer_title || "";
     $("e-t-email").value = a.tertiary_officer_email || "";
@@ -2633,6 +2648,7 @@
       secondary_officer_email: strOrNull("e-s-email"),
       secondary_officer_phone: strOrNull("e-s-phone"),
       secondary_officer_temperament: strOrNull("e-s-temperament"),
+      cc_emails: toLines("e-cc-emails"),
       tertiary_officer_name: strOrNull("e-t-name"),
       tertiary_officer_title: strOrNull("e-t-title"),
       tertiary_officer_email: strOrNull("e-t-email"),
