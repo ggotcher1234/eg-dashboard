@@ -569,6 +569,12 @@
 // only pulls data from Supabase).
 let CLIENT_ID = '';
 let STORE_KEY = '';
+// Handle for the autosave interval (set in init(), cleared on a successful
+// submit) -- without this, the interval kept firing every 4s after Submit
+// and silently re-wrote the just-cleared localStorage entry with the old
+// answers, so reopening the link later showed the form "still filled in"
+// even though the database side was already cleaned up (Greg, 8/25/26).
+let autosaveIntervalId = null;
 
 // ── SUBMIT (direct-submit path only) ──
 const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
@@ -665,6 +671,7 @@ async function submitEvaluation(){
     if(!res.ok || result.error){
       throw new Error(result.error || `Server returned ${res.status}`);
     }
+    if(autosaveIntervalId) clearInterval(autosaveIntervalId);
     localStorage.removeItem(STORE_KEY);
     document.getElementById('clientForm').classList.add('hidden');
     document.getElementById('submittedView').classList.remove('hidden');
@@ -726,7 +733,7 @@ async function init(){
   restoreFields();
   restoreQ3();
   restoreQ5();
-  setInterval(saveState, 4000);
+  autosaveIntervalId = setInterval(saveState, 4000);
 
   updateProgress();
 }
