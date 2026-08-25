@@ -737,6 +737,13 @@
                 </div>
               </div>
             </div>
+            <div class="field" style="margin-top:14px;">
+              <label>5. Close-Out Evaluation Link (for the CEO)</label>
+              <div class="field-hint" style="text-transform:none; font-weight:400; margin-bottom:8px;">
+                Generates this client's evaluation form (with their real research questions baked in) and shows it as a "Complete Your Close-Out Evaluation" link on their own dashboard. The CEO fills it out, saves it as a PDF, and emails it back — you upload that completed PDF into the Close-Out Survey slot above.
+              </div>
+              <div id="wf-eval-link"></div>
+            </div>
           </div>
 
           <!-- Step 9: Research Questions -- a fast way to seed the first
@@ -1504,6 +1511,7 @@
     if (error) { showBanner("Couldn't load workflow documents: " + error.message, "error"); return; }
     workflowData = data || {};
     WORKFLOW_FIELDS.forEach(renderWorkflowFileField);
+    renderEvalLinkField();
   }
 
   function renderWorkflowFileField(f) {
@@ -1611,6 +1619,104 @@
     workflowData[f.urlColumn] = null;
     renderWorkflowFileField(f);
     showBanner(`${f.label} removed.`, "success");
+  }
+
+  // ---------- Close-Out Evaluation Link ----------
+  // Greg (8/25/26): every Team Lead needs to be able to generate this
+  // client's close-out evaluation from inside the app instead of Greg
+  // hand-editing evaluation.html and emailing it out himself. "Generate"
+  // pulls this client's real research questions, bakes them into a copy of
+  // the standalone evaluation.html tool (same client-file format that
+  // tool's own admin bar produces), and publishes it to a public storage
+  // bucket. The resulting link is saved on client_content and picked up by
+  // get_client_public_view()/finalize_client() (077), which is what makes
+  // it show up as a "Complete Your Close-Out Evaluation" button on the
+  // client's own dashboard (client_public.html) -- no separate email step.
+  function renderEvalLinkField() {
+    const container = $("wf-eval-link");
+    if (!container) return;
+    const url = workflowData && workflowData.evaluation_link_url;
+
+    if (url) {
+      container.innerHTML = `
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="color:var(--navy-light); font-weight:600; font-size:13px; text-decoration:none; word-break:break-all;">&#128279; ${escapeHtml(url)}</a>
+          <button type="button" class="btn-secondary btn-sm" id="eval-link-copy-btn">Copy Link</button>
+          <button type="button" class="btn-secondary btn-sm" id="eval-link-regen-btn">Regenerate</button>
+        </div>
+      `;
+      container.querySelector("#eval-link-copy-btn").addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          showBanner("Evaluation link copied.", "success");
+        } catch (e) {
+          showBanner("Couldn't copy automatically — select and copy the link above.", "error");
+        }
+      });
+      container.querySelector("#eval-link-regen-btn").addEventListener("click", generateEvalLink);
+      return;
+    }
+
+    container.innerHTML = `<button type="button" class="btn-secondary btn-sm" id="eval-link-gen-btn">Generate Link</button>`;
+    container.querySelector("#eval-link-gen-btn").addEventListener("click", generateEvalLink);
+  }
+
+  async function generateEvalLink() {
+    const btn = document.querySelector("#eval-link-gen-btn, #eval-link-regen-btn");
+    const container = $("wf-eval-link");
+    if (btn) { btn.disabled = true; btn.textContent = "Generating…"; }
+
+    const { data: questionRows, error: qErr } = await sb
+      .from("client_research_questions")
+      .select("question")
+      .eq("client_id", currentClient.id)
+      .order("research_area")
+      .order("sort_order");
+    if (qErr) { showBanner("Couldn't load research questions: " + qErr.message, "error"); renderEvalLinkField(); return; }
+
+    const questions = (questionRows || [])
+      .map((r) => (r.question || "").trim())
+      .filter(Boolean);
+    if (!questions.length) {
+      showBanner("Add at least one research question (on the Research page or Step 9 above) before generating the evaluation link.", "error");
+      renderEvalLinkField();
+      return;
+    }
+
+    let sponsor = "";
+    if (currentClient.econ_dev_company_id) {
+      const { data: program } = await sb.from("econ_dev_companies").select("name").eq("id", currentClient.econ_dev_company_id).single();
+      sponsor = (program && program.name) || "";
+    }
+
+    let templateHtml;
+    try {
+      const res = await fetch("evaluation.html");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      templateHtml = await res.text();
+    } catch (e) {
+      showBanner("Couldn't load the evaluation template: " + e.message, "error");
+      renderEvalLinkField();
+      return;
+    }
+
+    let html = templateHtml;
+    html = html.replace(/\/\*QUESTIONS_START\*\/[\s\S]*?\/\*QUESTIONS_END\*\//, "/*QUESTIONS_START*/" + JSON.stringify(questions) + "/*QUESTIONS_END*/");
+    html = html.replace(/\/\*CLIENT_START\*\/[\s\S]*?\/\*CLIENT_END\*\//, "/*CLIENT_START*/" + JSON.stringify(currentClient.name || "") + "/*CLIENT_END*/");
+    html = html.replace(/\/\*SPONSOR_START\*\/[\s\S]*?\/\*SPONSOR_END\*\//, "/*SPONSOR_START*/" + JSON.stringify(sponsor) + "/*SPONSOR_END*/");
+    html = html.replace(/\/\*IS_CLIENT_START\*\/[\s\S]*?\/\*IS_CLIENT_END\*\//, "/*IS_CLIENT_START*/true/*IS_CLIENT_END*/");
+
+    const path = `clients/${currentClient.id}/evaluation.html`;
+    const { error: uploadErr } = await sb.storage.from("client-evaluations").upload(path, new Blob([html], { type: "text/html" }), { upsert: true, contentType: "text/html" });
+    if (uploadErr) { showBanner("Couldn't publish the evaluation link: " + uploadErr.message, "error"); renderEvalLinkField(); return; }
+
+    const { data: pub } = sb.storage.from("client-evaluations").getPublicUrl(path);
+    const { error: saveErr } = await sb.from("client_content").update({ evaluation_link_url: pub.publicUrl }).eq("client_id", currentClient.id);
+    if (saveErr) { showBanner("Couldn't save the evaluation link: " + saveErr.message, "error"); renderEvalLinkField(); return; }
+
+    workflowData.evaluation_link_url = pub.publicUrl;
+    renderEvalLinkField();
+    showBanner("Evaluation link generated — it now shows on the client's dashboard.", "success");
   }
 
   // ---------- Research Questions (Step 9) ----------
