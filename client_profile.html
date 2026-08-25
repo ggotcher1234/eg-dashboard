@@ -1661,11 +1661,10 @@
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
           <a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="color:var(--navy-light); font-weight:600; font-size:13px; text-decoration:none; word-break:break-all;">&#128279; ${escapeHtml(url)}</a>
           <button type="button" class="btn-secondary btn-sm" id="eval-link-copy-btn">Copy Link</button>
-          <button type="button" class="btn-secondary btn-sm" id="eval-link-regen-btn">Regenerate</button>
         </div>
       `;
     } else {
-      linkHtml = `<button type="button" class="btn-secondary btn-sm" id="eval-link-gen-btn">Generate Link</button>`;
+      linkHtml = `<button type="button" class="btn-secondary btn-sm" id="eval-link-gen-btn">Enable Link</button>`;
     }
 
     let responseHtml = "";
@@ -1697,7 +1696,6 @@
           showBanner("Couldn't copy automatically — select and copy the link above.", "error");
         }
       });
-      container.querySelector("#eval-link-regen-btn").addEventListener("click", generateEvalLink);
     } else {
       container.querySelector("#eval-link-gen-btn").addEventListener("click", generateEvalLink);
     }
@@ -1739,73 +1737,40 @@
     `;
   }
 
+  // Turns on the client's evaluation link. This is now a one-time switch,
+  // not a file-generation step: evaluation_public.html (079) fetches the
+  // client's name/sponsor/research questions live from Supabase every time
+  // the link is opened, so the URL never needs to be regenerated when
+  // questions change, and there's no uploaded file whose Content-Type the
+  // browser can get confused about. (Greg, 8/25/26: the earlier
+  // upload-a-baked-HTML-file-to-storage approach kept rendering as raw
+  // text instead of a form even after two upload-code fixes -- this page
+  // is served by Netlify like the rest of the site instead, so there's no
+  // storage-serving-HTML dependency left to go wrong.)
   async function generateEvalLink() {
-    const btn = document.querySelector("#eval-link-gen-btn, #eval-link-regen-btn");
-    const container = $("wf-eval-link");
-    if (btn) { btn.disabled = true; btn.textContent = "Generating…"; }
+    const btn = document.querySelector("#eval-link-gen-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Enabling…"; }
 
-    const { data: questionRows, error: qErr } = await sb
+    const { count, error: qErr } = await sb
       .from("client_research_questions")
-      .select("question")
+      .select("id", { count: "exact", head: true })
       .eq("client_id", currentClient.id)
-      .order("research_area")
-      .order("sort_order");
-    if (qErr) { showBanner("Couldn't load research questions: " + qErr.message, "error"); renderEvalLinkField(); return; }
-
-    const questions = (questionRows || [])
-      .map((r) => (r.question || "").trim())
-      .filter(Boolean);
-    if (!questions.length) {
-      showBanner("Add at least one research question (on the Research page or Step 9 above) before generating the evaluation link.", "error");
+      .not("question", "is", null)
+      .neq("question", "");
+    if (qErr) { showBanner("Couldn't check research questions: " + qErr.message, "error"); renderEvalLinkField(); return; }
+    if (!count) {
+      showBanner("Add at least one research question (on the Research page or Step 9 above) before enabling the evaluation link.", "error");
       renderEvalLinkField();
       return;
     }
 
-    let sponsor = "";
-    if (currentClient.econ_dev_company_id) {
-      const { data: program } = await sb.from("econ_dev_companies").select("name").eq("id", currentClient.econ_dev_company_id).single();
-      sponsor = (program && program.name) || "";
-    }
-
-    let templateHtml;
-    try {
-      const res = await fetch("evaluation.html");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      templateHtml = await res.text();
-    } catch (e) {
-      showBanner("Couldn't load the evaluation template: " + e.message, "error");
-      renderEvalLinkField();
-      return;
-    }
-
-    let html = templateHtml;
-    html = html.replace(/\/\*QUESTIONS_START\*\/[\s\S]*?\/\*QUESTIONS_END\*\//, "/*QUESTIONS_START*/" + JSON.stringify(questions) + "/*QUESTIONS_END*/");
-    html = html.replace(/\/\*CLIENT_START\*\/[\s\S]*?\/\*CLIENT_END\*\//, "/*CLIENT_START*/" + JSON.stringify(currentClient.name || "") + "/*CLIENT_END*/");
-    html = html.replace(/\/\*SPONSOR_START\*\/[\s\S]*?\/\*SPONSOR_END\*\//, "/*SPONSOR_START*/" + JSON.stringify(sponsor) + "/*SPONSOR_END*/");
-    html = html.replace(/\/\*IS_CLIENT_START\*\/[\s\S]*?\/\*IS_CLIENT_END\*\//, "/*IS_CLIENT_START*/true/*IS_CLIENT_END*/");
-    // Baked so the generated form can submit its answers directly back to
-    // this client (078) instead of falling back to the print-and-email
-    // footer -- see evaluation.html's BAKED_CLIENT_ID comment.
-    html = html.replace(/\/\*CLIENT_ID_START\*\/[\s\S]*?\/\*CLIENT_ID_END\*\//, "/*CLIENT_ID_START*/" + JSON.stringify(currentClient.id) + "/*CLIENT_ID_END*/");
-
-    const path = `clients/${currentClient.id}/evaluation.html`;
-    // A real File (not a bare Blob) with its own .type set, same as every
-    // other upload in this app (logo/workflow-doc uploads pass a browser
-    // File object and never need to override contentType) -- a plain Blob
-    // plus an explicit fileOptions.contentType was silently coming back as
-    // text/plain from storage, so the link opened as raw source instead of
-    // a rendered page (Greg, 8/25/26).
-    const evalFile = new File([html], "evaluation.html", { type: "text/html" });
-    const { error: uploadErr } = await sb.storage.from("client-evaluations").upload(path, evalFile, { upsert: true, contentType: "text/html" });
-    if (uploadErr) { showBanner("Couldn't publish the evaluation link: " + uploadErr.message, "error"); renderEvalLinkField(); return; }
-
-    const { data: pub } = sb.storage.from("client-evaluations").getPublicUrl(path);
-    const { error: saveErr } = await sb.from("client_content").update({ evaluation_link_url: pub.publicUrl }).eq("client_id", currentClient.id);
+    const url = `${PUBLIC_SITE_BASE}evaluation_public.html?client=${currentClient.id}`;
+    const { error: saveErr } = await sb.from("client_content").update({ evaluation_link_url: url }).eq("client_id", currentClient.id);
     if (saveErr) { showBanner("Couldn't save the evaluation link: " + saveErr.message, "error"); renderEvalLinkField(); return; }
 
-    workflowData.evaluation_link_url = pub.publicUrl;
+    workflowData.evaluation_link_url = url;
     renderEvalLinkField();
-    showBanner("Evaluation link generated — it now shows on the client's dashboard.", "success");
+    showBanner("Evaluation link enabled — it now shows on the client's dashboard.", "success");
   }
 
   // ---------- Research Questions (Step 9) ----------
