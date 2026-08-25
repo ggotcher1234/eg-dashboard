@@ -1789,7 +1789,14 @@
     html = html.replace(/\/\*CLIENT_ID_START\*\/[\s\S]*?\/\*CLIENT_ID_END\*\//, "/*CLIENT_ID_START*/" + JSON.stringify(currentClient.id) + "/*CLIENT_ID_END*/");
 
     const path = `clients/${currentClient.id}/evaluation.html`;
-    const { error: uploadErr } = await sb.storage.from("client-evaluations").upload(path, new Blob([html], { type: "text/html" }), { upsert: true, contentType: "text/html" });
+    // A real File (not a bare Blob) with its own .type set, same as every
+    // other upload in this app (logo/workflow-doc uploads pass a browser
+    // File object and never need to override contentType) -- a plain Blob
+    // plus an explicit fileOptions.contentType was silently coming back as
+    // text/plain from storage, so the link opened as raw source instead of
+    // a rendered page (Greg, 8/25/26).
+    const evalFile = new File([html], "evaluation.html", { type: "text/html" });
+    const { error: uploadErr } = await sb.storage.from("client-evaluations").upload(path, evalFile, { upsert: true, contentType: "text/html" });
     if (uploadErr) { showBanner("Couldn't publish the evaluation link: " + uploadErr.message, "error"); renderEvalLinkField(); return; }
 
     const { data: pub } = sb.storage.from("client-evaluations").getPublicUrl(path);
