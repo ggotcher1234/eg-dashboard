@@ -1671,11 +1671,26 @@
     // without exposing a link nobody's supposed to hand out.
     let linkHtml;
     if (url && !isLegacyUrl) {
+      // Greg (8/25/26): "i need a real checkbox to make the form live or
+      // not live" -- a one-way "Enable Link" button had no way to turn it
+      // back off. The URL is deterministic (built from the client id), so
+      // unchecking just nulls evaluation_link_url out and re-checking
+      // regenerates the identical URL -- nothing is lost either direction.
       linkHtml = `
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <div style="color:var(--navy); font-weight:600; font-size:13.5px;">&#9989; The evaluation form is live on this client's dashboard.</div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; color:var(--navy); font-size:13.5px;">
+            <input type="checkbox" id="eval-link-toggle" checked style="width:17px; height:17px; cursor:pointer; margin:0;">
+            The evaluation form is live on this client's dashboard.
+          </label>
           <button type="button" class="btn-secondary btn-sm" id="eval-link-preview-btn">Preview Form</button>
         </div>
+      `;
+    } else if (!url && !isLegacyUrl) {
+      linkHtml = `
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; color:var(--muted); font-size:13.5px;">
+          <input type="checkbox" id="eval-link-toggle" style="width:17px; height:17px; cursor:pointer; margin:0;">
+          Make the evaluation form live on this client's dashboard.
+        </label>
       `;
     } else if (url && isLegacyUrl) {
       linkHtml = `
@@ -1686,8 +1701,6 @@
           <button type="button" class="btn-secondary btn-sm" id="eval-link-update-btn">Update Link</button>
         </div>
       `;
-    } else {
-      linkHtml = `<button type="button" class="btn-secondary btn-sm" id="eval-link-gen-btn">Enable Link</button>`;
     }
 
     let responseHtml = "";
@@ -1713,14 +1726,16 @@
 
     container.innerHTML = linkHtml + responseHtml;
 
-    if (url && !isLegacyUrl) {
-      container.querySelector("#eval-link-preview-btn").addEventListener("click", () => {
-        window.open(url, "_blank", "noopener");
-      });
-    } else if (url && isLegacyUrl) {
+    if (isLegacyUrl) {
       container.querySelector("#eval-link-update-btn").addEventListener("click", generateEvalLink);
     } else {
-      container.querySelector("#eval-link-gen-btn").addEventListener("click", generateEvalLink);
+      const toggle = container.querySelector("#eval-link-toggle");
+      toggle.addEventListener("change", () => {
+        if (toggle.checked) generateEvalLink();
+        else disableEvalLink();
+      });
+      const previewBtn = container.querySelector("#eval-link-preview-btn");
+      if (previewBtn) previewBtn.addEventListener("click", () => window.open(url, "_blank", "noopener"));
     }
 
     if (evalResponse) {
@@ -1789,8 +1804,10 @@
   // is served by Netlify like the rest of the site instead, so there's no
   // storage-serving-HTML dependency left to go wrong.)
   async function generateEvalLink() {
-    const btn = document.querySelector("#eval-link-gen-btn, #eval-link-update-btn");
+    const btn = document.querySelector("#eval-link-update-btn");
+    const toggle = document.querySelector("#eval-link-toggle");
     if (btn) { btn.disabled = true; btn.textContent = "Enabling…"; }
+    if (toggle) toggle.disabled = true;
 
     const { count, error: qErr } = await sb
       .from("client_research_questions")
@@ -1812,6 +1829,27 @@
     workflowData.evaluation_link_url = url;
     renderEvalLinkField();
     showBanner("Evaluation link enabled — it now shows on the client's dashboard.", "success");
+  }
+
+  // Turns the evaluation link back off (Greg, 8/25/26: "i need a real
+  // checkbox to make the form live or not live"). Just nulls
+  // evaluation_link_url out -- renderEvalCta() on client_public.html hides
+  // the CEO-facing button the moment this is null, and re-checking the box
+  // regenerates the identical deterministic URL, so nothing is lost.
+  async function disableEvalLink() {
+    if (!confirm("Turn off the evaluation form? The CEO will no longer see the Close-Out Evaluation button on their dashboard.")) {
+      renderEvalLinkField();
+      return;
+    }
+    const toggle = document.querySelector("#eval-link-toggle");
+    if (toggle) toggle.disabled = true;
+
+    const { error } = await sb.from("client_content").update({ evaluation_link_url: null }).eq("client_id", currentClient.id);
+    if (error) { showBanner("Couldn't disable the evaluation link: " + error.message, "error"); renderEvalLinkField(); return; }
+
+    workflowData.evaluation_link_url = null;
+    renderEvalLinkField();
+    showBanner("Evaluation link disabled — it's no longer visible on the client's dashboard.", "success");
   }
 
   // ---------- Research Questions (Step 9) ----------
