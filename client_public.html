@@ -122,6 +122,22 @@
   .eval-cta-btn { flex-shrink: 0; background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 11px 22px; font-size: 13.5px; font-weight: 700; text-decoration: none; transition: background 0.15s ease; }
   .eval-cta-btn:hover { background: var(--accent-dark); }
 
+  /* Close-Out Evaluation has no document to open like the other three
+     workflow steps do -- it's rows in client_evaluation_responses, not a
+     file -- so clicking it once submitted opens this modal with the same
+     answers instead (Greg, 8/25/26: "all the other workflow fields bring
+     up a document... this should do the same"). */
+  .eval-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.55); z-index: 100; align-items: flex-start; justify-content: center; padding: 40px 20px; overflow-y: auto; }
+  .eval-modal-overlay.open { display: flex; }
+  .eval-modal { background: var(--card); border-radius: 12px; max-width: 640px; width: 100%; padding: 28px 30px; position: relative; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+  .eval-modal-close { position: absolute; top: 16px; right: 18px; background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer; line-height: 1; }
+  .eval-modal-close:hover { color: var(--text); }
+  .eval-modal h2 { font-size: 18px; color: var(--navy); margin: 0 0 4px; }
+  .eval-modal .em-meta { font-size: 12.5px; color: var(--muted); margin-bottom: 18px; }
+  .eval-modal .em-block { font-size: 13.5px; line-height: 1.6; color: var(--text); margin-bottom: 14px; }
+  .eval-modal .em-label { font-weight: 700; color: var(--navy); }
+  .eval-modal ul { margin: 4px 0 0 18px; padding: 0; }
+
   .workflow-tracker { display: flex; margin: 4px 0; }
   .wf-step {
     flex: 1; padding: 12px 20px 12px 32px; color: #fff; font-size: 12px; font-weight: 700;
@@ -148,6 +164,7 @@
   .wf-step-3 { background: #8998a6; }
   .wf-step-3.filled { background: var(--navy); }
   .wf-step-3.filled:hover { background: var(--navy-light); }
+  .wf-eval-detail-btn { cursor: pointer; }
 
   .research-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 4px; margin-bottom: 16px; }
   .research-card { border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #fff; }
@@ -318,6 +335,18 @@
       </div>
     </footer>
   </main>
+</div>
+
+<!-- Close-Out Evaluation detail modal -- shows the CEO their own submitted
+     answers when they click the completed workflow step (there's no
+     document to open like the other three steps have). Placed before the
+     script block below so its elements exist in the DOM before that
+     script's top-level code (which wires click handlers to it) runs. -->
+<div class="eval-modal-overlay" id="eval-modal-overlay">
+  <div class="eval-modal">
+    <button type="button" class="eval-modal-close" id="eval-modal-close" aria-label="Close">&#10005;</button>
+    <div id="eval-modal-body"></div>
+  </div>
 </div>
 
 <script>
@@ -709,19 +738,59 @@
       if (url) {
         return `<a class="wf-step ${colorClass} filled" href="${escapeHtml(url)}" target="_blank" rel="noopener">&#10003; ${escapeHtml(step.label)}</a>`;
       }
-      // A submitted evaluation response has no doc/link to open here (the
-      // detail lives in client_evaluation_responses, reviewed from
-      // client_profile.html) -- it just lights the step up as done.
+      // A submitted evaluation response has no doc/link to open here (it's
+      // rows in client_evaluation_responses, not a file) -- clicking it
+      // opens the modal below with the same answers instead, so it behaves
+      // the same as the other three steps do (Greg, 8/25/26: "all the
+      // other workflow fields bring up a document... this should do the
+      // same").
       if (extraFilled) {
-        return `<div class="wf-step ${colorClass} filled" style="cursor:default;">&#10003; ${escapeHtml(step.label)}</div>`;
+        return `<div class="wf-step ${colorClass} filled wf-eval-detail-btn">&#10003; ${escapeHtml(step.label)}</div>`;
       }
       return `<div class="wf-step ${colorClass}">${escapeHtml(step.label)}</div>`;
     }).join("");
     $("workflow-tracker").querySelectorAll(".wf-doc-link").forEach((el) => {
       el.addEventListener("click", (e) => { e.preventDefault(); openSignedDoc(el.dataset.path)(); });
     });
+    $("workflow-tracker").querySelectorAll(".wf-eval-detail-btn").forEach((el) => {
+      el.addEventListener("click", () => openEvalResponseModal(w.evaluation_response));
+    });
     renderEvalCta(w);
   }
+
+  const EVAL_RATING_LABELS = { very: "Very Useful", partial: "Partially Useful", not: "Not Useful" };
+
+  function openEvalResponseModal(r) {
+    if (!r) return;
+    const ratings = Array.isArray(r.question_ratings) ? r.question_ratings : [];
+    const referrals = (Array.isArray(r.referrals) ? r.referrals : []).filter((rr) => rr.name || rr.company || rr.contact);
+    const submittedDate = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : "";
+    $("eval-modal-body").innerHTML = `
+      <h2>Your Close-Out Evaluation</h2>
+      <div class="em-meta">Submitted ${escapeHtml(submittedDate)}${r.respondent_name ? " by " + escapeHtml(r.respondent_name) : ""} &mdash; ${r.very_useful_count} Very Useful, ${r.partially_useful_count} Partially Useful, ${r.not_useful_count} Not Useful (Weighted Score ${r.weighted_score}/${r.weighted_max})</div>
+      <div class="em-block">
+        <span class="em-label">Research Question Ratings</span>
+        <ul>
+          ${ratings.map((q) => `<li>${escapeHtml(q.question || "(no question text)")}: <strong>${escapeHtml(EVAL_RATING_LABELS[q.rating] || "—")}</strong></li>`).join("")}
+        </ul>
+      </div>
+      ${r.q1_explain ? `<div class="em-block"><span class="em-label">Explanation:</span> ${escapeHtml(r.q1_explain)}</div>` : ""}
+      <div class="em-block"><span class="em-label">Adequately prepared?</span> ${r.prepared === "yes" ? "Yes" : r.prepared === "no" ? "No" : "—"}${r.prepared_explain ? " — " + escapeHtml(r.prepared_explain) : ""}</div>
+      ${r.improvement_suggestions ? `<div class="em-block"><span class="em-label">What could we have done better:</span> ${escapeHtml(r.improvement_suggestions)}</div>` : ""}
+      <div class="em-block"><span class="em-label">Likelihood to recommend (1&ndash;10):</span> ${r.nps_score ?? "—"}${r.nps_explain ? " — " + escapeHtml(r.nps_explain) : ""}</div>
+      ${referrals.length ? `<div class="em-block"><span class="em-label">Referrals:</span><ul>${referrals.map((rr) => `<li>${escapeHtml(rr.name || "")}${rr.company ? " — " + escapeHtml(rr.company) : ""}${rr.contact ? " (" + escapeHtml(rr.contact) + ")" : ""}</li>`).join("")}</ul></div>` : ""}
+      ${r.testimonial ? `<div class="em-block"><span class="em-label">Testimonial:</span> ${escapeHtml(r.testimonial)}</div>` : ""}
+    `;
+    $("eval-modal-overlay").classList.add("open");
+  }
+
+  function closeEvalResponseModal() {
+    $("eval-modal-overlay").classList.remove("open");
+  }
+  $("eval-modal-close").addEventListener("click", closeEvalResponseModal);
+  $("eval-modal-overlay").addEventListener("click", (e) => {
+    if (e.target.id === "eval-modal-overlay") closeEvalResponseModal();
+  });
 
   // Only shown once a Team Lead has generated this client's evaluation link
   // (client_profile.html Step 8) AND the completed survey hasn't already
