@@ -741,7 +741,7 @@
             <div class="field" style="margin-top:14px;">
               <label>5. Close-Out Evaluation Link (for the CEO)</label>
               <div class="field-hint" style="text-transform:none; font-weight:400; margin-bottom:8px;">
-                Generates this client's evaluation form (with their real research questions baked in) and shows it as a "Complete Your Close-Out Evaluation" link on their own dashboard. The CEO fills it out and clicks Submit — their answers come straight back here, no email or PDF needed. You'll see the response below once it's in.
+                You don't send this link yourself — enabling it here just turns on the "Complete Your Close-Out Evaluation" button that already appears on the client's own dashboard (the URL at the top of this page). The CEO never sees this raw link; they just use their normal dashboard, click that button, fill out the form, and hit Submit — their answers come straight back here, no email or PDF needed. You'll see the response below once it's in.
               </div>
               <div id="wf-eval-link"></div>
             </div>
@@ -1654,13 +1654,28 @@
     const container = $("wf-eval-link");
     if (!container) return;
     const url = workflowData && workflowData.evaluation_link_url;
+    // Links saved before the storage-upload approach was replaced with a
+    // live Netlify page (Greg, 8/25/26: raw HTML kept showing instead of a
+    // form) still point at the old client-evaluations Storage bucket and
+    // will never render right. Flag those so there's a way to fix them
+    // from the UI instead of leaving Copy Link as the only option.
+    const isLegacyUrl = url && !url.includes("evaluation_public.html");
 
     let linkHtml;
-    if (url) {
+    if (url && !isLegacyUrl) {
       linkHtml = `
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
           <a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="color:var(--navy-light); font-weight:600; font-size:13px; text-decoration:none; word-break:break-all;">&#128279; ${escapeHtml(url)}</a>
           <button type="button" class="btn-secondary btn-sm" id="eval-link-copy-btn">Copy Link</button>
+        </div>
+      `;
+    } else if (url && isLegacyUrl) {
+      linkHtml = `
+        <div style="padding:10px 14px; background:#FCF3CF; border:1px solid #F1C40F; border-radius:8px;">
+          <div style="font-size:13px; color:#7D6608; font-weight:600; margin-bottom:8px;">
+            This link was created before a fix and won't render correctly for the CEO. Click Update Link to switch it to the working version.
+          </div>
+          <button type="button" class="btn-secondary btn-sm" id="eval-link-update-btn">Update Link</button>
         </div>
       `;
     } else {
@@ -1687,7 +1702,7 @@
 
     container.innerHTML = linkHtml + responseHtml;
 
-    if (url) {
+    if (url && !isLegacyUrl) {
       container.querySelector("#eval-link-copy-btn").addEventListener("click", async () => {
         try {
           await navigator.clipboard.writeText(url);
@@ -1696,6 +1711,8 @@
           showBanner("Couldn't copy automatically — select and copy the link above.", "error");
         }
       });
+    } else if (url && isLegacyUrl) {
+      container.querySelector("#eval-link-update-btn").addEventListener("click", generateEvalLink);
     } else {
       container.querySelector("#eval-link-gen-btn").addEventListener("click", generateEvalLink);
     }
@@ -1748,7 +1765,7 @@
   // is served by Netlify like the rest of the site instead, so there's no
   // storage-serving-HTML dependency left to go wrong.)
   async function generateEvalLink() {
-    const btn = document.querySelector("#eval-link-gen-btn");
+    const btn = document.querySelector("#eval-link-gen-btn, #eval-link-update-btn");
     if (btn) { btn.disabled = true; btn.textContent = "Enabling…"; }
 
     const { count, error: qErr } = await sb
