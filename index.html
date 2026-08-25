@@ -1176,15 +1176,31 @@
     }
   }
 
+  // Greg (8/25/26): "make sure the notification bell goes to everyone on
+  // the engagement team from EG and the Program manager if they have an
+  // account." Notifications used to be a single Super-Admin-only row with
+  // one shared read_at -- 082_notification_recipients.sql adds a
+  // notification_recipients row per person who should see it, each with
+  // its own read_at, so dismissing a notification only affects the person
+  // who dismissed it. This reads through that join instead of the
+  // notifications table directly.
   async function loadNotifications() {
     const { data, error } = await sb
-      .from("notifications")
-      .select("*")
+      .from("notification_recipients")
+      .select("id, created_at, notifications(client_id, message, created_at)")
+      .eq("user_id", currentUser.id)
       .is("read_at", null)
       .order("created_at", { ascending: false })
       .limit(20);
     if (error) return;
-    unreadNotifications = data || [];
+    unreadNotifications = (data || [])
+      .filter((r) => r.notifications)
+      .map((r) => ({
+        recipientId: r.id,
+        client_id: r.notifications.client_id,
+        message: r.notifications.message,
+        created_at: r.notifications.created_at,
+      }));
     renderNotifications();
   }
 
@@ -1200,7 +1216,7 @@
               <span>${timeAgo(n.created_at)}</span>
               <span>
                 ${n.client_id ? `<a href="client_workspace.html?client=${n.client_id}">View client</a> &middot;` : ""}
-                <a href="#" class="notif-dismiss" data-id="${n.id}">Dismiss</a>
+                <a href="#" class="notif-dismiss" data-id="${n.recipientId}">Dismiss</a>
               </span>
             </div>
           </div>
@@ -1215,8 +1231,8 @@
   }
 
   async function markNotificationRead(id) {
-    await sb.from("notifications").update({ read_at: new Date().toISOString(), read_by: currentUser.id }).eq("id", id);
-    unreadNotifications = unreadNotifications.filter((n) => n.id !== id);
+    await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id);
+    unreadNotifications = unreadNotifications.filter((n) => n.recipientId !== id);
     renderNotifications();
   }
 
@@ -1228,8 +1244,8 @@
 
   $("notif-mark-all").addEventListener("click", async () => {
     if (!unreadNotifications.length) return;
-    const ids = unreadNotifications.map((n) => n.id);
-    await sb.from("notifications").update({ read_at: new Date().toISOString(), read_by: currentUser.id }).in("id", ids);
+    const ids = unreadNotifications.map((n) => n.recipientId);
+    await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids);
     unreadNotifications = [];
     renderNotifications();
   });
