@@ -804,6 +804,35 @@
     return FILE_TYPE_ICONS[ext] || "\u{1F4C4}";
   }
 
+  // Some browsers/OSes hand back an empty (or generic) File.type for
+  // certain extensions -- most notably .html/.htm -- and Supabase Storage
+  // falls back to text/plain when no contentType is given, which is why
+  // an uploaded HTML "mini app" opened as raw source in a new tab instead
+  // of rendering (Greg, 8/26/26). Extension wins for html/htm specifically
+  // since that mismatch is the one that actually breaks something; every
+  // other type trusts the browser's reported type first.
+  const MIME_BY_EXT = {
+    html: "text/html", htm: "text/html",
+    pdf: "application/pdf",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    csv: "text/csv",
+    ppt: "application/vnd.ms-powerpoint",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+    txt: "text/plain",
+    zip: "application/zip",
+  };
+  function contentTypeFor(file) {
+    const name = (file.name || "").toLowerCase();
+    const dot = name.lastIndexOf(".");
+    const ext = dot === -1 ? "" : name.slice(dot + 1);
+    if (ext === "html" || ext === "htm") return "text/html";
+    return file.type || MIME_BY_EXT[ext] || "application/octet-stream";
+  }
+
   function renderResourceVaultRows(rows) {
     const list = $("resource_vault-list");
     list.innerHTML = rows.map((r) => {
@@ -952,7 +981,7 @@
         const rowId = input.dataset.rowId;
         input.disabled = true;
         const path = `clients/${currentClient.id}/resource-vault/${Date.now()}-${sanitizeFilename(file.name)}`;
-        const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+        const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file, { contentType: contentTypeFor(file) });
         if (uploadErr) {
           showBanner("Couldn't upload file: " + uploadErr.message, "error");
           input.disabled = false;
@@ -1021,7 +1050,7 @@
     const row = (listData.resource_vault || []).find((x) => x.templateId === templateId);
     const oldPath = row ? row.storagePath : null;
     const path = `resource-templates/${currentClient.organization_id}/${Date.now()}-${sanitizeFilename(file.name)}`;
-    const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+    const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file, { contentType: contentTypeFor(file) });
     if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
     const { error } = await sb.from("resource_vault_templates").update({ storage_path: path }).eq("id", templateId);
     if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
@@ -1041,7 +1070,7 @@
     if (fileInput.files.length) {
       const file = fileInput.files[0];
       storagePath = `clients/${currentClient.id}/resource-vault/${Date.now()}-${sanitizeFilename(file.name)}`;
-      const { error: uploadErr } = await sb.storage.from("client-documents").upload(storagePath, file);
+      const { error: uploadErr } = await sb.storage.from("client-documents").upload(storagePath, file, { contentType: contentTypeFor(file) });
       if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
     }
 
@@ -1074,7 +1103,7 @@
     if (fileInput.files.length) {
       const file = fileInput.files[0];
       storagePath = `resource-templates/${currentClient.organization_id}/${Date.now()}-${sanitizeFilename(file.name)}`;
-      const { error: uploadErr } = await sb.storage.from("client-documents").upload(storagePath, file);
+      const { error: uploadErr } = await sb.storage.from("client-documents").upload(storagePath, file, { contentType: contentTypeFor(file) });
       if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
     }
 
@@ -1484,7 +1513,7 @@
     const errors = [];
     for (const file of Array.from(fileList)) {
       const path = `clients/${currentClient.id}/questions/${questionId}/${Date.now()}-${sanitizeFilename(file.name)}`;
-      const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+      const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file, { contentType: contentTypeFor(file) });
       if (uploadErr) { errors.push(`${file.name}: ${uploadErr.message}`); continue; }
       const { error: rowErr } = await sb.from("documents").insert({
         client_id: currentClient.id,
