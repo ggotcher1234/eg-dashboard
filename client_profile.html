@@ -1615,7 +1615,7 @@
 
   async function uploadWorkflowFile(f, file) {
     const oldPath = workflowData && workflowData[f.pathColumn];
-    const path = `clients/${currentClient.id}/workflow/${f.key}-${Date.now()}-${sanitizeFilename(file.name)}`;
+    const path = `clients/${currentClient.id}/workflow/${f.key}/${Date.now()}-${sanitizeFilename(file.name)}`;
     const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
     if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
     // A field is one or the other -- uploading a file clears any link
@@ -2318,11 +2318,15 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
   }
 
   // Best-effort human-friendly file name from a storage path like
-  // clients/{id}/workflow/1699999999-my_file.pdf -> "my_file.pdf".
+  // clients/{id}/workflow/discovery/1699999999-my_file.pdf -> "my_file.pdf".
+  // Also strips the older clients/{id}/workflow/discovery-1699999999-my_file.pdf
+  // format (key baked into the filename itself, before the key was moved
+  // into its own folder segment -- Greg, 8/26/26) so files uploaded before
+  // this fix still display cleanly without needing to be re-uploaded.
   function fileNameFromPath(path) {
     if (!path) return "";
     const last = path.split("/").pop();
-    return last.replace(/^\d+-/, "");
+    return last.replace(/^(?:[a-zA-Z]+-)?\d+-/, "");
   }
 
   // Color-coded by file type so a file list is scannable at a glance --
