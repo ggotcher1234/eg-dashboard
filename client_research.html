@@ -108,21 +108,6 @@
     padding: 3px 10px; border-radius: 999px; flex-shrink: 0;
   }
 
-  /* Percentage of research questions answered -- "answered" means the
-     question has at least one document attached, since that's the only
-     signal the data model has. Greg (8/18/26). Overall summary sits above
-     the accordion list; each area also gets its own compact badge so a
-     consultant can see at a glance which area needs more work. */
-  .research-progress-overall { margin: 2px 0 16px; }
-  .research-progress-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
-  .research-progress-label { font-size: 13px; font-weight: 600; color: var(--text); }
-  .research-progress-pct { font-size: 13px; font-weight: 700; color: var(--accent-dark); }
-  .research-progress-track { height: 8px; border-radius: 999px; background: #eef1f4; overflow: hidden; }
-  .research-progress-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.2s ease; }
-  .ra-progress-badge {
-    font-size: 11.5px; font-weight: 700; color: var(--accent-dark); background: #e9f5ee;
-    padding: 3px 10px; border-radius: 999px; flex-shrink: 0;
-  }
   .accordion-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .accordion-chevron { font-size: 13px; color: var(--muted); transition: transform 0.15s ease; flex-shrink: 0; }
   .accordion-header.open .accordion-chevron { transform: rotate(90deg); }
@@ -148,11 +133,12 @@
   .rv-file-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; }
   .rv-file-link:hover { text-decoration: underline; }
 
-  /* Research Questions (nested under each research area) */
-  .rq-question { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; background: #fafbfc; }
-  .rq-question-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 10px; }
-  .rq-question-header .rq-label { font-weight: 700; font-size: 13px; color: var(--text); }
-  .rq-question input[type="text"] { width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; margin-bottom: 12px; font-family: inherit; }
+  /* Documents & Links, flat under each research area (Greg/Chris, 8/26/26:
+     removed the Research Questions layer -- specialists now just upload a
+     file or add a link directly under the area, no per-question grouping).
+     Class names kept as-is (rq- prefix) since they're still exactly the
+     right look for this, just re-used for the area-level list instead of a
+     per-question card. */
   .rq-docs-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; }
   .rq-doc-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
   .rq-doc-row .rq-doc-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; flex: 1; text-decoration: none; }
@@ -163,7 +149,6 @@
   .rq-doc-order-btns { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
   .rq-move-btn { padding: 0 6px; font-size: 9px; line-height: 1.5; }
   .rq-move-btn:disabled { opacity: 0.25; cursor: default; }
-  .rq-area-empty { color: var(--muted); font-size: 13px; padding: 6px 0 14px; }
   .rq-add-row { display: flex; gap: 8px; margin-top: 6px; }
   .rq-link-form { display: none; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); align-items: flex-end; }
   .rq-link-form.open { display: flex; }
@@ -370,7 +355,6 @@
         <div class="card">
           <h2>Economic Gardening Research Reports</h2>
           <div class="field-hint" style="margin-bottom:10px;">Each item becomes a link in the Preview Dashboard.</div>
-          <div class="research-progress-overall" id="research-progress-overall"></div>
           <div id="research-areas-sections"></div>
         </div>
       </div>
@@ -709,7 +693,7 @@
     }
 
     await loadDocuments();
-    await loadResearchQuestions();
+    renderResearchAreaSections();
   }
 
   function setResearchView(view) {
@@ -1140,8 +1124,29 @@
     await loadListSection(RESOURCE_VAULT_CONFIG);
   }
 
-  // ---------- Economic Gardening Research Reports (Questions + Documents, per area) ----------
+  // ---------- Economic Gardening Research Reports (flat Documents & Links,
+  // per area) ----------
   // GIS is folded into Outbound Marketing, not its own card (Greg, 8/22/26).
+  //
+  // This used to be a two-tier model -- Research Questions each holding
+  // their own documents/links -- but Greg/Chris (8/26/26) asked to drop the
+  // question layer entirely: specialists now just upload a file or add a
+  // link directly under the area, no per-question grouping, no question
+  // text field. Documents already carried research_area directly (not just
+  // question_id) from day one, so this is really just always taking the
+  // path the app already used for docs uploaded "the old flat way" before
+  // Research Questions existed (see the old (Unsorted) bucket this
+  // replaces) -- nothing new needed on the documents table, and any
+  // document that was attached to an old question still shows here since
+  // it's filtered by research_area, not question_id.
+  //
+  // The client_research_questions table itself is untouched (no migration,
+  // no data deleted) -- this page just stops reading/writing it. Two other
+  // features used to depend on question text specifically and were updated
+  // in the same pass to key off research area instead: client_profile.html's
+  // evaluation-email gate (now checks for any research document instead of
+  // question text) and Client Control Center's Draft Update Email (now
+  // names the research area instead of quoting a specific question).
   const RESEARCH_AREAS = [
     ["market_dynamics", "Market Dynamics Research"],
     ["outbound", "Outbound Marketing"],
@@ -1149,11 +1154,10 @@
     ["watering_holes", "Watering Holes"],
   ];
   let allDocuments = [];
-  let researchQuestions = [];
   // renderResearchAreaSections() rebuilds the whole accordion group from
-  // scratch every time a question is added/deleted (simplest way to keep
-  // sort order/render logic in one place) — track which area was open so
-  // that rebuild doesn't visually collapse it out from under the consultant.
+  // scratch after every upload/delete/reorder (simplest way to keep sort
+  // order/render logic in one place) — track which area was open so that
+  // rebuild doesn't visually collapse it out from under the consultant.
   let openResearchArea = null;
 
   async function loadDocuments() {
@@ -1170,18 +1174,6 @@
     allDocuments = data;
   }
 
-  async function loadResearchQuestions() {
-    const { data, error } = await sb
-      .from("client_research_questions")
-      .select("*")
-      .eq("client_id", currentClient.id)
-      .order("sort_order")
-      .order("created_at");
-    if (error) { showBanner("Couldn't load research questions: " + error.message, "error"); return; }
-    researchQuestions = data;
-    renderResearchAreaSections();
-  }
-
   function renderResearchAreaSections() {
     const container = $("research-areas-sections");
     container.innerHTML = RESEARCH_AREAS.map(([key, label]) => {
@@ -1190,18 +1182,33 @@
       <div class="card" style="margin-bottom:12px;">
         <div class="accordion-header ${isOpen ? "open" : ""}" data-ra-accordion="${key}">
           <h2><span class="accordion-chevron">&#9656;</span> ${escapeHtml(label)}</h2>
-          <span class="ra-progress-badge hidden" id="ra-${key}-progress"></span>
         </div>
         <div class="accordion-body ${isOpen ? "open" : ""}" id="ra-${key}-body">
-          <div id="ra-${key}-questions"></div>
-          <button type="button" class="btn-secondary btn-sm" data-add-question="${key}">+ Add Question</button>
+          <div class="rq-docs-label">Documents &amp; Links</div>
+          <div id="ra-${key}-docs"></div>
+          <div class="rq-add-row">
+            <button type="button" class="btn-secondary btn-sm" data-area-add-doc="${key}">+ Add Document</button>
+            <button type="button" class="btn-secondary btn-sm" data-area-add-link="${key}">+ Add Link</button>
+          </div>
+          <div class="rq-link-form" id="ra-link-form-${key}">
+            <div class="field">
+              <label for="ra-link-label-${key}">Label</label>
+              <input type="text" id="ra-link-label-${key}" placeholder="e.g. Listening Post" />
+            </div>
+            <div class="field">
+              <label for="ra-link-url-${key}">URL</label>
+              <input type="text" id="ra-link-url-${key}" placeholder="https://…" />
+            </div>
+            <button type="button" class="btn-primary btn-sm" data-area-save-link="${key}">Save Link</button>
+            <button type="button" class="btn-secondary btn-sm" data-area-cancel-link="${key}">Cancel</button>
+          </div>
         </div>
       </div>
     `;
     }).join("");
 
     container.querySelectorAll("[data-ra-accordion]").forEach((hdr) => {
-      hdr.addEventListener("click", async () => {
+      hdr.addEventListener("click", () => {
         const wasOpen = hdr.classList.contains("open");
         container.querySelectorAll("[data-ra-accordion]").forEach((h) => {
           h.classList.remove("open");
@@ -1211,118 +1218,46 @@
           hdr.classList.add("open");
           $(`ra-${hdr.dataset.raAccordion}-body`).classList.add("open");
           openResearchArea = hdr.dataset.raAccordion;
-          // Opening a totally empty area (no questions, nothing uploaded
-          // the old flat way either) should land on a ready-to-type
-          // Question 1 immediately — not an empty state that makes the
-          // consultant click "+ Add Question" before they can do anything.
-          await ensureFirstQuestion(hdr.dataset.raAccordion);
         } else {
           openResearchArea = null;
         }
       });
     });
 
-    container.querySelectorAll("[data-add-question]").forEach((btn) => {
-      btn.addEventListener("click", () => addResearchQuestion(btn.dataset.addQuestion));
+    container.querySelectorAll("[data-area-add-doc]").forEach((btn) => {
+      btn.addEventListener("click", () => pickAreaDocuments(btn.dataset.areaAddDoc));
     });
 
-    RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
-    renderResearchProgress();
-  }
-
-  // ---------- Percentage of research questions answered ----------
-  // "Answered" = the question has at least one document attached (there's
-  // no separate answered/unanswered flag in the data model, so a document
-  // is the actual signal that the question got researched). A blank
-  // question with zero documents counts toward the denominator but not
-  // the numerator, same as it should — it's still open work.
-  function researchProgressForArea(area) {
-    const questions = researchQuestions.filter((q) => q.research_area === area);
-    const total = questions.length;
-    const answered = questions.filter((q) => allDocuments.some((d) => d.question_id === q.id)).length;
-    return { answered, total };
-  }
-
-  function renderResearchProgress() {
-    let totalAll = 0, answeredAll = 0;
-    RESEARCH_AREAS.forEach(([key]) => {
-      const { answered, total } = researchProgressForArea(key);
-      totalAll += total;
-      answeredAll += answered;
-      const badge = $(`ra-${key}-progress`);
-      if (!badge) return;
-      if (!total) {
-        badge.classList.add("hidden");
-        return;
-      }
-      badge.classList.remove("hidden");
-      badge.textContent = `${answered}/${total} answered`;
+    // Add Link -- toggles the small inline form open/closed rather than
+    // opening a file picker, since a link has no file to select.
+    container.querySelectorAll("[data-area-add-link]").forEach((btn) => {
+      const area = btn.dataset.areaAddLink;
+      const linkForm = $(`ra-link-form-${area}`);
+      btn.addEventListener("click", () => {
+        linkForm.classList.toggle("open");
+        if (linkForm.classList.contains("open")) $(`ra-link-label-${area}`).focus();
+      });
+    });
+    container.querySelectorAll("[data-area-cancel-link]").forEach((btn) => {
+      const area = btn.dataset.areaCancelLink;
+      btn.addEventListener("click", () => {
+        $(`ra-link-form-${area}`).classList.remove("open");
+        $(`ra-link-label-${area}`).value = "";
+        $(`ra-link-url-${area}`).value = "";
+      });
+    });
+    container.querySelectorAll("[data-area-save-link]").forEach((btn) => {
+      btn.addEventListener("click", () => saveAreaLink(btn.dataset.areaSaveLink));
     });
 
-    const overall = $("research-progress-overall");
-    if (!overall) return;
-    if (!totalAll) {
-      overall.innerHTML = `<div class="field-hint">No research questions yet — add one below to start tracking progress.</div>`;
-      return;
-    }
-    const pct = Math.round((answeredAll / totalAll) * 100);
-    overall.innerHTML = `
-      <div class="research-progress-row">
-        <span class="research-progress-label">${answeredAll} of ${totalAll} questions answered</span>
-        <span class="research-progress-pct">${pct}%</span>
-      </div>
-      <div class="research-progress-track"><div class="research-progress-fill" style="width:${pct}%"></div></div>
-    `;
+    RESEARCH_AREAS.forEach(([key]) => renderAreaDocs(key));
   }
 
-  function renderQuestionsForArea(area) {
-    const el = $(`ra-${area}-questions`);
-    const questions = researchQuestions.filter((q) => q.research_area === area);
-    // Docs uploaded the old way (tagged with an area, no question) still
-    // show, in an "(Unsorted)" bucket at the end, rather than disappearing.
-    const unsorted = allDocuments.filter((d) => d.research_area === area && !d.question_id);
-
-    if (!questions.length && !unsorted.length) {
-      el.innerHTML = `<div class="rq-area-empty">No questions yet — use "+ Add Question" below.</div>`;
-      return;
-    }
-
-    el.innerHTML = questions.map((q, i) => renderQuestionCard(q, i + 1)).join("")
-      + (unsorted.length ? renderUnsortedCard(area, unsorted) : "");
-
-    questions.forEach((q) => wireQuestionCard(q));
-    if (unsorted.length) wireUnsortedCard(area);
-  }
-
-  function renderQuestionCard(q, num) {
-    const docs = allDocuments.filter((d) => d.question_id === q.id);
-    return `
-      <div class="rq-question" data-question-card="${q.id}">
-        <div class="rq-question-header">
-          <span class="rq-label">Question ${num}</span>
-          <button type="button" class="btn-danger icon-btn" data-delete-question="${q.id}" title="Delete question">&times;</button>
-        </div>
-        <input type="text" data-question-input="${q.id}" placeholder="Enter the research question…" value="${escapeHtml(q.question || "")}" />
-        <div class="rq-docs-label">Documents &amp; Links</div>
-        <div id="rq-docs-${q.id}">${renderQuestionDocs(docs, `question:${q.id}`)}</div>
-        <div class="rq-add-row">
-          <button type="button" class="btn-secondary btn-sm" data-question-add-doc="${q.id}">+ Add Document</button>
-          <button type="button" class="btn-secondary btn-sm" data-question-add-link="${q.id}">+ Add Link</button>
-        </div>
-        <div class="rq-link-form" id="rq-link-form-${q.id}">
-          <div class="field">
-            <label for="rq-link-label-${q.id}">Label</label>
-            <input type="text" id="rq-link-label-${q.id}" placeholder="e.g. Listening Post" />
-          </div>
-          <div class="field">
-            <label for="rq-link-url-${q.id}">URL</label>
-            <input type="text" id="rq-link-url-${q.id}" placeholder="https://…" />
-          </div>
-          <button type="button" class="btn-primary btn-sm" data-question-save-link="${q.id}">Save Link</button>
-          <button type="button" class="btn-secondary btn-sm" data-question-cancel-link="${q.id}">Cancel</button>
-        </div>
-      </div>
-    `;
+  function renderAreaDocs(area) {
+    const el = $(`ra-${area}-docs`);
+    const docs = allDocuments.filter((d) => d.research_area === area);
+    el.innerHTML = renderQuestionDocs(docs, `area:${area}`);
+    wireDocRowHandlers(el);
   }
 
   function renderQuestionDocs(docs, scope) {
@@ -1352,61 +1287,6 @@
     }).join("");
   }
 
-  function renderUnsortedCard(area, docs) {
-    return `
-      <div class="rq-question" data-unsorted-card="${area}">
-        <div class="rq-question-header"><span class="rq-label">(Unsorted — uploaded before Questions existed)</span></div>
-        <div class="rq-docs-label">Documents</div>
-        <div>${renderQuestionDocs(docs, `unsorted:${area}`)}</div>
-      </div>
-    `;
-  }
-
-  function wireQuestionCard(q) {
-    const card = document.querySelector(`[data-question-card="${q.id}"]`);
-    const input = card.querySelector(`[data-question-input="${q.id}"]`);
-    const original = input.value;
-    input.addEventListener("blur", async () => {
-      const value = input.value.trim();
-      if (value === original) return;
-      const { error } = await sb.from("client_research_questions").update({ question: value || null }).eq("id", q.id);
-      if (error) { showBanner("Couldn't save the question: " + error.message, "error"); input.value = original; return; }
-    });
-
-    card.querySelector(`[data-delete-question="${q.id}"]`).addEventListener("click", () => deleteResearchQuestion(q.id));
-
-    // Built fresh each click, same pattern as elsewhere in the app —
-    // clicking the visible button spawns a real <input type="file"> in JS
-    // and clicks it immediately, rather than relying on a hidden <input>
-    // tucked inside a <label> that gets torn down and rebuilt every time
-    // this card re-renders (after every upload, delete, etc.). This is
-    // always usable — every click opens a fresh file picker, so a
-    // question can end up with any number of documents, one upload (or
-    // one multi-select) at a time.
-    card.querySelector(`[data-question-add-doc="${q.id}"]`).addEventListener("click", () => pickQuestionDocuments(q.id));
-
-    // Add Link -- toggles the small inline form open/closed rather than
-    // opening a file picker, since a link has no file to select.
-    const linkForm = card.querySelector(`#rq-link-form-${q.id}`);
-    card.querySelector(`[data-question-add-link="${q.id}"]`).addEventListener("click", () => {
-      linkForm.classList.toggle("open");
-      if (linkForm.classList.contains("open")) card.querySelector(`#rq-link-label-${q.id}`).focus();
-    });
-    card.querySelector(`[data-question-cancel-link="${q.id}"]`).addEventListener("click", () => {
-      linkForm.classList.remove("open");
-      card.querySelector(`#rq-link-label-${q.id}`).value = "";
-      card.querySelector(`#rq-link-url-${q.id}`).value = "";
-    });
-    card.querySelector(`[data-question-save-link="${q.id}"]`).addEventListener("click", () => saveQuestionLink(q.id));
-
-    wireDocRowHandlers(card);
-  }
-
-  function wireUnsortedCard(area) {
-    const card = document.querySelector(`[data-unsorted-card="${area}"]`);
-    wireDocRowHandlers(card);
-  }
-
   function wireDocRowHandlers(scopeEl) {
     // Only file rows (rendered as a <span data-path>) need this -- link
     // rows render as a real <a href> and open on their own, no signed URL
@@ -1420,8 +1300,7 @@
         const { error } = await sb.from("documents").update({ visibility: next }).eq("id", btn.dataset.id);
         if (error) { showBanner("Couldn't update visibility: " + error.message, "error"); return; }
         await loadDocuments();
-        RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
-        renderResearchProgress();
+        RESEARCH_AREAS.forEach(([key]) => renderAreaDocs(key));
       });
     });
     scopeEl.querySelectorAll("[data-delete-doc]").forEach((btn) => {
@@ -1431,8 +1310,7 @@
         const { error } = await sb.from("documents").delete().eq("id", btn.dataset.deleteDoc);
         if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
         await loadDocuments();
-        RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
-        renderResearchProgress();
+        RESEARCH_AREAS.forEach(([key]) => renderAreaDocs(key));
       });
     });
     scopeEl.querySelectorAll(".rq-move-btn").forEach((btn) => {
@@ -1444,10 +1322,8 @@
   // is already sorted (sort_order asc, uploaded_at desc) by loadDocuments(),
   // so filtering it preserves that order without a re-sort.
   function docsForScope(scope) {
-    const [type, id] = scope.split(":");
-    return type === "question"
-      ? allDocuments.filter((d) => d.question_id === id)
-      : allDocuments.filter((d) => d.research_area === id && !d.question_id);
+    const [, id] = scope.split(":");
+    return allDocuments.filter((d) => d.research_area === id);
   }
 
   // Swaps sort_order with the adjacent row and re-renders -- this is the
@@ -1466,75 +1342,38 @@
     ]);
     if (r1.error || r2.error) { showBanner("Couldn't reorder: " + (r1.error || r2.error).message, "error"); return; }
     await loadDocuments();
-    RESEARCH_AREAS.forEach(([key]) => renderQuestionsForArea(key));
+    RESEARCH_AREAS.forEach(([key]) => renderAreaDocs(key));
   }
 
   // Next sort_order for a newly added document/link -- appended to the end
-  // of whatever's already there for this question, same as always dropping
+  // of whatever's already there for this area, same as always dropping
   // a new item at the bottom of a list.
-  function nextSortOrderForQuestion(questionId) {
-    const existing = allDocuments.filter((d) => d.question_id === questionId);
+  function nextSortOrderForArea(area) {
+    const existing = allDocuments.filter((d) => d.research_area === area);
     return existing.length ? Math.max(...existing.map((d) => d.sort_order || 0)) + 1 : 1;
   }
 
-  async function addResearchQuestion(area) {
-    const existing = researchQuestions.filter((q) => q.research_area === area);
-    const { error } = await sb.from("client_research_questions").insert({
-      client_id: currentClient.id,
-      research_area: area,
-      sort_order: existing.length + 1,
-    });
-    if (error) { showBanner("Couldn't add question: " + error.message, "error"); return; }
-    await loadResearchQuestions();
-  }
-
-  // Runs once, right when an area's accordion is first opened. If it's
-  // completely empty — no questions, and nothing left over from the old
-  // flat-upload days either — silently create a blank Question 1 so it's
-  // already there to type into. Once it exists (even blank), this is a
-  // no-op on every later open — it never adds a second one on its own,
-  // and a blank one left untouched never shows on the client dashboard
-  // (see 034_hide_blank_research_questions.sql).
-  async function ensureFirstQuestion(area) {
-    const hasQuestions = researchQuestions.some((q) => q.research_area === area);
-    const hasUnsorted = allDocuments.some((d) => d.research_area === area && !d.question_id);
-    if (hasQuestions || hasUnsorted) return;
-    await addResearchQuestion(area);
-  }
-
-  async function deleteResearchQuestion(id) {
-    if (!confirm("Delete this question? Any documents uploaded under it will be deleted too.")) return;
-    const docsToRemove = allDocuments.filter((d) => d.question_id === id).map((d) => d.storage_path);
-    if (docsToRemove.length) await sb.storage.from("client-documents").remove(docsToRemove);
-    const { error } = await sb.from("client_research_questions").delete().eq("id", id);
-    if (error) { showBanner("Couldn't delete question: " + error.message, "error"); return; }
-    await loadDocuments();
-    await loadResearchQuestions();
-  }
-
-  function pickQuestionDocuments(questionId) {
+  function pickAreaDocuments(area) {
     const picker = document.createElement("input");
     picker.type = "file";
     picker.multiple = true;
-    picker.addEventListener("change", () => { if (picker.files.length) uploadQuestionDocuments(questionId, picker.files); });
+    picker.addEventListener("change", () => { if (picker.files.length) uploadAreaDocuments(area, picker.files); });
     picker.click();
   }
 
-  // A question can have any number of documents attached — this always
-  // takes a FileList (even a single-file selection is a FileList of 1) so
-  // one trip through the file picker can attach several at once.
-  async function uploadQuestionDocuments(questionId, fileList) {
-    const q = researchQuestions.find((x) => x.id === questionId);
-    let nextSortOrder = nextSortOrderForQuestion(questionId);
+  // An area can have any number of documents attached — this always takes
+  // a FileList (even a single-file selection is a FileList of 1) so one
+  // trip through the file picker can attach several at once.
+  async function uploadAreaDocuments(area, fileList) {
+    let nextSortOrder = nextSortOrderForArea(area);
     const errors = [];
     for (const file of Array.from(fileList)) {
-      const path = `clients/${currentClient.id}/questions/${questionId}/${Date.now()}-${sanitizeFilename(file.name)}`;
+      const path = `clients/${currentClient.id}/research/${area}/${Date.now()}-${sanitizeFilename(file.name)}`;
       const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file, { contentType: contentTypeFor(file) });
       if (uploadErr) { errors.push(`${file.name}: ${uploadErr.message}`); continue; }
       const { error: rowErr } = await sb.from("documents").insert({
         client_id: currentClient.id,
-        question_id: questionId,
-        research_area: q ? q.research_area : null,
+        research_area: area,
         file_name: file.name,
         storage_path: path,
         visibility: "internal",
@@ -1545,19 +1384,17 @@
     }
     if (errors.length) showBanner("Some files didn't upload: " + errors.join("; "), "error");
     await loadDocuments();
-    if (q) renderQuestionsForArea(q.research_area);
-    renderResearchProgress();
+    renderAreaDocs(area);
   }
 
-  // A question's answer can be a link instead of (or alongside) an
+  // A research area's findings can be a link instead of (or alongside) an
   // uploaded file -- Greg (8/18/26): "some answers are pages inside this
   // app itself, like the Listening Post, not a document to upload." Stored
   // as a documents row same as a file, just with url set and storage_path
-  // left null, so it counts toward "answered" the same way a file does.
-  async function saveQuestionLink(questionId) {
-    const q = researchQuestions.find((x) => x.id === questionId);
-    const labelInput = $(`rq-link-label-${questionId}`);
-    const urlInput = $(`rq-link-url-${questionId}`);
+  // left null.
+  async function saveAreaLink(area) {
+    const labelInput = $(`ra-link-label-${area}`);
+    const urlInput = $(`ra-link-url-${area}`);
     let url = urlInput.value.trim();
     if (!url) { showBanner("Enter a URL first.", "error"); return; }
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
@@ -1565,22 +1402,22 @@
 
     const { error } = await sb.from("documents").insert({
       client_id: currentClient.id,
-      question_id: questionId,
-      research_area: q ? q.research_area : null,
+      research_area: area,
       file_name: label,
       storage_path: null,
       url,
       visibility: "internal",
       uploaded_by: currentUser.id,
-      sort_order: nextSortOrderForQuestion(questionId),
+      sort_order: nextSortOrderForArea(area),
     });
     if (error) { showBanner("Couldn't add link: " + error.message, "error"); return; }
 
     labelInput.value = "";
     urlInput.value = "";
+    const form = $(`ra-link-form-${area}`);
+    if (form) form.classList.remove("open");
     await loadDocuments();
-    if (q) renderQuestionsForArea(q.research_area);
-    renderResearchProgress();
+    renderAreaDocs(area);
   }
 </script>
 </body>

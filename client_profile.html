@@ -1770,15 +1770,18 @@
   // button with a Team Lead-sent email instead), so this just runs
   // whenever Create Email is clicked.
   async function ensureEvalLinkUrl() {
+    // Greg (8/26/26): research pages no longer track per-question text --
+    // specialists just upload documents/links under a research area. So the
+    // gate here is simply "has at least one research document been
+    // uploaded for this client," instead of checking for question text.
     const { count, error: qErr } = await sb
-      .from("client_research_questions")
+      .from("documents")
       .select("id", { count: "exact", head: true })
       .eq("client_id", currentClient.id)
-      .not("question", "is", null)
-      .neq("question", "");
-    if (qErr) { showBanner("Couldn't check research questions: " + qErr.message, "error"); return null; }
+      .not("research_area", "is", null);
+    if (qErr) { showBanner("Couldn't check research documents: " + qErr.message, "error"); return null; }
     if (!count) {
-      showBanner("Add at least one research question (on the Research page or Step 9 above) before emailing the evaluation link.", "error");
+      showBanner("Upload at least one research document or link (on the Research page) before emailing the evaluation link.", "error");
       return null;
     }
 
