@@ -1053,13 +1053,16 @@
     $("ed-no-contacts").classList.add("hidden");
     $("email-draft-overlay").classList.add("open");
 
-    const [{ data: contacts }, { data: questions }, { data: team }] = await Promise.all([
+    const [{ data: contacts }, { data: areaDocs }, { data: team }] = await Promise.all([
       sb.from("client_contacts").select("name, email").eq("client_id", client.id),
-      sb.from("client_research_questions")
-        .select("id, research_area, question")
+      // Greg (8/26/26): research pages no longer track per-question text --
+      // a research area counts as "in progress" once any document/link has
+      // been uploaded under it, so this just checks which areas have at
+      // least one documents row instead of reading question text.
+      sb.from("documents")
+        .select("research_area")
         .eq("client_id", client.id)
-        .order("research_area")
-        .order("sort_order"),
+        .not("research_area", "is", null),
       // Same EG Team roster shown in the Dashboard Edit "Team Members"
       // accordion -- whoever's actually assigned via client_assignments.
       sb.from("client_assignments")
