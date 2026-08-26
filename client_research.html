@@ -804,13 +804,9 @@
     return FILE_TYPE_ICONS[ext] || "\u{1F4C4}";
   }
 
-  // Some browsers/OSes hand back an empty (or generic) File.type for
-  // certain extensions -- most notably .html/.htm -- and Supabase Storage
-  // falls back to text/plain when no contentType is given, which is why
-  // an uploaded HTML "mini app" opened as raw source in a new tab instead
-  // of rendering (Greg, 8/26/26). Extension wins for html/htm specifically
-  // since that mismatch is the one that actually breaks something; every
-  // other type trusts the browser's reported type first.
+  // Declaring the right Content-Type at upload time (belt-and-suspenders
+  // alongside openStoredDocument() below, which is what actually fixes
+  // rendering -- see its comment for the real root cause).
   const MIME_BY_EXT = {
     html: "text/html", htm: "text/html",
     pdf: "application/pdf",
@@ -831,6 +827,34 @@
     const ext = dot === -1 ? "" : name.slice(dot + 1);
     if (ext === "html" || ext === "htm") return "text/html";
     return file.type || MIME_BY_EXT[ext] || "application/octet-stream";
+  }
+
+  // Root cause of "uploaded HTML opens as raw source instead of running"
+  // (Greg, 8/26/26): Supabase Storage's own server-side MIME detection
+  // runs off magic bytes, and text-based formats like .html/.svg don't
+  // have any -- so no matter what Content-Type the upload declares, the
+  // stored object gets served back as text/plain. Confirmed directly
+  // against this project's bucket; declaring the right type at upload
+  // time (contentTypeFor above) does not change this. Binary formats
+  // (pdf, docx, xlsx, pptx, images) DO have detectable magic bytes and
+  // already open/download correctly, so only html/htm/svg need the
+  // workaround: download the raw bytes ourselves and hand the browser a
+  // freshly-typed Blob instead of trusting the signed URL's header.
+  const TEXT_RENDER_TYPES = { html: "text/html", htm: "text/html", svg: "image/svg+xml" };
+  async function openStoredDocument(path) {
+    const name = (path.split("/").pop() || "").toLowerCase();
+    const dot = name.lastIndexOf(".");
+    const ext = dot === -1 ? "" : name.slice(dot + 1);
+    if (TEXT_RENDER_TYPES[ext]) {
+      const { data, error } = await sb.storage.from("client-documents").download(path);
+      if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+      const blob = new Blob([data], { type: TEXT_RENDER_TYPES[ext] });
+      window.open(URL.createObjectURL(blob), "_blank");
+      return;
+    }
+    const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, 60);
+    if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+    window.open(data.signedUrl, "_blank");
   }
 
   function renderResourceVaultRows(rows) {
@@ -938,11 +962,7 @@
     });
 
     list.querySelectorAll(".rv-file-link").forEach((el) => {
-      el.addEventListener("click", async () => {
-        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(el.dataset.path, 60);
-        if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
-        window.open(data.signedUrl, "_blank");
-      });
+      el.addEventListener("click", () => openStoredDocument(el.dataset.path));
     });
 
     list.querySelectorAll("[data-unlink-id]").forEach((btn) => {
@@ -1392,11 +1412,7 @@
     // rows render as a real <a href> and open on their own, no signed URL
     // to fetch.
     scopeEl.querySelectorAll(".rq-doc-link[data-path]").forEach((el) => {
-      el.addEventListener("click", async () => {
-        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(el.dataset.path, 60);
-        if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
-        window.open(data.signedUrl, "_blank");
-      });
+      el.addEventListener("click", () => openStoredDocument(el.dataset.path));
     });
     scopeEl.querySelectorAll(".rq-visibility-toggle").forEach((btn) => {
       btn.addEventListener("click", async () => {

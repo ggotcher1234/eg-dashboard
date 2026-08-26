@@ -447,13 +447,29 @@
     return FILE_TYPE_ICONS[fileExtension(path)] || "\u{1F4C4}";
   }
 
+  // Text-based formats (html, htm, svg) have no magic bytes for Supabase
+  // Storage's server-side MIME sniffer to detect, so no matter what
+  // Content-Type the upload declared, the object gets served back as
+  // text/plain -- confirmed directly against this project's bucket
+  // (Greg, 8/26/26). That made an uploaded HTML "mini app" open as raw
+  // source instead of running. Binary formats (pdf, docx, xlsx, pptx,
+  // images) sniff correctly and don't need this detour.
+  const TEXT_RENDER_TYPES = { html: "text/html", htm: "text/html", svg: "image/svg+xml" };
   function openSignedDoc(path) {
     return async () => {
+      const ext = fileExtension(path);
+      if (TEXT_RENDER_TYPES[ext]) {
+        const { data, error } = await sb.storage.from("client-documents").download(path);
+        if (error) { alert("Couldn't open this file: " + error.message); return; }
+        const blob = new Blob([data], { type: TEXT_RENDER_TYPES[ext] });
+        window.open(URL.createObjectURL(blob), "_blank");
+        return;
+      }
       // 300s (not 60s) so the Office viewer has time to fetch the file
       // itself before the link expires.
       const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, 300);
       if (error) { alert("Couldn't open this file: " + error.message); return; }
-      if (OFFICE_VIEWER_EXTENSIONS.includes(fileExtension(path))) {
+      if (OFFICE_VIEWER_EXTENSIONS.includes(ext)) {
         window.open(`https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(data.signedUrl)}`, "_blank");
         return;
       }
