@@ -399,16 +399,16 @@
       <div class="toolbar-right">
         <span class="count" id="row-count"></span>
         <button class="btn-secondary btn-sm" id="application-links-btn" onclick="location.href='program_application_links.html'">Application Links</button>
-        <button class="btn-secondary btn-sm hidden" id="contacts-csv-export-btn">&#8595; Export Contacts CSV</button>
-        <button class="btn-secondary btn-sm hidden" id="contacts-csv-import-btn">&#8593; Import Contacts CSV</button>
-        <input type="file" accept=".csv,text/csv" id="contacts-csv-file" class="csv-file-input" />
-        <!-- Contract Signer / Program Administrator / Program Finance --
-             separate CSV pair from the per-person Contacts one above: this
-             one is keyed one-row-per-Program and overwrites those 3 text
-             blocks on econ_dev_companies, matching Chris's periodic "EG
-             Programs Contact Info" doc (Greg, 8/26/26). -->
-        <button class="btn-secondary btn-sm hidden" id="program-info-csv-export-btn">&#8595; Export Program Info CSV</button>
-        <button class="btn-secondary btn-sm hidden" id="program-info-csv-import-btn">&#8593; Import Program Info CSV</button>
+        <!-- Contract Signer / Program Administrator / Program Finance CSV --
+             one-row-per-Program, overwrites those 3 text blocks on
+             econ_dev_companies, matching Chris's periodic "EG Programs
+             Contact Info" doc. Greg (8/26/26): trimmed the toolbar down to
+             just one Export/Import pair -- this replaced the older
+             per-person Contacts CSV pair, which is now gone from here (the
+             Contacts list itself, inside each Program's Detail popup, is
+             unaffected and still editable one at a time). -->
+        <button class="btn-secondary btn-sm hidden" id="program-info-csv-export-btn">&#8595; Export CSV</button>
+        <button class="btn-secondary btn-sm hidden" id="program-info-csv-import-btn">&#8593; Import CSV</button>
         <input type="file" accept=".csv,text/csv" id="program-info-csv-file" class="csv-file-input" />
         <button class="btn-primary hidden" id="add-btn">+ Add Program</button>
       </div>
@@ -564,16 +564,12 @@
       $("add-btn").classList.remove("hidden");
       $("actions-header").classList.remove("hidden");
       $("readonly-note").classList.add("hidden");
-      $("contacts-csv-export-btn").classList.remove("hidden");
-      $("contacts-csv-import-btn").classList.remove("hidden");
       $("program-info-csv-export-btn").classList.remove("hidden");
       $("program-info-csv-import-btn").classList.remove("hidden");
     } else {
       $("add-btn").classList.add("hidden");
       $("actions-header").classList.add("hidden");
       $("readonly-note").classList.remove("hidden");
-      $("contacts-csv-export-btn").classList.add("hidden");
-      $("contacts-csv-import-btn").classList.add("hidden");
       $("program-info-csv-export-btn").classList.add("hidden");
       $("program-info-csv-import-btn").classList.add("hidden");
     }
@@ -1280,8 +1276,6 @@
     return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
   }
 
-  const CONTACTS_CSV_HEADERS = ["Partner Code", "Partner Name", "Name", "Title", "Email", "Phone"];
-
   // Loose match for Partner Name: lowercase, drop parenthetical suffixes like
   // "(West Virginia)", strip punctuation, collapse whitespace. Lets a CSV
   // sourced from an external doc (different capitalization/punctuation than
@@ -1293,97 +1287,6 @@
       .replace(/[^a-z0-9]+/g, " ")
       .trim();
   }
-
-  $("contacts-csv-export-btn").addEventListener("click", () => {
-    const partnerById = Object.fromEntries(allPartners.map((p) => [p.id, p]));
-    const lines = [CONTACTS_CSV_HEADERS.map(csvField).join(",")];
-    for (const c of allContacts) {
-      const p = partnerById[c.partner_id];
-      lines.push([p ? p.code : "", p ? p.name : "", c.name, c.title, c.email, c.phone].map(csvField).join(","));
-    }
-    const blob = new Blob([lines.join("\r\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "econ-dev-partner-contacts.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  });
-
-  $("contacts-csv-import-btn").addEventListener("click", () => $("contacts-csv-file").click());
-
-  $("contacts-csv-file").addEventListener("change", async () => {
-    const fileInput = $("contacts-csv-file");
-    const file = fileInput.files[0];
-    if (!file) return;
-
-    const text = await file.text();
-    let allRows = parseCsv(text);
-    if (!allRows.length) { showBanner("That CSV looks empty.", "error"); fileInput.value = ""; return; }
-
-    // Drop a header row if present (case-insensitive, so a prior export round-trips).
-    if (allRows[0][0] && allRows[0][0].trim().toLowerCase() === CONTACTS_CSV_HEADERS[0].toLowerCase()) {
-      allRows = allRows.slice(1);
-    }
-
-    const partnerByCode = {};
-    const partnerByNormName = {};
-    for (const p of allPartners) {
-      partnerByCode[p.code.trim().toLowerCase()] = p;
-      partnerByNormName[normalizePartnerName(p.name)] = p;
-    }
-
-    const toInsert = [];
-    const unmatchedLabels = new Set();
-    let skippedBlank = 0;
-
-    allRows.forEach((r) => {
-      const [codeRaw, partnerNameRaw, nameRaw, titleRaw, emailRaw, phoneRaw] = r;
-      const code = (codeRaw || "").trim();
-      const partnerNameCsv = (partnerNameRaw || "").trim();
-      const name = (nameRaw || "").trim();
-      if (!code && !partnerNameCsv && !name) { skippedBlank++; return; }
-
-      // Match by code first, fall back to normalized partner name.
-      let partner = code ? partnerByCode[code.toLowerCase()] : null;
-      if (!partner && partnerNameCsv) partner = partnerByNormName[normalizePartnerName(partnerNameCsv)];
-
-      if (!partner) { unmatchedLabels.add(code || partnerNameCsv || "(blank)"); return; }
-      if (!name) { skippedBlank++; return; }
-      toInsert.push({
-        organization_id: currentUser.organization_id,
-        partner_id: partner.id,
-        name,
-        title: (titleRaw || "").trim() || null,
-        email: (emailRaw || "").trim() || null,
-        phone: (phoneRaw || "").trim() || null,
-        sort_order: contactsForPartner(partner.id).length + toInsert.filter((x) => x.partner_id === partner.id).length,
-      });
-    });
-
-    fileInput.value = "";
-
-    if (!toInsert.length) {
-      showBanner(
-        unmatchedLabels.size
-          ? `No rows imported — none of the partners matched an existing partner (${[...unmatchedLabels].slice(0, 5).join(", ")}).`
-          : "No rows found in that CSV to import.",
-        "error"
-      );
-      return;
-    }
-
-    const { error } = await sb.from("econ_dev_partner_contacts").insert(toInsert);
-    if (error) {
-      showBanner("Couldn't import CSV: " + error.message, "error");
-      return;
-    }
-
-    let msg = `Imported ${toInsert.length} contact${toInsert.length === 1 ? "" : "s"}.`;
-    if (unmatchedLabels.size) msg += ` Skipped ${unmatchedLabels.size} row(s) that didn't match an existing partner (${[...unmatchedLabels].slice(0, 5).join(", ")}).`;
-    showBanner(msg, "success");
-    await loadPartners();
-  });
 
   // ---------- CSV import/export for the Contract Signer / Program
   // Administrator / Program Finance blocks ----------
