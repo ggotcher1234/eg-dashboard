@@ -1085,69 +1085,61 @@
     const mySlot = currentUser ? teamRows.find((r) => r.user_id === currentUser.id) : null;
     emailSpecialtyLabel = mySlot ? (SPECIALTY_LABELS[mySlot.specialty_type] || mySlot.specialty_type) : "";
 
-    // Collapse to at most ONE dropdown entry per research area (Greg,
-    // 8/22/26: "we don't need two inbound and two outbound selections --
-    // it's one or the other") -- a client can have more than one question
-    // row saved under the same area, but the dropdown only ever names the
-    // category ("Outbound Marketing Question"), so two rows in the same
-    // area rendered as two identical-looking options. Keeps the first one
-    // per area in the query's existing sort_order.
-    const seenAreas = new Set();
-    emailQuestions = (questions || [])
-      .filter((q) => (q.question || "").trim())
-      .filter((q) => {
-        if (seenAreas.has(q.research_area)) return false;
-        seenAreas.add(q.research_area);
-        return true;
-      });
-    if (emailQuestions.length) {
-      $("ed-question").innerHTML = emailQuestions.map((q) => {
-        const label = EMAIL_QUESTION_DROPDOWN_LABELS[q.research_area]
-          || `${RESEARCH_AREA_LABELS[q.research_area] || q.research_area} Question`;
-        return `<option value="${q.id}">${escapeHtml(label)}</option>`;
+    // Greg (8/26/26): the dropdown just lists which of the 4 fixed research
+    // areas already have at least one document uploaded -- no more reading
+    // question text, since specialists no longer write it. Order follows
+    // RESEARCH_AREAS (not upload order) so it's stable and predictable.
+    const areasWithDocs = new Set((areaDocs || []).map((d) => d.research_area));
+    emailAreas = RESEARCH_AREAS.map(([key]) => key).filter((key) => areasWithDocs.has(key));
+    if (emailAreas.length) {
+      $("ed-question").innerHTML = emailAreas.map((key) => {
+        const label = EMAIL_QUESTION_DROPDOWN_LABELS[key] || `${RESEARCH_AREA_LABELS[key] || key} Question`;
+        return `<option value="${key}">${escapeHtml(label)}</option>`;
       }).join("");
-      await loadDocsForSelectedQuestion();
+      await loadDocsForSelectedArea();
     } else {
-      $("ed-question").innerHTML = `<option value="">(no research questions yet — add one on the Research page first)</option>`;
-      emailQuestionDocs = {};
+      $("ed-question").innerHTML = `<option value="">(no research documents yet — upload one on the Research page first)</option>`;
+      emailAreaDocs = {};
     }
 
     composeEmailBody();
     updateMailtoHref();
   }
 
-  async function loadDocsForSelectedQuestion() {
-    const qid = $("ed-question").value;
-    if (!qid || emailQuestionDocs[qid]) return;
+  async function loadDocsForSelectedArea() {
+    const area = $("ed-question").value;
+    if (!area || emailAreaDocs[area]) return;
     const { data: docs } = await sb.from("documents")
       .select("file_name, url")
-      .eq("question_id", qid)
+      .eq("client_id", activeClient.id)
+      .eq("research_area", area)
       .eq("visibility", "client_facing");
-    emailQuestionDocs[qid] = docs || [];
+    emailAreaDocs[area] = docs || [];
   }
 
-  // Rebuilds Subject + Body from the selected question, the typed-in brief
-  // answer, and that question's own attached client-facing documents/links --
-  // NOT a generic "recently added files" list, so the attachment mentioned
-  // in the email always matches the question actually being discussed.
+  // Rebuilds Subject + Body from the selected research area, the typed-in
+  // brief answer, and that area's own attached client-facing
+  // documents/links -- NOT a generic "recently added files" list, so the
+  // attachment mentioned in the email always matches the area actually
+  // being discussed.
   function composeEmailBody() {
     if (!activeClient) return;
-    const q = emailQuestions.find((q) => q.id === $("ed-question").value);
+    const area = $("ed-question").value;
     const firstContactName = emailContacts[0] && emailContacts[0].name ? emailContacts[0].name.split(" ")[0] : "there";
     const specialistLabel = emailSpecialtyLabel ? `${emailSpecialtyLabel} specialist` : "specialist";
     const introBy = emailTeamLeadName ? `As ${emailTeamLeadName} mentioned, ` : "";
-    const areaLabel = q ? (RESEARCH_AREA_LABELS[q.research_area] || q.research_area) : "";
+    const areaLabel = area ? (RESEARCH_AREA_LABELS[area] || area) : "";
     const answer = $("ed-answer").value.trim();
-    const docs = q ? (emailQuestionDocs[q.id] || []) : [];
+    const docs = area ? (emailAreaDocs[area] || []) : [];
     const contactBits = [currentUser && currentUser.email, currentUser && currentUser.phone].filter(Boolean).join(" or ");
 
     const programCode = activeClient.econ_dev_companies && activeClient.econ_dev_companies.code;
-    const reportLabel = q ? (EMAIL_SUBJECT_REPORT_LABELS[q.research_area] || areaLabel) : "";
-    $("ed-subject").value = q
+    const reportLabel = area ? (EMAIL_SUBJECT_REPORT_LABELS[area] || areaLabel) : "";
+    $("ed-subject").value = area
       ? `${programCode ? `(${programCode}) ` : ""}${activeClient.name} - ${reportLabel} Report`
       : `Update on your Economic Gardening research — ${activeClient.name}`;
 
-    if (!q) {
+    if (!area) {
       $("ed-body").value = `Hi ${firstContactName},
 
 Wanted to share a quick update on your Economic Gardening engagement.
@@ -1163,19 +1155,16 @@ ${currentUser ? currentUser.full_name : ""}`;
 
     // Points to their EG Dashboard instead of claiming a literal email
     // attachment (Greg, 8/22/26) -- the document actually lives on the
-    // client-facing Dashboard (client_public.html) under this question's
-    // research area, not as a file bolted onto this message.
+    // client-facing Dashboard (client_public.html) under this research
+    // area, not as a file bolted onto this message.
     const shareUrl = activeClient.slug ? new URL(`c/${encodeURIComponent(activeClient.slug)}`, PUBLIC_SITE_BASE).href : "";
     const attachLine = docs.length
       ? `I've uploaded the research document${docs.length > 1 ? "s" : ""} to your EG Dashboard for you to review${shareUrl ? `:\n${shareUrl}` : "."}`
-      : `I've uploaded the research document to your EG Dashboard for you to review${shareUrl ? ` (${shareUrl})` : ""} — add it to this question on the Research page first if it isn't there yet.`;
+      : `I've uploaded the research document to your EG Dashboard for you to review${shareUrl ? ` (${shareUrl})` : ""} — mark it client-facing under this research area on the Research page first if it isn't there yet.`;
 
     $("ed-body").value = `Hi ${firstContactName}:
 
 ${introBy}I'm the ${specialistLabel} working on your ${areaLabel.toLowerCase()} in this Economic Gardening engagement.
-
-The question I've been researching:
-"${q.question}"
 
 My brief answer:
 ${answer || "(a sentence or two goes here — see the Brief answer box above)"}
