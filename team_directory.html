@@ -541,7 +541,7 @@
       <thead>
         <tr>
           <th class="sortable" data-sort="name" id="th-name">Roster Member<span class="sort-arrow"></span></th>
-          <th class="sortable" data-sort="specialty" id="th-specialty" title="Sorted alphabetically by each person's combined specialty list">Specialties<span class="sort-arrow"></span></th>
+          <th class="sortable" data-sort="address" id="th-address">Address<span class="sort-arrow"></span></th>
           <th style="width:150px; white-space:nowrap;">Phone</th>
           <th>Email</th>
           <th style="width:70px;"></th>
@@ -1004,6 +1004,16 @@
     }
     return `<div class="specialty-chip-row">${html}</div>`;
   }
+  // Roster table's Address column (Greg/Chris, 8/26/26) -- replaced the
+  // Specialties column, which is still filterable/searchable but no longer
+  // shown as its own column. renderSpecialtyChips() above is kept since the
+  // profile modal's specialty picker still needs specialtyLabelsForDisplay,
+  // but the table row now calls this instead.
+  function renderAddressCell(u) {
+    return u.address
+      ? `<span>${escapeHtml(u.address)}</span>`
+      : '<span class="cell-muted">Not provided</span>';
+  }
 
   function initials(name) {
     return (name || "?")
@@ -1334,7 +1344,7 @@
   function sortValue(u, field) {
     if (field === "roster") return rosterRank(u);
     if (field === "name") return (u.full_name || "").toLowerCase();
-    if (field === "specialty") return specialtiesSortValue(u);
+    if (field === "address") return (u.address || "").toLowerCase();
     return "";
   }
 
@@ -1354,7 +1364,7 @@
   }
 
   function updateSortIndicators() {
-    ["name", "specialty"].forEach((field) => {
+    ["name", "address"].forEach((field) => {
       const arrow = $(`th-${field}`).querySelector(".sort-arrow");
       arrow.textContent = field === sortField ? (sortDir === 1 ? "▲" : "▼") : "";
     });
@@ -1492,7 +1502,7 @@
             </div>
           </div>
         </td>
-        <td>${renderSpecialtyChips(u)}</td>
+        <td>${renderAddressCell(u)}</td>
         <td>${phoneDisplay
           ? `<a class="contact-link" href="${telHref(u.phone)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>${escapeHtml(phoneDisplay)}</a>`
           : '<span class="cell-muted">Not provided</span>'}</td>
