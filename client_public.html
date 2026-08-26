@@ -251,39 +251,37 @@
     <div class="research-grid" id="research-grid"></div>
 
     <div class="card">
-      <!-- Company Info and Top Business Issues used to sit as plain always-
-           visible text further down the masthead card. Greg (8/21/26) asked
-           for them as the same green roll-up accordion bars as Client
-           Contacts / EG Team / Resource Vault below -- same
-           .action-bar/.action-body classes, just wired here directly since
-           their content isn't a list (so they don't fit the
-           ACTION_BAR_DEFS/renderActionBars loop) -- and (8/21/26) moved
-           directly under the logo/name, ahead of the rest of the masthead
-           details. -->
+      <!-- Company Info used to be its own bar with Top Business Issues as a
+           separate bar right after it, plus NAICS/website/socials and the
+           Competitors/Top Customers/Next Steps stat pills all living as
+           plain siblings below both. Chris asked (8/26/26) for all of that
+           to roll up into the one Company Info accordion instead of sitting
+           as separate top-level bars/pills -- so everything below now
+           lives inside bar-company_info-body, and only the single
+           "Company Info" bar toggles it all open/closed. -->
       <div id="company-info-bar-wrap" class="hidden">
         <div class="action-bar" id="bar-company_info">
           <span>&#127970; Company Info</span>
           <span class="ab-chevron">&#9656;</span>
         </div>
-        <div class="action-body" id="bar-company_info-body"></div>
-      </div>
+        <div class="action-body" id="bar-company_info-body">
+          <div id="company-description-slot"></div>
 
-      <div id="top-issues-bar-wrap" class="hidden">
-        <div class="action-bar" id="bar-top_issues">
-          <span>&#9888;&#65039; Top Business Issues</span>
-          <span class="ab-chevron">&#9656;</span>
+          <div id="top-issues-section" class="hidden" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+            <div style="font-weight:700; font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:6px;">&#9888;&#65039; Top Business Issues</div>
+            <div class="company-description" id="top-issues-content"></div>
+          </div>
+
+          <div class="company-naics hidden" id="company-naics"></div>
+          <a class="company-website hidden" id="company-website" target="_blank" rel="noopener"></a>
+          <div class="company-socials" id="company-socials"></div>
+          <div class="stat-pills" id="stat-pills"></div>
+          <div id="stat-pill-details">
+            <div class="action-body" id="detail-competitors"></div>
+            <div class="action-body" id="detail-top_customers"></div>
+            <div class="action-body" id="detail-next_steps"></div>
+          </div>
         </div>
-        <div class="action-body" id="bar-top_issues-body"></div>
-      </div>
-
-      <div class="company-naics hidden" id="company-naics"></div>
-      <a class="company-website hidden" id="company-website" target="_blank" rel="noopener"></a>
-      <div class="company-socials" id="company-socials"></div>
-      <div class="stat-pills" id="stat-pills"></div>
-      <div id="stat-pill-details">
-        <div class="action-body" id="detail-competitors"></div>
-        <div class="action-body" id="detail-top_customers"></div>
-        <div class="action-body" id="detail-next_steps"></div>
       </div>
     </div>
 
@@ -531,17 +529,26 @@
     }
 
     if (c.description) {
-      $("company-info-bar-wrap").classList.remove("hidden");
-      $("bar-company_info-body").innerHTML = `<div class="company-description">${renderDescription(c.description)}</div>`;
-      $("bar-company_info").classList.toggle("open", !!expandAll);
-      $("bar-company_info-body").classList.toggle("open", !!expandAll);
+      $("company-description-slot").innerHTML = `<div class="company-description">${renderDescription(c.description)}</div>`;
     }
 
     if (c.top_business_issues) {
-      $("top-issues-bar-wrap").classList.remove("hidden");
-      $("bar-top_issues-body").innerHTML = `<div class="company-description">${renderDescription(c.top_business_issues)}</div>`;
-      $("bar-top_issues").classList.toggle("open", !!expandAll);
-      $("bar-top_issues-body").classList.toggle("open", !!expandAll);
+      $("top-issues-section").classList.remove("hidden");
+      $("top-issues-content").innerHTML = renderDescription(c.top_business_issues);
+    }
+
+    // Everything inside the Company Info accordion now rolls up together
+    // (Greg/Chris, 8/26/26) -- Top Business Issues, NAICS, website, socials,
+    // and the Competitors/Top Customers/Next Steps stat pills all live
+    // inside bar-company_info-body, so the bar itself shows if ANY of that
+    // has content, not just the description. Stat-pill counts come from the
+    // same `row` this function already receives, same as renderStatPills().
+    const hasStats = (row.competitors || []).length || (row.top_customers || []).length || (row.next_steps || []).length;
+    const hasSocials = c.linkedin_url || c.facebook_url || c.instagram_url || c.twitter_url || c.youtube_url;
+    if (c.description || c.top_business_issues || c.naics_codes || c.website_url || hasSocials || hasStats) {
+      $("company-info-bar-wrap").classList.remove("hidden");
+      $("bar-company_info").classList.toggle("open", !!expandAll);
+      $("bar-company_info-body").classList.toggle("open", !!expandAll);
     }
 
     if (c.naics_codes) {
@@ -866,14 +873,14 @@
 
   $("print-btn").addEventListener("click", () => window.print());
 
-  // Company Info / Top Business Issues bars are static markup (not
-  // regenerated per row like the ACTION_BAR_DEFS ones), so they're wired
-  // once here instead of inside renderActionBars.
-  [["bar-company_info", "bar-company_info-body"], ["bar-top_issues", "bar-top_issues-body"]].forEach(([barId, bodyId]) => {
-    $(barId).addEventListener("click", () => {
-      $(barId).classList.toggle("open");
-      $(bodyId).classList.toggle("open");
-    });
+  // Company Info's bar is static markup (not regenerated per row like the
+  // ACTION_BAR_DEFS ones), so it's wired once here instead of inside
+  // renderActionBars. Top Business Issues, NAICS/website/socials, and the
+  // stat pills all live inside its body now (Greg/Chris, 8/26/26) -- there's
+  // no separate Top Business Issues bar anymore.
+  $("bar-company_info").addEventListener("click", () => {
+    $("bar-company_info").classList.toggle("open");
+    $("bar-company_info-body").classList.toggle("open");
   });
 
   init();
