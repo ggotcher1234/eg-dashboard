@@ -32,6 +32,8 @@
   header .sub { font-size: 12px; color: #c9d6e3; margin-top: 2px; }
   header a.back-link { color: #c9d6e3; font-size: 12px; text-decoration: none; }
   header a.back-link:hover { color: #fff; text-decoration: underline; }
+  header a.back-link.disabled-link { opacity: 0.5; pointer-events: none; }
+  header .sub .crumb-sep { margin: 0 6px; opacity: 0.6; }
   #userbox { display: flex; align-items: center; gap: 14px; font-size: 13.5px; }
   #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
 
@@ -265,7 +267,9 @@
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
       <h1>Research</h1>
-      <div class="sub"><a class="back-link" id="header-back-link" href="index.html">← Engagement Workspace</a></div>
+      <div class="sub">
+        <a class="back-link" id="header-back-link" href="index.html">← Engagement Workspace</a><span class="crumb-sep">&middot;</span><a class="back-link" id="header-dashboard-link" href="#" target="_blank" rel="noopener">Engagement Dashboard (Client View) &#8599;</a>
+      </div>
     </div>
     </div>
     <nav class="site-nav">
@@ -438,6 +442,10 @@
 </div>
 
 <script>
+  // Same client-facing share-link base used on Client Profile / Client
+  // Control Center -- kept as a literal constant here too (rather than
+  // imported) since each page in this app is a standalone file.
+  const PUBLIC_SITE_BASE = "https://egdb.netlify.app/";
   const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -671,6 +679,14 @@
     AI_CONTEXT_LABEL = `${client.name} — Research`;
     $("header-back-link").href = `client_control_center.html?client=${client.id}`;
     $("header-back-link").textContent = `← Engagement Workspace`;
+    const dashboardLink = $("header-dashboard-link");
+    if (client.slug) {
+      dashboardLink.href = new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href;
+      dashboardLink.classList.remove("disabled-link");
+    } else {
+      dashboardLink.href = "#";
+      dashboardLink.classList.add("disabled-link");
+    }
     $("p-lifecycle-badge").className = `badge badge-${client.project_status}`;
     $("p-lifecycle-badge").textContent = client.project_status;
 
