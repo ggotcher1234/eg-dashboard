@@ -286,23 +286,6 @@
   .wizard-panel-hint { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
   .wizard-subcard + .wizard-subcard { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
 
-  /* ---------- Research step: same accordion + question-card look as
-     client_research.html, minus the document/link UI (Greg, 8/23/26). ---------- */
-  .wiz-ra-card { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
-  .wiz-ra-card + .wiz-ra-card { margin-top: 0; }
-  .wiz-ra-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; gap: 12px; padding: 14px 16px; }
-  .wiz-ra-header h4 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--navy); }
-  .wiz-ra-chevron { font-size: 13px; color: var(--muted); transition: transform 0.15s ease; flex-shrink: 0; }
-  .wiz-ra-header.open .wiz-ra-chevron { transform: rotate(90deg); }
-  .wiz-ra-progress-badge { font-size: 11.5px; font-weight: 700; color: var(--accent-dark); background: #e9f5ee; padding: 3px 9px; border-radius: 999px; flex-shrink: 0; }
-  .wiz-ra-body { display: none; padding: 0 16px 16px; }
-  .wiz-ra-body.open { display: block; }
-  .rq-question { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; background: #fafbfc; }
-  .rq-question:last-child { margin-bottom: 0; }
-  .rq-question-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 10px; }
-  .rq-question-header .rq-label { font-weight: 700; font-size: 13px; color: var(--text); }
-  .rq-question input[type="text"] { width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; }
-
   .wizard-bottom-bar {
     position: sticky; bottom: 0; background: #fff; border-top: 1px solid var(--border); margin: 22px -20px -100px;
     padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
@@ -741,21 +724,6 @@
               </div>
               <div id="wf-eval-link"></div>
             </div>
-          </div>
-
-          <!-- Step 9: Research Questions -- a fast way to seed the first
-               question or two per category (usually copied straight out of
-               the Controlling Document above) without leaving the Wizard.
-               The full Research page (client_research.html) is still where
-               documents get attached and questions get managed in depth --
-               this is just quick capture (Greg, 8/22/26). GIS is folded
-               into Outbound Marketing, not its own category, per Greg's
-               8/22/26 note. -->
-          <!-- Step 8 (was 9): Research Questions -->
-          <div class="wizard-panel-card wizard-panel hidden" data-step="8">
-            <h3>Research Questions</h3>
-            <div class="wizard-panel-hint">Add a question or two per category, usually straight from the Controlling Document above. To attach documents or links to a question, use the full <a href="#" id="wiz-research-page-link">Research page</a>.</div>
-            <div id="wiz-research-areas"></div>
           </div>
 
         </div>
@@ -1208,7 +1176,6 @@
     $("p-workspace-link").href = `client_workspace.html?client=${client.id}`;
     $("p-app-info-link").href = `client_applications.html?client=${client.id}`;
     $("p-research-link").href = `client_research.html?client=${client.id}`;
-    $("wiz-research-page-link").href = `client_research.html?client=${client.id}`;
     renderShareLink(client);
 
     renderStatusToggle(client);
@@ -1224,7 +1191,6 @@
     renderListSections();
     await Promise.all(LIST_CONFIGS.map((cfg) => loadListSection(cfg)));
     await loadPartnerContactsSection();
-    await loadWizardResearchQuestions(client.id);
 
     // Deep links from other pages (?section=next_steps, ?section=contacts,
     // etc.) land directly on the wizard step that now holds that content,
@@ -1900,154 +1866,6 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     }
   });
 
-  // ---------- Research Questions (Step 9) ----------
-  // Same accordion-per-category layout as the full Research page
-  // (client_research.html) -- one open area at a time, "+ Add Question"
-  // for as many as needed, auto-seeds a blank Question 1 the first time an
-  // empty area is opened. The only thing stripped out here is the
-  // document/link attachment UI -- that still only lives on the full
-  // Research page (Greg, 8/23/26: "why don't we use a version of the full
-  // research page but with only the questions fields"). GIS is folded into
-  // Outbound Marketing, not its own category (Greg, 8/22/26) -- same 4
-  // categories as everywhere else research areas show up.
-  const WIZ_RESEARCH_AREAS = [
-    ["market_dynamics", "Market Research"],
-    ["outbound", "Outbound Marketing"],
-    ["inbound", "Inbound Marketing"],
-    ["watering_holes", "Watering Holes"],
-  ];
-  let wizResearchQuestions = [];
-  let wizOpenResearchArea = null;
-
-  async function loadWizardResearchQuestions(clientId) {
-    const { data, error } = await sb
-      .from("client_research_questions")
-      .select("id, research_area, question, sort_order")
-      .eq("client_id", clientId)
-      .order("research_area")
-      .order("sort_order");
-    if (error) { showBanner("Couldn't load research questions: " + error.message, "error"); return; }
-    wizResearchQuestions = data || [];
-    renderWizResearchAreaSections();
-  }
-
-  function renderWizResearchAreaSections() {
-    const container = $("wiz-research-areas");
-    container.innerHTML = WIZ_RESEARCH_AREAS.map(([area, label]) => {
-      const isOpen = wizOpenResearchArea === area;
-      const count = wizResearchQuestions.filter((q) => q.research_area === area).length;
-      return `
-      <div class="wiz-ra-card">
-        <div class="wiz-ra-header ${isOpen ? "open" : ""}" data-wiz-ra-accordion="${area}">
-          <h4><span class="wiz-ra-chevron">&#9656;</span> ${escapeHtml(label)}</h4>
-          <span class="wiz-ra-progress-badge ${count ? "" : "hidden"}">${count} question${count === 1 ? "" : "s"}</span>
-        </div>
-        <div class="wiz-ra-body ${isOpen ? "open" : ""}" id="wiz-ra-${area}-body">
-          <div id="wiz-ra-${area}-questions"></div>
-          <button type="button" class="btn-secondary btn-sm" data-wiz-add-question="${area}">+ Add Question</button>
-        </div>
-      </div>
-    `;
-    }).join("");
-
-    container.querySelectorAll("[data-wiz-ra-accordion]").forEach((hdr) => {
-      hdr.addEventListener("click", async () => {
-        const area = hdr.dataset.wizRaAccordion;
-        const wasOpen = hdr.classList.contains("open");
-        container.querySelectorAll("[data-wiz-ra-accordion]").forEach((h) => {
-          h.classList.remove("open");
-          $(`wiz-ra-${h.dataset.wizRaAccordion}-body`).classList.remove("open");
-        });
-        if (!wasOpen) {
-          hdr.classList.add("open");
-          $(`wiz-ra-${area}-body`).classList.add("open");
-          wizOpenResearchArea = area;
-          await ensureFirstWizResearchQuestion(area);
-        } else {
-          wizOpenResearchArea = null;
-        }
-      });
-    });
-
-    container.querySelectorAll("[data-wiz-add-question]").forEach((btn) => {
-      btn.addEventListener("click", () => addWizResearchQuestion(btn.dataset.wizAddQuestion));
-    });
-
-    WIZ_RESEARCH_AREAS.forEach(([area]) => renderWizResearchQuestionsForArea(area));
-  }
-
-  function renderWizResearchQuestionsForArea(area) {
-    const el = $(`wiz-ra-${area}-questions`);
-    const questions = wizResearchQuestions
-      .filter((q) => q.research_area === area)
-      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-    if (!questions.length) {
-      el.innerHTML = `<div class="field-hint">No questions yet — use "+ Add Question" below.</div>`;
-      return;
-    }
-    el.innerHTML = questions.map((q, i) => `
-      <div class="rq-question" data-wiz-question-card="${q.id}">
-        <div class="rq-question-header">
-          <span class="rq-label">Question ${i + 1}</span>
-          <button type="button" class="btn-danger icon-btn" data-wiz-delete-question="${q.id}" title="Delete question">&times;</button>
-        </div>
-        <input type="text" data-wiz-question-input="${q.id}" placeholder="Enter the research question — usually straight from the Controlling Document" value="${escapeHtml(q.question || "")}" />
-      </div>
-    `).join("");
-
-    questions.forEach((q) => {
-      const card = el.querySelector(`[data-wiz-question-card="${q.id}"]`);
-      const input = card.querySelector(`[data-wiz-question-input="${q.id}"]`);
-      const original = input.value;
-      input.addEventListener("blur", async () => {
-        const value = input.value.trim();
-        if (value === original) return;
-        const { error } = await sb.from("client_research_questions").update({ question: value || null }).eq("id", q.id);
-        if (error) { showBanner("Couldn't save question: " + error.message, "error"); input.value = original; return; }
-        q.question = value || null;
-      });
-      card.querySelector(`[data-wiz-delete-question="${q.id}"]`).addEventListener("click", () => deleteWizResearchQuestion(q.id));
-    });
-  }
-
-  async function addWizResearchQuestion(area) {
-    const existing = wizResearchQuestions.filter((q) => q.research_area === area);
-    const { data, error } = await sb.from("client_research_questions").insert({
-      client_id: currentClient.id,
-      research_area: area,
-      sort_order: existing.length + 1,
-    }).select("id, research_area, question, sort_order").single();
-    if (error) { showBanner("Couldn't add question: " + error.message, "error"); return; }
-    wizResearchQuestions.push(data);
-    renderWizResearchQuestionsForArea(area);
-    updateWizResearchProgressBadge(area);
-  }
-
-  async function ensureFirstWizResearchQuestion(area) {
-    if (wizResearchQuestions.some((q) => q.research_area === area)) return;
-    await addWizResearchQuestion(area);
-  }
-
-  async function deleteWizResearchQuestion(id) {
-    if (!confirm("Delete this question?")) return;
-    const { error } = await sb.from("client_research_questions").delete().eq("id", id);
-    if (error) { showBanner("Couldn't delete question: " + error.message, "error"); return; }
-    const q = wizResearchQuestions.find((q) => q.id === id);
-    wizResearchQuestions = wizResearchQuestions.filter((q) => q.id !== id);
-    if (q) {
-      renderWizResearchQuestionsForArea(q.research_area);
-      updateWizResearchProgressBadge(q.research_area);
-    }
-  }
-
-  function updateWizResearchProgressBadge(area) {
-    const badge = document.querySelector(`[data-wiz-ra-accordion="${area}"] .wiz-ra-progress-badge`);
-    if (!badge) return;
-    const count = wizResearchQuestions.filter((q) => q.research_area === area).length;
-    badge.textContent = `${count} question${count === 1 ? "" : "s"}`;
-    badge.classList.toggle("hidden", !count);
-  }
-
   // ---------- Generic list sections (Next Steps, Contacts, Team, Competitors, Top Customers) ----------
   // Each of these now lives on its own dedicated wizard step instead of a
   // shared collapsible accordion stack -- same table-backed CRUD, autosave,
@@ -2566,8 +2384,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     { n: 4, key: "contacts", label: "Contacts" },
     { n: 5, key: "competitors", label: "Competitors" },
     { n: 6, key: "top_customers", label: "Customers" },
-    { n: 7, key: "workflow", label: "Documents" },
-    { n: 8, key: "research", label: "Research" },
+    { n: 7, key: "workflow", label: "Workflow Docs" },
   ];
   let wizStep = 1;
 
