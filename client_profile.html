@@ -735,9 +735,9 @@
               </div>
             </div>
             <div class="field" style="margin-top:14px;">
-              <label>4. Close-Out Evaluation Link (for the CEO)</label>
+              <label>4. Send Close-Out Evaluation Email (to the CEO, from the Team Lead)</label>
               <div class="field-hint" style="text-transform:none; font-weight:400; margin-bottom:8px;">
-                You don't send this link yourself — enabling it here just turns on the "Complete Your Close-Out Evaluation" button that already appears on the client's own dashboard (the URL at the top of this page). The CEO never sees this raw link; they just use their normal dashboard, click that button, fill out the form, and hit Submit — their answers come straight back here, no email or PDF needed. You'll see the response below once it's in.
+                Create Email drafts a short note to the CEO with a link to their Close-Out Evaluation form, ready to send from the Team Lead. Review and edit it, then send it from here or copy it into Outlook. Their answers come straight back here, no email reply or PDF needed — you'll see the response below once it's in.
               </div>
               <div id="wf-eval-link"></div>
             </div>
@@ -770,6 +770,55 @@
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- Close-Out Evaluation email composer (Greg, 8/25/26) -- same
+     review-then-send-or-copy pattern as Draft Update Email in
+     client_control_center.html. Placed above the main script block so the
+     synchronous top-level wiring further down can find these elements when
+     it runs. -->
+<style>
+  .eem-overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); z-index: 200; align-items: center; justify-content: center; }
+  .eem-overlay.open { display: flex; }
+  .eem-modal { background: #fff; border-radius: 10px; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 22px 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+  .eem-modal-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+  .eem-modal-header h3 { margin: 0 0 4px; color: var(--navy); }
+  .eem-modal-meta { font-size: 12.5px; color: var(--muted); }
+  .eem-modal-close { background: none; border: none; font-size: 20px; line-height: 1; cursor: pointer; color: var(--muted); padding: 2px 6px; }
+  #eem-body input, #eem-body textarea { width: 100%; font-family: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; }
+  #eem-body textarea { resize: vertical; }
+</style>
+<div class="eem-overlay" id="eval-email-overlay">
+  <div class="eem-modal">
+    <div class="eem-modal-header">
+      <div>
+        <h3>Close-Out Evaluation Email</h3>
+        <div class="eem-modal-meta">Review and edit, then send it from here or copy it into Outlook.</div>
+      </div>
+      <button class="eem-modal-close" id="eem-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="eem-body">
+      <div class="field">
+        <label>To</label>
+        <input type="text" id="eem-to" />
+      </div>
+      <div id="eem-no-contact" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
+        No contact email found on file for this client — add the CEO's email in Company Contacts, or type it in above.
+      </div>
+      <div class="field">
+        <label>Subject</label>
+        <input type="text" id="eem-subject" />
+      </div>
+      <div class="field">
+        <label>Body</label>
+        <textarea id="eem-body-text" rows="12"></textarea>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button type="button" class="btn-secondary btn-sm" id="eem-copy-btn">Copy Email Text</button>
+        <a class="btn-primary btn-sm" id="eem-mailto-btn" href="#">Send Email &rarr;</a>
+      </div>
     </div>
   </div>
 </div>
@@ -1654,54 +1703,16 @@
   function renderEvalLinkField() {
     const container = $("wf-eval-link");
     if (!container) return;
-    const url = workflowData && workflowData.evaluation_link_url;
-    // Links saved before the storage-upload approach was replaced with a
-    // live Netlify page (Greg, 8/25/26: raw HTML kept showing instead of a
-    // form) still point at the old client-evaluations Storage bucket and
-    // will never render right. Flag those so there's a way to fix them
-    // from the UI instead of leaving Copy Link as the only option.
-    const isLegacyUrl = url && !url.includes("evaluation_public.html");
 
-    // Greg (8/25/26): "what we are really doing is enabling the evaluation
-    // form on the dashboard. if everything is working properly i don't
-    // need to see a link, just a message." The raw URL + Copy Link was a
-    // debugging artifact from building this feature, not something a Team
-    // Lead needs day-to-day -- a status line plus an optional Preview Form
-    // button (for QC'ing what the CEO will see) covers the real need
-    // without exposing a link nobody's supposed to hand out.
-    let linkHtml;
-    if (url && !isLegacyUrl) {
-      // Greg (8/25/26): "i need a real checkbox to make the form live or
-      // not live" -- a one-way "Enable Link" button had no way to turn it
-      // back off. The URL is deterministic (built from the client id), so
-      // unchecking just nulls evaluation_link_url out and re-checking
-      // regenerates the identical URL -- nothing is lost either direction.
-      linkHtml = `
-        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; color:var(--navy); font-size:13.5px;">
-            <input type="checkbox" id="eval-link-toggle" checked style="width:17px; height:17px; cursor:pointer; margin:0;">
-            The evaluation form is live on this client's dashboard.
-          </label>
-          <button type="button" class="btn-secondary btn-sm" id="eval-link-preview-btn">Preview Form</button>
-        </div>
-      `;
-    } else if (!url && !isLegacyUrl) {
-      linkHtml = `
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; color:var(--muted); font-size:13.5px;">
-          <input type="checkbox" id="eval-link-toggle" style="width:17px; height:17px; cursor:pointer; margin:0;">
-          Make the evaluation form live on this client's dashboard.
-        </label>
-      `;
-    } else if (url && isLegacyUrl) {
-      linkHtml = `
-        <div style="padding:10px 14px; background:#FCF3CF; border:1px solid #F1C40F; border-radius:8px;">
-          <div style="font-size:13px; color:#7D6608; font-weight:600; margin-bottom:8px;">
-            This link was created before a fix and won't render correctly for the CEO. Click Update Link to switch it to the working version.
-          </div>
-          <button type="button" class="btn-secondary btn-sm" id="eval-link-update-btn">Update Link</button>
-        </div>
-      `;
-    }
+    // Greg (8/25/26): "instead of putting a button on the dashboard that
+    // links to the evaluation form, change number 4 to Send email with a
+    // link to the Evaluation form to the CEO from the Team Lead." Replaces
+    // the old checkbox/"live on the dashboard" toggle and CEO-facing CTA
+    // button entirely -- there's no dashboard button anymore (removed from
+    // client_public.html), just this one button that drafts the email.
+    const linkHtml = `
+      <button type="button" class="btn-secondary btn-sm" id="eval-email-create-btn">Create Email</button>
+    `;
 
     let responseHtml = "";
     if (evalResponse) {
@@ -1726,17 +1737,7 @@
 
     container.innerHTML = linkHtml + responseHtml;
 
-    if (isLegacyUrl) {
-      container.querySelector("#eval-link-update-btn").addEventListener("click", generateEvalLink);
-    } else {
-      const toggle = container.querySelector("#eval-link-toggle");
-      toggle.addEventListener("change", () => {
-        if (toggle.checked) generateEvalLink();
-        else disableEvalLink();
-      });
-      const previewBtn = container.querySelector("#eval-link-preview-btn");
-      if (previewBtn) previewBtn.addEventListener("click", () => window.open(url, "_blank", "noopener"));
-    }
+    container.querySelector("#eval-email-create-btn").addEventListener("click", openEvalEmailModal);
 
     if (evalResponse) {
       const toggleBtn = container.querySelector("#eval-response-toggle-btn");
@@ -1793,64 +1794,111 @@
     `;
   }
 
-  // Turns on the client's evaluation link. This is now a one-time switch,
-  // not a file-generation step: evaluation_public.html (079) fetches the
-  // client's name/sponsor/research questions live from Supabase every time
-  // the link is opened, so the URL never needs to be regenerated when
-  // questions change, and there's no uploaded file whose Content-Type the
-  // browser can get confused about. (Greg, 8/25/26: the earlier
-  // upload-a-baked-HTML-file-to-storage approach kept rendering as raw
-  // text instead of a form even after two upload-code fixes -- this page
-  // is served by Netlify like the rest of the site instead, so there's no
-  // storage-serving-HTML dependency left to go wrong.)
-  async function generateEvalLink() {
-    const btn = document.querySelector("#eval-link-update-btn");
-    const toggle = document.querySelector("#eval-link-toggle");
-    if (btn) { btn.disabled = true; btn.textContent = "Enabling…"; }
-    if (toggle) toggle.disabled = true;
-
+  // Ensures the client's deterministic evaluation link is saved to
+  // client_content.evaluation_link_url (evaluation_public.html / 079 fetches
+  // the client's name/sponsor/research questions live from Supabase every
+  // time the link is opened, so the URL itself never needs to change).
+  // Returns the url on success, or null if it couldn't (already showed a
+  // banner explaining why). Silent otherwise -- there's no dashboard toggle
+  // for this anymore (Greg, 8/25/26: replaced the CEO-facing dashboard
+  // button with a Team Lead-sent email instead), so this just runs
+  // whenever Create Email is clicked.
+  async function ensureEvalLinkUrl() {
     const { count, error: qErr } = await sb
       .from("client_research_questions")
       .select("id", { count: "exact", head: true })
       .eq("client_id", currentClient.id)
       .not("question", "is", null)
       .neq("question", "");
-    if (qErr) { showBanner("Couldn't check research questions: " + qErr.message, "error"); renderEvalLinkField(); return; }
+    if (qErr) { showBanner("Couldn't check research questions: " + qErr.message, "error"); return null; }
     if (!count) {
-      showBanner("Add at least one research question (on the Research page or Step 9 above) before enabling the evaluation link.", "error");
-      renderEvalLinkField();
-      return;
+      showBanner("Add at least one research question (on the Research page or Step 9 above) before emailing the evaluation link.", "error");
+      return null;
     }
 
     const url = `${PUBLIC_SITE_BASE}evaluation_public.html?client=${currentClient.id}`;
-    const { error: saveErr } = await sb.from("client_content").update({ evaluation_link_url: url }).eq("client_id", currentClient.id);
-    if (saveErr) { showBanner("Couldn't save the evaluation link: " + saveErr.message, "error"); renderEvalLinkField(); return; }
-
-    workflowData.evaluation_link_url = url;
-    renderEvalLinkField();
-    showBanner("Evaluation link enabled — it now shows on the client's dashboard.", "success");
-  }
-
-  // Turns the evaluation link back off (Greg, 8/25/26: "i need a real
-  // checkbox to make the form live or not live"). Just nulls
-  // evaluation_link_url out -- renderEvalCta() on client_public.html hides
-  // the CEO-facing button the moment this is null, and re-checking the box
-  // regenerates the identical deterministic URL, so nothing is lost.
-  async function disableEvalLink() {
-    if (!confirm("Turn off the evaluation form? The CEO will no longer see the Close-Out Evaluation button on their dashboard.")) {
-      renderEvalLinkField();
-      return;
+    if (workflowData.evaluation_link_url !== url) {
+      const { error: saveErr } = await sb.from("client_content").update({ evaluation_link_url: url }).eq("client_id", currentClient.id);
+      if (saveErr) { showBanner("Couldn't save the evaluation link: " + saveErr.message, "error"); return null; }
+      workflowData.evaluation_link_url = url;
     }
-    const toggle = document.querySelector("#eval-link-toggle");
-    if (toggle) toggle.disabled = true;
-
-    const { error } = await sb.from("client_content").update({ evaluation_link_url: null }).eq("client_id", currentClient.id);
-    if (error) { showBanner("Couldn't disable the evaluation link: " + error.message, "error"); renderEvalLinkField(); return; }
-
-    workflowData.evaluation_link_url = null;
-    renderEvalLinkField();
-    showBanner("Evaluation link disabled — it's no longer visible on the client's dashboard.", "success");
+    return url;
   }
+
+  // ---------- Close-Out Evaluation email (Greg, 8/25/26) ----------
+  // "instead of putting a button on the dashboard that links to the
+  // evaluation form, change number 4 to Send email with a link to the
+  // Evaluation form to the CEO from the Team Lead." Same
+  // draft-review-then-send-or-copy pattern as Draft Update Email
+  // (client_control_center.html) -- nothing is actually sent from this app;
+  // "Open in Email App" hands it to the Team Lead's own mail client
+  // (Outlook or otherwise) ready to send, and Copy Email Text covers
+  // pasting it in by hand instead.
+  async function openEvalEmailModal() {
+    const createBtn = document.querySelector("#eval-email-create-btn");
+    if (createBtn) { createBtn.disabled = true; createBtn.textContent = "Preparing…"; }
+    const url = await ensureEvalLinkUrl();
+    if (createBtn) { createBtn.disabled = false; createBtn.textContent = "Create Email"; }
+    if (!url) return;
+
+    const contacts = listData.contacts || [];
+    const ceoContact = contacts.find((c) => (c.title || "").toLowerCase().includes("ceo")) || contacts[0] || null;
+    const teamRows = listData.team || [];
+    const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
+    const teamLeadName = leadRow ? leadRow.users.full_name : "";
+    const teamLeadFirstName = teamLeadName ? teamLeadName.split(" ")[0] : "";
+
+    let programName = "";
+    if (currentClient.econ_dev_company_id) {
+      const { data: partner } = await sb.from("econ_dev_companies").select("name").eq("id", currentClient.econ_dev_company_id).single();
+      programName = (partner && partner.name) || "";
+    }
+
+    $("eem-to").value = (ceoContact && ceoContact.email) || "";
+    $("eem-no-contact").classList.toggle("hidden", !!(ceoContact && ceoContact.email));
+
+    const ceoFirstName = ceoContact && ceoContact.name ? ceoContact.name.split(" ")[0] : "there";
+    $("eem-subject").value = `Your Close-Out Evaluation — ${currentClient.name}`;
+    const sponsorLine = programName
+      ? `It also gets shared with ${programName}, your program sponsor, so it carries real weight heading into that conversation.`
+      : `It also gets shared with your program sponsor, so it carries real weight heading into that conversation.`;
+    $("eem-body-text").value = `Hi ${ceoFirstName},
+
+As we wrap up our engagement, we'd love to get your feedback on how the Economic Gardening program worked for ${currentClient.name}. It only takes a few minutes, and it genuinely helps us fine-tune how we support CEOs like you. ${sponsorLine}
+
+Could you take a moment to fill it out ahead of our upcoming close-out call?
+
+${url}
+
+Thank you again for the opportunity to work with you and your team.
+
+${teamLeadFirstName || "Your EG Team Lead"}`;
+
+    updateEvalEmailMailto();
+    $("eval-email-overlay").classList.add("open");
+  }
+
+  function updateEvalEmailMailto() {
+    const toParam = $("eem-to").value.split(",").map((s) => s.trim()).filter(Boolean).map(encodeURIComponent).join(",");
+    $("eem-mailto-btn").href = `mailto:${toParam}?subject=${encodeURIComponent($("eem-subject").value)}&body=${encodeURIComponent($("eem-body-text").value)}`;
+  }
+
+  $("eem-close").addEventListener("click", () => $("eval-email-overlay").classList.remove("open"));
+  $("eval-email-overlay").addEventListener("click", (e) => {
+    if (e.target === $("eval-email-overlay")) $("eval-email-overlay").classList.remove("open");
+  });
+  $("eem-to").addEventListener("input", updateEvalEmailMailto);
+  $("eem-subject").addEventListener("input", updateEvalEmailMailto);
+  $("eem-body-text").addEventListener("input", updateEvalEmailMailto);
+  $("eem-copy-btn").addEventListener("click", async () => {
+    const text = `To: ${$("eem-to").value}\nSubject: ${$("eem-subject").value}\n\n${$("eem-body-text").value}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      showBanner("Email text copied — paste it into your email client.", "success");
+    } catch (e) {
+      showBanner("Couldn't copy automatically — select the text below and copy manually.", "error");
+    }
+  });
 
   // ---------- Research Questions (Step 9) ----------
   // Same accordion-per-category layout as the full Research page

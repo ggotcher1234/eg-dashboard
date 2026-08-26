@@ -115,13 +115,6 @@
      href and shows on hover via the title attribute. */
   .mini-table td:nth-child(2) a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  .eval-cta-card { background: #f3f6f1; border-color: var(--accent); }
-  .eval-cta { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-  .eval-cta-text { font-size: 14px; line-height: 1.5; color: var(--text); }
-  .eval-cta-text strong { color: var(--navy); }
-  .eval-cta-btn { flex-shrink: 0; background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 11px 22px; font-size: 13.5px; font-weight: 700; text-decoration: none; transition: background 0.15s ease; }
-  .eval-cta-btn:hover { background: var(--accent-dark); }
-
   /* Close-Out Evaluation has no document to open like the other three
      workflow steps do -- it's rows in client_evaluation_responses, not a
      file -- so clicking it once submitted opens this modal with the same
@@ -253,21 +246,6 @@
          ahead of Company Info / Top Business Issues and everything else. -->
     <div class="card">
       <div class="workflow-tracker" id="workflow-tracker"></div>
-    </div>
-
-    <!-- Close-Out Evaluation call-to-action (8/25/26): shows only once a
-         Team Lead has generated this client's evaluation link (Step 8 of
-         the Dashboard Wizard) AND the completed survey hasn't been
-         returned/uploaded yet -- once closeout_survey_url/storage_path is
-         set, this disappears and the workflow tracker's Close-Out
-         Evaluation step lights up instead. -->
-    <div class="card eval-cta-card hidden" id="eval-cta-card">
-      <div class="eval-cta">
-        <div class="eval-cta-text">
-          <strong>Your Close-Out Evaluation is ready.</strong> Please take a few minutes to complete it — it helps us capture the impact of this engagement.
-        </div>
-        <a id="eval-cta-link" class="eval-cta-btn" href="#" target="_blank" rel="noopener">Complete Evaluation &rarr;</a>
-      </div>
     </div>
 
     <div class="research-grid" id="research-grid"></div>
@@ -755,7 +733,6 @@
     $("workflow-tracker").querySelectorAll(".wf-eval-detail-btn").forEach((el) => {
       el.addEventListener("click", () => openEvalResponseModal(w.evaluation_response));
     });
-    renderEvalCta(w);
   }
 
   const EVAL_RATING_LABELS = { very: "Very Useful", partial: "Partially Useful", not: "Not Useful" };
@@ -791,23 +768,6 @@
   $("eval-modal-overlay").addEventListener("click", (e) => {
     if (e.target.id === "eval-modal-overlay") closeEvalResponseModal();
   });
-
-  // Only shown once a Team Lead has generated this client's evaluation link
-  // (client_profile.html Step 8) AND the completed survey hasn't already
-  // been returned/uploaded -- once closeout_survey_url/storage_path is set,
-  // this hides itself and the tracker's Close-Out Evaluation step above
-  // lights up instead, so there's never a redundant "do this" prompt.
-  function renderEvalCta(w) {
-    const card = $("eval-cta-card");
-    const hasEvalLink = !!w.evaluation_link_url;
-    const hasCompleted = !!(w.closeout_survey_url || w.closeout_survey_storage_path || w.evaluation_submitted_at);
-    if (hasEvalLink && !hasCompleted) {
-      $("eval-cta-link").href = w.evaluation_link_url;
-      card.classList.remove("hidden");
-    } else {
-      card.classList.add("hidden");
-    }
-  }
 
   // Each area is now a list of { question, documents } entries (a
   // question consultants are researching, and the files that answer it) —
