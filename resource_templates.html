@@ -49,6 +49,31 @@
   .btn-danger:hover { background: var(--danger-dark); }
   .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
   .btn-ghost:hover { background: #eef1f4; }
+
+  /* ---------- Standardized Search/Print/Export/Import toolbar (Greg, 8/27/26) ---------- */
+  /* Unlike most other pages, Import is real here (not disabled) -- these
+     shared templates are a genuine bulk-editable record list, same as
+     Programs/Roster. */
+  .std-toolbar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
+  .global-search-wrap { position: relative; flex: 1; min-width: 220px; max-width: 420px; }
+  .search-box { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+  .search-box input { border: none; outline: none; font-size: 13.5px; font-family: inherit; flex: 1; color: var(--text); background: transparent; }
+  .search-box:focus-within { border-color: var(--navy-light); }
+  .search-icon { font-size: 14px; color: var(--muted); }
+  .global-search-results { position: absolute; top: calc(100% + 6px); left: 0; width: 100%; min-width: 320px; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,0.15); z-index: 80; max-height: 360px; overflow-y: auto; }
+  .global-search-results.hidden { display: none; }
+  .gsr-group-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); padding: 8px 14px 4px; }
+  .gsr-item { display: block; width: 100%; text-align: left; padding: 8px 14px; border: none; background: transparent; cursor: pointer; }
+  .gsr-item:hover { background: #f4f6f8; }
+  .gsr-name { font-size: 13.5px; color: var(--text); font-weight: 600; }
+  .gsr-meta { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .std-toolbar-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .std-toolbar-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #fff; }
+    main { max-width: none; margin: 0; padding: 0; }
+  }
   header .btn-ghost { color: #c9d6e3; }
   header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
 
@@ -103,7 +128,7 @@
 <div id="loading-view"><div>Loading…</div></div>
 
 <div id="not-admin-view" class="hidden">
-  <header>
+  <header class="no-print">
     <div class="brand-row">
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div><h1>Resource Templates</h1></div>
@@ -131,7 +156,7 @@
 </div>
 
 <div id="app-view" class="hidden">
-  <header>
+  <header class="no-print">
     <div class="brand-row">
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
@@ -163,6 +188,23 @@
 
   <main>
     <div id="banner"></div>
+
+    <div class="std-toolbar-row no-print">
+      <div class="global-search-wrap">
+        <div class="search-box">
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="global-search-input" placeholder="Search…" autocomplete="off" />
+        </div>
+        <div class="global-search-results hidden" id="global-search-results"></div>
+      </div>
+      <div class="std-toolbar-actions">
+        <button type="button" class="btn-secondary btn-sm" id="std-print-btn" title="Print the Resource Templates list">Print</button>
+        <button type="button" class="btn-secondary btn-sm" id="std-export-btn" title="Export the Resource Templates list as CSV">&#8595; Export</button>
+        <button type="button" class="btn-secondary btn-sm" id="std-import-btn" title="Bulk import Title/Description via CSV">&#8593; Import</button>
+        <input type="file" id="resource-csv-file" accept=".csv" class="hidden" />
+      </div>
+    </div>
+
     <div class="intro">
       These are the standard resources shown in every client's Resource Vault. Upload or replace a file here and it
       updates immediately for every client that has it — no need to re-upload it per client. Title and description
@@ -174,7 +216,7 @@
       <div id="tpl-empty" class="empty-note hidden">No shared resources yet — add the first one below.</div>
     </div>
 
-    <div class="card">
+    <div class="card no-print">
       <h3 style="margin:0 0 4px; font-size:15px;">Add a Resource</h3>
       <div class="field-hint" style="margin-bottom:12px;">This will appear in every client's Resource Vault right away.</div>
       <form id="add-form" class="add-card">
@@ -313,6 +355,7 @@
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = roleLabel(profile.role);
     await loadTemplates();
+    loadGlobalSearchIndex();
   }
 
   sb.auth.getSession().then(({ data: { session } }) => {
@@ -321,6 +364,158 @@
     } else {
       redirectToLogin();
     }
+  });
+
+  // ---------- Standardized Search/Print/Export/Import toolbar ----------
+  // Same four controls, same order, on every internal page (Greg, 8/27/26).
+  // No Ask AI on this page, so search results just navigate. Import IS real
+  // here (unlike most other pages) -- these shared templates are a genuine
+  // bulk-editable record list, same as Programs/Roster. CSV import only
+  // covers Title/Description (files still have to be uploaded per-row
+  // below); it matches existing rows by Title and updates the Description,
+  // or adds a new row with no file if the Title isn't found yet.
+  let gsClients = [], gsUsers = [], gsPrograms = [];
+  async function loadGlobalSearchIndex() {
+    const [{ data: clients }, { data: users }, { data: programs }] = await Promise.all([
+      sb.from("clients").select("id, name, project_status"),
+      sb.from("users").select("id, full_name"),
+      sb.from("econ_dev_companies").select("id, name, code"),
+    ]);
+    gsClients = clients || [];
+    gsUsers = users || [];
+    gsPrograms = programs || [];
+  }
+  const GS_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+  function renderGlobalSearchResults(query) {
+    const box = $("global-search-results");
+    const q = query.trim().toLowerCase();
+    if (!q) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+    const engMatches = gsClients.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 5);
+    const specMatches = gsUsers.filter((u) => u.full_name && u.full_name.toLowerCase().includes(q)).slice(0, 5);
+    const progMatches = gsPrograms.filter((p) => (p.name || "").toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q)).slice(0, 5);
+    let html = "";
+    if (engMatches.length) {
+      html += `<div class="gsr-group-label">Engagements</div>` + engMatches.map((c) => `
+        <div class="gsr-item" data-gsr-nav="client_control_center.html?client=${c.id}">
+          <span class="gsr-name">${escapeHtml(c.name)}</span>
+          <span class="gsr-meta">${escapeHtml(GS_STATUS_LABELS[c.project_status] || c.project_status)}</span>
+        </div>
+      `).join("");
+    }
+    if (specMatches.length) {
+      html += `<div class="gsr-group-label">Specialists</div>` + specMatches.map((u) => `
+        <div class="gsr-item" data-gsr-nav="team_directory.html"><span class="gsr-name">${escapeHtml(u.full_name)}</span></div>
+      `).join("");
+    }
+    if (progMatches.length) {
+      html += `<div class="gsr-group-label">Programs</div>` + progMatches.map((p) => `
+        <div class="gsr-item" data-gsr-nav="econ_dev_partners_admin.html?program=${p.id}">
+          <span class="gsr-name">${escapeHtml(p.name)}</span>
+          <span class="gsr-meta">${escapeHtml(p.code || "")}</span>
+        </div>
+      `).join("");
+    }
+    if (!html) html = `<div class="gsr-item" style="cursor:default;"><span class="gsr-name" style="color:var(--muted); font-weight:400;">No matches.</span></div>`;
+    box.innerHTML = html;
+    box.classList.remove("hidden");
+    box.querySelectorAll("[data-gsr-nav]").forEach((el) => {
+      el.addEventListener("click", () => { window.location.href = el.dataset.gsrNav; });
+    });
+  }
+  $("global-search-input").addEventListener("input", () => renderGlobalSearchResults($("global-search-input").value));
+  $("global-search-input").addEventListener("focus", () => {
+    if ($("global-search-input").value.trim()) renderGlobalSearchResults($("global-search-input").value);
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".global-search-wrap")) $("global-search-results").classList.add("hidden");
+  });
+  function csvField(value) {
+    const v = value == null ? "" : String(value);
+    return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  }
+  function downloadCsv(filename, rows) {
+    const csv = rows.map((r) => r.map(csvField).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  function parseCsv(text) {
+    const rows = [];
+    let row = [], field = "", inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+        else if (c === '"') { inQuotes = false; }
+        else { field += c; }
+      } else if (c === '"') {
+        inQuotes = true;
+      } else if (c === ",") {
+        row.push(field); field = "";
+      } else if (c === "\n" || c === "\r") {
+        if (c === "\r" && text[i + 1] === "\n") i++;
+        row.push(field); field = "";
+        if (row.some((v) => v !== "")) rows.push(row);
+        row = [];
+      } else {
+        field += c;
+      }
+    }
+    if (field !== "" || row.length) { row.push(field); if (row.some((v) => v !== "")) rows.push(row); }
+    return rows;
+  }
+  $("std-print-btn").addEventListener("click", () => window.print());
+  $("std-export-btn").addEventListener("click", () => {
+    if (!templates.length) { showBanner("No templates to export yet.", "error"); return; }
+    const rows = [["Title", "Description", "File"]];
+    for (const t of templates) {
+      rows.push([t.title, t.description || "", t.storage_path ? fileNameFromPath(t.storage_path) : ""]);
+    }
+    downloadCsv(`resource-templates-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  });
+  $("std-import-btn").addEventListener("click", () => $("resource-csv-file").click());
+  $("resource-csv-file").addEventListener("change", async () => {
+    const fileInput = $("resource-csv-file");
+    const file = fileInput.files[0];
+    if (!file) return;
+    const text = await file.text();
+    const rows = parseCsv(text);
+    fileInput.value = "";
+    if (rows.length < 2) { showBanner("That CSV has no data rows.", "error"); return; }
+
+    const header = rows[0].map((h) => h.trim().toLowerCase());
+    const titleIdx = header.indexOf("title");
+    const descIdx = header.indexOf("description");
+    if (titleIdx === -1) { showBanner("CSV needs a Title column.", "error"); return; }
+
+    const byTitle = new Map(templates.map((t) => [t.title.trim().toLowerCase(), t]));
+    let updated = 0, added = 0, nextSort = templates.length + 1;
+
+    for (const row of rows.slice(1)) {
+      const title = (row[titleIdx] || "").trim();
+      if (!title) continue;
+      const description = descIdx !== -1 ? (row[descIdx] || "").trim() : "";
+      const existing = byTitle.get(title.toLowerCase());
+      if (existing) {
+        if ((existing.description || "") !== description) {
+          const { error } = await sb.from("resource_vault_templates").update({ description: description || null }).eq("id", existing.id);
+          if (error) { showBanner("Couldn't update \"" + title + "\": " + error.message, "error"); return; }
+          updated++;
+        }
+      } else {
+        const { error } = await sb.from("resource_vault_templates").insert({
+          organization_id: currentUser.organization_id,
+          title, description: description || null, storage_path: null, sort_order: nextSort++,
+        });
+        if (error) { showBanner("Couldn't add \"" + title + "\": " + error.message, "error"); return; }
+        added++;
+      }
+    }
+    showBanner(`Import complete -- ${added} added, ${updated} updated.`, "success");
+    await loadTemplates();
   });
 
   async function loadTemplates() {

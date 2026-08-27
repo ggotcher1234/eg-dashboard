@@ -86,6 +86,30 @@
   header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
   .btn-sm { padding: 5px 10px; font-size: 12.5px; }
 
+  /* Standardized Search/Print/Export/Import toolbar (Greg, 8/27/26) -- same
+     four controls, same order, on every internal page. The sitewide search
+     sits above the existing Roster search/table toolbar. */
+  .std-toolbar-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .global-search-wrap { position: relative; flex: 1; max-width: 480px; }
+  .global-search-wrap .search-box { position: relative; }
+  .global-search-wrap .search-box input {
+    width: 100%; height: 36px; padding: 0 14px 0 38px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13.5px; background: #fff;
+  }
+  .global-search-wrap .search-box input:focus { outline: none; border-color: var(--navy-light); }
+  .global-search-wrap .search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
+  .global-search-results {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #fff;
+    border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(20,48,77,0.15);
+    z-index: 70; max-height: 420px; overflow-y: auto;
+  }
+  .gsr-group-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; padding: 10px 14px 4px; }
+  .gsr-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; cursor: pointer; font-size: 13.5px; }
+  .gsr-item:hover { background: #f4f6f8; }
+  .gsr-item .gsr-name { font-weight: 600; color: var(--text); }
+  .gsr-item .gsr-meta { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .std-toolbar-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
   main { max-width: 1040px; margin: 28px auto; padding: 0 20px 60px; }
 
   /* Toolbar -- search + Filters on one row, count + Import + Add Team
@@ -363,7 +387,7 @@
 
   @media print {
     body { background: #fff; }
-    header, .ai-drawer-overlay, .ai-drawer, #banner, .search-wrap, #roster-import-btn,
+    .no-print, header, .ai-drawer-overlay, .ai-drawer, #banner, .search-wrap, #roster-import-btn,
     #roster-print-btn, #add-btn, #import-btn, #workload-section, td.actions { display: none !important; }
     main { max-width: none; margin: 0; padding: 0; }
     table { border: 1px solid #ccc; }
@@ -375,7 +399,7 @@
 <div id="loading-view"><div>Loading…</div></div>
 
 <div id="app-view" class="hidden">
-  <header>
+  <header class="no-print">
     <div class="brand-row">
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
@@ -416,8 +440,8 @@
     </div>
   </header>
 
-  <div class="ai-drawer-overlay" id="ai-drawer-overlay"></div>
-  <div class="ai-drawer" id="ai-drawer">
+  <div class="ai-drawer-overlay no-print" id="ai-drawer-overlay"></div>
+  <div class="ai-drawer no-print" id="ai-drawer">
     <div class="ai-drawer-header">
       <div>
         <h3><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z"/></svg>Ask AI</h3>
@@ -455,6 +479,19 @@
 
   <main>
     <div id="banner"></div>
+
+    <div class="std-toolbar-row no-print">
+      <div class="global-search-wrap">
+        <div class="search-box">
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="global-search-input" placeholder="Search…" autocomplete="off" />
+        </div>
+        <div class="global-search-results hidden" id="global-search-results"></div>
+      </div>
+      <div class="std-toolbar-actions">
+        <button type="button" class="btn-secondary btn-sm" id="std-export-btn" title="Export the roster as CSV">&#8595; Export</button>
+      </div>
+    </div>
 
     <div class="toolbar-row">
       <div class="toolbar-left">
@@ -1165,6 +1202,7 @@
 
     await loadUsers();
     if (isSuperAdmin) await loadTeamLeadWorkload();
+    loadGlobalSearchIndex();
   }
 
   // Closed-by-default accordion for the Team Lead Workload panel — click
@@ -1293,6 +1331,89 @@
   });
 
   // ---------- Load & render ----------
+  // ---------- Standardized Search/Print/Export/Import toolbar ----------
+  // Same four controls, same order, on every internal page (Greg, 8/27/26).
+  // This page already has its own local roster search + Import (CSV) + Print
+  // buttons in the toolbar below -- this just adds the sitewide search and
+  // the missing Export (CSV) control. Specialists match directly against
+  // allUsers (this page IS the specialist directory), so clicking one opens
+  // its profile modal instead of navigating away.
+  let gsClients = [], gsPrograms = [];
+  async function loadGlobalSearchIndex() {
+    const [{ data: clients }, { data: programs }] = await Promise.all([
+      sb.from("clients").select("id, name, project_status"),
+      sb.from("econ_dev_companies").select("id, name, code"),
+    ]);
+    gsClients = clients || []; gsPrograms = programs || [];
+  }
+  const GS_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+  function renderGlobalSearchResults(query) {
+    const box = $("global-search-results");
+    const q = query.trim().toLowerCase();
+    if (!q) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+    const engMatches = gsClients.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 5);
+    const specMatches = allUsers.filter((u) => u.full_name && u.full_name.toLowerCase().includes(q)).slice(0, 5);
+    const progMatches = gsPrograms.filter((p) => (p.name || "").toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q)).slice(0, 5);
+    let html = "";
+    if (engMatches.length) {
+      html += `<div class="gsr-group-label">Engagements</div>` + engMatches.map((c) => `
+        <div class="gsr-item" data-gsr-nav="client_control_center.html?client=${c.id}">
+          <span class="gsr-name">${escapeHtml(c.name)}</span>
+          <span class="gsr-meta">${escapeHtml(GS_STATUS_LABELS[c.project_status] || c.project_status)}</span>
+        </div>
+      `).join("");
+    }
+    if (specMatches.length) {
+      html += `<div class="gsr-group-label">Specialists</div>` + specMatches.map((u) => `
+        <div class="gsr-item" data-gsr-open="${u.id}"><span class="gsr-name">${escapeHtml(u.full_name)}</span></div>
+      `).join("");
+    }
+    if (progMatches.length) {
+      html += `<div class="gsr-group-label">Programs</div>` + progMatches.map((p) => `
+        <div class="gsr-item" data-gsr-nav="econ_dev_partners_admin.html?program=${p.id}">
+          <span class="gsr-name">${escapeHtml(p.name)}</span>
+          <span class="gsr-meta">${escapeHtml(p.code || "")}</span>
+        </div>
+      `).join("");
+    }
+    if (!html) html = `<div class="gsr-item" style="cursor:default;"><span class="gsr-name" style="color:var(--muted); font-weight:400;">No matches.</span></div>`;
+    box.innerHTML = html;
+    box.classList.remove("hidden");
+    box.querySelectorAll("[data-gsr-nav]").forEach((el) => {
+      el.addEventListener("click", () => { window.location.href = el.dataset.gsrNav; });
+    });
+    box.querySelectorAll("[data-gsr-open]").forEach((el) => {
+      el.addEventListener("click", () => { box.classList.add("hidden"); $("global-search-input").value = ""; openProfile(el.dataset.gsrOpen); });
+    });
+  }
+  $("global-search-input").addEventListener("input", () => renderGlobalSearchResults($("global-search-input").value));
+  $("global-search-input").addEventListener("focus", () => {
+    if ($("global-search-input").value.trim()) renderGlobalSearchResults($("global-search-input").value);
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".global-search-wrap")) $("global-search-results").classList.add("hidden");
+  });
+  function csvField(value) {
+    const v = value == null ? "" : String(value);
+    return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  }
+  function downloadCsv(filename, rows) {
+    const csv = rows.map((r) => r.map(csvField).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  $("std-export-btn").addEventListener("click", () => {
+    const rows = [["Name", "Title", "Company", "Role", "Email", "Phone", "Address"]];
+    for (const u of allUsers) {
+      rows.push([u.full_name, u.title || "", u.company_name || "", roleLabel(u.role), u.email || "", u.phone || "", u.address || ""]);
+    }
+    downloadCsv(`roster-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  });
+
   async function loadUsers() {
     const [{ data, error }, { data: specialtyRows, error: specErr }] = await Promise.all([
       sb.from("users")

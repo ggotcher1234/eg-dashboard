@@ -158,6 +158,33 @@
   #month-today { margin-left: 4px; }
   .toolbar-actions { display: flex; gap: 10px; }
 
+  /* Standardized Search/Print/Export/Import toolbar (Greg, 8/27/26) -- same
+     four controls, same order, on every internal page. The sitewide search
+     sits above the existing Month/tab toolbar; Export already exists per
+     tab (Export CSV / Export Payroll CSV / Export YTD CSV) so it isn't
+     duplicated here. */
+  .std-toolbar-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .global-search-wrap { position: relative; flex: 1; max-width: 480px; }
+  .global-search-wrap .search-box { position: relative; }
+  .global-search-wrap .search-box input {
+    width: 100%; height: 36px; padding: 0 14px 0 38px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13.5px; background: #fff;
+  }
+  .global-search-wrap .search-box input:focus { outline: none; border-color: var(--navy-light); }
+  .global-search-wrap .search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
+  .global-search-results {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #fff;
+    border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(20,48,77,0.15);
+    z-index: 70; max-height: 420px; overflow-y: auto;
+  }
+  .gsr-group-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; padding: 10px 14px 4px; }
+  .gsr-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; cursor: pointer; font-size: 13.5px; }
+  .gsr-item:hover { background: #f4f6f8; }
+  .gsr-item .gsr-name { font-weight: 600; color: var(--text); }
+  .gsr-item .gsr-meta { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .std-toolbar-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .std-toolbar-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+
   /* KPI cards -- same bold, colorful treatment used across the rest of the
      app: left accent bar + diagonal tint wash + matching icon chip. Budget
      Alerts flips from green (success) to coral (warning) treatment only
@@ -471,7 +498,7 @@
        outgrows a portrait page), so print wide instead of clipping. */
     @page { size: landscape; margin: 0.4in; }
     body { background: #fff; }
-    header, .ai-drawer-overlay, .ai-drawer, #banner, .sticky-top-wrap, .tab-bar,
+    .no-print, header, .ai-drawer-overlay, .ai-drawer, #banner, .sticky-top-wrap, .tab-bar,
     .sp-controls, .sp-pagination, #ts-print-btn, #eng-detail-back,
     #panel-payroll-mtd, #panel-payroll-ytd { display: none !important; }
     main { max-width: none; margin: 0; padding: 0; }
@@ -496,7 +523,7 @@
 <div id="loading-view"><div>Loading…</div></div>
 
 <div id="not-admin-view" class="hidden">
-  <header>
+  <header class="no-print">
     <div class="brand-row">
       <a class="brand-badge" href="index.html"><img src="/NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div><h1>Invoicing Report</h1></div>
@@ -524,7 +551,7 @@
 </div>
 
 <div id="app-view" class="hidden">
-  <header>
+  <header class="no-print">
     <div class="brand-row">
       <a class="brand-badge" href="index.html"><img src="/NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
@@ -576,8 +603,8 @@
     </div>
   </div>
 
-  <div class="ai-drawer-overlay" id="ai-drawer-overlay"></div>
-  <aside class="ai-drawer" id="ai-drawer">
+  <div class="ai-drawer-overlay no-print" id="ai-drawer-overlay"></div>
+  <aside class="ai-drawer no-print" id="ai-drawer">
     <div class="ai-drawer-header">
       <div>
         <h3>
@@ -620,6 +647,20 @@
 
   <main>
     <div id="banner"></div>
+
+    <div class="std-toolbar-row no-print">
+      <div class="global-search-wrap">
+        <div class="search-box">
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="global-search-input" placeholder="Search…" autocomplete="off" />
+        </div>
+        <div class="global-search-results hidden" id="global-search-results"></div>
+      </div>
+      <div class="std-toolbar-actions">
+        <button type="button" class="btn-secondary btn-sm" id="std-print-btn" title="Print the current view">Print</button>
+        <button type="button" class="btn-secondary btn-sm" id="std-import-btn" title="This is a computed payroll report -- nothing to bulk import here" disabled>&#8593; Import</button>
+      </div>
+    </div>
 
     <div class="sticky-top-wrap" id="sticky-toolbar">
       <div class="toolbar-row">
@@ -1126,6 +1167,7 @@
 
     await loadHourlyRate();
     await loadData();
+    loadGlobalSearchIndex();
   }
 
   // ---------- Tabs ----------
@@ -1251,6 +1293,66 @@
   // At EG's current scale (~30 specialists, a handful of logged hours each
   // per month) this is a small amount of data -- no need for a database
   // function just to add two numbers together.
+  // ---------- Standardized Search/Print/Export/Import toolbar ----------
+  // Same four controls, same order, on every internal page (Greg, 8/27/26).
+  // Export already exists per tab (Export CSV / Export Payroll CSV / Export
+  // YTD CSV) so it isn't duplicated here. Import is disabled -- this is a
+  // computed payroll report, not an editable record list.
+  let gsClients = [], gsUsers = [], gsPrograms = [];
+  async function loadGlobalSearchIndex() {
+    const [{ data: clients }, { data: users }, { data: programs }] = await Promise.all([
+      sb.from("clients").select("id, name, project_status"),
+      sb.from("users").select("id, full_name"),
+      sb.from("econ_dev_companies").select("id, name, code"),
+    ]);
+    gsClients = clients || []; gsUsers = users || []; gsPrograms = programs || [];
+  }
+  const GS_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+  function renderGlobalSearchResults(query) {
+    const box = $("global-search-results");
+    const q = query.trim().toLowerCase();
+    if (!q) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+    const engMatches = gsClients.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 5);
+    const specMatches = gsUsers.filter((u) => u.full_name && u.full_name.toLowerCase().includes(q)).slice(0, 5);
+    const progMatches = gsPrograms.filter((p) => (p.name || "").toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q)).slice(0, 5);
+    let html = "";
+    if (engMatches.length) {
+      html += `<div class="gsr-group-label">Engagements</div>` + engMatches.map((c) => `
+        <div class="gsr-item" data-gsr-nav="client_control_center.html?client=${c.id}">
+          <span class="gsr-name">${escapeHtml(c.name)}</span>
+          <span class="gsr-meta">${escapeHtml(GS_STATUS_LABELS[c.project_status] || c.project_status)}</span>
+        </div>
+      `).join("");
+    }
+    if (specMatches.length) {
+      html += `<div class="gsr-group-label">Specialists</div>` + specMatches.map((u) => `
+        <div class="gsr-item" data-gsr-nav="team_directory.html"><span class="gsr-name">${escapeHtml(u.full_name)}</span></div>
+      `).join("");
+    }
+    if (progMatches.length) {
+      html += `<div class="gsr-group-label">Programs</div>` + progMatches.map((p) => `
+        <div class="gsr-item" data-gsr-nav="econ_dev_partners_admin.html?program=${p.id}">
+          <span class="gsr-name">${escapeHtml(p.name)}</span>
+          <span class="gsr-meta">${escapeHtml(p.code || "")}</span>
+        </div>
+      `).join("");
+    }
+    if (!html) html = `<div class="gsr-item" style="cursor:default;"><span class="gsr-name" style="color:var(--muted); font-weight:400;">No matches.</span></div>`;
+    box.innerHTML = html;
+    box.classList.remove("hidden");
+    box.querySelectorAll("[data-gsr-nav]").forEach((el) => {
+      el.addEventListener("click", () => { window.location.href = el.dataset.gsrNav; });
+    });
+  }
+  $("global-search-input").addEventListener("input", () => renderGlobalSearchResults($("global-search-input").value));
+  $("global-search-input").addEventListener("focus", () => {
+    if ($("global-search-input").value.trim()) renderGlobalSearchResults($("global-search-input").value);
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".global-search-wrap")) $("global-search-results").classList.add("hidden");
+  });
+  $("std-print-btn").addEventListener("click", () => window.print());
+
   async function loadData() {
     const [assignmentsRes, entriesRes, usersRes, clientsRes] = await Promise.all([
       sb.from("client_assignments")

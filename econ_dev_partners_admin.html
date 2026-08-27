@@ -113,6 +113,35 @@
   .profile-dropdown button:hover, header .profile-dropdown button:hover { background: #eef1f4; color: var(--text); }
   .btn-sm { padding: 5px 10px; font-size: 12.5px; }
 
+  /* Standardized Search/Print/Export/Import toolbar (Greg, 8/27/26) -- same
+     four controls, same order, on every internal page. The sitewide search
+     sits above the existing local Programs search/table toolbar. */
+  .std-toolbar-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .global-search-wrap { position: relative; flex: 1; max-width: 480px; }
+  .global-search-wrap .search-box { position: relative; }
+  .global-search-wrap .search-box input {
+    width: 100%; height: 36px; padding: 0 14px 0 38px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13.5px; background: #fff;
+  }
+  .global-search-wrap .search-box input:focus { outline: none; border-color: var(--navy-light); }
+  .global-search-wrap .search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
+  .global-search-results {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #fff;
+    border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(20,48,77,0.15);
+    z-index: 70; max-height: 420px; overflow-y: auto;
+  }
+  .gsr-group-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; padding: 10px 14px 4px; }
+  .gsr-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; cursor: pointer; font-size: 13.5px; }
+  .gsr-item:hover { background: #f4f6f8; }
+  .gsr-item .gsr-name { font-weight: 600; color: var(--text); }
+  .gsr-item .gsr-meta { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .std-toolbar-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #fff; }
+    main { max-width: none; margin: 0; padding: 0; }
+  }
+
   main { max-width: 1160px; margin: 28px auto; padding: 0 20px 60px; }
 
   /* Control bar: search + filter left, count + export/import/add right --
@@ -310,7 +339,7 @@
 <div id="loading-view"><div>Loading…</div></div>
 
 <div id="app-view" class="hidden">
-  <header>
+  <header class="no-print">
     <div class="brand-row">
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
@@ -350,8 +379,8 @@
     </div>
   </header>
 
-  <div class="ai-drawer-overlay" id="ai-drawer-overlay"></div>
-  <div class="ai-drawer" id="ai-drawer">
+  <div class="ai-drawer-overlay no-print" id="ai-drawer-overlay"></div>
+  <div class="ai-drawer no-print" id="ai-drawer">
     <div class="ai-drawer-header">
       <div>
         <h3><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z"/></svg>Ask AI</h3>
@@ -393,7 +422,20 @@
       You're viewing this list read-only. Only an Admin can add, edit, or remove programs.
     </div>
 
-    <div class="toolbar">
+    <div class="std-toolbar-row no-print">
+      <div class="global-search-wrap">
+        <div class="search-box">
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="global-search-input" placeholder="Search…" autocomplete="off" />
+        </div>
+        <div class="global-search-results hidden" id="global-search-results"></div>
+      </div>
+      <div class="std-toolbar-actions">
+        <button type="button" class="btn-secondary btn-sm" id="std-print-btn" title="Print">Print</button>
+      </div>
+    </div>
+
+    <div class="toolbar no-print">
       <div class="toolbar-left">
         <input type="text" id="search-box" placeholder="Search programs by name or code…" />
       </div>
@@ -577,6 +619,7 @@
     }
 
     await loadPartners();
+    loadGlobalSearchIndex();
   }
 
   // Restore session on reload
@@ -589,6 +632,65 @@
   });
 
   // ---------- Load & render ----------
+  // ---------- Standardized Search/Print/Export/Import toolbar ----------
+  // Same four controls, same order, on every internal page (Greg, 8/27/26).
+  // The Programs table already has its own local search plus a real
+  // Export/Import CSV pair for Program Contact Info -- this just adds the
+  // sitewide search and a Print button alongside them.
+  let gsClients = [], gsUsers = [];
+  async function loadGlobalSearchIndex() {
+    const [{ data: clients }, { data: users }] = await Promise.all([
+      sb.from("clients").select("id, name, project_status"),
+      sb.from("users").select("id, full_name"),
+    ]);
+    gsClients = clients || []; gsUsers = users || [];
+  }
+  const GS_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+  function renderGlobalSearchResults(query) {
+    const box = $("global-search-results");
+    const q = query.trim().toLowerCase();
+    if (!q) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+    const engMatches = gsClients.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 5);
+    const specMatches = gsUsers.filter((u) => u.full_name && u.full_name.toLowerCase().includes(q)).slice(0, 5);
+    const progMatches = allPartners.filter((p) => (p.name || "").toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q)).slice(0, 5);
+    let html = "";
+    if (engMatches.length) {
+      html += `<div class="gsr-group-label">Engagements</div>` + engMatches.map((c) => `
+        <div class="gsr-item" data-gsr-nav="client_control_center.html?client=${c.id}">
+          <span class="gsr-name">${escapeHtml(c.name)}</span>
+          <span class="gsr-meta">${escapeHtml(GS_STATUS_LABELS[c.project_status] || c.project_status)}</span>
+        </div>
+      `).join("");
+    }
+    if (specMatches.length) {
+      html += `<div class="gsr-group-label">Specialists</div>` + specMatches.map((u) => `
+        <div class="gsr-item" data-gsr-nav="team_directory.html"><span class="gsr-name">${escapeHtml(u.full_name)}</span></div>
+      `).join("");
+    }
+    if (progMatches.length) {
+      html += `<div class="gsr-group-label">Programs</div>` + progMatches.map((p) => `
+        <div class="gsr-item" data-gsr-nav="econ_dev_partners_admin.html?program=${p.id}">
+          <span class="gsr-name">${escapeHtml(p.name)}</span>
+          <span class="gsr-meta">${escapeHtml(p.code || "")}</span>
+        </div>
+      `).join("");
+    }
+    if (!html) html = `<div class="gsr-item" style="cursor:default;"><span class="gsr-name" style="color:var(--muted); font-weight:400;">No matches.</span></div>`;
+    box.innerHTML = html;
+    box.classList.remove("hidden");
+    box.querySelectorAll("[data-gsr-nav]").forEach((el) => {
+      el.addEventListener("click", () => { window.location.href = el.dataset.gsrNav; });
+    });
+  }
+  $("global-search-input").addEventListener("input", () => renderGlobalSearchResults($("global-search-input").value));
+  $("global-search-input").addEventListener("focus", () => {
+    if ($("global-search-input").value.trim()) renderGlobalSearchResults($("global-search-input").value);
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".global-search-wrap")) $("global-search-results").classList.add("hidden");
+  });
+  $("std-print-btn").addEventListener("click", () => window.print());
+
   async function loadPartners() {
     const { data, error } = await sb
       .from("econ_dev_companies")

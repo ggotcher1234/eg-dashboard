@@ -118,6 +118,18 @@
   }
   #add-client-btn:hover { background: var(--accent-dark); }
 
+  /* Standardized Search/Print/Export/Import toolbar controls (Greg, 8/27/26)
+     -- same markup/behavior rolled out across every internal page so the
+     header always offers the same four things in the same order. */
+  .btn-sm { padding: 8px 12px; font-size: 13px; height: 40px; border-radius: 8px; font-weight: 600; }
+  .std-toolbar-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .std-toolbar-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #fff; }
+    main { max-width: none; margin: 0; padding: 0; }
+  }
+
   .global-search-wrap { position: relative; flex: 1; max-width: 640px; }
   .global-search-results {
     position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #fff;
@@ -498,7 +510,7 @@
 </div>
 
 <div id="app-view" class="hidden">
-  <header>
+  <header class="no-print">
     <div class="brand-row">
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
@@ -551,8 +563,8 @@
     </div>
   </header>
 
-  <div class="ai-drawer-overlay" id="ai-drawer-overlay"></div>
-  <div class="ai-drawer" id="ai-drawer">
+  <div class="ai-drawer-overlay no-print" id="ai-drawer-overlay"></div>
+  <div class="ai-drawer no-print" id="ai-drawer">
     <div class="ai-drawer-header">
       <div>
         <h3><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z"/></svg>Ask AI</h3>
@@ -591,13 +603,18 @@
   <main>
     <div id="banner"></div>
 
-    <div class="toolbar-row" id="toolbar-row">
+    <div class="toolbar-row no-print" id="toolbar-row">
       <div class="global-search-wrap">
         <div class="search-box">
           <span class="search-icon">&#128269;</span>
           <input type="text" id="global-search-input" placeholder="Search…" autocomplete="off" />
         </div>
         <div class="global-search-results hidden" id="global-search-results"></div>
+      </div>
+      <div class="std-toolbar-actions">
+        <button type="button" class="btn-secondary btn-sm" id="std-print-btn" title="Print the engagements list">Print</button>
+        <button type="button" class="btn-secondary btn-sm" id="std-export-btn" title="Export the engagements list as CSV">&#8595; Export</button>
+        <button type="button" class="btn-secondary btn-sm" id="std-import-btn" title="New engagements are created via Client Applications, not bulk import" disabled>&#8593; Import</button>
       </div>
       <a class="btn-primary hidden" id="add-client-btn" href="client_applications.html?new=1">+ Add Engagement</a>
     </div>
@@ -1698,6 +1715,40 @@
   });
   document.addEventListener("click", (e) => {
     if (!e.target.closest(".global-search-wrap")) $("global-search-results").classList.add("hidden");
+  });
+
+  // ---------- Standardized Search/Print/Export/Import toolbar ----------
+  // Same four controls, same order, on every internal page (Greg, 8/27/26).
+  // Import is disabled here -- new engagements are created through the
+  // Client Applications intake/acceptance flow, not a bulk CSV, so there's
+  // nothing safe to bulk-import into this list.
+  function csvField(value) {
+    const v = value == null ? "" : String(value);
+    return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  }
+  function downloadCsv(filename, rows) {
+    const csv = rows.map((r) => r.map(csvField).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  $("std-print-btn").addEventListener("click", () => window.print());
+  $("std-export-btn").addEventListener("click", () => {
+    const rows = [["Engagement", "Program", "Status", "Team Lead", "Last Activity"]];
+    for (const c of allClients) {
+      const partner = c.econ_dev_companies;
+      rows.push([
+        c.name,
+        partner ? partner.code : "",
+        PROJECT_STATUS_LABELS[c.project_status] || c.project_status,
+        teamLeadByClient[c.id] || "",
+        formatLastActivity(c.last_activity_at || c.updated_at),
+      ]);
+    }
+    downloadCsv(`engagements-${new Date().toISOString().slice(0, 10)}.csv`, rows);
   });
 
   // ---------- Create Invoice ----------

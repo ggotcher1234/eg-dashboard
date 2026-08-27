@@ -53,6 +53,25 @@
   .btn-danger:hover { background: #f5d5d4; }
   .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
   .btn-ghost:hover { background: #eef1f4; }
+
+  /* ---------- Standardized Search/Print/Export/Import toolbar (Greg, 8/27/26) ---------- */
+  .btn-sm { padding: 8px 12px; font-size: 13px; }
+  .std-toolbar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
+  .global-search-wrap { position: relative; flex: 1; min-width: 220px; max-width: 420px; }
+  .search-box { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+  .search-box input { border: none; outline: none; font-size: 13.5px; font-family: inherit; flex: 1; color: var(--text); background: transparent; }
+  .search-box:focus-within { border-color: var(--navy-light); }
+  .search-icon { font-size: 14px; color: var(--muted); }
+  .global-search-results { position: absolute; top: calc(100% + 6px); left: 0; width: 100%; min-width: 320px; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,0.15); z-index: 80; max-height: 360px; overflow-y: auto; }
+  .global-search-results.hidden { display: none; }
+  .gsr-group-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); padding: 8px 14px 4px; }
+  .gsr-item { display: block; width: 100%; text-align: left; padding: 8px 14px; border: none; background: transparent; cursor: pointer; }
+  .gsr-item:hover { background: #f4f6f8; }
+  .gsr-name { font-size: 13.5px; color: var(--text); font-weight: 600; }
+  .gsr-meta { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .gsr-ask-ai { border-top: 1px solid var(--border); }
+  .std-toolbar-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .std-toolbar-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
   header .btn-ghost { color: #c9d6e3; }
   header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
   button:disabled { opacity: 0.55; cursor: default; }
@@ -214,7 +233,7 @@
 
   @media print {
     body { background: #fff; }
-    header, .ai-drawer-overlay, .ai-drawer, #banner, #back-to-invoicing, #builder-section, #past-invoices-section, #invoice-toolbar { display: none !important; }
+    .no-print, header, .ai-drawer-overlay, .ai-drawer, #banner, #back-to-invoicing, #builder-section, #invoice-toolbar { display: none !important; }
     main { max-width: none; margin: 0; padding: 0; }
     #invoice-sheet { border: none; padding: 0; }
   }
@@ -230,7 +249,7 @@
 <div id="loading-view"><div>Loading…</div></div>
 
 <div id="not-admin-view" class="hidden">
-  <header>
+  <header class="no-print">
     <div class="brand-row">
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div><h1>Program Invoices</h1></div>
@@ -258,7 +277,7 @@
 </div>
 
 <div id="app-view" class="hidden">
-  <header>
+  <header class="no-print">
     <div class="brand-row">
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
@@ -298,8 +317,8 @@
     </div>
   </header>
 
-  <div class="ai-drawer-overlay" id="ai-drawer-overlay"></div>
-  <aside class="ai-drawer" id="ai-drawer">
+  <div class="ai-drawer-overlay no-print" id="ai-drawer-overlay"></div>
+  <aside class="ai-drawer no-print" id="ai-drawer">
     <div class="ai-drawer-header">
       <div>
         <h3>
@@ -342,6 +361,22 @@
 
   <main>
     <div id="banner"></div>
+
+    <div class="std-toolbar-row no-print">
+      <div class="global-search-wrap">
+        <div class="search-box">
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="global-search-input" placeholder="Search…" autocomplete="off" />
+        </div>
+        <div class="global-search-results hidden" id="global-search-results"></div>
+      </div>
+      <div class="std-toolbar-actions">
+        <button type="button" class="btn-secondary btn-sm" id="std-print-btn" title="Print the Past Invoices list">Print</button>
+        <button type="button" class="btn-secondary btn-sm" id="std-export-btn" title="Export the Past Invoices list as CSV">&#8595; Export</button>
+        <button type="button" class="btn-secondary btn-sm" id="std-import-btn" title="Program invoices are generated, not bulk imported" disabled>&#8593; Import</button>
+      </div>
+    </div>
+
     <button class="btn-ghost" id="back-to-invoicing" style="margin-bottom:12px; padding-left:0;">&larr; Invoicing</button>
 
     <div id="builder-section">
@@ -625,6 +660,7 @@
     $("user-role").textContent = roleLabel(profile.role);
 
     await loadPrograms();
+    loadGlobalSearchIndex();
     await loadPastInvoices();
 
     const now = new Date();
@@ -674,6 +710,102 @@
     if (program) program.billing_hourly_rate = newRate;
     await refreshPreview();
   }
+
+  // ---------- Standardized Search/Print/Export/Import toolbar ----------
+  // Same four controls, same order, on every internal page (Greg, 8/27/26).
+  // Programs reuses the `programs` array already loaded by loadPrograms();
+  // Clients/Specialists get their own small fetch. Print/Export act on the
+  // Past Invoices list (the builder form itself has nothing to print/export).
+  // Import is disabled -- invoices are generated, not bulk imported.
+  let gsClients = [], gsUsers = [];
+  async function loadGlobalSearchIndex() {
+    const [{ data: clients }, { data: users }] = await Promise.all([
+      sb.from("clients").select("id, name, project_status"),
+      sb.from("users").select("id, full_name"),
+    ]);
+    gsClients = clients || [];
+    gsUsers = users || [];
+  }
+  const GS_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+  function renderGlobalSearchResults(query) {
+    const box = $("global-search-results");
+    const q = query.trim().toLowerCase();
+    if (!q) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+    const engMatches = gsClients.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 5);
+    const specMatches = gsUsers.filter((u) => u.full_name && u.full_name.toLowerCase().includes(q)).slice(0, 5);
+    const progMatches = programs.filter((p) => (p.name || "").toLowerCase().includes(q)).slice(0, 5);
+    let html = "";
+    if (engMatches.length) {
+      html += `<div class="gsr-group-label">Engagements</div>` + engMatches.map((c) => `
+        <div class="gsr-item" data-gsr-nav="client_control_center.html?client=${c.id}">
+          <span class="gsr-name">${escapeHtml(c.name)}</span>
+          <span class="gsr-meta">${escapeHtml(GS_STATUS_LABELS[c.project_status] || c.project_status)}</span>
+        </div>
+      `).join("");
+    }
+    if (specMatches.length) {
+      html += `<div class="gsr-group-label">Specialists</div>` + specMatches.map((u) => `
+        <div class="gsr-item" data-gsr-nav="team_directory.html"><span class="gsr-name">${escapeHtml(u.full_name)}</span></div>
+      `).join("");
+    }
+    if (progMatches.length) {
+      html += `<div class="gsr-group-label">Programs</div>` + progMatches.map((p) => `
+        <div class="gsr-item" data-gsr-nav="econ_dev_partners_admin.html?program=${p.id}"><span class="gsr-name">${escapeHtml(p.name)}</span></div>
+      `).join("");
+    }
+    html += `<div class="gsr-item gsr-ask-ai" data-gsr-ask="1"><span class="gsr-name">Ask AI: "${escapeHtml(query.trim())}"</span></div>`;
+    box.innerHTML = html;
+    box.classList.remove("hidden");
+    box.querySelectorAll("[data-gsr-nav]").forEach((el) => {
+      el.addEventListener("click", () => { window.location.href = el.dataset.gsrNav; });
+    });
+    const askRow = box.querySelector("[data-gsr-ask]");
+    if (askRow) {
+      askRow.addEventListener("click", () => {
+        const q2 = $("global-search-input").value.trim();
+        box.classList.add("hidden");
+        $("global-search-input").value = "";
+        openAiDrawer();
+        $("ai-question-input").value = q2;
+        askAi(q2);
+      });
+    }
+  }
+  $("global-search-input").addEventListener("input", () => renderGlobalSearchResults($("global-search-input").value));
+  $("global-search-input").addEventListener("focus", () => {
+    if ($("global-search-input").value.trim()) renderGlobalSearchResults($("global-search-input").value);
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".global-search-wrap")) $("global-search-results").classList.add("hidden");
+  });
+  function csvField(value) {
+    const v = value == null ? "" : String(value);
+    return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  }
+  function downloadCsv(filename, rows) {
+    const csv = rows.map((r) => r.map(csvField).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  $("std-print-btn").addEventListener("click", () => window.print());
+  $("std-export-btn").addEventListener("click", () => {
+    const rows = [["Invoice #", "Program", "Month", "Date", "Total Due", "Voided"]];
+    for (const inv of pastInvoices) {
+      rows.push([
+        inv.invoice_number,
+        (inv.econ_dev_companies && inv.econ_dev_companies.name) || "",
+        monthLongLabel(inv.billing_month),
+        inv.invoice_date,
+        inv.total_due,
+        inv.voided ? "Yes" : "No",
+      ]);
+    }
+    downloadCsv(`program-invoices-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  });
 
   function wireBuilderControls() {
     $("pi-program").addEventListener("change", () => {

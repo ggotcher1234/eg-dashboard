@@ -81,6 +81,36 @@
   #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
 
   .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+
+  /* Standardized Search/Print/Export/Import toolbar (Greg, 8/27/26) -- same
+     four controls, same order, on every internal page. */
+  .std-toolbar-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+  .global-search-wrap { position: relative; flex: 1; max-width: 480px; }
+  .global-search-wrap .search-box { position: relative; }
+  .global-search-wrap .search-box input {
+    width: 100%; height: 38px; padding: 0 14px 0 38px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13.5px; background: #fff;
+  }
+  .global-search-wrap .search-box input:focus { outline: none; border-color: var(--navy-light); }
+  .global-search-wrap .search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
+  .global-search-results {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #fff;
+    border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(20,48,77,0.15);
+    z-index: 70; max-height: 420px; overflow-y: auto;
+  }
+  .gsr-group-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; padding: 10px 14px 4px; }
+  .gsr-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; cursor: pointer; font-size: 13.5px; }
+  .gsr-item:hover { background: #f4f6f8; }
+  .gsr-item .gsr-name { font-weight: 600; color: var(--text); }
+  .gsr-item .gsr-meta { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .gsr-ask-ai { color: #6528a3; font-weight: 700; border-top: 1px solid var(--border); }
+  .std-toolbar-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .std-toolbar-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #fff; }
+    main { max-width: none; margin: 0; padding: 0; }
+  }
   .drafts-wrap { position: relative; }
   .drafts-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--navy-light); color: #fff; font-size: 11px; font-weight: 700; margin-left: 4px; }
   .drafts-dropdown { position: absolute; top: calc(100% + 8px); right: 0; width: min(320px, calc(100vw - 24px)); max-height: 380px; overflow-y: auto; background: #fff; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.18); z-index: 60; }
@@ -429,7 +459,7 @@
 <div id="loading-view"><div>Loading…</div></div>
 
 <div id="app-view" class="hidden">
-  <header>
+  <header class="no-print">
     <div class="brand-row">
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
@@ -469,8 +499,8 @@
     </div>
   </header>
 
-  <div class="ai-drawer-overlay" id="ai-drawer-overlay"></div>
-  <div class="ai-drawer" id="ai-drawer">
+  <div class="ai-drawer-overlay no-print" id="ai-drawer-overlay"></div>
+  <div class="ai-drawer no-print" id="ai-drawer">
     <div class="ai-drawer-header">
       <div>
         <h3><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z"/></svg>Ask AI</h3>
@@ -511,6 +541,20 @@
 
     <!-- ===== LIST VIEW ===== -->
     <div id="view-list">
+      <div class="std-toolbar-row no-print">
+        <div class="global-search-wrap">
+          <div class="search-box">
+            <span class="search-icon">&#128269;</span>
+            <input type="text" id="global-search-input" placeholder="Search…" autocomplete="off" />
+          </div>
+          <div class="global-search-results hidden" id="global-search-results"></div>
+        </div>
+        <div class="std-toolbar-actions">
+          <button type="button" class="btn-secondary btn-sm" id="std-print-btn" title="Print">Print</button>
+          <button type="button" class="btn-secondary btn-sm" id="std-export-btn" title="Export the applications list as CSV">&#8595; Export</button>
+          <button type="button" class="btn-secondary btn-sm" id="std-import-btn" title="New applications go through the intake wizard, not bulk import" disabled>&#8593; Import</button>
+        </div>
+      </div>
       <div class="toolbar">
         <div class="tabs">
           <span class="tab" data-status="pending">Pending<span class="tab-count">0</span></span>
@@ -1225,7 +1269,7 @@
       document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.status === statusParam));
     }
 
-    await Promise.all([loadPartners(), loadUsers(), loadPartnerContacts(), loadDrafts()]);
+    await Promise.all([loadPartners(), loadUsers(), loadPartnerContacts(), loadDrafts(), loadGlobalSearchClients()]);
     await loadApplications();
 
     // Deep link from the Home page's "Drafts in progress" pill (Greg,
@@ -1277,6 +1321,95 @@
     if (error) { showBanner("Couldn't load program contacts: " + error.message, "error"); return; }
     allPartnerContacts = data;
   }
+
+  // ---------- Standardized Search/Print/Export/Import toolbar ----------
+  // Same four controls, same order, on every internal page (Greg, 8/27/26).
+  // Search is the sitewide omnisearch (engagements/specialists/programs),
+  // matching index.html -- allUsers/allPartners are already loaded for the
+  // form dropdowns above, so only the engagements list needs its own fetch.
+  let gsClients = [];
+  async function loadGlobalSearchClients() {
+    const { data } = await sb.from("clients").select("id, name, project_status");
+    gsClients = data || [];
+  }
+  const GS_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+  function renderGlobalSearchResults(query) {
+    const box = $("global-search-results");
+    const q = query.trim().toLowerCase();
+    if (!q) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+    const engMatches = gsClients.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 5);
+    const specMatches = allUsers.filter((u) => u.full_name && u.full_name.toLowerCase().includes(q)).slice(0, 5);
+    const progMatches = allPartners.filter((p) => (p.name || "").toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q)).slice(0, 5);
+    let html = "";
+    if (engMatches.length) {
+      html += `<div class="gsr-group-label">Engagements</div>` + engMatches.map((c) => `
+        <div class="gsr-item" data-gsr-nav="client_control_center.html?client=${c.id}">
+          <span class="gsr-name">${escapeHtml(c.name)}</span>
+          <span class="gsr-meta">${escapeHtml(GS_STATUS_LABELS[c.project_status] || c.project_status)}</span>
+        </div>
+      `).join("");
+    }
+    if (specMatches.length) {
+      html += `<div class="gsr-group-label">Specialists</div>` + specMatches.map((u) => `
+        <div class="gsr-item" data-gsr-nav="team_directory.html"><span class="gsr-name">${escapeHtml(u.full_name)}</span></div>
+      `).join("");
+    }
+    if (progMatches.length) {
+      html += `<div class="gsr-group-label">Programs</div>` + progMatches.map((p) => `
+        <div class="gsr-item" data-gsr-nav="econ_dev_partners_admin.html?program=${p.id}">
+          <span class="gsr-name">${escapeHtml(p.name)}</span>
+          <span class="gsr-meta">${escapeHtml(p.code || "")}</span>
+        </div>
+      `).join("");
+    }
+    html += `<div class="gsr-item gsr-ask-ai" data-gsr-ask="1"><span class="gsr-name">Ask AI: "${escapeHtml(query.trim())}"</span></div>`;
+    box.innerHTML = html;
+    box.classList.remove("hidden");
+    box.querySelectorAll("[data-gsr-nav]").forEach((el) => {
+      el.addEventListener("click", () => { window.location.href = el.dataset.gsrNav; });
+    });
+    const askRow = box.querySelector("[data-gsr-ask]");
+    if (askRow) {
+      askRow.addEventListener("click", () => {
+        const q2 = $("global-search-input").value.trim();
+        box.classList.add("hidden");
+        $("global-search-input").value = "";
+        openAiDrawer();
+        $("ai-ask-input").value = q2;
+        askAi(q2);
+      });
+    }
+  }
+  $("global-search-input").addEventListener("input", () => renderGlobalSearchResults($("global-search-input").value));
+  $("global-search-input").addEventListener("focus", () => {
+    if ($("global-search-input").value.trim()) renderGlobalSearchResults($("global-search-input").value);
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".global-search-wrap")) $("global-search-results").classList.add("hidden");
+  });
+  function csvField(value) {
+    const v = value == null ? "" : String(value);
+    return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  }
+  function downloadCsv(filename, rows) {
+    const csv = rows.map((r) => r.map(csvField).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  $("std-print-btn").addEventListener("click", () => window.print());
+  $("std-export-btn").addEventListener("click", () => {
+    const rows = [["Company Name", "Program", "Submitted By", "Submitted", "Status"]];
+    for (const a of allApplications) {
+      const partner = allPartners.find((p) => p.id === a.econ_dev_company_id);
+      const submitter = allUsers.find((u) => u.id === a.submitted_by);
+      rows.push([a.company_name, partner ? partner.code : "", submitter ? submitter.full_name : "", a.submitted_at || "", a.status]);
+    }
+    downloadCsv(`applications-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  });
 
   // Rebuilds the Program Contact dropdown to only show contacts for the
   // currently selected EG Program -- keeps the current selection if it's
