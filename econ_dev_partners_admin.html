@@ -1306,19 +1306,29 @@
   }
 
   // ---------- CSV import/export for the Contract Signer / Program
-  // Administrator / Program Finance blocks ----------
+  // Administrator / Program Finance / Address fields ----------
   // Separate from the per-person Contacts CSV above -- this one is
-  // one-row-per-Program and overwrites those 3 freeform text fields on
-  // econ_dev_companies directly. Built so Greg can re-run this any time
-  // Chris sends an updated version of his "EG Programs Contact Info" doc:
-  // paste the new doc's contents into this CSV shape (matched by Code or
-  // Program Name, same fuzzy match as the Contacts CSV) and re-import.
-  const PROGRAM_INFO_CSV_HEADERS = ["Code", "Program Name", "Contract Signer", "Program Administrator", "Program Finance"];
+  // one-row-per-Program and writes these 4 fields on econ_dev_companies
+  // directly. Built so Greg can re-run this any time Chris sends an
+  // updated version of his "EG Programs Contact Info" doc: paste the new
+  // doc's contents into this CSV shape (matched by Code or Program Name,
+  // same fuzzy match as the Contacts CSV) and re-import.
+  //
+  // Address added 8/27/26 for the new physical_address column (Greg: "add
+  // address field" to the Programs list). At the same time, import
+  // switched from "blank column = clear this field" to "blank column =
+  // leave whatever's already saved alone" -- a 4-column full-doc import
+  // used to null out any field a row left blank, which is exactly what
+  // would've happened importing an address-only CSV: it would have wiped
+  // every Program's already-imported Contract Signer / Program
+  // Administrator / Program Finance. Per-field partial updates mean a CSV
+  // with just Program Name + Address filled in only ever touches Address.
+  const PROGRAM_INFO_CSV_HEADERS = ["Code", "Program Name", "Contract Signer", "Program Administrator", "Program Finance", "Address"];
 
   $("program-info-csv-export-btn").addEventListener("click", () => {
     const lines = [PROGRAM_INFO_CSV_HEADERS.map(csvField).join(",")];
     for (const p of allPartners) {
-      lines.push([p.code, p.name, p.contract_signer, p.program_administrator, p.address].map(csvField).join(","));
+      lines.push([p.code, p.name, p.contract_signer, p.program_administrator, p.address, p.physical_address].map(csvField).join(","));
     }
     const blob = new Blob([lines.join("\r\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -1357,7 +1367,7 @@
     let skippedBlank = 0;
 
     allRows.forEach((r) => {
-      const [codeRaw, nameRaw, contractSignerRaw, programAdminRaw, financeRaw] = r;
+      const [codeRaw, nameRaw, contractSignerRaw, programAdminRaw, financeRaw, addressRaw] = r;
       const code = (codeRaw || "").trim();
       const nameCsv = (nameRaw || "").trim();
       if (!code && !nameCsv) { skippedBlank++; return; }
@@ -1367,12 +1377,18 @@
       if (!partner && nameCsv) partner = partnerByNormName[normalizePartnerName(nameCsv)];
 
       if (!partner) { unmatchedLabels.add(code || nameCsv || "(blank)"); return; }
-      updates.push({
-        id: partner.id,
-        contract_signer: (contractSignerRaw || "").trim() || null,
-        program_administrator: (programAdminRaw || "").trim() || null,
-        address: (financeRaw || "").trim() || null,
-      });
+
+      // Partial update -- only fields this row actually has a value for get
+      // written; a blank cell leaves that field untouched rather than
+      // clearing it (see comment above PROGRAM_INFO_CSV_HEADERS).
+      const fields = {};
+      if ((contractSignerRaw || "").trim()) fields.contract_signer = contractSignerRaw.trim();
+      if ((programAdminRaw || "").trim()) fields.program_administrator = programAdminRaw.trim();
+      if ((financeRaw || "").trim()) fields.address = financeRaw.trim();
+      if ((addressRaw || "").trim()) fields.physical_address = addressRaw.trim();
+      if (!Object.keys(fields).length) return;
+
+      updates.push({ id: partner.id, fields });
     });
 
     fileInput.value = "";
@@ -1388,9 +1404,7 @@
     }
 
     const results = await Promise.all(updates.map((u) =>
-      sb.from("econ_dev_companies")
-        .update({ contract_signer: u.contract_signer, program_administrator: u.program_administrator, address: u.address })
-        .eq("id", u.id)
+      sb.from("econ_dev_companies").update(u.fields).eq("id", u.id)
     ));
     const failed = results.filter((r) => r.error);
     if (failed.length === updates.length) {
