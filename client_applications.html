@@ -163,6 +163,7 @@
   .review-item .value { font-size: 14px; margin-top: 2px; }
   .review-item .value a.link-action { display: inline-flex; align-items: center; gap: 4px; color: var(--navy-light); text-decoration: none; }
   .review-item .value a.link-action:hover { text-decoration: underline; }
+  .review-empty { color: var(--muted); font-style: italic; }
   .review-section-title { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--navy-light); margin: 22px 0 8px; }
   .review-section-title:first-child { margin-top: 0; }
 
@@ -1668,13 +1669,12 @@
   // ---------- Review step: live read-only summary of everything entered ----------
   function wizRenderReview() {
     const val = (id) => $(id).value.trim();
-    const reviewItem = (label, value) => value
-      ? `<div class="review-item"><div class="label">${label}</div><div class="value">${escapeHtml(value)}</div></div>`
-      : "";
-    const reviewGrid = (items) => {
-      const filled = items.filter(Boolean);
-      return filled.length ? `<div class="review-grid">${filled.join("")}</div>` : `<div class="section-card-empty">Nothing entered for this section yet.</div>`;
-    };
+    // Greg (8/27/26): "make sure the review page shows all fields even if
+    // they are empty" -- every field label always renders now, with a
+    // muted "—" placeholder standing in for anything not yet filled out,
+    // instead of the field (or the whole section) disappearing.
+    const reviewItem = (label, value) => `<div class="review-item"><div class="label">${label}</div><div class="value">${value ? escapeHtml(value) : '<span class="review-empty">—</span>'}</div></div>`;
+    const reviewGrid = (items) => `<div class="review-grid">${items.join("")}</div>`;
 
     const partnerSel = $("f-econ-dev");
     const partnerLabel = partnerSel.value ? partnerSel.options[partnerSel.selectedIndex].textContent : "";
@@ -1682,22 +1682,21 @@
     const programContactLabel = contactSel.value ? contactSel.options[contactSel.selectedIndex].textContent : "";
     const ownership = $("f-is-private").value === "" ? "" : ($("f-is-private").value === "true" ? "Private" : "Public");
 
-    const contactBlock = (label, prefix, hasTemperament) => {
+    const contactBlock = (label, prefix) => {
       const name = val(`f-${prefix}-name`), title = val(`f-${prefix}-title`), email = val(`f-${prefix}-email`), phone = val(`f-${prefix}-phone`);
-      if (!name && !title && !email && !phone) return "";
       return `
         <div class="contact-card">
           <span class="contact-badge">${label}</span>
-          <div class="contact-name">${name ? escapeHtml(name) : '<span style="color:var(--muted); font-weight:400;">Unnamed contact</span>'}</div>
-          ${title ? `<div class="contact-title">${escapeHtml(title)}</div>` : ""}
+          <div class="contact-name">${name ? escapeHtml(name) : '<span class="review-empty">Not entered</span>'}</div>
+          <div class="contact-title">${title ? escapeHtml(title) : '<span class="review-empty">—</span>'}</div>
           <div class="contact-lines">
-            ${email ? `<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>` : ""}
-            ${phone ? `<a href="tel:${escapeHtml(phone.replace(/[^0-9+]/g, ""))}">${escapeHtml(phone)}</a>` : ""}
+            <div>${email ? `<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>` : '<span class="review-empty">—</span>'}</div>
+            <div>${phone ? `<a href="tel:${escapeHtml(phone.replace(/[^0-9+]/g, ""))}">${escapeHtml(phone)}</a>` : '<span class="review-empty">—</span>'}</div>
           </div>
         </div>
       `;
     };
-    const contactCards = [contactBlock("Primary", "p", true), contactBlock("Secondary", "s", true), contactBlock("3rd", "t", false)].filter(Boolean).join("");
+    const contactCards = [contactBlock("Primary", "p"), contactBlock("Secondary", "s"), contactBlock("3rd", "t")].join("");
     const ccEmailsList = val("f-cc-emails") ? val("f-cc-emails").split("\n").map((s) => s.trim()).filter(Boolean) : [];
 
     const ynItem = (label, checked) => `<div class="yn-item"><span>${label}</span><span class="yn-badge ${checked ? "yes" : "no"}">${checked ? "Yes" : "No"}</span></div>`;
@@ -1742,8 +1741,8 @@
           <h3 class="section-card-title">Contacts</h3>
         </div>
         <div class="section-card-body">
-          ${contactCards ? `<div class="contacts-grid">${contactCards}</div>` : `<div class="section-card-empty">No contacts entered yet.</div>`}
-          ${ccEmailsList.length ? `<div class="review-item" style="margin-top:10px;"><div class="label">Others on Email CC List</div><div class="value">${ccEmailsList.map(escapeHtml).join(", ")}</div></div>` : ""}
+          <div class="contacts-grid">${contactCards}</div>
+          <div class="review-item" style="margin-top:10px;"><div class="label">Others on Email CC List</div><div class="value">${ccEmailsList.length ? ccEmailsList.map(escapeHtml).join(", ") : '<span class="review-empty">—</span>'}</div></div>
         </div>
       </div>
 
@@ -1755,9 +1754,9 @@
         <div class="section-card-body">
           ${reviewGrid([
             reviewItem("Primary business &amp; NAICS", val("f-naics")),
-            reviewItem("Has 10–100 FTE employees", $("f-fte-range").checked ? "Yes" : ""),
-            reviewItem("FTEs 2025 / 2024", (val("f-fte-2025") || val("f-fte-2024")) ? `${val("f-fte-2025") || "—"} / ${val("f-fte-2024") || "—"}` : ""),
-            reviewItem("Revenue 2025 / 2024", (val("f-rev-2025") || val("f-rev-2024")) ? `${val("f-rev-2025") ? "$" + val("f-rev-2025") : "—"} / ${val("f-rev-2024") ? "$" + val("f-rev-2024") : "—"}` : ""),
+            reviewItem("Has 10–100 FTE employees", $("f-fte-range").checked ? "Yes" : "No"),
+            reviewItem("FTEs 2025 / 2024", `${val("f-fte-2025") || "—"} / ${val("f-fte-2024") || "—"}`),
+            reviewItem("Revenue 2025 / 2024", `${val("f-rev-2025") ? "$" + val("f-rev-2025") : "—"} / ${val("f-rev-2024") ? "$" + val("f-rev-2024") : "—"}`),
             reviewItem("% employees in-state", val("f-pct-instate") ? val("f-pct-instate") + "%" : ""),
             reviewItem("Top Business Issues", val("f-top-issues")),
             reviewItem("Tags", val("f-tags")),
