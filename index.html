@@ -272,6 +272,14 @@
   .client-row:hover { background: #f8fafb; }
   .client-row .cr-name { font-weight: 700; font-size: 13.5px; color: var(--navy); text-decoration: underline; }
   .client-row .cr-meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  /* Overdue engagement (no activity in 60+ days) -- Chris's whole job is
+     clearing these, so they need to jump off the list (Greg, 8/27/26). */
+  .client-row .cr-meta.cr-overdue { color: var(--danger-dark); font-weight: 700; }
+  .overdue-badge {
+    display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+    background: #fbe9e9; color: var(--danger-dark); font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.3px;
+  }
   .empty-note { padding: 26px; text-align: center; color: var(--muted); font-size: 13.5px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
   @media (max-width: 720px) {
     .client-row { display: block; }
@@ -1572,11 +1580,15 @@
     const partner = c.econ_dev_companies;
     const teamLead = teamLeadByClient[c.id];
     const teamLeadAvatar = teamLeadAvatarByClient[c.id];
+    // Overdue = no activity in 60+ days (2 months) on an open engagement --
+    // this is the exact list Chris is working from, so it needs to be
+    // impossible to miss (Greg, 8/27/26).
+    const overdue = c.project_status !== "closed" && daysSince(c.last_activity_at || c.updated_at) >= 60;
     return `
       <div class="client-row" data-client-id="${c.id}">
         <div>
           <div class="cr-name">${escapeHtml(c.name)}</div>
-          <div class="cr-meta">${partner ? escapeHtml(partner.code) : "—"} &middot; Last activity: ${formatLastActivity(c.last_activity_at || c.updated_at)}</div>
+          <div class="cr-meta${overdue ? " cr-overdue" : ""}">${partner ? escapeHtml(partner.code) : "—"} &middot; Last activity: ${formatLastActivity(c.last_activity_at || c.updated_at)}${overdue ? '<span class="overdue-badge">Overdue</span>' : ""}</div>
         </div>
         <div class="eng-tl-block">
           ${teamLead ? `<div><div class="eng-tl-caption">Team Lead</div><div class="eng-tl-name-row"><div class="avatar-sm">${teamLeadAvatar ? `<img src="${escapeHtml(teamLeadAvatar)}" alt="" />` : escapeHtml(initials(teamLead))}</div><span class="eng-tl-name">${escapeHtml(teamLead)}</span></div></div>` : `<span class="cr-meta">No Team Lead</span>`}
