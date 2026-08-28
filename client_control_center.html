@@ -142,6 +142,26 @@
   .status-dot-yellow { background: var(--amber); }
   .status-dot-red { background: var(--danger); }
 
+  /* Editable status control (Team Lead / Admin only) -- lets you change an
+     engagement's status right here on its hub page, instead of only
+     displaying it read-only (Greg, 8/27/26: "lost the ability to change
+     status" -- it lived one click deeper, on the Dashboard Wizard, with no
+     hint that's where it was). Same segmented-control look as
+     client_profile.html's status toggle. */
+  .segmented-control {
+    display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden;
+    background: #f6f8fa;
+  }
+  .segmented-control .status-pill {
+    border: none; border-right: 1px solid var(--border); border-radius: 0; padding: 6px 13px;
+    font-size: 11.5px; font-weight: 700; background: transparent; color: var(--muted);
+    cursor: pointer; font-family: inherit; transition: background 0.15s ease, color 0.15s ease;
+  }
+  .segmented-control .status-pill:last-child { border-right: none; }
+  .segmented-control .status-pill:hover:not(:disabled):not(.active) { background: #eceff2; color: var(--text); }
+  .segmented-control .status-pill.active { background: var(--navy); color: #fff; }
+  .segmented-control .status-pill:disabled { cursor: default; }
+
   .delay-note { margin-top: 12px; padding: 12px 14px; border-radius: 8px; background: #f4f6f8; border: 1px solid var(--border); }
   .delay-note.delay-yellow { background: #fdf7ec; border-color: #f0dca6; }
   .delay-note.delay-red { background: #fbe9e9; border-color: #f0c2c0; }
@@ -454,7 +474,8 @@
           <h2 id="cm-name"></h2>
           <span class="status-badge-wrap">
             <span class="status-dot hidden" id="cm-status-dot" title=""></span>
-            <span class="badge" id="cm-status-badge"></span>
+            <span class="badge hidden" id="cm-status-badge"></span>
+            <div class="segmented-control hidden" id="cm-status-toggle"></div>
           </span>
         </div>
         <div id="cm-meta"></div>
@@ -577,6 +598,8 @@
 
   let currentUser = null;
   let activeClient = null;
+  let isSuperAdmin = false;
+  let isTeamLeadHere = false; // is currentUser the Team Lead on activeClient?
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -592,6 +615,7 @@
   }
   const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
   const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+  const PROJECT_STATUSES = ["accepted", "in_progress", "on_hold", "closed"];
 
   /* ---------- Ask AI ----------
      Browser -> eg-dashboard-ai Supabase Edge Function -> Claude API. The
@@ -793,11 +817,11 @@
 
     const clientId = new URLSearchParams(location.search).get("client");
 
-    const [{ data: profile, error: profileErr }] = await Promise.all([
-      sb.from("users").select("id, full_name, role, organization_id, email, phone").eq("id", user.id).single(),
-      clientId ? loadClient(clientId) : Promise.resolve(),
-      loadGlobalSearchIndex(),
-    ]);
+    // Profile needs to resolve before loadClient() renders anything status-
+    // related -- the status control's Team Lead/Admin gating depends on
+    // knowing who's signed in (Greg, 8/27/26).
+    const { data: profile, error: profileErr } = await sb
+      .from("users").select("id, full_name, role, organization_id, email, phone").eq("id", user.id).single();
 
     if (profileErr || !profile) {
       await sb.auth.signOut();
@@ -806,11 +830,17 @@
     }
 
     currentUser = profile;
+    isSuperAdmin = profile.role === "super_admin";
     $("loading-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
     maybeShowAiNudge();
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = roleLabel(profile.role);
+
+    await Promise.all([
+      clientId ? loadClient(clientId) : Promise.resolve(),
+      loadGlobalSearchIndex(),
+    ]);
 
     if (!clientId) {
       $("no-client-note").classList.remove("hidden");
@@ -847,23 +877,27 @@
     const partner = client.econ_dev_companies;
     $("cm-name").textContent = client.name;
     AI_CONTEXT_LABEL = `${client.name} — Engagement Workspace`;
-    // A single status pill -- project_status (accepted/in progress/on
-    // hold/closed) is the one that actually matters day-to-day for a
-    // specialist; client.status (active/finalized/archived) is an
-    // admin-level lifecycle field and was redundant to show alongside it.
-    $("cm-status-badge").className = `badge badge-${client.project_status}`;
-    $("cm-status-badge").textContent = PROJECT_STATUS_LABELS[client.project_status] || client.project_status;
     renderStatusAge(client);
 
     const { data: assignRows } = await sb
       .from("client_assignments")
-      .select("is_team_lead, users(full_name)")
+      .select("is_team_lead, user_id, users(full_name)")
       .eq("client_id", client.id)
       .not("user_id", "is", null);
     let teamLead = null;
     for (const r of assignRows || []) {
       if (r.is_team_lead && r.users && r.users.full_name) { teamLead = r.users.full_name; break; }
     }
+    isTeamLeadHere = (assignRows || []).some((r) => r.is_team_lead && r.user_id === currentUser.id);
+    // A single status control -- project_status (accepted/in progress/on
+    // hold/closed) is the one that actually matters day-to-day for a
+    // specialist; client.status (active/finalized/archived) is an
+    // admin-level lifecycle field and was redundant to show alongside it.
+    // Editable by Admin or this engagement's own Team Lead, same rule as
+    // client_profile.html's status toggle (Greg, 8/27/26: this used to be
+    // reachable only via the "TL - Dashboard Wizard" card, with no hint
+    // that's where status lived -- now it's right here on the hub page).
+    renderStatusToggle(client);
     // Trimmed to just the partner name and Team Lead -- the full specialist
     // roster lives one click away on the Engagement card, and repeating it
     // here was adding a line without answering "which client / where does
@@ -904,6 +938,44 @@
     if (!SUNK_COST_SPECIALTIES.includes(specialtyType)) return false;
     const partner = client && client.econ_dev_companies;
     return !partner || partner.bill_admin_qc_upfront !== false;
+  }
+
+  // ---------- Status control (Admin / Team Lead can change it here) ----------
+  // Same segmented control as client_profile.html's status toggle, gated
+  // the same way (isSuperAdmin || isTeamLeadHere). Everyone else sees the
+  // old read-only pill instead (Greg, 8/27/26).
+  function renderStatusToggle(client) {
+    const canEdit = isSuperAdmin || isTeamLeadHere;
+    if (!canEdit) {
+      $("cm-status-toggle").classList.add("hidden");
+      $("cm-status-badge").classList.remove("hidden");
+      $("cm-status-badge").className = `badge badge-${client.project_status}`;
+      $("cm-status-badge").textContent = PROJECT_STATUS_LABELS[client.project_status] || client.project_status;
+      return;
+    }
+    $("cm-status-badge").classList.add("hidden");
+    const toggle = $("cm-status-toggle");
+    toggle.classList.remove("hidden");
+    toggle.innerHTML = PROJECT_STATUSES.map((s) => `
+      <button type="button" data-pstatus="${s}" class="status-pill ${s === client.project_status ? "active" : ""}">${PROJECT_STATUS_LABELS[s]}</button>
+    `).join("");
+    toggle.querySelectorAll("button").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const newStatus = btn.dataset.pstatus;
+        if (newStatus === activeClient.project_status) return;
+        toggle.querySelectorAll("button").forEach((b) => (b.disabled = true));
+        const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", activeClient.id);
+        if (error) {
+          showBanner("Couldn't update status: " + error.message, "error");
+          toggle.querySelectorAll("button").forEach((b) => (b.disabled = false));
+          return;
+        }
+        activeClient.project_status = newStatus;
+        showBanner("Status updated.", "success");
+        renderStatusToggle(activeClient);
+        renderStatusAge(activeClient);
+      });
+    });
   }
 
   // ---------- Status age (overdue indicator + delay reason) ----------
