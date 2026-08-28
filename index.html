@@ -1566,12 +1566,16 @@
   }
 
   // ---------- My Engagements (tabs + Mine/All scope) ----------
-  // Overdue engagement dot: green <30 days, yellow <60, red 60+ since
-  // project_status last changed to In Progress. status_since is kept
-  // current by a database trigger (051_engagement_status_tracking.sql).
+  // Overdue engagement dot: green <30 days, yellow <60, red 60+ since the
+  // engagement was ORIGINALLY put In Progress (first_in_progress_at, added
+  // in 086_first_in_progress_at.sql) -- stamped once, never reset, unlike
+  // status_since (051_engagement_status_tracking.sql) which restarts on
+  // every status change. status_since is kept only as a fallback for rows
+  // from before 086 backfilled first_in_progress_at.
   function statusAgeDotHtml(c) {
-    if (c.project_status !== "in_progress" || !c.status_since) return "";
-    const days = Math.max(0, Math.floor((Date.now() - new Date(c.status_since).getTime()) / (1000 * 60 * 60 * 24)));
+    const since = c.first_in_progress_at || c.status_since;
+    if (c.project_status !== "in_progress" || !since) return "";
+    const days = Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / (1000 * 60 * 60 * 24)));
     const tier = days >= 60 ? "red" : days >= 30 ? "yellow" : "green";
     return `<span class="status-dot status-dot-${tier}" title="In Progress for ${days} day${days === 1 ? "" : "s"}"></span>`;
   }

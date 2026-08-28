@@ -983,9 +983,12 @@
   // usually because a closing call can't get scheduled -- with a place to
   // note why, so nobody has to ask and nobody has to re-explain it. Only
   // shown for In Progress; the other statuses don't carry the same
-  // "should be moving" expectation. status_since is kept current by a
-  // database trigger (051_engagement_status_tracking.sql) that resets it
-  // whenever project_status actually changes.
+  // "should be moving" expectation. Days shown = time since the engagement
+  // was ORIGINALLY put In Progress (first_in_progress_at, added in
+  // 086_first_in_progress_at.sql) -- that timestamp is stamped once and
+  // never reset, unlike status_since (051_engagement_status_tracking.sql),
+  // which restarts on every status change and is kept only as a fallback
+  // for rows from before 086 backfilled it.
   function daysSince(iso) {
     if (!iso) return 0;
     return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24)));
@@ -1005,18 +1008,25 @@
       return;
     }
 
-    const days = daysSince(client.status_since);
+    const days = daysSince(client.first_in_progress_at || client.status_since);
     const tier = statusAgeTier(days);
     dot.className = `status-dot status-dot-${tier}`;
-    dot.title = `In Progress for ${days} day${days === 1 ? "" : "s"}`;
 
-    note.classList.remove("hidden", "delay-yellow", "delay-red");
-    if (tier === "yellow") note.classList.add("delay-yellow");
-    if (tier === "red") note.classList.add("delay-red");
+    // Greg (8/28/26): no need for a delay reason until an engagement is
+    // actually overdue (60+ days) -- the note only appears at that point,
+    // and the label switches from "In Progress" framing to "Overdue".
+    if (tier !== "red") {
+      dot.title = `In Progress for ${days} day${days === 1 ? "" : "s"}`;
+      note.classList.add("hidden");
+      note.classList.remove("delay-yellow", "delay-red");
+      return;
+    }
+
+    dot.title = `Overdue — ${days} day${days === 1 ? "" : "s"}`;
+    note.classList.remove("hidden", "delay-yellow");
+    note.classList.add("delay-red");
     $("cm-delay-note-label").textContent =
-      tier === "green"
-        ? `In Progress for ${days} day${days === 1 ? "" : "s"}`
-        : `In Progress for ${days} days — why is it taking longer than expected?`;
+      `Overdue — ${days} day${days === 1 ? "" : "s"} in progress. Why is it taking longer than expected?`;
     $("cm-delay-reason").value = client.delay_reason || "";
     $("cm-delay-saved").style.display = "none";
   }
