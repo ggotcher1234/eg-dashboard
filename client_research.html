@@ -1425,18 +1425,36 @@
     const questions = allQuestions.filter((q) => q.research_area === area);
     if (!questions.length) {
       el.innerHTML = `<div class="field-hint" style="margin-bottom:10px;">No research questions yet — these are what the CEO close-out survey asks about.</div>`;
-      return;
+    } else {
+      el.innerHTML = questions.map((q) => `
+        <div class="rq-doc-row">
+          <input type="text" class="row-input-edit rq-question-input" data-question-id="${q.id}" value="${escapeHtml(q.question || "")}" placeholder="e.g. Who are our fastest-growing competitors?" style="flex:1; padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13.5px; font-family:inherit;" />
+          <button type="button" class="btn-danger icon-btn" data-delete-question="${q.id}" title="Delete">&times;</button>
+        </div>
+      `).join("");
+      wireQuestionHandlers(el, area);
     }
-    el.innerHTML = questions.map((q) => `
-      <div class="rq-doc-row">
-        <input type="text" class="row-input-edit rq-question-input" data-question-id="${q.id}" value="${escapeHtml(q.question || "")}" placeholder="e.g. Who are our fastest-growing competitors?" style="flex:1; padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13.5px; font-family:inherit;" />
-        <button type="button" class="btn-danger icon-btn" data-delete-question="${q.id}" title="Delete">&times;</button>
-      </div>
-    `).join("");
-    wireQuestionHandlers(el);
+    updateAreaAddButtonsState(area);
   }
 
-  function wireQuestionHandlers(scopeEl) {
+  // Greg (8/28/26): a document or link has to be answering *something* --
+  // require at least one non-blank research question under an area before
+  // Add Document / Add Link there are usable. Only gates NEW adds; nothing
+  // already uploaded is affected.
+  function areaHasQuestion(area) {
+    return allQuestions.some((q) => q.research_area === area && q.question && q.question.trim());
+  }
+
+  function updateAreaAddButtonsState(area) {
+    const hasQuestion = areaHasQuestion(area);
+    const hint = "Add a research question above first — a document or link needs a question it's answering.";
+    document.querySelectorAll(`[data-area-add-doc="${area}"], [data-area-add-link="${area}"]`).forEach((btn) => {
+      btn.disabled = !hasQuestion;
+      btn.title = hasQuestion ? "" : hint;
+    });
+  }
+
+  function wireQuestionHandlers(scopeEl, area) {
     scopeEl.querySelectorAll(".rq-question-input").forEach((inp) => {
       const original = inp.value;
       inp.addEventListener("blur", async () => {
@@ -1444,6 +1462,9 @@
         if (value === original) return;
         const { error } = await sb.from("client_research_questions").update({ question: value || null }).eq("id", inp.dataset.questionId);
         if (error) { showBanner("Couldn't save question: " + error.message, "error"); inp.value = original; return; }
+        const q = allQuestions.find((x) => x.id === inp.dataset.questionId);
+        if (q) q.question = value || null;
+        updateAreaAddButtonsState(area);
       });
     });
     scopeEl.querySelectorAll("[data-delete-question]").forEach((btn) => {
