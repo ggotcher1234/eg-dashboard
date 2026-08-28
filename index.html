@@ -429,6 +429,9 @@
   .eng-tabs { display: flex; gap: 4px; background: #eef1f4; border-radius: 999px; padding: 3px; flex-shrink: 0; }
   .eng-tab { background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 999px; white-space: nowrap; }
   .eng-tab.active { background: #fff; color: var(--navy); box-shadow: 0 1px 3px rgba(20,48,77,0.1); }
+  .eng-closed-toggle { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .eng-closed-toggle input { margin: 0; cursor: pointer; }
+  .eng-closed-toggle:hover { color: var(--text); }
   .eng-icon-sq { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0; }
   .eng-tl-block { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .eng-tl-caption { font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
@@ -641,6 +644,10 @@
       <div class="engagements-panel">
         <div class="eng-panel-header">
           <div class="eng-header-right">
+            <label class="eng-closed-toggle" for="eng-show-closed">
+              <input type="checkbox" id="eng-show-closed" />
+              Show closed
+            </label>
             <div class="eng-tabs" id="eng-tabs">
               <button type="button" class="eng-tab" data-tab="recent">Recent</button>
             </div>
@@ -777,6 +784,7 @@
   let engagementTab = "all";            // "all" | "attention" | "recent"
   let engagementSort = "name_asc";      // "name_asc" | "name_desc" | "lead_asc" | "lead_desc"
   let engagementsExpanded = false;      // My Engagements list is capped until "View all" is clicked
+  let showClosedEngagements = false;    // Off by default -- "Show closed" checkbox lifts the filter below
   const ENGAGEMENTS_ROW_LIMIT = 6;
 
   const $ = (id) => document.getElementById(id);
@@ -1626,9 +1634,11 @@
   function renderEngagementsList() {
     const list = $("engagements-list");
     // Closed engagements are done work -- they'd just be dead weight in a
-    // "what do I need to look at" list, so this view is active-only. They're
-    // still reachable via search and the Client Workspace itself.
-    let pool = allClients.filter((c) => c.project_status !== "closed");
+    // "what do I need to look at" list, so this view is active-only by
+    // default. The "Show closed" checkbox (Greg, 8/28/26, per the platform
+    // review meeting) lifts the filter for anyone who wants to look back at
+    // finished engagements without having to search for them by name.
+    let pool = showClosedEngagements ? [...allClients] : allClients.filter((c) => c.project_status !== "closed");
     if (engagementScope === "mine") pool = pool.filter((c) => myClientIds.has(c.id));
 
     if (engagementTab === "recent") {
@@ -1665,6 +1675,11 @@
   $("eng-view-all-link").addEventListener("click", (e) => {
     e.preventDefault();
     engagementsExpanded = !engagementsExpanded;
+    renderEngagementsList();
+  });
+  $("eng-show-closed").addEventListener("change", (e) => {
+    showClosedEngagements = e.target.checked;
+    engagementsExpanded = false;
     renderEngagementsList();
   });
 
