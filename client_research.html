@@ -819,7 +819,7 @@
       $("rv-template-add-form").addEventListener("submit", (e) => { e.preventDefault(); addSharedTemplate(); });
     }
 
-    await loadDocuments();
+    await Promise.all([loadDocuments(), loadResearchQuestions()]);
     renderResearchAreaSections();
   }
 
@@ -1252,28 +1252,35 @@
   }
 
   // ---------- Economic Gardening Research Reports (flat Documents & Links,
-  // per area) ----------
+  // per area, plus a lightweight Research Questions list) ----------
   // GIS is folded into Outbound Marketing, not its own card (Greg, 8/22/26).
   //
-  // This used to be a two-tier model -- Research Questions each holding
-  // their own documents/links -- but Greg/Chris (8/26/26) asked to drop the
-  // question layer entirely: specialists now just upload a file or add a
-  // link directly under the area, no per-question grouping, no question
-  // text field. Documents already carried research_area directly (not just
-  // question_id) from day one, so this is really just always taking the
-  // path the app already used for docs uploaded "the old flat way" before
-  // Research Questions existed (see the old (Unsorted) bucket this
-  // replaces) -- nothing new needed on the documents table, and any
-  // document that was attached to an old question still shows here since
-  // it's filtered by research_area, not question_id.
+  // History: this used to be a two-tier model -- Research Questions each
+  // holding their own documents/links -- but Greg/Chris (8/26/26) dropped
+  // the question layer entirely, moving documents to a flat per-area list
+  // with no question text at all. That turned out to be a mistake: the CEO
+  // close-out survey (evaluation_public.html, via get_evaluation_form_data()
+  // in 079_evaluation_form_data.sql) reads its rating criteria straight out
+  // of client_research_questions.question -- with no UI left to write that
+  // column, the survey silently had nothing to show. Greg (8/28/26) asked
+  // for the question fields back.
   //
-  // The client_research_questions table itself is untouched (no migration,
-  // no data deleted) -- this page just stops reading/writing it. Two other
-  // features used to depend on question text specifically and were updated
-  // in the same pass to key off research area instead: client_profile.html's
-  // evaluation-email gate (now checks for any research document instead of
-  // question text) and Client Control Center's Draft Update Email (now
-  // names the research area instead of quoting a specific question).
+  // What came back: a simple, flat list of question text per area (add /
+  // edit inline / delete), NOT the old per-question document grouping --
+  // documents stay exactly where they were post-8/26, tagged with
+  // research_area only, no question_id. So client_research_questions rows
+  // now exist purely to hold question text; nothing links a document to a
+  // specific question anymore, and nothing needs to.
+  //
+  // Visibility: these questions are what the CEO close-out survey asks
+  // about, not something a client should read on their own dashboard
+  // (Greg, 8/28/26: "default not to show the questions in the Client
+  // Dashboard but do show them in the CEO close-out survey"). The survey
+  // gets them straight from client_research_questions via the RPC above,
+  // untouched by any of this. client_public.html was updated separately to
+  // stop rendering question text and drop any now-empty per-question
+  // entry get_client_public_view() still produces (see its
+  // renderResearchAreaBody comment).
   const RESEARCH_AREAS = [
     ["market_dynamics", "Market Dynamics Research"],
     ["outbound", "Outbound Marketing"],
@@ -1281,11 +1288,23 @@
     ["watering_holes", "Watering Holes"],
   ];
   let allDocuments = [];
+  let allQuestions = [];
   // renderResearchAreaSections() rebuilds the whole accordion group from
   // scratch after every upload/delete/reorder (simplest way to keep sort
   // order/render logic in one place) — track which area was open so that
   // rebuild doesn't visually collapse it out from under the consultant.
   let openResearchArea = null;
+
+  async function loadResearchQuestions() {
+    const { data, error } = await sb
+      .from("client_research_questions")
+      .select("*")
+      .eq("client_id", currentClient.id)
+      .order("research_area", { ascending: true })
+      .order("sort_order", { ascending: true });
+    if (error) { showBanner("Couldn't load research questions: " + error.message, "error"); return; }
+    allQuestions = data || [];
+  }
 
   async function loadDocuments() {
     // sort_order is what a specialist can now drag/click-reorder into the
@@ -1311,6 +1330,12 @@
           <h2><span class="accordion-chevron">&#9656;</span> ${escapeHtml(label)}</h2>
         </div>
         <div class="accordion-body ${isOpen ? "open" : ""}" id="ra-${key}-body">
+          <div class="rq-docs-label">Research Questions</div>
+          <div id="ra-${key}-questions"></div>
+          <div class="rq-add-row" style="margin-bottom:16px;">
+            <button type="button" class="btn-secondary btn-sm" data-area-add-question="${key}">+ Add Question</button>
+          </div>
+
           <div class="rq-docs-label">Documents &amp; Links</div>
           <div id="ra-${key}-docs"></div>
           <div class="rq-add-row">
@@ -1351,6 +1376,10 @@
       });
     });
 
+    container.querySelectorAll("[data-area-add-question]").forEach((btn) => {
+      btn.addEventListener("click", () => addAreaQuestion(btn.dataset.areaAddQuestion));
+    });
+
     container.querySelectorAll("[data-area-add-doc]").forEach((btn) => {
       btn.addEventListener("click", () => pickAreaDocuments(btn.dataset.areaAddDoc));
     });
@@ -1377,7 +1406,7 @@
       btn.addEventListener("click", () => saveAreaLink(btn.dataset.areaSaveLink));
     });
 
-    RESEARCH_AREAS.forEach(([key]) => renderAreaDocs(key));
+    RESEARCH_AREAS.forEach(([key]) => { renderAreaQuestions(key); renderAreaDocs(key); });
   }
 
   function renderAreaDocs(area) {
@@ -1387,8 +1416,66 @@
     wireDocRowHandlers(el);
   }
 
+  // Research Questions -- flat list of question text per area, no document
+  // grouping (see the comment above RESEARCH_AREAS for why this came back
+  // and why it's kept simple). Existing questions are inline-editable
+  // (blur to save); "+ Add Question" appends a blank one to the end.
+  function renderAreaQuestions(area) {
+    const el = $(`ra-${area}-questions`);
+    const questions = allQuestions.filter((q) => q.research_area === area);
+    if (!questions.length) {
+      el.innerHTML = `<div class="field-hint" style="margin-bottom:10px;">No research questions yet — these are what the CEO close-out survey asks about.</div>`;
+      return;
+    }
+    el.innerHTML = questions.map((q) => `
+      <div class="rq-doc-row">
+        <input type="text" class="row-input-edit rq-question-input" data-question-id="${q.id}" value="${escapeHtml(q.question || "")}" placeholder="e.g. Who are our fastest-growing competitors?" style="flex:1; padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13.5px; font-family:inherit;" />
+        <button type="button" class="btn-danger icon-btn" data-delete-question="${q.id}" title="Delete">&times;</button>
+      </div>
+    `).join("");
+    wireQuestionHandlers(el);
+  }
+
+  function wireQuestionHandlers(scopeEl) {
+    scopeEl.querySelectorAll(".rq-question-input").forEach((inp) => {
+      const original = inp.value;
+      inp.addEventListener("blur", async () => {
+        const value = inp.value.trim();
+        if (value === original) return;
+        const { error } = await sb.from("client_research_questions").update({ question: value || null }).eq("id", inp.dataset.questionId);
+        if (error) { showBanner("Couldn't save question: " + error.message, "error"); inp.value = original; return; }
+      });
+    });
+    scopeEl.querySelectorAll("[data-delete-question]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const { error } = await sb.from("client_research_questions").delete().eq("id", btn.dataset.deleteQuestion);
+        if (error) { showBanner("Couldn't delete question: " + error.message, "error"); return; }
+        await loadResearchQuestions();
+        RESEARCH_AREAS.forEach(([key]) => renderAreaQuestions(key));
+      });
+    });
+  }
+
+  async function addAreaQuestion(area) {
+    const existing = allQuestions.filter((q) => q.research_area === area);
+    const sortOrder = existing.length ? Math.max(...existing.map((q) => q.sort_order || 0)) + 1 : 1;
+    const { error } = await sb.from("client_research_questions").insert({
+      client_id: currentClient.id,
+      research_area: area,
+      question: "",
+      sort_order: sortOrder,
+    });
+    if (error) { showBanner("Couldn't add question: " + error.message, "error"); return; }
+    await loadResearchQuestions();
+    renderAreaQuestions(area);
+    const inputs = $(`ra-${area}-questions`).querySelectorAll(".rq-question-input");
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  }
+
   function renderQuestionDocs(docs, scope) {
-    if (!docs.length) return `<div class="field-hint" style="margin-bottom:6px;">No files or links added yet.</div>`;
+    // Greg (8/28/26): dropped the empty-state hint here -- an empty list
+    // under "Documents & Links" already makes that obvious on its own.
+    if (!docs.length) return "";
     return docs.map((d, i) => {
       // A row is either an uploaded file (storage_path -- opens via a
       // signed URL, same as always) or a link (url -- a plain <a>, no

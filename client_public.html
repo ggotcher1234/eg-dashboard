@@ -792,17 +792,22 @@
     if (e.target.id === "eval-modal-overlay") closeEvalResponseModal();
   });
 
-  // Each area is now a list of { question, documents } entries (a
-  // question consultants are researching, and the files that answer it) —
-  // rather than a flat file list. A legacy entry with question: null
-  // (files tagged with an area before Questions existed) renders as a
-  // plain file list with no heading above it.
+  // Each area is a list of { question, documents } entries from
+  // get_client_public_view() -- one per client_research_questions row,
+  // plus a trailing entry (question: null) for documents not tied to a
+  // specific question. Question text is intentionally NOT shown here
+  // (Greg, 8/28/26): research questions are what the CEO close-out survey
+  // asks about, not something meant for the client-facing dashboard.
+  // Documents also aren't tagged to a specific question anymore (client_
+  // research.html dropped that linkage 8/26/26), so every real question
+  // row comes through with an empty documents array -- those are filtered
+  // out entirely rather than rendered as an empty block; only entries that
+  // actually have documents (in practice, just the trailing one) show.
   function renderResearchAreaBody(entriesIn) {
-    const entries = (entriesIn || []).filter(Boolean);
+    const entries = (entriesIn || []).filter((e) => e && e.documents && e.documents.length);
     if (!entries.length) return `<div class="rc-empty">Nothing here yet.</div>`;
     return entries.map((entry) => `
       <div class="rc-question-block">
-        ${entry.question ? `<div class="rc-question-title">${escapeHtml(entry.question)}</div>` : ""}
         ${renderDocLinks(entry.documents)}
       </div>
     `).join("");
