@@ -230,10 +230,22 @@
   .list-row-edit { display: flex; align-items: flex-end; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0f2f4; }
   .list-row-edit:first-child { padding-top: 0; }
   .list-row-edit .list-checkbox { margin-bottom: 9px; flex-shrink: 0; }
+  .list-row-edit .list-checkbox:disabled { cursor: not-allowed; opacity: 0.7; }
   .lre-fields { display: flex; gap: 16px; flex-wrap: wrap; flex: 1; }
   .lre-fields .field { margin-bottom: 0; flex: 1; min-width: 140px; }
   .lre-fields label { font-size: 11px; }
   .list-row-edit .icon-btn { flex-shrink: 0; }
+  /* Auto-completing Next Steps (Chris/Greg, 8/28/26): a step tagged with
+     auto_source (see 090_next_step_auto_source.sql) checks itself off when
+     its matching event fires elsewhere in the app -- Close-Out Survey
+     submission is the first one wired up. The checkbox is disabled rather
+     than hidden so it's still obvious at a glance whether that step is
+     actually done; the badge explains why nobody has to click it. */
+  .auto-step-badge {
+    display: inline-flex; align-items: center; gap: 4px; margin-bottom: 9px; padding: 2px 8px;
+    border-radius: 999px; background: #eef3ea; color: var(--accent-dark); font-size: 10.5px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; white-space: nowrap;
+  }
 
   .add-row-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); align-items: flex-end; }
   .add-row-form .field { margin-bottom: 0; flex: 1; min-width: 140px; }
@@ -2368,7 +2380,8 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
 
     list.innerHTML = rows.map((r) => `
       <div class="list-row-edit">
-        ${cfg.isChecklist ? `<input type="checkbox" class="list-checkbox" data-toggle-id="${r.id}" ${r.completed ? "checked" : ""} />` : ""}
+        ${cfg.isChecklist ? `<input type="checkbox" class="list-checkbox" data-toggle-id="${r.id}" ${r.completed ? "checked" : ""} ${r.auto_source ? "disabled" : ""} title="${r.auto_source ? "Completes automatically -- no need to check this by hand" : ""}" />` : ""}
+        ${cfg.isChecklist && r.auto_source ? `<span class="auto-step-badge" title="This step checks itself off automatically -- see the Task's own note for how.">Auto</span>` : ""}
         <div class="lre-fields">
           ${cfg.fields.map((f) => `
             <div class="field">
