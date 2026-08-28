@@ -215,39 +215,44 @@
   }
   .inline-edit-input:focus { outline: none; border-color: var(--navy-light); }
   .inline-edit-input[readonly] { background: #f4f6f8; color: var(--muted); }
-  /* Program Finance holds a whole contact block (name/title, org, mailing
-     address, email, phone) as free-form multi-line text -- some Programs
-     only have a name and email, others a full mailing address, so this
-     isn't broken into separate structured fields (Greg, 8/22/26). Prints
-     straight onto the generated invoice's "Bill To" block in
-     program_invoicing.html (already white-space:pre-line there). */
+  /* Contract Signer / Program Administrator / Program Finance used to be one
+     big free-form text block each (name/title, org, mailing address, email,
+     phone all run together) -- Rita (8/28/26, per the platform review
+     meeting) asked for real named fields instead, the same shape the CC List
+     already used. All four "kinds of Program contact" now share one
+     structured contact-card component (see 089_program_contact_structured_
+     fields.sql): Name, Title, Address, Email, Phone, Notes. Old free-form
+     text isn't lost -- it was copied verbatim into a placeholder contact's
+     Notes field so it can be read and re-keyed into proper fields over time. */
   textarea.inline-edit-textarea { min-height: 128px; line-height: 1.5; resize: vertical; }
   .delete-row-btn { background: transparent; border: none; color: var(--muted); font-size: 17px; padding: 4px 8px; line-height: 1; }
   .delete-row-btn:hover { color: var(--danger-dark); }
 
   tr.contacts-detail-row td { background: #f8fafb; padding: 16px 18px; border-bottom: 1px solid var(--border); }
   .contacts-detail-inner { max-width: 780px; }
-  .contact-row {
-    display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #e7ecf0;
+  .contact-card {
+    border: 1px solid #e7ecf0; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; background: #fff;
   }
-  .contact-row:last-of-type { border-bottom: none; }
-  .contact-row input[type="text"] {
-    padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; background: #fff;
+  .contact-card:last-of-type { margin-bottom: 0; }
+  .cc-row { display: flex; gap: 8px; margin-bottom: 6px; }
+  .cc-row:last-child { margin-bottom: 0; }
+  .cc-row input[type="text"] {
+    flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; background: #fff;
   }
-  .contact-row .cr-name { flex: 1.3; min-width: 0; }
-  .contact-row .cr-title { flex: 1.3; min-width: 0; }
-  .contact-row .cr-email { flex: 1.4; min-width: 0; }
-  .contact-row .cr-phone { flex: 1; min-width: 0; }
-  .contact-row.readonly-row { flex-direction: column; align-items: stretch; gap: 3px; }
-  .contact-row.readonly-row span { font-size: 13px; }
-  .contact-row.readonly-row .cr-name { font-weight: 600; color: var(--navy); }
-  .contact-row.readonly-row .cr-muted { color: var(--muted); }
-  .contact-row.readonly-row .cr-name-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .contact-row.readonly-row .cr-sub-line { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .contact-card textarea.cc-notes {
+    width: 100%; min-height: 40px; margin-top: 2px; padding: 6px 8px; border: 1px solid var(--border);
+    border-radius: 5px; font-size: 13px; font-family: inherit; resize: vertical;
+  }
+  .contact-card-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
+  .contact-card.readonly { padding: 8px 12px; }
+  .cc-readonly-line { font-size: 13px; margin-top: 2px; }
+  .cc-readonly-line:first-child { margin-top: 0; }
+  .cc-readonly-name { font-weight: 600; color: var(--navy); }
+  .cc-readonly-muted { color: var(--muted); }
   .contacts-empty { padding: 10px 0; color: var(--muted); font-size: 13px; }
-  .contacts-add-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+  .contacts-add-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
   .contacts-add-row input[type="text"] {
-    padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; background: #fff;
+    padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; background: #fff; flex: 1; min-width: 100px;
   }
 
   .csv-file-input { display: none; }
@@ -760,6 +765,78 @@
     return allContacts.filter((c) => c.partner_id === partnerId);
   }
 
+  // Rita (8/28/26, per the platform review meeting): named fields instead of
+  // free-form text for Contract Signer / Program Administrator / Program
+  // Finance -- same shape the CC List contacts already used. Migration 089
+  // added a `category` column to econ_dev_partner_contacts so all four
+  // "kinds of Program contact" now live in one structured table instead of
+  // three free-form text blobs plus one structured list.
+  const PROGRAM_CONTACT_CATEGORIES = [
+    { key: "contract_signer", label: "Contract Signer", hint: "Who signed EG's contract for this Program." },
+    { key: "program_administrator", label: "Program Administrator", hint: "Day-to-day contact(s) for this Program -- add Regional Directors or other sub-groups as separate contacts instead of cramming them into one." },
+    { key: "program_finance", label: "Program Finance", hint: "Who receives EG's invoices for this Program." },
+    { key: "cc_list", label: "CC List", hint: "People to keep in the loop day-to-day -- the first one listed doubles as the \"Primary Contact\" shown on the Programs list." },
+  ];
+
+  function contactsForCategory(partnerId, category) {
+    return contactsForPartner(partnerId).filter((c) => (c.category || "cc_list") === category);
+  }
+
+  function renderContactCard(c, editable) {
+    if (!editable) {
+      return `
+        <div class="contact-card readonly">
+          <div class="cc-readonly-line"><span class="cc-readonly-name">${escapeHtml(c.name || "")}</span>${c.title ? ` <span class="cc-readonly-muted">${escapeHtml(c.title)}</span>` : ""}</div>
+          ${c.address ? `<div class="cc-readonly-line cc-readonly-muted">${escapeHtml(c.address)}</div>` : ""}
+          ${(c.email || c.phone) ? `<div class="cc-readonly-line cc-readonly-muted">${[c.email, c.phone].filter(Boolean).map(escapeHtml).join(" · ")}</div>` : ""}
+          ${c.notes ? `<div class="cc-readonly-line cc-readonly-muted" style="white-space:pre-line;">${escapeHtml(c.notes)}</div>` : ""}
+        </div>
+      `;
+    }
+    return `
+      <div class="contact-card">
+        <div class="cc-row">
+          <input type="text" data-contact-id="${c.id}" data-contact-field="name" value="${escapeHtml(c.name || "")}" placeholder="Name" />
+          <input type="text" data-contact-id="${c.id}" data-contact-field="title" value="${escapeHtml(c.title || "")}" placeholder="Title" />
+        </div>
+        <div class="cc-row">
+          <input type="text" data-contact-id="${c.id}" data-contact-field="address" value="${escapeHtml(c.address || "")}" placeholder="Address" />
+        </div>
+        <div class="cc-row">
+          <input type="text" data-contact-id="${c.id}" data-contact-field="email" value="${escapeHtml(c.email || "")}" placeholder="Email" />
+          <input type="text" data-contact-id="${c.id}" data-contact-field="phone" value="${escapeHtml(c.phone || "")}" placeholder="Phone" />
+        </div>
+        <textarea class="cc-notes" data-contact-id="${c.id}" data-contact-field="notes" placeholder="Notes">${escapeHtml(c.notes || "")}</textarea>
+        <div class="contact-card-actions">
+          <button type="button" class="btn-danger icon-btn" data-delete-contact-id="${c.id}" title="Delete">&times;</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderContactCategorySection(p, catDef) {
+    const contacts = contactsForCategory(p.id, catDef.key);
+    const rowsHtml = contacts.length
+      ? contacts.map((c) => renderContactCard(c, isSuperAdmin)).join("")
+      : `<div class="contacts-empty">No ${escapeHtml(catDef.label)} contacts on file for this program yet.</div>`;
+    const addFormHtml = isSuperAdmin ? `
+      <form class="contacts-add-row" data-add-contact-partner="${p.id}" data-add-contact-category="${catDef.key}">
+        <input type="text" id="new-contact-name-${catDef.key}-${p.id}" placeholder="Name" required />
+        <input type="text" id="new-contact-title-${catDef.key}-${p.id}" placeholder="Title" />
+        <input type="text" id="new-contact-address-${catDef.key}-${p.id}" placeholder="Address" />
+        <input type="text" id="new-contact-email-${catDef.key}-${p.id}" placeholder="Email" />
+        <input type="text" id="new-contact-phone-${catDef.key}-${p.id}" placeholder="Phone" />
+        <input type="text" id="new-contact-notes-${catDef.key}-${p.id}" placeholder="Notes" />
+        <button type="submit" class="btn-secondary btn-sm">+ Add</button>
+      </form>
+    ` : "";
+    return `
+      <label style="margin-top:18px;">${escapeHtml(catDef.label)}</label>
+      <div class="field-hint" style="font-size:12px; color:var(--muted); margin:-6px 0 6px;">${escapeHtml(catDef.hint)}</div>
+      <div class="contacts-detail-inner">${rowsHtml}${addFormHtml}</div>
+    `;
+  }
+
   function applySort(rows) {
     const dir = sortDir === "asc" ? 1 : -1;
     return [...rows].sort((a, b) => {
@@ -835,15 +912,18 @@
 
   // Primary contact column (Greg, 8/28/26, per the platform review
   // meeting): Rita's problem was having to open every Program's detail
-  // popup just to find a phone number. Uses the first contact on that
-  // Program's CC List (econ_dev_partner_contacts, ordered by sort_order --
-  // whichever was added first) as "primary" -- there's no explicit
-  // primary flag on that table, so this is a judgment call worth
-  // confirming with Rita if a Program's CC List isn't already ordered
-  // with the right person first.
+  // popup just to find a phone number. Now that contacts are split into
+  // categories (089_program_contact_structured_fields.sql), prefer the
+  // first Program Administrator contact (the day-to-day contact), falling
+  // back to the first CC List contact if there's no Program Administrator
+  // on file yet. Still a judgment call, not an explicit "primary" flag --
+  // worth confirming with Rita once real people replace the migration's
+  // "Imported from ..." placeholder rows.
   function primaryContactForPartner(partnerId) {
-    const contacts = contactsForPartner(partnerId);
-    return contacts.length ? contacts[0] : null;
+    const admins = contactsForCategory(partnerId, "program_administrator");
+    if (admins.length) return admins[0];
+    const ccList = contactsForCategory(partnerId, "cc_list");
+    return ccList.length ? ccList[0] : null;
   }
 
   function renderPrimaryContactCell(p) {
@@ -947,24 +1027,15 @@
       <label for="pd-physical-address-input" style="margin-top:18px;">Address</label>
       <input type="text" class="inline-edit-input" id="pd-physical-address-input" data-program-id="${p.id}" data-program-field="physical_address" value="${escapeHtml(p.physical_address || "")}" ${editableAttrs} />
 
-      <!-- Contract Signer / Program Administrator / Program Finance -- this
-           exact 3-block format + order matches Chris's standing "EG Programs
-           Contact Info" doc (6/25/26). Each is freeform text (name/title,
-           org, address, email, phone -- some Programs have several people
-           and sub-groups crammed into one block, e.g. Regional Directors
-           under Program Administrator), same pattern Program Finance
-           already used. See 083_program_contact_signer_administrator.sql. -->
-      <label for="pd-contract-signer-input" style="margin-top:18px;">Contract Signer</label>
-      <div class="field-hint" style="font-size:12px; color:var(--muted); margin:-6px 0 6px;">Who signed EG's contract for this Program.</div>
-      <textarea class="inline-edit-input inline-edit-textarea" id="pd-contract-signer-input" data-program-id="${p.id}" data-program-field="contract_signer" ${editableAttrs}>${escapeHtml(p.contract_signer || "")}</textarea>
-
-      <label for="pd-program-administrator-input" style="margin-top:18px;">Program Administrator</label>
-      <div class="field-hint" style="font-size:12px; color:var(--muted); margin:-6px 0 6px;">Day-to-day contact(s) for this Program -- add Regional Directors or other sub-groups as extra lines in the same block if needed.</div>
-      <textarea class="inline-edit-input inline-edit-textarea" id="pd-program-administrator-input" data-program-id="${p.id}" data-program-field="program_administrator" ${editableAttrs}>${escapeHtml(p.program_administrator || "")}</textarea>
-
-      <label for="pd-address-input" style="margin-top:18px;">Program Finance</label>
-      <div class="field-hint" style="font-size:12px; color:var(--muted); margin:-6px 0 6px;">Who receives EG's invoices for this Program -- name/title, org, mailing address, email, phone. Some Programs are just a name and email.</div>
-      <textarea class="inline-edit-input inline-edit-textarea" id="pd-address-input" data-program-id="${p.id}" data-program-field="address" ${editableAttrs}>${escapeHtml(p.address || "")}</textarea>
+      <!-- Contract Signer / Program Administrator / Program Finance / CC List
+           -- Rita (8/28/26, per the platform review meeting) asked for named
+           fields (Name, Title, Address, Email, Phone, Notes) instead of one
+           free-form text block each. All four share the same structured
+           contact-card component now; old free-form text was copied intact
+           into a placeholder contact's Notes field for re-keying (see
+           089_program_contact_structured_fields.sql). Order matches Chris's
+           standing "EG Programs Contact Info" doc (6/25/26), CC List last. -->
+      ${PROGRAM_CONTACT_CATEGORIES.map((cat) => renderContactCategorySection(p, cat)).join("")}
 
       <label style="margin-top:18px;">Billing</label>
       <div class="checkrow" style="margin-top:2px;">
@@ -972,10 +1043,6 @@
         <label for="pd-admin-qc-upfront">Bill Admin/QC hours up front</label>
       </div>
       <div class="field-hint" style="font-size:12px; color:var(--muted); margin:-4px 0 0;">On (default): Admin and Quality Control hours bill in full the moment they're allotted, same as always. Off: this Program's Admin/QC hours are billed as actually performed, like every other specialty -- specialists log real hours and invoices pull from that.</div>
-
-      <label style="margin-top:18px;">CC List</label>
-      <div class="field-hint" style="font-size:12px; color:var(--muted); margin:-6px 0 6px;">People to keep in the loop day-to-day -- the first one listed doubles as the "Primary Contact" shown on the Programs list.</div>
-      <div id="pd-contacts-inner">${renderContactsDetail(p, contactsForPartner(p.id))}</div>
     `;
     wireProgramInlineEdits();
     wireAdminQcUpfrontToggle();
@@ -1121,43 +1188,10 @@
     });
   });
 
-  function renderContactsDetail(p, contacts) {
-    const rowsHtml = contacts.length
-      ? contacts.map((c) => isSuperAdmin ? `
-          <div class="contact-row">
-            <input type="text" class="cr-name" data-contact-id="${c.id}" data-contact-field="name" value="${escapeHtml(c.name || "")}" placeholder="Name" />
-            <input type="text" class="cr-title" data-contact-id="${c.id}" data-contact-field="title" value="${escapeHtml(c.title || "")}" placeholder="Title" />
-            <input type="text" class="cr-email" data-contact-id="${c.id}" data-contact-field="email" value="${escapeHtml(c.email || "")}" placeholder="Email" />
-            <input type="text" class="cr-phone" data-contact-id="${c.id}" data-contact-field="phone" value="${escapeHtml(c.phone || "")}" placeholder="Phone" />
-            <button type="button" class="btn-danger icon-btn" data-delete-contact-id="${c.id}" title="Delete" style="padding:4px 9px;">&times;</button>
-          </div>
-        ` : `
-          <div class="contact-row readonly-row">
-            <div class="cr-name-line">
-              <span class="cr-name">${escapeHtml(c.name || "")}</span>
-              ${c.title ? `<span class="cr-muted">${escapeHtml(c.title)}</span>` : ""}
-            </div>
-            <div class="cr-sub-line">
-              ${c.email ? `<span class="cr-muted">${escapeHtml(c.email)}</span>` : ""}
-              ${c.phone ? `<span class="cr-muted">${escapeHtml(c.phone)}</span>` : ""}
-            </div>
-          </div>
-        `).join("")
-      : `<div class="contacts-empty">No CC List contacts on file for this program yet.</div>`;
-
-    const addFormHtml = isSuperAdmin ? `
-      <form class="contacts-add-row" data-add-contact-partner="${p.id}">
-        <input type="text" id="new-contact-name-${p.id}" placeholder="Name" required />
-        <input type="text" id="new-contact-title-${p.id}" placeholder="Title" />
-        <input type="text" id="new-contact-email-${p.id}" placeholder="Email" />
-        <input type="text" id="new-contact-phone-${p.id}" placeholder="Phone" />
-        <button type="submit" class="btn-secondary btn-sm">+ Add Contact</button>
-      </form>
-    ` : "";
-
-    return `<div class="contacts-detail-inner">${rowsHtml}${addFormHtml}</div>`;
-  }
-
+  // Blur-to-save + delete + add wiring for every contact card in the Program
+  // Detail popup, across all 4 categories at once (Contract Signer, Program
+  // Administrator, Program Finance, CC List) -- the same generic pattern
+  // used before this was split into categories (Greg/Rita, 8/28/26).
   function wireContactsDetail(partnerId) {
     document.querySelectorAll("[data-contact-id]").forEach((inp) => {
       const original = inp.value;
@@ -1179,35 +1213,44 @@
         }
         const c = allContacts.find((x) => x.id === contactId);
         if (c) c[fieldName] = value || null;
+        renderTable();
       });
     });
 
     document.querySelectorAll("[data-delete-contact-id]").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        const { error } = await sb.from("econ_dev_partner_contacts").delete().eq("id", btn.dataset.deleteContactId);
+        const id = btn.dataset.deleteContactId;
+        const c = allContacts.find((x) => x.id === id);
+        const pid = c ? c.partner_id : partnerId;
+        const { error } = await sb.from("econ_dev_partner_contacts").delete().eq("id", id);
         if (error) {
           showBanner("Couldn't delete contact: " + error.message, "error");
           return;
         }
         await loadContacts();
         renderTable();
+        if (pid) renderProgramDetailModal(pid);
       });
     });
 
-    const addForm = document.querySelector(`[data-add-contact-partner="${partnerId}"]`);
-    if (addForm) {
+    document.querySelectorAll(`[data-add-contact-partner="${partnerId}"]`).forEach((addForm) => {
       addForm.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const name = $(`new-contact-name-${partnerId}`).value.trim();
-        const title = $(`new-contact-title-${partnerId}`).value.trim();
-        const email = $(`new-contact-email-${partnerId}`).value.trim();
-        const phone = $(`new-contact-phone-${partnerId}`).value.trim();
+        const category = addForm.dataset.addContactCategory;
+        const suffix = `${category}-${partnerId}`;
+        const name = $(`new-contact-name-${suffix}`).value.trim();
+        const title = $(`new-contact-title-${suffix}`).value.trim();
+        const address = $(`new-contact-address-${suffix}`).value.trim();
+        const email = $(`new-contact-email-${suffix}`).value.trim();
+        const phone = $(`new-contact-phone-${suffix}`).value.trim();
+        const notes = $(`new-contact-notes-${suffix}`).value.trim();
         if (!name) { showBanner("Contact name is required.", "error"); return; }
         const { error } = await sb.from("econ_dev_partner_contacts").insert({
           organization_id: currentUser.organization_id,
           partner_id: partnerId,
-          name, title: title || null, email: email || null, phone: phone || null,
-          sort_order: contactsForPartner(partnerId).length,
+          category,
+          name, title: title || null, address: address || null, email: email || null, phone: phone || null, notes: notes || null,
+          sort_order: contactsForCategory(partnerId, category).length,
         });
         if (error) {
           showBanner("Couldn't add contact: " + error.message, "error");
@@ -1215,8 +1258,9 @@
         }
         await loadContacts();
         renderTable();
+        renderProgramDetailModal(partnerId);
       });
-    }
+    });
   }
 
   function escapeHtml(str) {
@@ -1492,30 +1536,50 @@
       .trim();
   }
 
-  // ---------- CSV import/export for the Contract Signer / Program
-  // Administrator / Program Finance / Address fields ----------
-  // Separate from the per-person Contacts CSV above -- this one is
-  // one-row-per-Program and writes these 4 fields on econ_dev_companies
-  // directly. Built so Greg can re-run this any time Chris sends an
-  // updated version of his "EG Programs Contact Info" doc: paste the new
-  // doc's contents into this CSV shape (matched by Code or Program Name,
-  // same fuzzy match as the Contacts CSV) and re-import.
+  // ---------- CSV import/export for Contract Signer / Program
+  // Administrator / Program Finance / Address ----------
+  // Separate from the per-person CC List CSV above -- this one is still
+  // one-row-per-Program to match Chris's standing "EG Programs Contact
+  // Info" doc, but as of the structured-contacts rework (Rita, 8/28/26,
+  // per the platform review meeting) the first 3 columns summarize
+  // *every* contact in that category rather than holding one free-form
+  // blob. Export joins multiple contacts in a category with " | "; each
+  // contact's own fields (Name/Title/Address/Email/Phone/Notes) are
+  // joined with " — ". Address (physical_address) is unrelated and
+  // unchanged -- it's the Program's own mailing address, not a contact.
   //
-  // Address added 8/27/26 for the new physical_address column (Greg: "add
-  // address field" to the Programs list). At the same time, import
-  // switched from "blank column = clear this field" to "blank column =
-  // leave whatever's already saved alone" -- a 4-column full-doc import
-  // used to null out any field a row left blank, which is exactly what
-  // would've happened importing an address-only CSV: it would have wiped
-  // every Program's already-imported Contract Signer / Program
-  // Administrator / Program Finance. Per-field partial updates mean a CSV
-  // with just Program Name + Address filled in only ever touches Address.
+  // Import can't safely parse that summary back apart, so instead of
+  // overwriting a whole category it writes the raw cell text into the
+  // Notes field of that category's *first* contact (creating one with a
+  // placeholder name if the category has none yet) -- same non-destructive
+  // "copy the text somewhere a human can re-key it" approach the
+  // migration's backfill used. This preserves Chris's existing bulk-update
+  // workflow: paste his doc into this CSV shape and re-import any time he
+  // sends an update.
   const PROGRAM_INFO_CSV_HEADERS = ["Code", "Program Name", "Contract Signer", "Program Administrator", "Program Finance", "Address"];
+  const PROGRAM_INFO_CSV_IMPORT_PLACEHOLDER_LABEL = {
+    contract_signer: "Contract Signer",
+    program_administrator: "Program Administrator",
+    program_finance: "Program Finance",
+  };
+
+  function summarizeContactsForExport(partnerId, category) {
+    return contactsForCategory(partnerId, category)
+      .map((c) => [c.name, c.title, c.address, c.email, c.phone, c.notes].filter((v) => v && String(v).trim()).join(" — "))
+      .join(" | ");
+  }
 
   $("program-info-csv-export-btn").addEventListener("click", () => {
     const lines = [PROGRAM_INFO_CSV_HEADERS.map(csvField).join(",")];
     for (const p of allPartners) {
-      lines.push([p.code, p.name, p.contract_signer, p.program_administrator, p.address, p.physical_address].map(csvField).join(","));
+      lines.push([
+        p.code,
+        p.name,
+        summarizeContactsForExport(p.id, "contract_signer"),
+        summarizeContactsForExport(p.id, "program_administrator"),
+        summarizeContactsForExport(p.id, "program_finance"),
+        p.physical_address,
+      ].map(csvField).join(","));
     }
     const blob = new Blob([lines.join("\r\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -1527,6 +1591,24 @@
   });
 
   $("program-info-csv-import-btn").addEventListener("click", () => $("program-info-csv-file").click());
+
+  // Writes `text` into the Notes field of a category's first contact,
+  // creating a placeholder-named contact for that category if it has none
+  // yet -- mirrors the migration's own backfill approach.
+  async function upsertCategoryNoteFromImport(partner, category, text) {
+    const existing = contactsForCategory(partner.id, category);
+    if (existing.length) {
+      return sb.from("econ_dev_partner_contacts").update({ notes: text }).eq("id", existing[0].id);
+    }
+    return sb.from("econ_dev_partner_contacts").insert({
+      organization_id: currentUser.organization_id,
+      partner_id: partner.id,
+      category,
+      name: `Imported from ${PROGRAM_INFO_CSV_IMPORT_PLACEHOLDER_LABEL[category]}`,
+      notes: text,
+      sort_order: 0,
+    });
+  }
 
   $("program-info-csv-file").addEventListener("change", async () => {
     const fileInput = $("program-info-csv-file");
@@ -1549,7 +1631,9 @@
       partnerByNormName[normalizePartnerName(p.name)] = p;
     }
 
-    const updates = [];
+    const companyUpdates = [];   // physical_address only -- a plain field, not a contact
+    const contactNoteOps = [];   // { partner, category, text }
+    const touchedPartnerIds = new Set();
     const unmatchedLabels = new Set();
     let skippedBlank = 0;
 
@@ -1565,22 +1649,23 @@
 
       if (!partner) { unmatchedLabels.add(code || nameCsv || "(blank)"); return; }
 
-      // Partial update -- only fields this row actually has a value for get
-      // written; a blank cell leaves that field untouched rather than
-      // clearing it (see comment above PROGRAM_INFO_CSV_HEADERS).
-      const fields = {};
-      if ((contractSignerRaw || "").trim()) fields.contract_signer = contractSignerRaw.trim();
-      if ((programAdminRaw || "").trim()) fields.program_administrator = programAdminRaw.trim();
-      if ((financeRaw || "").trim()) fields.address = financeRaw.trim();
-      if ((addressRaw || "").trim()) fields.physical_address = addressRaw.trim();
-      if (!Object.keys(fields).length) return;
+      // Partial update -- only a column this row actually has a value for
+      // gets written; a blank cell leaves whatever's already saved alone.
+      let touched = false;
+      if ((addressRaw || "").trim()) {
+        companyUpdates.push({ id: partner.id, fields: { physical_address: addressRaw.trim() } });
+        touched = true;
+      }
+      if ((contractSignerRaw || "").trim()) { contactNoteOps.push({ partner, category: "contract_signer", text: contractSignerRaw.trim() }); touched = true; }
+      if ((programAdminRaw || "").trim()) { contactNoteOps.push({ partner, category: "program_administrator", text: programAdminRaw.trim() }); touched = true; }
+      if ((financeRaw || "").trim()) { contactNoteOps.push({ partner, category: "program_finance", text: financeRaw.trim() }); touched = true; }
 
-      updates.push({ id: partner.id, fields });
+      if (touched) touchedPartnerIds.add(partner.id);
     });
 
     fileInput.value = "";
 
-    if (!updates.length) {
+    if (!touchedPartnerIds.size) {
       showBanner(
         unmatchedLabels.size
           ? `No rows imported — none matched an existing Program (${[...unmatchedLabels].slice(0, 5).join(", ")}).`
@@ -1590,17 +1675,18 @@
       return;
     }
 
-    const results = await Promise.all(updates.map((u) =>
-      sb.from("econ_dev_companies").update(u.fields).eq("id", u.id)
-    ));
+    const results = await Promise.all([
+      ...companyUpdates.map((u) => sb.from("econ_dev_companies").update(u.fields).eq("id", u.id)),
+      ...contactNoteOps.map((op) => upsertCategoryNoteFromImport(op.partner, op.category, op.text)),
+    ]);
     const failed = results.filter((r) => r.error);
-    if (failed.length === updates.length) {
+    if (failed.length === results.length) {
       showBanner("Couldn't import CSV: " + failed[0].error.message, "error");
       return;
     }
 
-    let msg = `Updated ${updates.length - failed.length} Program${updates.length - failed.length === 1 ? "" : "s"}.`;
-    if (failed.length) msg += ` ${failed.length} row(s) failed to save.`;
+    let msg = `Updated ${touchedPartnerIds.size} Program${touchedPartnerIds.size === 1 ? "" : "s"}.`;
+    if (failed.length) msg += ` ${failed.length} field(s) failed to save.`;
     if (unmatchedLabels.size) msg += ` Skipped ${unmatchedLabels.size} row(s) that didn't match an existing Program (${[...unmatchedLabels].slice(0, 5).join(", ")}).`;
     showBanner(msg, failed.length ? "error" : "success");
     await loadPartners();
