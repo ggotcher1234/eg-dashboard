@@ -1596,11 +1596,18 @@
     // this is the exact list Chris is working from, so it needs to be
     // impossible to miss (Greg, 8/27/26).
     const overdue = c.project_status !== "closed" && daysSince(c.last_activity_at || c.updated_at) >= 60;
+    // Closed rows (only visible with "Show closed" checked) show when they
+    // closed instead of last-activity -- closed_at is stamped by a trigger
+    // the moment project_status becomes 'closed' (087_engagement_closed_at.sql).
+    // Greg, 8/28/26.
+    const metaText = c.project_status === "closed"
+      ? `Closed ${formatLastActivity(c.closed_at)}`
+      : `Last activity: ${formatLastActivity(c.last_activity_at || c.updated_at)}`;
     return `
       <div class="client-row" data-client-id="${c.id}">
         <div>
           <div class="cr-name">${escapeHtml(c.name)}</div>
-          <div class="cr-meta${overdue ? " cr-overdue" : ""}">${partner ? escapeHtml(partner.code) : "—"} &middot; Last activity: ${formatLastActivity(c.last_activity_at || c.updated_at)}${overdue ? '<span class="overdue-badge">Overdue</span>' : ""}</div>
+          <div class="cr-meta${overdue ? " cr-overdue" : ""}">${partner ? escapeHtml(partner.code) : "—"} &middot; ${metaText}${overdue ? '<span class="overdue-badge">Overdue</span>' : ""}</div>
         </div>
         <div class="eng-tl-block">
           ${teamLead ? `<div><div class="eng-tl-caption">Team Lead</div><div class="eng-tl-name-row"><div class="avatar-sm">${teamLeadAvatar ? `<img src="${escapeHtml(teamLeadAvatar)}" alt="" />` : escapeHtml(initials(teamLead))}</div><span class="eng-tl-name">${escapeHtml(teamLead)}</span></div></div>` : `<span class="cr-meta">No Team Lead</span>`}

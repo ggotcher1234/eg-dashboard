@@ -156,11 +156,14 @@
     padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13.5px; width: 260px; background: #fff;
   }
   .toolbar .count { font-size: 12.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  .show-archived-toggle { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .show-archived-toggle input { margin: 0; cursor: pointer; }
+  .show-archived-toggle:hover { color: var(--text); }
 
   table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
   @media (max-width: 640px) {
-    .table-scroll table { min-width: 620px; }
+    .table-scroll table { min-width: 760px; }
     .toolbar input[type="text"] { width: 100%; max-width: 260px; }
   }
   thead th {
@@ -190,6 +193,20 @@
   .program-name-link:hover { text-decoration: underline; color: var(--navy-light); }
   .program-code-label { font-size: 11.5px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; margin-top: 2px; }
   .cell-muted { color: var(--muted); }
+  /* Primary contact column (Greg, 8/28/26, per the platform review meeting):
+     Rita's problem was having to open every Program just to find a phone
+     number -- this shows the first contact on that Program's CC List
+     directly in the row instead. */
+  .contact-cell-name { font-weight: 600; font-size: 13.5px; }
+  .contact-cell-phone { font-size: 12.5px; margin-top: 1px; }
+  .contact-phone-link { color: var(--navy-light); text-decoration: none; }
+  .contact-phone-link:hover { text-decoration: underline; }
+  tr.archived-row { opacity: 0.6; }
+  .archived-badge {
+    display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+    background: #eef1f4; color: var(--muted); font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.3px; vertical-align: middle;
+  }
   /* Reused inside the Program Detail modal for the editable name/code/address
      fields (super admin only -- read-only for everyone else). */
   .inline-edit-input {
@@ -438,6 +455,10 @@
     <div class="toolbar no-print">
       <div class="toolbar-left">
         <input type="text" id="search-box" placeholder="Search programs by name or code…" />
+        <label class="show-archived-toggle" for="show-archived-programs">
+          <input type="checkbox" id="show-archived-programs" />
+          Show archived
+        </label>
       </div>
       <div class="toolbar-right">
         <span class="count" id="row-count"></span>
@@ -463,7 +484,8 @@
         <tr>
           <th class="sortable" data-sort="name">Program <span class="sort-arrow">&#8645;</span></th>
           <th>Address</th>
-          <th id="actions-header" class="hidden" style="width:40px;"></th>
+          <th>Primary Contact</th>
+          <th id="actions-header" class="hidden" style="width:90px;"></th>
         </tr>
       </thead>
       <tbody id="partners-tbody"></tbody>
@@ -538,6 +560,7 @@
   let pendingDeleteId = null;
   let sortField = "name";
   let sortDir = "asc";
+  let showArchivedPrograms = false;   // Off by default -- "Show archived" checkbox lifts the filter below
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -756,12 +779,16 @@
 
   function renderTable() {
     const q = $("search-box").value.trim().toLowerCase();
-    let rows = allPartners.filter(
+    // Archived programs are hidden by default -- the "Show archived"
+    // checkbox lifts this, same pattern as Engagements' "Show closed"
+    // toggle on index.html (Greg, 8/28/26).
+    const basePool = showArchivedPrograms ? allPartners : allPartners.filter((p) => !p.archived);
+    let rows = basePool.filter(
       (p) => !q || p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q)
     );
     rows = applySort(rows);
 
-    $("row-count").textContent = `${rows.length} of ${allPartners.length} Programs`;
+    $("row-count").textContent = `${rows.length} of ${basePool.length} Programs`;
 
     document.querySelectorAll("th.sortable").forEach((th) => {
       th.classList.toggle("sorted", th.dataset.sort === sortField);
@@ -779,24 +806,77 @@
 
     for (const p of rows) {
       const tr = document.createElement("tr");
+      if (p.archived) tr.classList.add("archived-row");
 
       const actionsCell = isSuperAdmin
-        ? `<td class="actions"><button type="button" class="delete-row-btn" data-delete-program="${p.id}" title="Delete program">&times;</button></td>`
+        ? `<td class="actions">
+             <button type="button" class="btn-secondary btn-sm" data-archive-program="${p.id}" title="${p.archived ? "Restore to the active Programs list" : "Hide from the default Programs list -- existing engagements keep their history"}">${p.archived ? "Unarchive" : "Archive"}</button>
+             <button type="button" class="delete-row-btn" data-delete-program="${p.id}" title="Permanently delete program">&times;</button>
+           </td>`
         : "";
 
       tr.innerHTML = `
         <td class="program-cell">
           <button type="button" class="program-name-link" data-open-program="${p.id}">${escapeHtml(p.name)}</button>
           <div class="program-code-label">${escapeHtml(p.code)}</div>
+          ${p.archived ? '<span class="archived-badge">Archived</span>' : ""}
         </td>
         <td class="address-cell">${renderProgramAddressCell(p)}</td>
+        <td class="contact-cell">${renderPrimaryContactCell(p)}</td>
         ${actionsCell}
       `;
       tbody.appendChild(tr);
     }
 
     wireDeleteButtons();
+    wireArchiveButtons();
     wireProgramDetailLinks();
+  }
+
+  // Primary contact column (Greg, 8/28/26, per the platform review
+  // meeting): Rita's problem was having to open every Program's detail
+  // popup just to find a phone number. Uses the first contact on that
+  // Program's CC List (econ_dev_partner_contacts, ordered by sort_order --
+  // whichever was added first) as "primary" -- there's no explicit
+  // primary flag on that table, so this is a judgment call worth
+  // confirming with Rita if a Program's CC List isn't already ordered
+  // with the right person first.
+  function primaryContactForPartner(partnerId) {
+    const contacts = contactsForPartner(partnerId);
+    return contacts.length ? contacts[0] : null;
+  }
+
+  function renderPrimaryContactCell(p) {
+    const c = primaryContactForPartner(p.id);
+    if (!c) return '<span class="cell-muted">No contact on file</span>';
+    const phoneHtml = c.phone
+      ? `<a href="tel:${escapeHtml(c.phone.replace(/[^0-9+]/g, ""))}" class="contact-phone-link">${escapeHtml(c.phone)}</a>`
+      : '<span class="cell-muted">No phone</span>';
+    return `<div class="contact-cell-name">${escapeHtml(c.name)}</div><div class="contact-cell-phone">${phoneHtml}</div>`;
+  }
+
+  // ---------- Archive / Unarchive (soft, keeps everything) ----------
+  // A real archive alongside the existing hard delete below (Greg,
+  // 8/28/26, per the platform review meeting) -- the old-only "Remove"
+  // permanently deletes the row, which was the only option even for a
+  // Program that's just no longer active. Archive just hides it from the
+  // default list; Unarchive brings it right back, nothing lost either way.
+  function wireArchiveButtons() {
+    document.querySelectorAll("[data-archive-program]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.archiveProgram;
+        const p = allPartners.find((x) => x.id === id);
+        if (!p) return;
+        const newVal = !p.archived;
+        btn.disabled = true;
+        const { error } = await sb.from("econ_dev_companies").update({ archived: newVal }).eq("id", id);
+        btn.disabled = false;
+        if (error) { showBanner("Couldn't update: " + error.message, "error"); return; }
+        p.archived = newVal;
+        showBanner(newVal ? `${p.name} archived.` : `${p.name} restored.`, "success");
+        renderTable();
+      });
+    });
   }
 
   // Programs list's Address column (Greg, 8/27/26) -- a plain physical
@@ -893,7 +973,8 @@
       </div>
       <div class="field-hint" style="font-size:12px; color:var(--muted); margin:-4px 0 0;">On (default): Admin and Quality Control hours bill in full the moment they're allotted, same as always. Off: this Program's Admin/QC hours are billed as actually performed, like every other specialty -- specialists log real hours and invoices pull from that.</div>
 
-      <label style="margin-top:18px;">Contacts</label>
+      <label style="margin-top:18px;">CC List</label>
+      <div class="field-hint" style="font-size:12px; color:var(--muted); margin:-6px 0 6px;">People to keep in the loop day-to-day -- the first one listed doubles as the "Primary Contact" shown on the Programs list.</div>
       <div id="pd-contacts-inner">${renderContactsDetail(p, contactsForPartner(p.id))}</div>
     `;
     wireProgramInlineEdits();
@@ -1062,7 +1143,7 @@
             </div>
           </div>
         `).join("")
-      : `<div class="contacts-empty">No contacts on file for this program yet.</div>`;
+      : `<div class="contacts-empty">No CC List contacts on file for this program yet.</div>`;
 
     const addFormHtml = isSuperAdmin ? `
       <form class="contacts-add-row" data-add-contact-partner="${p.id}">
@@ -1258,6 +1339,10 @@
   }
 
   $("search-box").addEventListener("input", renderTable);
+  $("show-archived-programs").addEventListener("change", (e) => {
+    showArchivedPrograms = e.target.checked;
+    renderTable();
+  });
 
   // ---------- Add / Edit modal ----------
   $("add-btn").addEventListener("click", () => openAdd());
