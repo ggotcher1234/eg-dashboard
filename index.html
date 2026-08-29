@@ -783,7 +783,8 @@
   let consultantsByClient = {};
   let unreadNotifications = [];
   let myClientIds = new Set();          // client_assignments where user_id = me
-  let nextStepByClient = {};            // client_id -> first incomplete Project Next Step
+  let myTeamLeadClientIds = new Set();  // subset of myClientIds where I'm specifically the Team Lead
+  let nextStepByClient = {};            // client_id -> first incomplete step of the 4-step Engagement Progress tracker (Discovery Call / Controlling Document / Research Review / Close-Out Evaluation)
   let openStepCountByClient = {};       // client_id -> count of incomplete steps
   let hoursThisMonth = 0;               // sum of my time_entries this calendar month
   let engagementScope = "mine";         // "mine" | "all" -- whose engagements the list/Needs Attention show
@@ -1262,14 +1263,20 @@
   }
 
   // ---------- My assignments / next steps / hours (personalization) ----------
-  let myAssignmentRows = []; // client_assignments where user_id = me: id, client_id, specialty_type, hours_allotted, slot_number
+  let myAssignmentRows = []; // client_assignments where user_id = me: id, client_id, specialty_type, hours_allotted, slot_number, is_team_lead
   async function loadMyAssignments() {
     const { data, error } = await sb
       .from("client_assignments")
-      .select("id, client_id, specialty_type, hours_allotted, slot_number")
+      .select("id, client_id, specialty_type, hours_allotted, slot_number, is_team_lead")
       .eq("user_id", currentUser.id);
     myAssignmentRows = error ? [] : (data || []);
     myClientIds = new Set(myAssignmentRows.map((r) => r.client_id));
+    // Engagement Progress (Discovery Call/Controlling Document/Research
+    // Review/Close-Out Evaluation) is the Team Lead's responsibility start
+    // to finish, same as the old Next Steps checklist was -- so "Tasks Due"
+    // only counts an engagement's outstanding step against its Team Lead,
+    // not every specialist assigned to it.
+    myTeamLeadClientIds = new Set(myAssignmentRows.filter((r) => r.is_team_lead).map((r) => r.client_id));
   }
 
   // Admin and Quality Control are sunk costs (mirrors client_control_center.html
@@ -1340,35 +1347,48 @@
     myTasksDueItems = [...stepItems, ...hourItems].sort((a, b) => a.clientName.localeCompare(b.clientName));
   }
 
-  // Powers the "Next: ..." line on each engagement row and the Tasks Due
-  // stat — the first (lowest sort_order) incomplete Project Next Step per
-  // client, and a per-client count of how many are still open. There's no
-  // due-date field on this table yet, so this is a task name only, never a
-  // fabricated date.
-  // myOpenTasksCount is a real per-person count -- Project Next Steps rows
-  // with assigned_to = the signed-in user and completed = false (see
-  // 050_next_step_assignee.sql). Distinct from openStepCountByClient below,
-  // which is engagement-wide and just powers the "Next: ..." line on each
-  // engagement row, not the Tasks Due stat.
+  // Powers the "Next" column on each engagement row and the Tasks Due stat
+  // (Greg, 8/29/26: Project Next Steps trimmed down to the same 4
+  // automatically-tracked steps as the client-facing workflow tracker --
+  // Discovery Call, Controlling Document, Research Review, Close-Out
+  // Evaluation -- see client_public.html's WORKFLOW_STEPS and
+  // client_profile.html's Engagement Progress wizard step, both driven off
+  // the same two data sources this pulls from here: client_content's
+  // uploaded/linked documents, and whether a Close-Out Evaluation has been
+  // submitted). Replaces the old free-typed, per-item client_next_steps
+  // checklist and its per-item "assigned_to" -- these 4 steps have no
+  // assignee of their own, so "my" task is instead: an engagement I'm
+  // specifically the Team Lead on (myTeamLeadClientIds, from
+  // loadMyAssignments) that still has an incomplete step and isn't Closed.
+  const PROGRESS_STEPS = [
+    { pathKey: "discovery_doc_storage_path", urlKey: "discovery_doc_url", label: "Discovery Call" },
+    { pathKey: "controlling_doc_storage_path", urlKey: "controlling_doc_url", label: "Controlling Document" },
+    { pathKey: "research_review_storage_path", urlKey: "research_review_url", label: "Research Review" },
+    { label: "Close-Out Evaluation", isEval: true },
+  ];
   let myOpenTasksCount = 0;
   let myAssignedSteps = []; // { clientId, description } -- raw list behind myOpenTasksCount, for the Tasks Due dropdown
   async function loadNextSteps() {
-    const { data, error } = await sb
-      .from("client_next_steps")
-      .select("client_id, description, completed, sort_order, assigned_to")
-      .order("sort_order");
     nextStepByClient = {};
     openStepCountByClient = {};
     myOpenTasksCount = 0;
     myAssignedSteps = [];
-    if (error) return; // RLS narrows this for non-admins viewing outside their own assignments -- fall back to blank "Next" fields rather than blocking the page.
-    for (const s of data || []) {
-      if (s.completed) continue;
-      openStepCountByClient[s.client_id] = (openStepCountByClient[s.client_id] || 0) + 1;
-      if (!nextStepByClient[s.client_id]) nextStepByClient[s.client_id] = s.description;
-      if (s.assigned_to === currentUser.id) {
+    const [{ data: content, error: contentErr }, { data: evalRows }] = await Promise.all([
+      sb.from("client_content").select("client_id, discovery_doc_storage_path, discovery_doc_url, controlling_doc_storage_path, controlling_doc_url, research_review_storage_path, research_review_url"),
+      sb.from("client_evaluation_responses").select("client_id"),
+    ]);
+    if (contentErr) return; // RLS narrows this for non-admins viewing outside their own assignments -- fall back to blank "Next" fields rather than blocking the page.
+    const submittedClientIds = new Set((evalRows || []).map((r) => r.client_id));
+    const clientStatusById = Object.fromEntries(allClients.map((c) => [c.id, c.project_status]));
+    for (const row of content || []) {
+      const stepsFilled = PROGRESS_STEPS.map((step) => step.isEval ? submittedClientIds.has(row.client_id) : !!(row[step.pathKey] || row[step.urlKey]));
+      const firstOpenIdx = stepsFilled.findIndex((filled) => !filled);
+      if (firstOpenIdx === -1) continue; // all 4 steps done -- nothing to show
+      openStepCountByClient[row.client_id] = stepsFilled.filter((filled) => !filled).length;
+      nextStepByClient[row.client_id] = PROGRESS_STEPS[firstOpenIdx].label;
+      if (myTeamLeadClientIds.has(row.client_id) && clientStatusById[row.client_id] !== "closed") {
         myOpenTasksCount++;
-        myAssignedSteps.push({ clientId: s.client_id, description: s.description });
+        myAssignedSteps.push({ clientId: row.client_id, description: PROGRESS_STEPS[firstOpenIdx].label });
       }
     }
   }
