@@ -797,16 +797,23 @@
                   <span class="accordion-sub">Optional</span>
                 </summary>
                 <div class="accordion-body">
+                  <!-- Paired by year (Greg, 8/29/26): Revenue and FTEs for the
+                       same year now sit on the same row, newest year first,
+                       instead of two separate blocks (all FTEs, then all
+                       Revenue) that made it easy to mismatch a figure to the
+                       wrong year. -->
                   <div class="grid-2">
+                    <div class="field"><label>Revenue (2025)</label><input type="text" inputmode="decimal" class="money-input" id="f-rev-2025" /></div>
                     <div class="field"><label>FTEs (2025)</label><input type="number" id="f-fte-2025" /></div>
+                  </div>
+                  <div class="grid-2">
+                    <div class="field"><label>Revenue (2024)</label><input type="text" inputmode="decimal" class="money-input" id="f-rev-2024" /></div>
                     <div class="field"><label>FTEs (2024)</label><input type="number" id="f-fte-2024" /></div>
+                  </div>
+                  <div class="grid-2">
+                    <div class="field"><label>Revenue (2023)</label><input type="text" inputmode="decimal" class="money-input" id="f-rev-2023" /></div>
                     <div class="field"><label>FTEs (2023)</label><input type="number" id="f-fte-2023" /></div>
                   </div>
-                  <div class="grid-3">
-                    <div class="field"><label>Revenue (2023)</label><input type="number" id="f-rev-2023" step="0.01" /></div>
-                    <div class="field"><label>Revenue (2024)</label><input type="number" id="f-rev-2024" step="0.01" /></div>
-                  </div>
-                  <div class="field" style="width:33%;"><label>Revenue (2025)</label><input type="number" id="f-rev-2025" step="0.01" /></div>
                 </div>
               </details>
 
@@ -971,17 +978,24 @@
         <legend>Company size &amp; financials</legend>
         <div class="field"><label>Primary business &amp; NAICS code</label><input type="text" id="e-naics" /></div>
         <div class="checkrow"><input type="checkbox" id="e-fte-range" /><label for="e-fte-range">Has 10–100 FTE employees</label></div>
+        <!-- Paired by year (Greg, 8/29/26): Revenue and FTEs for the same
+             year on the same row, newest year first, instead of an all-FTEs
+             block followed by an all-Revenue block. -->
         <div class="grid-2">
+          <div class="field"><label>Revenue (2025)</label><input type="text" inputmode="decimal" class="money-input" id="e-rev-2025" /></div>
           <div class="field"><label>FTEs (2025)</label><input type="number" id="e-fte-2025" /></div>
-          <div class="field"><label>FTEs (2024)</label><input type="number" id="e-fte-2024" /></div>
-          <div class="field"><label>FTEs (2023)</label><input type="number" id="e-fte-2023" /></div>
-          <div class="field"><label>FTEs (2022)</label><input type="number" id="e-fte-2022" /></div>
         </div>
         <div class="grid-2">
-          <div class="field"><label>Revenue (2025)</label><input type="number" id="e-rev-2025" step="0.01" /></div>
-          <div class="field"><label>Revenue (2024)</label><input type="number" id="e-rev-2024" step="0.01" /></div>
-          <div class="field"><label>Revenue (2023)</label><input type="number" id="e-rev-2023" step="0.01" /></div>
-          <div class="field"><label>Revenue (2022)</label><input type="number" id="e-rev-2022" step="0.01" /></div>
+          <div class="field"><label>Revenue (2024)</label><input type="text" inputmode="decimal" class="money-input" id="e-rev-2024" /></div>
+          <div class="field"><label>FTEs (2024)</label><input type="number" id="e-fte-2024" /></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Revenue (2023)</label><input type="text" inputmode="decimal" class="money-input" id="e-rev-2023" /></div>
+          <div class="field"><label>FTEs (2023)</label><input type="number" id="e-fte-2023" /></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Revenue (2022)</label><input type="text" inputmode="decimal" class="money-input" id="e-rev-2022" /></div>
+          <div class="field"><label>FTEs (2022)</label><input type="number" id="e-fte-2022" /></div>
         </div>
         <div class="field" style="width:50%;"><label>% employees in-state</label><input type="number" id="e-pct-instate" min="0" max="100" /></div>
       </fieldset>
@@ -1085,6 +1099,25 @@
     div.textContent = str == null ? "" : String(str);
     return div.innerHTML;
   }
+
+  // Revenue fields (Greg, 8/29/26: "cut and paste revenue numbers and those
+  // fields are acting wonky") -- these were plain type="number" inputs,
+  // which silently reject a pasted value like "$35,030,501.00" ($ and commas
+  // aren't valid number-input characters, so the paste just does nothing or
+  // clears the field). Switched to type="text" with a live sanitizer instead:
+  // strips everything but digits and a single decimal point as you type or
+  // paste, so a copied currency figure lands cleanly. numOrNull() (used when
+  // saving) also strips defensively in case this ever fires after the value
+  // is already read.
+  function sanitizeMoneyInput(el) {
+    const cleaned = el.value.replace(/[^0-9.]/g, "");
+    const firstDot = cleaned.indexOf(".");
+    const noExtraDots = firstDot === -1 ? cleaned : cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
+    if (noExtraDots !== el.value) el.value = noExtraDots;
+  }
+  document.querySelectorAll(".money-input").forEach((el) => {
+    el.addEventListener("input", () => sanitizeMoneyInput(el));
+  });
 
   // ---------- Ask AI ----------
   // Browser -> eg-dashboard-ai Supabase Edge Function -> Claude API. The
@@ -1985,7 +2018,11 @@
       const raw = $(id).value.trim();
       return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : null;
     };
-    const numOrNull = (id) => { const v = $(id).value; return v === "" ? null : Number(v); };
+    // Strips $ / commas / stray whitespace before parsing -- guards against
+    // a pasted "$35,030,501.00" landing here before the money-input
+    // sanitizer (below) has had a chance to clean it up (Greg, 8/29/26:
+    // pasted revenue figures were "acting wonky").
+    const numOrNull = (id) => { const v = $(id).value.replace(/[^0-9.-]/g, ""); return v === "" ? null : Number(v); };
     const boolOrNull = (id) => { const v = $(id).value; return v === "" ? null : v === "true"; };
     const strOrNull = (id) => { const v = $(id).value.trim(); return v === "" ? null : v; };
 
@@ -2739,7 +2776,11 @@
     if (!a) return;
     $("edit-app-error").style.display = "none";
 
-    const numOrNull = (id) => { const v = $(id).value; return v === "" ? null : Number(v); };
+    // Strips $ / commas / stray whitespace before parsing -- guards against
+    // a pasted "$35,030,501.00" landing here before the money-input
+    // sanitizer (below) has had a chance to clean it up (Greg, 8/29/26:
+    // pasted revenue figures were "acting wonky").
+    const numOrNull = (id) => { const v = $(id).value.replace(/[^0-9.-]/g, ""); return v === "" ? null : Number(v); };
     const strOrNull = (id) => { const v = $(id).value.trim(); return v === "" ? null : v; };
     const boolOrNull = (id) => { const v = $(id).value; return v === "" ? null : v === "true"; };
     const toLines = (id) => { const raw = $(id).value.trim(); return raw ? raw.split("\n").map((s) => s.trim()).filter(Boolean) : null; };
