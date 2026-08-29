@@ -298,11 +298,20 @@
   .wizard-topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
   .wizard-topbar h2 { margin: 0; font-size: 24px; }
   .wizard-progress-text { font-size: 13px; color: var(--muted); margin-top: 4px; }
-  .wizard-topbar-actions { display: flex; align-items: center; gap: 14px; }
-  .save-indicator { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
-  .save-indicator .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-dark); flex-shrink: 0; }
-  .save-indicator.saving .dot { background: var(--amber); animation: pulseDot 1s infinite ease-in-out; }
-  @keyframes pulseDot { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  /* Greg (8/29/26): "we don't need save draft if it autosaves. a short
+     popup every now and again that says autosaved would be nice." Replaced
+     the always-on save-indicator text (and the manual Save Draft button)
+     with this fixed-position toast that briefly appears after each
+     successful autosave, wherever you're scrolled to in the form, then
+     fades on its own -- see showAutosaveToast(). */
+  .autosave-toast {
+    position: fixed; bottom: 24px; right: 24px; z-index: 200;
+    background: var(--navy); color: #fff; font-size: 13px; font-weight: 600;
+    padding: 10px 18px; border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    opacity: 0; transform: translateY(6px); pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+  }
+  .autosave-toast.show { opacity: 1; transform: translateY(0); }
 
   .wizard-progress-bar { height: 6px; border-radius: 999px; background: #e7ecf1; overflow: hidden; margin-bottom: 20px; }
   .wizard-progress-fill { height: 100%; border-radius: 999px; background: var(--navy-light); transition: width 0.25s ease; }
@@ -559,6 +568,7 @@
 
   <main>
     <div id="banner"></div>
+    <div class="autosave-toast" id="autosave-toast">Autosaved</div>
 
     <!-- ===== LIST VIEW ===== -->
     <div id="view-list">
@@ -625,9 +635,6 @@
         <div>
           <h2>Engagement Application</h2>
           <div class="wizard-progress-text">Step <span id="wiz-step-num">1</span> of 5 &middot; <span id="wiz-pct">20%</span> complete</div>
-        </div>
-        <div class="wizard-topbar-actions">
-          <span class="save-indicator" id="wiz-save-indicator"><span class="dot"></span><span id="wiz-save-text">Not saved yet</span></span>
         </div>
       </div>
 
@@ -890,7 +897,6 @@
         <button type="button" class="btn-secondary" id="new-app-cancel">&larr; Cancel Application</button>
         <div class="wizard-bottom-right">
           <button type="button" class="btn-ghost hidden" id="wiz-back">&larr; Back</button>
-          <button type="button" class="btn-secondary" id="wiz-save-draft-bottom">&#128190; Save Draft</button>
           <button type="button" class="btn-primary" id="wiz-continue">Continue &rarr;</button>
           <button type="submit" class="btn-primary hidden" id="new-app-submit" form="new-app-form">Submit Application</button>
         </div>
@@ -1653,15 +1659,19 @@
     if (data._secondaryOpen) wizShowContactCard("secondary");
     if (data._tertiaryOpen) wizShowContactCard("tertiary");
   }
-  function wizSetSaveIndicator(state) {
-    const el = $("wiz-save-indicator");
-    const text = $("wiz-save-text");
-    if (state === "saving") { el.classList.add("saving"); text.textContent = "Saving…"; }
-    else if (state === "saved") { el.classList.remove("saving"); text.textContent = "Saved just now"; }
-    else { el.classList.remove("saving"); text.textContent = "Not saved yet"; }
+  // Greg (8/29/26): "we don't need save draft if it autosaves. a short
+  // popup every now and again that says autosaved would be nice." Replaces
+  // the old always-visible "Saving…"/"Saved just now" indicator -- this
+  // fades in briefly after each successful autosave and fades back out on
+  // its own, so it doesn't need to be watched or dismissed.
+  let autosaveToastTimer = null;
+  function showAutosaveToast() {
+    const el = $("autosave-toast");
+    el.classList.add("show");
+    clearTimeout(autosaveToastTimer);
+    autosaveToastTimer = setTimeout(() => el.classList.remove("show"), 1800);
   }
-  async function wizSaveDraft(showFlash) {
-    if (showFlash) wizSetSaveIndicator("saving");
+  async function wizSaveDraft() {
     const data = wizSerialize();
     const engagementName = (data["f-company-name"] || "").trim() || null;
     try {
@@ -1678,11 +1688,10 @@
         if (error) throw error;
         currentDraftId = inserted.id;
       }
-      wizSetSaveIndicator("saved");
+      showAutosaveToast();
       await loadDrafts();
     } catch (err) {
-      wizSetSaveIndicator("idle");
-      if (showFlash) showBanner("Couldn't save draft: " + err.message, "error");
+      showBanner("Couldn't save draft: " + err.message, "error");
     }
   }
   async function wizDeleteDraftRow(draftId) {
@@ -1759,11 +1768,9 @@
 
   let wizAutosaveTimer = null;
   $("new-app-form").addEventListener("input", () => {
-    wizSetSaveIndicator("saving");
     clearTimeout(wizAutosaveTimer);
-    wizAutosaveTimer = setTimeout(() => wizSaveDraft(false), 1200);
+    wizAutosaveTimer = setTimeout(() => wizSaveDraft(), 1200);
   });
-  $("wiz-save-draft-bottom").addEventListener("click", () => wizSaveDraft(true));
 
   // ---------- Contacts: progressive disclosure ----------
   function wizShowContactCard(which) {
@@ -2026,7 +2033,6 @@
       panel.classList.toggle("hidden", Number(panel.dataset.step) !== 1);
     });
     wizRenderChrome();
-    wizSetSaveIndicator(draft ? "saved" : "idle");
     if (draft) showBanner("Draft resumed.", "success");
 
     closeDraftsDropdown();
