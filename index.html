@@ -470,8 +470,6 @@
   .eng-tabs { display: flex; gap: 4px; background: #eef1f4; border-radius: 999px; padding: 3px; flex-shrink: 0; }
   .eng-tab { background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 999px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
   .eng-tab.active { background: #fff; color: var(--navy); box-shadow: 0 1px 3px rgba(20,48,77,0.1); }
-  .eng-tab-count { background: rgba(0,0,0,0.08); color: inherit; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 7px; min-width: 18px; text-align: center; }
-  .eng-tab.active .eng-tab-count { background: #eef1f4; }
   /* Status pill switcher is Admin-only (Greg, 8/29/26) -- Team Leads/
      Specialists just get a static "In Progress" readout, no switching. */
   .eng-tabs.admin-only-pills [data-status]:not([data-status="in_progress"]) { display: none; }
@@ -687,25 +685,18 @@
     <div id="engagements-section" style="margin-top:8px;">
       <div class="engagements-panel">
         <div class="eng-panel-header">
-          <!-- Status count header (Greg, 8/29/26): "the dashboard look we had
-               before with a header of all the different statuses and how
-               many were in each status" -- brings back a pipeline-style
-               breakdown, but as clickable filter pills (each with a live
-               count) rather than a static row, so it replaces the old plain
-               In Progress / Other Statuses toggle. Since Closed now has its
-               own pill with an exact count, the separate "Show closed"
-               checkbox was redundant and has been folded into this. -->
+          <!-- Status view toggle (Greg, 8/29/26, final pass): back to a
+               plain two-way pill -- In Progress (default) vs. Other. The
+               per-status count header was tried and rolled back same day.
+               "Other" doesn't filter this list in place; it jumps straight
+               to the Applications page's All view (client_applications.html
+               ?status=all), which already lists every engagement/
+               application with its status and project status in one table,
+               plus Drafts. Admin-only -- Team Leads/Specialists just get
+               the static In Progress view (see .admin-only-pills below). -->
           <div class="eng-tabs" id="eng-status-tabs">
-            <button type="button" class="eng-tab active" data-status="in_progress">In Progress <span class="eng-tab-count" id="eng-count-in_progress">0</span></button>
-            <button type="button" class="eng-tab" data-status="accepted">Accepted <span class="eng-tab-count" id="eng-count-accepted">0</span></button>
-            <button type="button" class="eng-tab" data-status="on_hold">On Hold <span class="eng-tab-count" id="eng-count-on_hold">0</span></button>
-            <button type="button" class="eng-tab" data-status="closed">Closed <span class="eng-tab-count" id="eng-count-closed">0</span></button>
-            <!-- Not a project_status -- clicking jumps to the Applications
-                 page (client_applications.html) instead of filtering this
-                 list, since a submitted application isn't a client/
-                 engagement yet (Greg, 8/29/26: this replaces the old
-                 Management-row entry point that got removed). -->
-            <button type="button" class="eng-tab" data-status="applications">Applications <span class="eng-tab-count" id="eng-count-applications">0</span></button>
+            <button type="button" class="eng-tab active" data-status="in_progress">In Progress</button>
+            <button type="button" class="eng-tab" data-status="other">Other</button>
           </div>
           <div class="eng-header-right">
             <div class="eng-tabs" id="eng-tabs">
@@ -837,13 +828,11 @@
   let engagementTab = "all";            // "all" | "attention" | "recent"
   let engagementSort = "name_asc";      // "name_asc" | "name_desc" | "lead_asc" | "lead_desc"
   let engagementsExpanded = false;      // My Engagements list is capped until "View all" is clicked
-  // "in_progress" | "accepted" | "on_hold" | "closed" -- the eng-status-tabs
-  // pill (Greg, 8/29/26), one of the 4 canonical PROJECT_STATUS_LABELS.
-  // In Progress is the default everyday working view; each pill shows a
-  // live count of engagements in that status (the "dashboard look" Greg
-  // asked to bring back). This replaced the old plain In Progress / Other
-  // Statuses toggle plus the separate "Show closed" checkbox -- Closed now
-  // has its own exact-count pill instead.
+  // "in_progress" is the only real value this ever takes now -- the
+  // eng-status-tabs "Other" pill (Greg, 8/29/26, final pass) doesn't filter
+  // this list in place, it navigates to the Applications page instead. Kept
+  // as a variable (rather than inlined) so the pool-filter line below reads
+  // the same as it always has.
   let engagementStatusFilter = "in_progress";
   const ENGAGEMENTS_ROW_LIMIT = 6;
 
@@ -1107,7 +1096,7 @@
     // one job, showing every active engagement's current next step, is now
     // covered directly by the Next Step column on the list above.)
 
-    await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex(), isSuperAdminUser ? loadPendingApplicationsCount() : Promise.resolve()]);
+    await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex()]);
     await loadMyBillableTasks(); // needs allClients + myAssignmentRows, both settled above
     buildTasksDueItems();
     // "Mine" is the default for Team Leads and Specialists -- their own
@@ -1118,11 +1107,9 @@
     // (Specialist: my work first. Team Lead: team workload. Admin: everything.).
     engagementScope = isSuperAdminUser ? "all" : "mine";
 
-    // Status pill switcher (Accepted/In Progress/On Hold/Closed) is
-    // Admin-only (Greg, 8/29/26): Team Leads/Specialists just see their
-    // default In Progress view with no way to switch statuses -- browsing
-    // the org's full status breakdown isn't part of their day-to-day work,
-    // and their own engagements are almost always in one status anyway.
+    // "Other" pill is Admin-only (Greg, 8/29/26): Team Leads/Specialists
+    // just get the static In Progress view -- only Admins can jump to the
+    // Applications page's All view from here.
     $("eng-status-tabs").classList.toggle("admin-only-pills", !isSuperAdminUser);
 
     renderEngagementsList();
@@ -1151,18 +1138,6 @@
   // its own read_at, so dismissing a notification only affects the person
   // who dismissed it. This reads through that join instead of the
   // notifications table directly.
-  // Powers the "Applications" pill's count in the eng-status-tabs header --
-  // Super-Admin-only, same gating as the rest of that pill row (Greg, 8/29/26).
-  async function loadPendingApplicationsCount() {
-    const { count, error } = await sb
-      .from("client_applications")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending");
-    if (error) return;
-    const el = $("eng-count-applications");
-    if (el) el.textContent = count ?? 0;
-  }
-
   async function loadNotifications() {
     const { data, error } = await sb
       .from("notification_recipients")
@@ -1752,21 +1727,13 @@
 
   function renderEngagementsList() {
     const list = $("engagements-list");
-    // Closed engagements are done work -- they'd just be dead weight in a
-    // "what do I need to look at" list, so this view is active-only by
-    // default. The "Show closed" checkbox (Greg, 8/28/26, per the platform
-    // review meeting) lifts the filter for anyone who wants to look back at
-    // finished engagements without having to search for them by name.
+    // Closed (and Accepted/On Hold) engagements are done or not-yet-started
+    // work -- they'd just be dead weight in a "what do I need to look at"
+    // list, so this view only ever shows In Progress. The "Other" pill
+    // (Admin-only) doesn't lift that filter in place anymore -- it jumps to
+    // the Applications page's All view instead (Greg, 8/29/26, final pass).
     let scopedPool = [...allClients];
     if (engagementScope === "mine") scopedPool = scopedPool.filter((c) => myClientIds.has(c.id));
-
-    // Status count header (Greg, 8/29/26): each pill needs a live count of
-    // the scoped pool in that exact status, independent of which pill is
-    // currently selected.
-    Object.keys(PROJECT_STATUS_LABELS).forEach((status) => {
-      const el = $(`eng-count-${status}`);
-      if (el) el.textContent = scopedPool.filter((c) => c.project_status === status).length;
-    });
 
     let pool = scopedPool.filter((c) => c.project_status === engagementStatusFilter);
 
@@ -1778,14 +1745,13 @@
 
     // The empty-state message used to always say "You're not assigned to
     // any engagements yet" no matter why the list was empty (Greg, 8/29/26:
-    // as an Admin -- scope "all", not "mine" -- landing on a status with
-    // nothing there, that message reads like an access problem when really
-    // there just aren't any engagements in that status right now). Now it
-    // reflects both filters actually in effect.
-    const statusPhrase = PROJECT_STATUS_LABELS[engagementStatusFilter] || engagementStatusFilter;
+    // as an Admin -- scope "all", not "mine" -- landing here with nothing
+    // there reads like an access problem when really there just aren't any
+    // In Progress engagements right now). Now it reflects both filters
+    // actually in effect.
     $("engagements-empty").textContent = engagementScope === "mine"
-      ? `You're not assigned to any ${statusPhrase} engagements.`
-      : `Nothing ${statusPhrase} right now.`;
+      ? `You're not assigned to any In Progress engagements.`
+      : `Nothing In Progress right now.`;
     $("engagements-empty").classList.toggle("hidden", pool.length > 0);
 
     const showAll = engagementsExpanded || pool.length <= ENGAGEMENTS_ROW_LIMIT;
@@ -1802,23 +1768,17 @@
     }
   }
 
-  // Status view toggle -- unlike the Recent pill below, this one's always
-  // in one state or the other (no toggle-back-to-neutral), since "neither"
-  // doesn't mean anything here the way it does for Recent vs. the full list.
+  // "Other" isn't a filter on this list -- it jumps straight to the
+  // Applications page's All view (client_applications.html?status=all),
+  // which already lists every engagement/application with its status and
+  // project status in one table, plus Drafts (Greg, 8/29/26, final pass).
   $("eng-status-tabs").addEventListener("click", (e) => {
     const btn = e.target.closest("[data-status]");
     if (!btn) return;
-    // "Applications" isn't a project_status -- it's a link out to the
-    // Applications page, not a filter on this list (see comment on the
-    // button itself).
-    if (btn.dataset.status === "applications") {
-      location.href = "client_applications.html";
+    if (btn.dataset.status === "other") {
+      location.href = "client_applications.html?status=all";
       return;
     }
-    engagementStatusFilter = btn.dataset.status;
-    engagementsExpanded = false;
-    $("eng-status-tabs").querySelectorAll("[data-status]").forEach((b) => b.classList.toggle("active", b.dataset.status === engagementStatusFilter));
-    renderEngagementsList();
   });
 
   // No "All" pill here -- it was redundant with the unfiltered default
