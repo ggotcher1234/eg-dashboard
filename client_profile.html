@@ -342,12 +342,30 @@
   }
 
   /* ---------- Top nav + Ask AI ---------- */
+  header { position: relative; }
   header .site-nav { display: flex; align-items: center; gap: 4px; }
   header .nav-link { color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 8px 12px; border-radius: 6px; position: relative; }
   header .nav-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
   header .nav-link.active { color: #fff; }
   header .nav-link.active::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -14px; height: 2px; background: #fff; }
-  @media (max-width: 980px) { header .site-nav { display: none; } }
+  .nav-toggle {
+    display: none; align-items: center; justify-content: center; width: 34px; height: 34px;
+    background: rgba(255,255,255,0.1); border: none; border-radius: 6px; color: #fff; cursor: pointer; flex-shrink: 0;
+  }
+  .nav-toggle:hover { background: rgba(255,255,255,0.18); }
+  .nav-toggle svg { width: 20px; height: 20px; display: block; }
+  @media (max-width: 980px) {
+    .nav-toggle { display: inline-flex; }
+    header .site-nav {
+      display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; gap: 2px;
+      background: var(--navy); padding: 8px; box-shadow: 0 10px 24px rgba(0,0,0,0.28); z-index: 96;
+      border-radius: 0 0 10px 10px;
+    }
+    header .site-nav.open { display: flex; }
+    header .nav-link { padding: 12px 14px; border-radius: 6px; }
+    header .nav-link.active { background: rgba(255,255,255,0.14); }
+    header .nav-link.active::after { display: none; }
+  }
 
   .ask-ai-btn {
     display: inline-flex; align-items: center; gap: 6px; background: rgba(124,63,196,0.18); color: #d9c8f5;
@@ -424,6 +442,9 @@
       <a class="nav-link" href="team_directory.html">Roster</a>
       <a class="nav-link" href="invoicing_report.html">Invoicing</a>
     </nav>
+    <button type="button" class="nav-toggle" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
     <div id="userbox">
       <div class="ask-ai-wrap">
         <button class="ask-ai-btn" id="ask-ai-btn">
@@ -2563,6 +2584,31 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
   $("wiz-back").addEventListener("click", () => wizGoToStep(wizStep - 1));
   $("wiz-continue").addEventListener("click", () => wizGoToStep(wizStep + 1));
   wizRenderChrome();
+</script>
+<script>
+  // Mobile nav toggle (Greg, 8/29/26) -- header .site-nav is display:none
+  // below 980px with nothing else to reach it, so this wires up the
+  // .nav-toggle button (added right after each </nav>) to flip a .open
+  // class the @media (max-width: 980px) CSS above turns into a dropdown
+  // panel. Class-based/generic on purpose: some pages render two
+  // <header>s (a skeleton one while auth/role resolves, then the real
+  // one), so this wires whichever ones exist rather than assuming one.
+  document.querySelectorAll(".nav-toggle").forEach((btn) => {
+    const nav = btn.closest("header")?.querySelector(".site-nav");
+    if (!nav) return;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = nav.classList.toggle("open");
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  });
+  document.addEventListener("click", (e) => {
+    document.querySelectorAll(".site-nav.open").forEach((nav) => {
+      if (!nav.contains(e.target) && !nav.nextElementSibling?.contains(e.target)) {
+        nav.classList.remove("open");
+      }
+    });
+  });
 </script>
 </body>
 </html>
