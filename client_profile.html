@@ -297,6 +297,27 @@
   .wizard-step-connector { flex: 1; height: 2px; background: var(--border); margin: 0 6px; min-width: 8px; }
   @media (max-width: 900px) { .wizard-step-pill .label { display: none; } }
 
+  /* Engagement Progress tracker (Greg, 8/29/26) -- read-only, non-clickable
+     copy of client_public.html's workflow-tracker (same chevron shape and
+     per-step colors) so the Team Lead sees the exact same automatic
+     checkmarks the client does, right inside the wizard. */
+  .workflow-tracker { display: flex; margin: 4px 0; }
+  .wf-step {
+    flex: 1; padding: 12px 20px 12px 32px; color: #fff; font-size: 12px; font-weight: 700;
+    text-align: center; text-transform: uppercase; letter-spacing: 0.3px; position: relative;
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%, 16px 50%);
+    margin-left: -16px;
+  }
+  .wf-step:first-child { margin-left: 0; clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%); }
+  .wf-step-0 { background: #7fa4c4; }
+  .wf-step-0.filled { background: #2f6fb0; }
+  .wf-step-1 { background: #c9ac74; }
+  .wf-step-1.filled { background: var(--amber); }
+  .wf-step-2 { background: #96ab84; }
+  .wf-step-2.filled { background: var(--accent); }
+  .wf-step-3 { background: #8998a6; }
+  .wf-step-3.filled { background: var(--navy); }
+
   .wizard-body { display: grid; grid-template-columns: 220px 1fr; gap: 18px; align-items: start; }
   @media (max-width: 800px) { .wizard-body { grid-template-columns: 1fr; } .wizard-sidebar { order: 2; } }
   .wizard-sidebar { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 20px; }
@@ -694,14 +715,20 @@
             </div>
           </div>
 
-          <!-- Step 4: Project Next Step -->
-          <!-- Step 3 (was 4): Project Next Steps -->
+          <!-- Step 3: Engagement Progress -- Greg (8/29/26): "we will track
+               only 4 next steps... Discovery Call, Controlling Document,
+               Research Review, Close-Out Evaluation. Each step will be
+               monitored automatically the same as the checkmarks on the
+               client dashboard." Replaces the old free-typed 6-item Next
+               Steps checklist entirely -- this mirrors client_public.html's
+               workflow-tracker exactly: same 4 steps, same underlying
+               client_content document fields + latest Close-Out Evaluation
+               response (both already loaded for the Workflow Docs step
+               below), nothing to type in here. -->
           <div class="wizard-panel-card wizard-panel hidden" data-step="3">
-            <h3>Project Next Steps</h3>
-            <div class="wizard-panel-hint">Track project milestones. Shows as a checkable list on the client dashboard.</div>
-            <span class="accordion-count" id="next_steps-count" style="display:inline-block; margin-bottom:10px;"></span>
-            <div id="next_steps-list"></div>
-            <form class="add-row-form" id="next_steps-add-form"></form>
+            <h3>Engagement Progress</h3>
+            <div class="wizard-panel-hint">Tracked automatically from the documents and Close-Out Evaluation on the Workflow Docs step -- the exact same checkmarks the client sees on their own dashboard. Nothing to fill in here.</div>
+            <div class="workflow-tracker" id="wiz-progress-tracker"></div>
           </div>
 
           <!-- Step 4 (was 5): Company Contacts (+ Team Members read-only) -->
@@ -1327,11 +1354,11 @@
     fillCompanyForm(client);
     await loadWorkflowLinks(client.id);
     await loadEvalResponse(client.id);
-    // Team Members is loaded first, on its own, because the Project Next
-    // Steps "Assigned To" dropdown (built inside renderListSections, right
-    // below) needs the engagement's team roster already in hand -- loading
-    // it in the same Promise.all as everything else would race it against
-    // the Next Steps render with no guarantee it wins.
+    // Engagement Progress (wizard step 3) is just a live read of the two
+    // awaits directly above -- workflowData (client_content's document
+    // fields) and evalResponse (the latest Close-Out Evaluation) -- so it
+    // can render the instant both are in hand, no separate query needed.
+    renderEngagementProgress();
     listData.team = await TEAM_CONFIG.customLoad(client.id);
     renderListSections();
     await Promise.all(LIST_CONFIGS.map((cfg) => loadListSection(cfg)));
@@ -1748,6 +1775,7 @@
     if (error) { showBanner("Couldn't save the link: " + error.message, "error"); return; }
     workflowData[f.urlColumn] = url;
     renderWorkflowFileField(f);
+    renderEngagementProgress();
     showBanner(`${f.label} link saved.`, "success");
   }
 
@@ -1771,6 +1799,7 @@
     workflowData[f.pathColumn] = path;
     workflowData[f.urlColumn] = null;
     renderWorkflowFileField(f);
+    renderEngagementProgress();
     showBanner(`${f.label} uploaded.`, "success");
   }
 
@@ -1782,7 +1811,34 @@
     workflowData[f.pathColumn] = null;
     workflowData[f.urlColumn] = null;
     renderWorkflowFileField(f);
+    renderEngagementProgress();
     showBanner(`${f.label} removed.`, "success");
+  }
+
+  // ---------- Engagement Progress (wizard step 3) ----------
+  // Greg (8/29/26): "we will track only 4 next steps... Discovery Call,
+  // Controlling Document, Research Review, Close-Out Evaluation. Each step
+  // will be monitored automatically the same as the checkmarks on the
+  // client dashboard." This mirrors client_public.html's WORKFLOW_STEPS/
+  // renderWorkflow() exactly, off the same two data sources already loaded
+  // for the Workflow Docs step (7) below -- workflowData (client_content's
+  // discovery/controlling/research-review document fields) and evalResponse
+  // (the latest client_evaluation_responses row). Read-only: there's
+  // nothing to type in, it just reflects those two things.
+  const PROGRESS_STEPS = [
+    { pathKey: "discovery_doc_storage_path", urlKey: "discovery_doc_url", label: "Discovery Call" },
+    { pathKey: "controlling_doc_storage_path", urlKey: "controlling_doc_url", label: "Controlling Document" },
+    { pathKey: "research_review_storage_path", urlKey: "research_review_url", label: "Research Review" },
+    { label: "Close-Out Evaluation", isEval: true },
+  ];
+  function renderEngagementProgress() {
+    const w = workflowData || {};
+    const el = $("wiz-progress-tracker");
+    if (!el) return;
+    el.innerHTML = PROGRESS_STEPS.map((step, i) => {
+      const filled = step.isEval ? !!evalResponse : !!(w[step.pathKey] || w[step.urlKey]);
+      return `<div class="wf-step wf-step-${i}${filled ? " filled" : ""}">${filled ? "&#10003; " : ""}${escapeHtml(step.label)}</div>`;
+    }).join("");
   }
 
   // ---------- Close-Out Evaluation Link ----------
@@ -2060,30 +2116,14 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     csv: COMPETITORS_CONFIG.csv,
     render: COMPETITORS_CONFIG.render,
   };
-  // Next Steps items (Send EG Invitation Email, Discovery Call, Controlling
-  // Document, etc.) are always the Team Lead's own responsibility, start to
-  // finish -- Greg (8/19/26): "the challenge is that the Team Lead is
-  // responsible for all of these items... the customer who sees these next
-  // steps doesn't need to know about that detail." So there's no per-item
-  // "Assigned To" picker here anymore; assigned_to is still set behind the
-  // scenes (see addListRow) so the Home page's Tasks Due feature keeps
-  // working, it's just no longer something anyone has to choose by hand.
-  // (The real per-specialist assignment need -- who's researching which
-  // question once the Controlling Document is agreed -- is tracked
-  // separately via Team Members/client_assignments, not here.)
-  function currentTeamLeadUserId() {
-    const lead = (listData.team || []).find((r) => r.is_team_lead && r.user_id);
-    return lead ? lead.user_id : null;
-  }
-  const NEXT_STEPS_CONFIG = {
-    key: "next_steps", table: "client_next_steps", title: "Project Next Steps",
-    fields: [
-      { name: "description", label: "Task", type: "text", required: true },
-      { name: "notes", label: "Notes/Date/Time", type: "text" },
-    ],
-    isChecklist: true,
-    render: (r) => ({ title: r.description, sub: r.notes || "" }),
-  };
+  // Project Next Steps (the old free-typed 6-item checklist -- Send EG
+  // Invitation Email, Discovery Call, Controlling Document, etc.) is gone as
+  // of 8/29/26 -- replaced by the Engagement Progress tracker (see
+  // renderEngagementProgress() below and wizard step 3), which mirrors the
+  // client-facing dashboard's own automatic checkmarks instead of a manual
+  // list someone has to keep up to date. The underlying client_next_steps
+  // table and its auto_source triggers (090/091/092) are untouched -- this
+  // just removes the manual editing UI for it.
   // Team Members isn't its own table — it's whoever's actually assigned on
   // the Client Workspace page (Section 4.3, "pull from real assignments").
   // Read-only here on purpose: adding/removing a team member is an
@@ -2117,7 +2157,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
       ].filter(Boolean).join(" · "),
     }),
   };
-  const LIST_CONFIGS = [NEXT_STEPS_CONFIG, CONTACTS_CONFIG, TEAM_CONFIG, COMPETITORS_CONFIG, TOP_CUSTOMERS_CONFIG];
+  const LIST_CONFIGS = [CONTACTS_CONFIG, TEAM_CONFIG, COMPETITORS_CONFIG, TOP_CUSTOMERS_CONFIG];
   const listData = {}; // key -> rows
 
   // Builds the "+ Add" form for one config into its wizard step (the list
@@ -2499,11 +2539,6 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
       if (f.required && !v) { showBanner(`${f.label} is required.`, "error"); return; }
       values[f.name] = v || null;
     }
-    // Next Steps no longer has an "Assigned To" field for someone to fill
-    // in (see NEXT_STEPS_CONFIG comment) -- it's always this engagement's
-    // Team Lead, set automatically so Tasks Due on the Home page still
-    // knows who a new item belongs to.
-    if (cfg.key === "next_steps") values.assigned_to = currentTeamLeadUserId();
     const { error } = await sb.from(cfg.table).insert(values);
     if (error) { showBanner(`Couldn't add to ${cfg.title}: ` + error.message, "error"); return; }
     $(`${cfg.key}-add-form`).reset();
@@ -2517,12 +2552,6 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     await loadListSection(cfg);
   }
 
-  async function toggleNextStep(id, completed) {
-    const { error } = await sb.from("client_next_steps").update({ completed }).eq("id", id);
-    if (error) { showBanner("Couldn't update: " + error.message, "error"); return; }
-    await loadListSection(NEXT_STEPS_CONFIG);
-  }
-
   // ---------- Dashboard Wizard step chrome (progress bar, top pills, left sidebar) ----------
   // Unlike the New Application wizard on client_applications.html, this is
   // an EDIT wizard for a live engagement -- every field already autosaves
@@ -2532,7 +2561,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
   const WIZARD_STEPS = [
     { n: 1, key: "status_company", label: "Company" },
     { n: 2, key: "description_issues", label: "Description" },
-    { n: 3, key: "next_step", label: "Next Step" },
+    { n: 3, key: "next_step", label: "Progress" },
     { n: 4, key: "contacts", label: "Contacts" },
     { n: 5, key: "competitors", label: "Competitors" },
     { n: 6, key: "top_customers", label: "Customers" },
