@@ -240,11 +240,15 @@
      its matching event fires elsewhere in the app -- Close-Out Survey
      submission is the first one wired up. The checkbox is disabled rather
      than hidden so it's still obvious at a glance whether that step is
-     actually done; the badge explains why nobody has to click it. */
+     actually done; the badge explains why nobody has to click it. Sits
+     inline inside the Task field's own label (not as a sibling of the
+     checkbox) so every row's Task/Notes boxes start and line up at the
+     same x position whether or not that row has a badge (Greg, 8/29/26 --
+     the badge used to live at the row level and threw off alignment). */
   .auto-step-badge {
-    display: inline-flex; align-items: center; gap: 4px; margin-bottom: 9px; padding: 2px 8px;
-    border-radius: 999px; background: #eef3ea; color: var(--accent-dark); font-size: 10.5px;
-    font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; margin-left: 4px;
+    border-radius: 999px; background: #eef3ea; color: var(--accent-dark); font-size: 10px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; vertical-align: middle;
   }
 
   .add-row-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); align-items: flex-end; }
@@ -2381,11 +2385,10 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     list.innerHTML = rows.map((r) => `
       <div class="list-row-edit">
         ${cfg.isChecklist ? `<input type="checkbox" class="list-checkbox" data-toggle-id="${r.id}" ${r.completed ? "checked" : ""} ${r.auto_source ? "disabled" : ""} title="${r.auto_source ? "Completes automatically -- no need to check this by hand" : ""}" />` : ""}
-        ${cfg.isChecklist && r.auto_source ? `<span class="auto-step-badge" title="This step checks itself off automatically -- see the Task's own note for how.">Auto</span>` : ""}
         <div class="lre-fields">
-          ${cfg.fields.map((f) => `
+          ${cfg.fields.map((f, fIdx) => `
             <div class="field">
-              <label>${escapeHtml(f.label)}</label>
+              <label>${escapeHtml(f.label)}${cfg.isChecklist && fIdx === 0 && r.auto_source ? ` <span class="auto-step-badge" title="This step checks itself off automatically -- see the Task's own note for how.">Auto</span>` : ""}</label>
               ${f.type === "select" ? `
               <select class="row-select-edit" data-row-id="${r.id}" data-field="${f.name}" ${f.required ? "required" : ""}>
                 <option value="">${escapeHtml(f.blankLabel || "—")}</option>
