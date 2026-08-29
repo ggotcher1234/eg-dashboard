@@ -297,27 +297,6 @@
   .wizard-step-connector { flex: 1; height: 2px; background: var(--border); margin: 0 6px; min-width: 8px; }
   @media (max-width: 900px) { .wizard-step-pill .label { display: none; } }
 
-  /* Engagement Progress tracker (Greg, 8/29/26) -- read-only, non-clickable
-     copy of client_public.html's workflow-tracker (same chevron shape and
-     per-step colors) so the Team Lead sees the exact same automatic
-     checkmarks the client does, right inside the wizard. */
-  .workflow-tracker { display: flex; margin: 4px 0; }
-  .wf-step {
-    flex: 1; padding: 12px 20px 12px 32px; color: #fff; font-size: 12px; font-weight: 700;
-    text-align: center; text-transform: uppercase; letter-spacing: 0.3px; position: relative;
-    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%, 16px 50%);
-    margin-left: -16px;
-  }
-  .wf-step:first-child { margin-left: 0; clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%); }
-  .wf-step-0 { background: #7fa4c4; }
-  .wf-step-0.filled { background: #2f6fb0; }
-  .wf-step-1 { background: #c9ac74; }
-  .wf-step-1.filled { background: var(--amber); }
-  .wf-step-2 { background: #96ab84; }
-  .wf-step-2.filled { background: var(--accent); }
-  .wf-step-3 { background: #8998a6; }
-  .wf-step-3.filled { background: var(--navy); }
-
   .wizard-body { display: grid; grid-template-columns: 220px 1fr; gap: 18px; align-items: start; }
   @media (max-width: 800px) { .wizard-body { grid-template-columns: 1fr; } .wizard-sidebar { order: 2; } }
   .wizard-sidebar { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 20px; }
@@ -715,24 +694,8 @@
             </div>
           </div>
 
-          <!-- Step 3: Engagement Progress -- Greg (8/29/26): "we will track
-               only 4 next steps... Discovery Call, Controlling Document,
-               Research Review, Close-Out Evaluation. Each step will be
-               monitored automatically the same as the checkmarks on the
-               client dashboard." Replaces the old free-typed 6-item Next
-               Steps checklist entirely -- this mirrors client_public.html's
-               workflow-tracker exactly: same 4 steps, same underlying
-               client_content document fields + latest Close-Out Evaluation
-               response (both already loaded for the Workflow Docs step
-               below), nothing to type in here. -->
+          <!-- Step 3 (was 4): Company Contacts (+ Team Members read-only) -->
           <div class="wizard-panel-card wizard-panel hidden" data-step="3">
-            <h3>Engagement Progress</h3>
-            <div class="wizard-panel-hint">Tracked automatically from the documents and Close-Out Evaluation on the Workflow Docs step -- the exact same checkmarks the client sees on their own dashboard. Nothing to fill in here.</div>
-            <div class="workflow-tracker" id="wiz-progress-tracker"></div>
-          </div>
-
-          <!-- Step 4 (was 5): Company Contacts (+ Team Members read-only) -->
-          <div class="wizard-panel-card wizard-panel hidden" data-step="4">
             <h3>Company Contacts</h3>
             <div class="wizard-panel-hint">Who EG staff should coordinate with at this company.</div>
             <span class="accordion-count" id="contacts-count" style="display:inline-block; margin-bottom:10px;"></span>
@@ -752,8 +715,8 @@
             </div>
           </div>
 
-          <!-- Step 5 (was 6): Competitors -->
-          <div class="wizard-panel-card wizard-panel hidden" data-step="5">
+          <!-- Step 4 (was 5): Competitors -->
+          <div class="wizard-panel-card wizard-panel hidden" data-step="4">
             <h3>Competitors</h3>
             <div class="wizard-panel-hint">Import or export the list as a CSV with columns: Company, URL, Location, Notes.</div>
             <div style="display:flex; gap:8px; margin-bottom:14px;">
@@ -767,8 +730,8 @@
             <form class="add-row-form" id="competitors-add-form"></form>
           </div>
 
-          <!-- Step 6 (was 7): Top Customers -->
-          <div class="wizard-panel-card wizard-panel hidden" data-step="6">
+          <!-- Step 5 (was 6): Top Customers -->
+          <div class="wizard-panel-card wizard-panel hidden" data-step="5">
             <h3>Top Customers</h3>
             <div class="wizard-panel-hint">Import or export the list as a CSV with columns: Company, URL, Location, Notes.</div>
             <div style="display:flex; gap:8px; margin-bottom:14px;">
@@ -782,8 +745,8 @@
             <form class="add-row-form" id="top_customers-add-form"></form>
           </div>
 
-          <!-- Step 7 (was 8): Workflow Documents -->
-          <div class="wizard-panel-card wizard-panel hidden" data-step="7">
+          <!-- Step 6 (was 7): Workflow Documents -->
+          <div class="wizard-panel-card wizard-panel hidden" data-step="6">
             <h3>EG Workflow Documents</h3>
             <div class="wizard-panel-hint">Discovery, Controlling, and Research Review can each be an uploaded file or a link — whichever's easier. Close-Out is handled below via the evaluation link, not a file upload.</div>
             <div class="field-grid">
@@ -1227,7 +1190,7 @@
 
   // Section keys used by other pages' deep links (?section=…) map onto the
   // wizard step that now contains that content.
-  const SECTION_TO_STEP = { next_steps: 3, contacts: 4, team: 4, competitors: 5, top_customers: 6, workflow: 7 };
+  const SECTION_TO_STEP = { contacts: 3, team: 3, competitors: 4, top_customers: 5, workflow: 6 };
 
   // ---------- Standardized Search/Print/Export/Import toolbar ----------
   // Same four controls, same order, on every internal page (Greg, 8/27/26).
@@ -1354,11 +1317,6 @@
     fillCompanyForm(client);
     await loadWorkflowLinks(client.id);
     await loadEvalResponse(client.id);
-    // Engagement Progress (wizard step 3) is just a live read of the two
-    // awaits directly above -- workflowData (client_content's document
-    // fields) and evalResponse (the latest Close-Out Evaluation) -- so it
-    // can render the instant both are in hand, no separate query needed.
-    renderEngagementProgress();
     listData.team = await TEAM_CONFIG.customLoad(client.id);
     renderListSections();
     await Promise.all(LIST_CONFIGS.map((cfg) => loadListSection(cfg)));
@@ -1775,7 +1733,6 @@
     if (error) { showBanner("Couldn't save the link: " + error.message, "error"); return; }
     workflowData[f.urlColumn] = url;
     renderWorkflowFileField(f);
-    renderEngagementProgress();
     showBanner(`${f.label} link saved.`, "success");
   }
 
@@ -1799,7 +1756,6 @@
     workflowData[f.pathColumn] = path;
     workflowData[f.urlColumn] = null;
     renderWorkflowFileField(f);
-    renderEngagementProgress();
     showBanner(`${f.label} uploaded.`, "success");
   }
 
@@ -1811,34 +1767,7 @@
     workflowData[f.pathColumn] = null;
     workflowData[f.urlColumn] = null;
     renderWorkflowFileField(f);
-    renderEngagementProgress();
     showBanner(`${f.label} removed.`, "success");
-  }
-
-  // ---------- Engagement Progress (wizard step 3) ----------
-  // Greg (8/29/26): "we will track only 4 next steps... Discovery Call,
-  // Controlling Document, Research Review, Close-Out Evaluation. Each step
-  // will be monitored automatically the same as the checkmarks on the
-  // client dashboard." This mirrors client_public.html's WORKFLOW_STEPS/
-  // renderWorkflow() exactly, off the same two data sources already loaded
-  // for the Workflow Docs step (7) below -- workflowData (client_content's
-  // discovery/controlling/research-review document fields) and evalResponse
-  // (the latest client_evaluation_responses row). Read-only: there's
-  // nothing to type in, it just reflects those two things.
-  const PROGRESS_STEPS = [
-    { pathKey: "discovery_doc_storage_path", urlKey: "discovery_doc_url", label: "Discovery Call" },
-    { pathKey: "controlling_doc_storage_path", urlKey: "controlling_doc_url", label: "Controlling Document" },
-    { pathKey: "research_review_storage_path", urlKey: "research_review_url", label: "Research Review" },
-    { label: "Close-Out Evaluation", isEval: true },
-  ];
-  function renderEngagementProgress() {
-    const w = workflowData || {};
-    const el = $("wiz-progress-tracker");
-    if (!el) return;
-    el.innerHTML = PROGRESS_STEPS.map((step, i) => {
-      const filled = step.isEval ? !!evalResponse : !!(w[step.pathKey] || w[step.urlKey]);
-      return `<div class="wf-step wf-step-${i}${filled ? " filled" : ""}">${filled ? "&#10003; " : ""}${escapeHtml(step.label)}</div>`;
-    }).join("");
   }
 
   // ---------- Close-Out Evaluation Link ----------
@@ -2118,12 +2047,12 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
   };
   // Project Next Steps (the old free-typed 6-item checklist -- Send EG
   // Invitation Email, Discovery Call, Controlling Document, etc.) is gone as
-  // of 8/29/26 -- replaced by the Engagement Progress tracker (see
-  // renderEngagementProgress() below and wizard step 3), which mirrors the
-  // client-facing dashboard's own automatic checkmarks instead of a manual
-  // list someone has to keep up to date. The underlying client_next_steps
-  // table and its auto_source triggers (090/091/092) are untouched -- this
-  // just removes the manual editing UI for it.
+  // of 8/29/26, briefly replaced by an automatic Engagement Progress step in
+  // the wizard mirroring the client-facing dashboard's checkmarks -- then
+  // that step itself was removed too, since the same info already shows on
+  // the Home page's Next Step column (Greg, 8/29/26). The underlying
+  // client_next_steps table and its auto_source triggers (090/091/092) are
+  // untouched -- this just removes the manual/automatic editing UI for it.
   // Team Members isn't its own table — it's whoever's actually assigned on
   // the Client Workspace page (Section 4.3, "pull from real assignments").
   // Read-only here on purpose: adding/removing a team member is an
@@ -2561,11 +2490,10 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
   const WIZARD_STEPS = [
     { n: 1, key: "status_company", label: "Company" },
     { n: 2, key: "description_issues", label: "Description" },
-    { n: 3, key: "next_step", label: "Progress" },
-    { n: 4, key: "contacts", label: "Contacts" },
-    { n: 5, key: "competitors", label: "Competitors" },
-    { n: 6, key: "top_customers", label: "Customers" },
-    { n: 7, key: "workflow", label: "Workflow Docs" },
+    { n: 3, key: "contacts", label: "Contacts" },
+    { n: 4, key: "competitors", label: "Competitors" },
+    { n: 5, key: "top_customers", label: "Customers" },
+    { n: 6, key: "workflow", label: "Workflow Docs" },
   ];
   let wizStep = 1;
 
