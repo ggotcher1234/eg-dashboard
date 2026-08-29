@@ -1827,7 +1827,16 @@
 
     $("wiz-back").classList.toggle("hidden", wizStep === 1);
     $("wiz-continue").classList.toggle("hidden", wizStep === WIZARD_STEPS.length);
-    $("new-app-submit").classList.toggle("hidden", wizStep !== WIZARD_STEPS.length);
+    // Bug (Greg, 8/29/26): a hidden type="submit" button is still an
+    // "enabled" implicit-submit target per the HTML forms spec, so pressing
+    // Enter in any text field -- e.g. while editing the Financials step's
+    // Revenue fields -- silently submitted the whole application early,
+    // deleting the in-progress draft with no way back. Disabling it whenever
+    // it's not the active step's button removes it from implicit submission
+    // entirely, not just hiding it visually.
+    const onFinalStep = wizStep === WIZARD_STEPS.length;
+    $("new-app-submit").classList.toggle("hidden", !onFinalStep);
+    $("new-app-submit").disabled = !onFinalStep;
     const nextStep = WIZARD_STEPS[wizStep]; // wizStep is 1-indexed, so this is the *next* step's entry
     $("wiz-continue").textContent = nextStep ? `Continue to ${nextStep.label} →` : "Continue →";
   }
@@ -2013,6 +2022,13 @@
 
   $("new-app-form").addEventListener("submit", async (e) => {
     e.preventDefault();
+
+    // Belt-and-suspenders alongside the disabled-button fix above (Greg,
+    // 8/29/26) -- if a submit event reaches here from any step but the
+    // last, it wasn't a deliberate "Submit Application" click, so bail
+    // instead of silently creating a real application out of a mid-edit
+    // draft.
+    if (wizStep !== WIZARD_STEPS.length) return;
 
     const companyName = $("f-company-name").value.trim();
     const econDevId = $("f-econ-dev").value;
