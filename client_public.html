@@ -279,7 +279,6 @@
           <div id="stat-pill-details">
             <div class="action-body" id="detail-competitors"></div>
             <div class="action-body" id="detail-top_customers"></div>
-            <div class="action-body" id="detail-next_steps"></div>
           </div>
         </div>
       </div>
@@ -539,11 +538,14 @@
 
     // Everything inside the Company Info accordion now rolls up together
     // (Greg/Chris, 8/26/26) -- Top Business Issues, NAICS, website, socials,
-    // and the Competitors/Top Customers/Next Steps stat pills all live
-    // inside bar-company_info-body, so the bar itself shows if ANY of that
-    // has content, not just the description. Stat-pill counts come from the
+    // and the Competitors/Top Customers stat pills all live inside
+    // bar-company_info-body, so the bar itself shows if ANY of that has
+    // content, not just the description. Stat-pill counts come from the
     // same `row` this function already receives, same as renderStatPills().
-    const hasStats = (row.competitors || []).length || (row.top_customers || []).length || (row.next_steps || []).length;
+    // (Greg, 8/29/26: Next Steps removed from the client-facing dashboard
+    // entirely -- the workflow tracker above is the only progress display
+    // now, so it's dropped from this check too.)
+    const hasStats = (row.competitors || []).length || (row.top_customers || []).length;
     const hasSocials = c.linkedin_url || c.facebook_url || c.instagram_url || c.twitter_url || c.youtube_url;
     if (c.description || c.top_business_issues || c.naics_codes || c.website_url || hasSocials || hasStats) {
       $("company-info-bar-wrap").classList.remove("hidden");
@@ -574,24 +576,23 @@
       .join("");
   }
 
-  // Competitors / Top Customers / Next Steps used to also get their own
-  // full-width accordion bars below, which just duplicated these pill
-  // counts. The pills are now the only place to see them — clicking one
-  // expands the same list content right underneath instead.
+  // Competitors / Top Customers used to also get their own full-width
+  // accordion bars below, which just duplicated these pill counts. The
+  // pills are now the only place to see them — clicking one expands the
+  // same list content right underneath instead.
+  // (Greg, 8/29/26: Next Steps pill removed -- Project Next Steps no longer
+  // surfaces on the client-facing dashboard at all; the workflow tracker
+  // above is the sole progress display now.)
   function renderStatPills(row) {
     const competitorsCount = (row.competitors || []).length;
     const customersCount = (row.top_customers || []).length;
-    const steps = row.next_steps || [];
-    const stepsDone = steps.filter((s) => s.completed).length;
     $("stat-pills").innerHTML = `
       <div class="stat-pill" data-pill="competitors">&#127970; Competitors <span class="count">${competitorsCount}</span> <span class="pill-chevron">&#9656;</span></div>
       <div class="stat-pill" data-pill="top_customers">&#127991; Top Customers <span class="count">${customersCount}</span> <span class="pill-chevron">&#9656;</span></div>
-      <div class="stat-pill" data-pill="next_steps">&#9989; Next Steps <span class="count">${stepsDone}/${steps.length}</span> <span class="pill-chevron">&#9656;</span></div>
     `;
 
     $("detail-competitors").innerHTML = renderActionBody("competitors", row.competitors || []);
     $("detail-top_customers").innerHTML = renderActionBody("top_customers", row.top_customers || []);
-    $("detail-next_steps").innerHTML = renderActionBody("next_steps", steps);
 
     $("stat-pills").querySelectorAll("[data-pill]").forEach((pill) => {
       pill.addEventListener("click", () => {
@@ -704,14 +705,6 @@
           </tbody>
         </table>
       `;
-    }
-    if (key === "next_steps") {
-      return rows.map((r) => `
-        <div class="action-row ${r.completed ? "done" : ""}">
-          <div class="ar-title">${r.completed ? "&#9745;" : "&#9744;"} ${escapeHtml(r.description)}</div>
-          ${r.notes ? `<div class="ar-sub">${escapeHtml(r.notes)}</div>` : ""}
-        </div>
-      `).join("");
     }
     return "";
   }
