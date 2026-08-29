@@ -681,6 +681,18 @@
     <div id="engagements-section" style="margin-top:8px;">
       <div class="engagements-panel">
         <div class="eng-panel-header">
+          <!-- Status view toggle (Greg, 8/29/26): "a very simple way to
+               switch between In Progress (default) and all the other
+               engagement statuses" -- a plain two-way pill instead of a
+               per-status picker, since the badge already on each row
+               (Accepted/On Hold/Closed) tells you which is which once
+               you're looking at the "Other" bucket. Separate from the
+               "Show closed" checkbox, which still governs Closed rows on
+               either side of this toggle. -->
+          <div class="eng-tabs" id="eng-status-tabs">
+            <button type="button" class="eng-tab active" data-status="in_progress">In Progress</button>
+            <button type="button" class="eng-tab" data-status="other">Other Statuses</button>
+          </div>
           <div class="eng-header-right">
             <label class="eng-closed-toggle" for="eng-show-closed">
               <input type="checkbox" id="eng-show-closed" />
@@ -816,6 +828,12 @@
   let engagementSort = "name_asc";      // "name_asc" | "name_desc" | "lead_asc" | "lead_desc"
   let engagementsExpanded = false;      // My Engagements list is capped until "View all" is clicked
   let showClosedEngagements = false;    // Off by default -- "Show closed" checkbox lifts the filter below
+  // "in_progress" | "other" -- the eng-status-tabs pill (Greg, 8/29/26). In
+  // Progress is the everyday working view; "Other Statuses" is everything
+  // else (Accepted, On Hold) so an engagement doesn't just vanish once it's
+  // no longer active without going looking for it. Independent of the
+  // "Show closed" checkbox, which still governs Closed rows either way.
+  let engagementStatusFilter = "in_progress";
   const ENGAGEMENTS_ROW_LIMIT = 6;
 
   const $ = (id) => document.getElementById(id);
@@ -1711,6 +1729,9 @@
     let pool = showClosedEngagements ? [...allClients] : allClients.filter((c) => c.project_status !== "closed");
     if (engagementScope === "mine") pool = pool.filter((c) => myClientIds.has(c.id));
 
+    if (engagementStatusFilter === "in_progress") pool = pool.filter((c) => c.project_status === "in_progress");
+    else if (engagementStatusFilter === "other") pool = pool.filter((c) => c.project_status !== "in_progress");
+
     if (engagementTab === "recent") {
       // "Recent" picks its top 10 by last activity first.
       pool = [...pool].sort((a, b) => new Date(b.last_activity_at || b.updated_at) - new Date(a.last_activity_at || a.updated_at)).slice(0, 10);
@@ -1732,6 +1753,18 @@
       viewAllWrap.classList.add("hidden");
     }
   }
+
+  // Status view toggle -- unlike the Recent pill below, this one's always
+  // in one state or the other (no toggle-back-to-neutral), since "neither"
+  // doesn't mean anything here the way it does for Recent vs. the full list.
+  $("eng-status-tabs").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-status]");
+    if (!btn) return;
+    engagementStatusFilter = btn.dataset.status;
+    engagementsExpanded = false;
+    $("eng-status-tabs").querySelectorAll("[data-status]").forEach((b) => b.classList.toggle("active", b.dataset.status === engagementStatusFilter));
+    renderEngagementsList();
+  });
 
   // No "All" pill here -- it was redundant with the unfiltered default
   // state. Clicking a tab that's already active toggles it back off to
