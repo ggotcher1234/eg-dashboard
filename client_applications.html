@@ -834,6 +834,27 @@
                 </div>
               </details>
 
+              <!-- Restored (Greg, 8/29/26: "we seem to have lost the
+                   application fields for social media") -- this Links &
+                   Tags section existed on the Edit Application modal
+                   (e-social-links/e-news-links/e-tags) and the public
+                   intake form's structured social fields, but somewhere
+                   along the way never made it back onto this New
+                   Application wizard after its rebuild, so a brand-new
+                   application had no way to capture this at intake. -->
+              <details class="accordion-card">
+                <summary>
+                  <div class="section-card-icon icon-green"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+                  Links &amp; Tags
+                  <span class="accordion-sub">Optional</span>
+                </summary>
+                <div class="accordion-body">
+                  <div class="field"><label>Social links <span class="hint">(one per line)</span></label><textarea id="f-social-links"></textarea></div>
+                  <div class="field"><label>News links <span class="hint">(one per line)</span></label><textarea id="f-news-links"></textarea></div>
+                  <div class="field"><label>Tags <span class="hint">(comma-separated)</span></label><input type="text" id="f-tags" /></div>
+                </div>
+              </details>
+
               <div class="field" style="margin-top:16px;">
                 <label>Top Business Issues</label>
                 <textarea id="f-top-issues" placeholder="What is this company trying to solve?"></textarea>
@@ -1861,6 +1882,8 @@
     };
     const contactCards = [contactBlock("Primary", "p"), contactBlock("Secondary", "s"), contactBlock("3rd", "t")].join("");
     const ccEmailsList = val("f-cc-emails") ? val("f-cc-emails").split("\n").map((s) => s.trim()).filter(Boolean) : [];
+    const socialLinksList = val("f-social-links") ? val("f-social-links").split("\n").map((s) => s.trim()).filter(Boolean) : [];
+    const newsLinksList = val("f-news-links") ? val("f-news-links").split("\n").map((s) => s.trim()).filter(Boolean) : [];
 
     const ynItem = (label, checked) => `<div class="yn-item"><span>${label}</span><span class="yn-badge ${checked ? "yes" : "no"}">${checked ? "Yes" : "No"}</span></div>`;
 
@@ -1921,6 +1944,9 @@
             reviewItem("FTEs 2025 / 2024", `${val("f-fte-2025") || "—"} / ${val("f-fte-2024") || "—"}`),
             reviewItem("Revenue 2025 / 2024", `${val("f-rev-2025") ? "$" + val("f-rev-2025") : "—"} / ${val("f-rev-2024") ? "$" + val("f-rev-2024") : "—"}`),
             reviewItem("% employees in-state", val("f-pct-instate") ? val("f-pct-instate") + "%" : ""),
+            reviewItem("Social links", socialLinksList.join(", ")),
+            reviewItem("News links", newsLinksList.join(", ")),
+            reviewItem("Tags", val("f-tags")),
             reviewItem("Top Business Issues", val("f-top-issues")),
           ])}
         </div>
@@ -2067,6 +2093,9 @@
       veteran_owned: $("f-veteran").checked,
       disabled_owned: $("f-disabled").checked,
       pct_employees_in_state: numOrNull("f-pct-instate"),
+      social_links: toLines("f-social-links"),
+      news_links: toLines("f-news-links"),
+      tags: toTags("f-tags"),
       top_business_issues: $("f-top-issues").value.trim() || null,
       submitted_by: currentUser.id,
     };
