@@ -468,8 +468,10 @@
     border-radius: 6px; padding: 4px 8px; background: #fff; cursor: pointer;
   }
   .eng-tabs { display: flex; gap: 4px; background: #eef1f4; border-radius: 999px; padding: 3px; flex-shrink: 0; }
-  .eng-tab { background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 999px; white-space: nowrap; }
+  .eng-tab { background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 999px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
   .eng-tab.active { background: #fff; color: var(--navy); box-shadow: 0 1px 3px rgba(20,48,77,0.1); }
+  .eng-tab-count { background: rgba(0,0,0,0.08); color: inherit; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 7px; min-width: 18px; text-align: center; }
+  .eng-tab.active .eng-tab-count { background: #eef1f4; }
   .eng-closed-toggle { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
   .eng-closed-toggle input { margin: 0; cursor: pointer; }
   .eng-closed-toggle:hover { color: var(--text); }
@@ -681,23 +683,21 @@
     <div id="engagements-section" style="margin-top:8px;">
       <div class="engagements-panel">
         <div class="eng-panel-header">
-          <!-- Status view toggle (Greg, 8/29/26): "a very simple way to
-               switch between In Progress (default) and all the other
-               engagement statuses" -- a plain two-way pill instead of a
-               per-status picker, since the badge already on each row
-               (Accepted/On Hold/Closed) tells you which is which once
-               you're looking at the "Other" bucket. Separate from the
-               "Show closed" checkbox, which still governs Closed rows on
-               either side of this toggle. -->
+          <!-- Status count header (Greg, 8/29/26): "the dashboard look we had
+               before with a header of all the different statuses and how
+               many were in each status" -- brings back a pipeline-style
+               breakdown, but as clickable filter pills (each with a live
+               count) rather than a static row, so it replaces the old plain
+               In Progress / Other Statuses toggle. Since Closed now has its
+               own pill with an exact count, the separate "Show closed"
+               checkbox was redundant and has been folded into this. -->
           <div class="eng-tabs" id="eng-status-tabs">
-            <button type="button" class="eng-tab active" data-status="in_progress">In Progress</button>
-            <button type="button" class="eng-tab" data-status="other">Other Statuses</button>
+            <button type="button" class="eng-tab active" data-status="in_progress">In Progress <span class="eng-tab-count" id="eng-count-in_progress">0</span></button>
+            <button type="button" class="eng-tab" data-status="accepted">Accepted <span class="eng-tab-count" id="eng-count-accepted">0</span></button>
+            <button type="button" class="eng-tab" data-status="on_hold">On Hold <span class="eng-tab-count" id="eng-count-on_hold">0</span></button>
+            <button type="button" class="eng-tab" data-status="closed">Closed <span class="eng-tab-count" id="eng-count-closed">0</span></button>
           </div>
           <div class="eng-header-right">
-            <label class="eng-closed-toggle" for="eng-show-closed">
-              <input type="checkbox" id="eng-show-closed" />
-              Show closed
-            </label>
             <div class="eng-tabs" id="eng-tabs">
               <button type="button" class="eng-tab" data-tab="recent">Recent</button>
             </div>
@@ -827,12 +827,13 @@
   let engagementTab = "all";            // "all" | "attention" | "recent"
   let engagementSort = "name_asc";      // "name_asc" | "name_desc" | "lead_asc" | "lead_desc"
   let engagementsExpanded = false;      // My Engagements list is capped until "View all" is clicked
-  let showClosedEngagements = false;    // Off by default -- "Show closed" checkbox lifts the filter below
-  // "in_progress" | "other" -- the eng-status-tabs pill (Greg, 8/29/26). In
-  // Progress is the everyday working view; "Other Statuses" is everything
-  // else (Accepted, On Hold) so an engagement doesn't just vanish once it's
-  // no longer active without going looking for it. Independent of the
-  // "Show closed" checkbox, which still governs Closed rows either way.
+  // "in_progress" | "accepted" | "on_hold" | "closed" -- the eng-status-tabs
+  // pill (Greg, 8/29/26), one of the 4 canonical PROJECT_STATUS_LABELS.
+  // In Progress is the default everyday working view; each pill shows a
+  // live count of engagements in that status (the "dashboard look" Greg
+  // asked to bring back). This replaced the old plain In Progress / Other
+  // Statuses toggle plus the separate "Show closed" checkbox -- Closed now
+  // has its own exact-count pill instead.
   let engagementStatusFilter = "in_progress";
   const ENGAGEMENTS_ROW_LIMIT = 6;
 
@@ -1726,11 +1727,18 @@
     // default. The "Show closed" checkbox (Greg, 8/28/26, per the platform
     // review meeting) lifts the filter for anyone who wants to look back at
     // finished engagements without having to search for them by name.
-    let pool = showClosedEngagements ? [...allClients] : allClients.filter((c) => c.project_status !== "closed");
-    if (engagementScope === "mine") pool = pool.filter((c) => myClientIds.has(c.id));
+    let scopedPool = [...allClients];
+    if (engagementScope === "mine") scopedPool = scopedPool.filter((c) => myClientIds.has(c.id));
 
-    if (engagementStatusFilter === "in_progress") pool = pool.filter((c) => c.project_status === "in_progress");
-    else if (engagementStatusFilter === "other") pool = pool.filter((c) => c.project_status !== "in_progress");
+    // Status count header (Greg, 8/29/26): each pill needs a live count of
+    // the scoped pool in that exact status, independent of which pill is
+    // currently selected.
+    Object.keys(PROJECT_STATUS_LABELS).forEach((status) => {
+      const el = $(`eng-count-${status}`);
+      if (el) el.textContent = scopedPool.filter((c) => c.project_status === status).length;
+    });
+
+    let pool = scopedPool.filter((c) => c.project_status === engagementStatusFilter);
 
     if (engagementTab === "recent") {
       // "Recent" picks its top 10 by last activity first.
@@ -1738,6 +1746,16 @@
     }
     pool = sortEngagementPool(pool);
 
+    // The empty-state message used to always say "You're not assigned to
+    // any engagements yet" no matter why the list was empty (Greg, 8/29/26:
+    // as an Admin -- scope "all", not "mine" -- landing on a status with
+    // nothing there, that message reads like an access problem when really
+    // there just aren't any engagements in that status right now). Now it
+    // reflects both filters actually in effect.
+    const statusPhrase = PROJECT_STATUS_LABELS[engagementStatusFilter] || engagementStatusFilter;
+    $("engagements-empty").textContent = engagementScope === "mine"
+      ? `You're not assigned to any ${statusPhrase} engagements.`
+      : `Nothing ${statusPhrase} right now.`;
     $("engagements-empty").classList.toggle("hidden", pool.length > 0);
 
     const showAll = engagementsExpanded || pool.length <= ENGAGEMENTS_ROW_LIMIT;
@@ -1778,11 +1796,6 @@
   $("eng-view-all-link").addEventListener("click", (e) => {
     e.preventDefault();
     engagementsExpanded = !engagementsExpanded;
-    renderEngagementsList();
-  });
-  $("eng-show-closed").addEventListener("change", (e) => {
-    showClosedEngagements = e.target.checked;
-    engagementsExpanded = false;
     renderEngagementsList();
   });
 
