@@ -1617,10 +1617,16 @@
     const partner = c.econ_dev_companies;
     const teamLead = teamLeadByClient[c.id];
     const teamLeadAvatar = teamLeadAvatarByClient[c.id];
-    // Overdue = no activity in 60+ days (2 months) on an open engagement --
-    // this is the exact list Chris is working from, so it needs to be
-    // impossible to miss (Greg, 8/27/26).
-    const overdue = c.project_status !== "closed" && daysSince(c.last_activity_at || c.updated_at) >= 60;
+    // Overdue = In Progress for 60+ days, period -- same clock as the status
+    // dot above (first_in_progress_at/status_since), NOT activity-based.
+    // Originally this checked last_activity_at, but Greg pointed out that's
+    // wrong: touching the account (logging an hour, editing a document,
+    // anything) would silently clear the overdue flag, when the real rule
+    // is "once it crosses 60 days it's overdue, full stop, and stays that
+    // way until the engagement is actually closed" (Greg, 8/29/26). This is
+    // the exact list Chris is working from, so it needs to be impossible to
+    // miss (Greg, 8/27/26).
+    const overdue = c.project_status !== "closed" && daysSince(c.first_in_progress_at || c.status_since) >= 60;
     // Closed rows (only visible with "Show closed" checked) show when they
     // closed instead of the start date -- closed_at is stamped by a trigger
     // the moment project_status becomes 'closed' (087_engagement_closed_at.sql).
