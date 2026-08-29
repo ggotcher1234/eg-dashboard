@@ -472,6 +472,10 @@
   .eng-tab.active { background: #fff; color: var(--navy); box-shadow: 0 1px 3px rgba(20,48,77,0.1); }
   .eng-tab-count { background: rgba(0,0,0,0.08); color: inherit; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 7px; min-width: 18px; text-align: center; }
   .eng-tab.active .eng-tab-count { background: #eef1f4; }
+  /* Status pill switcher is Admin-only (Greg, 8/29/26) -- Team Leads/
+     Specialists just get a static "In Progress" readout, no switching. */
+  .eng-tabs.admin-only-pills [data-status]:not([data-status="in_progress"]) { display: none; }
+  .eng-tabs.admin-only-pills [data-status="in_progress"] { cursor: default; pointer-events: none; }
   .eng-closed-toggle { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
   .eng-closed-toggle input { margin: 0; cursor: pointer; }
   .eng-closed-toggle:hover { color: var(--text); }
@@ -696,6 +700,12 @@
             <button type="button" class="eng-tab" data-status="accepted">Accepted <span class="eng-tab-count" id="eng-count-accepted">0</span></button>
             <button type="button" class="eng-tab" data-status="on_hold">On Hold <span class="eng-tab-count" id="eng-count-on_hold">0</span></button>
             <button type="button" class="eng-tab" data-status="closed">Closed <span class="eng-tab-count" id="eng-count-closed">0</span></button>
+            <!-- Not a project_status -- clicking jumps to the Applications
+                 page (client_applications.html) instead of filtering this
+                 list, since a submitted application isn't a client/
+                 engagement yet (Greg, 8/29/26: this replaces the old
+                 Management-row entry point that got removed). -->
+            <button type="button" class="eng-tab" data-status="applications">Applications <span class="eng-tab-count" id="eng-count-applications">0</span></button>
           </div>
           <div class="eng-header-right">
             <div class="eng-tabs" id="eng-tabs">
@@ -1097,7 +1107,7 @@
     // one job, showing every active engagement's current next step, is now
     // covered directly by the Next Step column on the list above.)
 
-    await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex()]);
+    await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex(), isSuperAdminUser ? loadPendingApplicationsCount() : Promise.resolve()]);
     await loadMyBillableTasks(); // needs allClients + myAssignmentRows, both settled above
     buildTasksDueItems();
     // "Mine" is the default for Team Leads and Specialists -- their own
@@ -1107,6 +1117,14 @@
     // their own handful of assignments, per the role-based hierarchy
     // (Specialist: my work first. Team Lead: team workload. Admin: everything.).
     engagementScope = isSuperAdminUser ? "all" : "mine";
+
+    // Status pill switcher (Accepted/In Progress/On Hold/Closed) is
+    // Admin-only (Greg, 8/29/26): Team Leads/Specialists just see their
+    // default In Progress view with no way to switch statuses -- browsing
+    // the org's full status breakdown isn't part of their day-to-day work,
+    // and their own engagements are almost always in one status anyway.
+    $("eng-status-tabs").classList.toggle("admin-only-pills", !isSuperAdminUser);
+
     renderEngagementsList();
 
     // An engagement-tab link lands here with ?tab=recent (etc.) so it's a
@@ -1133,6 +1151,18 @@
   // its own read_at, so dismissing a notification only affects the person
   // who dismissed it. This reads through that join instead of the
   // notifications table directly.
+  // Powers the "Applications" pill's count in the eng-status-tabs header --
+  // Super-Admin-only, same gating as the rest of that pill row (Greg, 8/29/26).
+  async function loadPendingApplicationsCount() {
+    const { count, error } = await sb
+      .from("client_applications")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending");
+    if (error) return;
+    const el = $("eng-count-applications");
+    if (el) el.textContent = count ?? 0;
+  }
+
   async function loadNotifications() {
     const { data, error } = await sb
       .from("notification_recipients")
@@ -1778,6 +1808,13 @@
   $("eng-status-tabs").addEventListener("click", (e) => {
     const btn = e.target.closest("[data-status]");
     if (!btn) return;
+    // "Applications" isn't a project_status -- it's a link out to the
+    // Applications page, not a filter on this list (see comment on the
+    // button itself).
+    if (btn.dataset.status === "applications") {
+      location.href = "client_applications.html";
+      return;
+    }
     engagementStatusFilter = btn.dataset.status;
     engagementsExpanded = false;
     $("eng-status-tabs").querySelectorAll("[data-status]").forEach((b) => b.classList.toggle("active", b.dataset.status === engagementStatusFilter));
