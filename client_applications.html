@@ -1136,8 +1136,27 @@
     const noExtraDots = firstDot === -1 ? cleaned : cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
     if (noExtraDots !== el.value) el.value = noExtraDots;
   }
+  // Greg (8/29/26): "format the field as a dollar amount, with commas and
+  // no cents, even if the one i paste in is just a number." Formatting
+  // happens on blur (not on every keystroke) so it never fights with typing
+  // or pasting mid-edit -- while the field has focus it's always a plain
+  // sanitized number (see sanitizeMoneyInput above); the "$12,345" look only
+  // appears once you've moved on. focus reverses it back to a plain number
+  // so the field is easy to edit/re-paste into.
+  function formatMoneyDisplay(el) {
+    const raw = el.value.replace(/[^0-9.]/g, "");
+    if (raw === "" || raw === ".") { el.value = ""; return; }
+    const rounded = Math.round(Number(raw));
+    el.value = isNaN(rounded) ? "" : "$" + rounded.toLocaleString("en-US");
+  }
+  function unformatMoneyDisplay(el) {
+    const raw = el.value.replace(/[^0-9.]/g, "");
+    el.value = raw;
+  }
   document.querySelectorAll(".money-input").forEach((el) => {
     el.addEventListener("input", () => sanitizeMoneyInput(el));
+    el.addEventListener("focus", () => unformatMoneyDisplay(el));
+    el.addEventListener("blur", () => formatMoneyDisplay(el));
   });
 
   // ---------- Ask AI ----------
@@ -1992,6 +2011,10 @@
     wizStep = 1;
     currentDraftId = draft ? draft.id : null;
     if (draft) wizRestore(draft.data);
+    // Restored values land as plain numbers -- give them the same
+    // "$12,345" blur-formatting everything else gets, without requiring
+    // the user to click into and back out of each field first.
+    document.querySelectorAll("#new-app-form .money-input").forEach(formatMoneyDisplay);
     // f-program-contact's options only exist for whichever program is
     // selected, so the generic wizRestore() pass above couldn't select a
     // saved value yet -- rebuild the list now that f-econ-dev is set, then
@@ -2798,6 +2821,9 @@
     $("e-rev-2024").value = a.revenue_2024 ?? "";
     $("e-rev-2023").value = a.revenue_2023 ?? "";
     $("e-rev-2022").value = a.revenue_2022 ?? "";
+    // Show them formatted right away, same as a blurred field, rather than
+    // making Greg click into and back out of each one first.
+    document.querySelectorAll("#edit-app-form .money-input").forEach(formatMoneyDisplay);
     $("e-pct-instate").value = a.pct_employees_in_state ?? "";
     $("e-sales-range").checked = !!a.sales_1_to_50m;
     $("e-sales-external").checked = !!a.sales_primarily_external;
