@@ -841,14 +841,15 @@
                 </div>
               </details>
 
-              <!-- Restored (Greg, 8/29/26: "we seem to have lost the
-                   application fields for social media") -- this Links &
-                   Tags section existed on the Edit Application modal
-                   (e-social-links/e-news-links/e-tags) and the public
-                   intake form's structured social fields, but somewhere
-                   along the way never made it back onto this New
-                   Application wizard after its rebuild, so a brand-new
-                   application had no way to capture this at intake. -->
+              <!-- Social media links moved off application intake entirely
+                   (Greg, 8/29/26: "i don't want social media links here...
+                   they need to be on the company page with the website
+                   link") -- they now live as 6 dedicated fields (Facebook,
+                   LinkedIn, X/Twitter, Instagram, YouTube, Other) on the
+                   Company Information section of client_profile.html,
+                   alongside Website, once the engagement is a real client.
+                   Only News links + Tags stay here at the application
+                   stage. -->
               <details class="accordion-card">
                 <summary>
                   <div class="section-card-icon icon-green"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
@@ -856,7 +857,6 @@
                   <span class="accordion-sub">Optional</span>
                 </summary>
                 <div class="accordion-body">
-                  <div class="field"><label>Social links <span class="hint">(one per line)</span></label><textarea id="f-social-links"></textarea></div>
                   <div class="field"><label>News links <span class="hint">(one per line)</span></label><textarea id="f-news-links"></textarea></div>
                   <div class="field"><label>Tags <span class="hint">(comma-separated)</span></label><input type="text" id="f-tags" /></div>
                 </div>
@@ -1039,7 +1039,10 @@
 
       <fieldset>
         <legend>Links &amp; tags</legend>
-        <div class="field"><label>Social links <span class="hint">(one per line)</span></label><textarea id="e-social-links"></textarea></div>
+        <!-- Social links moved to the Company Information section of
+             client_profile.html once the engagement is a real client
+             (Greg, 8/29/26) -- see the matching note in the New
+             Application wizard above. -->
         <div class="field"><label>News links <span class="hint">(one per line)</span></label><textarea id="e-news-links"></textarea></div>
         <div class="field"><label>Tags <span class="hint">(comma-separated)</span></label><input type="text" id="e-tags" /></div>
       </fieldset>
@@ -1917,7 +1920,6 @@
     };
     const contactCards = [contactBlock("Primary", "p"), contactBlock("Secondary", "s"), contactBlock("3rd", "t")].join("");
     const ccEmailsList = val("f-cc-emails") ? val("f-cc-emails").split("\n").map((s) => s.trim()).filter(Boolean) : [];
-    const socialLinksList = val("f-social-links") ? val("f-social-links").split("\n").map((s) => s.trim()).filter(Boolean) : [];
     const newsLinksList = val("f-news-links") ? val("f-news-links").split("\n").map((s) => s.trim()).filter(Boolean) : [];
 
     const ynItem = (label, checked) => `<div class="yn-item"><span>${label}</span><span class="yn-badge ${checked ? "yes" : "no"}">${checked ? "Yes" : "No"}</span></div>`;
@@ -1979,7 +1981,6 @@
             reviewItem("FTEs 2025 / 2024", `${val("f-fte-2025") || "—"} / ${val("f-fte-2024") || "—"}`),
             reviewItem("Revenue 2025 / 2024", `${val("f-rev-2025") ? "$" + val("f-rev-2025") : "—"} / ${val("f-rev-2024") ? "$" + val("f-rev-2024") : "—"}`),
             reviewItem("% employees in-state", val("f-pct-instate") ? val("f-pct-instate") + "%" : ""),
-            reviewItem("Social links", socialLinksList.join(", ")),
             reviewItem("News links", newsLinksList.join(", ")),
             reviewItem("Tags", val("f-tags")),
             reviewItem("Top Business Issues", val("f-top-issues")),
@@ -2138,7 +2139,6 @@
       veteran_owned: $("f-veteran").checked,
       disabled_owned: $("f-disabled").checked,
       pct_employees_in_state: numOrNull("f-pct-instate"),
-      social_links: toLines("f-social-links"),
       news_links: toLines("f-news-links"),
       tags: toTags("f-tags"),
       top_business_issues: $("f-top-issues").value.trim() || null,
@@ -2837,7 +2837,6 @@
     $("e-minority").checked = !!a.minority_owned;
     $("e-veteran").checked = !!a.veteran_owned;
     $("e-disabled").checked = !!a.disabled_owned;
-    $("e-social-links").value = (a.social_links || []).join("\n");
     $("e-news-links").value = (a.news_links || []).join("\n");
     $("e-tags").value = (a.tags || []).join(", ");
     $("e-top-issues").value = a.top_business_issues || "";
@@ -2911,7 +2910,6 @@
       minority_owned: $("e-minority").checked,
       veteran_owned: $("e-veteran").checked,
       disabled_owned: $("e-disabled").checked,
-      social_links: toLines("e-social-links"),
       news_links: toLines("e-news-links"),
       tags: toTags("e-tags"),
       top_business_issues: $("e-top-issues").value.trim() || null,
