@@ -183,9 +183,17 @@
   .segmented-control .status-pill-closed.active { background: var(--muted); color: #fff; }
 
 
-  /* ---------- Left nav + content pane shell ---------- */
-  .cc-shell { display: flex; align-items: flex-start; gap: 18px; }
-  .cc-nav { width: 186px; flex-shrink: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 8px; }
+  /* ---------- Left nav + content pane shell ----------
+     Grid instead of flex so the right-hand workspace can claim literally
+     all remaining width -- minmax(0, 1fr) (plus min-width:0 on .cc-pane)
+     is what lets tables/iframes inside it actually shrink instead of
+     forcing the column wider than the viewport (Greg, 8/30/26). The
+     "wide-workspace" modifier narrows the nav further for data-heavy
+     panes (Update Dashboard / Add Research) so those get a little extra
+     room without the user having to do anything. */
+  .cc-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
+  .cc-shell.wide-workspace { grid-template-columns: 180px minmax(0, 1fr); }
+  .cc-nav { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 8px; }
   .cc-nav-btn {
     display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 11px; margin-bottom: 2px;
     border: none; border-radius: 8px; background: transparent; font-size: 13.5px; font-weight: 600; color: var(--text);
@@ -195,9 +203,9 @@
   .cc-nav-btn svg { width: 17px; height: 17px; flex-shrink: 0; color: var(--muted); }
   .cc-nav-btn.active svg { color: var(--navy-light); }
   .cc-nav-btn:disabled { cursor: default; }
-  .cc-pane { flex: 1; min-width: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px; }
+  .cc-pane { min-width: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px; }
   @media (max-width: 760px) {
-    .cc-shell { flex-direction: column; }
+    .cc-shell, .cc-shell.wide-workspace { grid-template-columns: 1fr; }
     .cc-nav { width: 100%; display: flex; flex-wrap: wrap; gap: 4px; }
     .cc-nav-btn { width: auto; flex: 1 1 auto; }
   }
@@ -474,14 +482,21 @@
             <div class="field-error" id="tw-summary-error"></div>
 
             <div class="table-scroll">
-              <table>
+              <table style="table-layout:fixed;">
+                <colgroup>
+                  <col style="width:17%;">
+                  <col style="width:40%;">
+                  <col style="width:13%;">
+                  <col style="width:12%;">
+                  <col style="width:18%;">
+                </colgroup>
                 <thead>
                   <tr>
                     <th>Work Area</th>
                     <th>Person</th>
-                    <th style="width:110px; text-align:right;">Planned Hours</th>
-                    <th style="width:110px;">Hours Used</th>
-                    <th id="tw-actions-header" class="hidden" style="width:90px;"></th>
+                    <th style="text-align:right;">Planned Hours</th>
+                    <th>Hours Used</th>
+                    <th id="tw-actions-header" class="hidden"></th>
                   </tr>
                 </thead>
                 <tbody id="tw-tbody"></tbody>
@@ -499,7 +514,7 @@
           </div>
 
           <div id="cc-pane-iframe" class="cc-pane-inner hidden">
-            <iframe id="cc-iframe" title="Engagement content" style="width:100%; height:74vh; min-height:520px; border:none; border-radius:8px; background:#fff; display:block;"></iframe>
+            <iframe id="cc-iframe" title="Engagement content" style="width:100%; height:520px; min-height:520px; border:none; border-radius:8px; background:#fff; display:block;"></iframe>
           </div>
 
         </div>
@@ -938,12 +953,19 @@
     setActivePane(activePane);
   }
 
+  // Data-heavy panes get a few extra pixels back from the nav column --
+  // right now that's just Update Dashboard (TL), whose wizard has CSV
+  // tables/forms that were designed assuming full browser width (Greg,
+  // 8/30/26).
+  const WIDE_WORKSPACE_PANE_KEYS = ["setup"];
+
   function setActivePane(key) {
     activePane = key;
     $("cc-nav").querySelectorAll("[data-pane]").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.pane === key);
     });
     $("cc-pane-team").classList.toggle("hidden", key !== "team");
+    document.querySelector(".cc-shell").classList.toggle("wide-workspace", WIDE_WORKSPACE_PANE_KEYS.includes(key));
 
     const isIframePane = IFRAME_PANE_KEYS.includes(key);
     $("cc-pane-iframe").classList.toggle("hidden", !isIframePane);
@@ -957,6 +979,33 @@
       }
     }
   }
+
+  // ---------- Iframe auto-height (single scrollbar, not two) ----------
+  // The embedded pages used to sit in a fixed-height (74vh) iframe, so
+  // whenever their content ran taller than that, the iframe grew its own
+  // internal scrollbar *in addition to* the outer page's scrollbar --
+  // exactly the "which box am I scrolling" confusion Greg called out.
+  // Since these are same-origin embeds (?embed=1, not a different site),
+  // we can read the embedded document's real height and grow the iframe
+  // to match, so there's only ever the one, familiar browser scrollbar.
+  let ccIframeResizeObserver = null;
+  function fitIframeToContent() {
+    const iframe = $("cc-iframe");
+    try {
+      const doc = iframe.contentDocument;
+      if (!doc || !doc.documentElement) return;
+      const h = Math.max(doc.documentElement.scrollHeight, doc.body ? doc.body.scrollHeight : 0, 520);
+      iframe.style.height = `${h}px`;
+      if (ccIframeResizeObserver) ccIframeResizeObserver.disconnect();
+      if (window.ResizeObserver && doc.body) {
+        ccIframeResizeObserver = new ResizeObserver(() => fitIframeToContent());
+        ccIframeResizeObserver.observe(doc.body);
+      }
+    } catch (e) {
+      // Cross-origin or not-yet-loaded -- fall back to the CSS min-height.
+    }
+  }
+  $("cc-iframe").addEventListener("load", fitIframeToContent);
 
   // ---------- Status control (Admin / Team Lead can change it here) ----------
   function renderStatusToggle(client) {
@@ -1143,8 +1192,21 @@
     ];
     return '<option value="">Select…</option>' + opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
   }
+  // A shorter label just for the Person dropdown in the Team & Hours table
+  // -- the row's own Work Area column already says "Team Lead"/"Digital
+  // Marketing"/etc., so repeating the person's full specialty list here
+  // (as userLabel() does everywhere else) just eats width for no new
+  // information (Greg, 8/30/26). Name collisions fall back to email
+  // instead, since every option in this one dropdown shares the same work
+  // area anyway and specialty text wouldn't disambiguate them.
+  function consultantOptionLabel(u) {
+    if (!u) return "";
+    const collides = allUsers.filter((x) => x.full_name === u.full_name).length > 1;
+    if (!collides) return u.full_name;
+    return u.email ? `${u.full_name} (${u.email})` : `${u.full_name} — ${specialtyDescriptor(u)}`;
+  }
   function consultantOptionsHtml(selectedId) {
-    return '<option value="">Not assigned</option>' + allUsers.map((u) => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${escapeHtml(userLabel(u))}</option>`).join("");
+    return '<option value="">Not assigned</option>' + allUsers.map((u) => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${escapeHtml(consultantOptionLabel(u))}</option>`).join("");
   }
 
   async function loadAssignments() {

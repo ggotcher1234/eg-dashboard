@@ -255,6 +255,29 @@
   .add-row-form .field { margin-bottom: 0; flex: 1; min-width: 140px; }
   .add-row-form label { font-size: 11px; }
 
+  /* Company/URL/Location/Notes rows (Competitors, Top Customers) --
+     explicit 30/40/30 columns instead of equal-width flex-wrap, since
+     Company, URL and Location genuinely need different amounts of room;
+     Notes/NAICS Code always gets its own full-width row underneath. Below
+     900px that collapses to a natural 2x2 grid (Company+URL / Location+
+     Notes), and below 480px to one field per row -- no horizontal
+     scrolling at any width (Greg, 8/30/26). */
+  .fields-3col.lre-fields, .fields-3col.add-row-form {
+    display: grid; grid-template-columns: 30% 40% 30%; gap: 12px 16px; align-items: end;
+  }
+  .fields-3col .field { margin-bottom: 0; flex: none; min-width: 0; }
+  .fields-3col.lre-fields .field:nth-child(4) { grid-column: 1 / -1; }
+  .fields-3col.add-row-form .field:nth-child(4) { grid-column: 1 / -1; }
+  .fields-3col.add-row-form button[type="submit"] { grid-column: 1 / -1; justify-self: start; }
+  @media (max-width: 900px) {
+    .fields-3col.lre-fields, .fields-3col.add-row-form { grid-template-columns: 1fr 1fr; }
+    .fields-3col.lre-fields .field:nth-child(4),
+    .fields-3col.add-row-form .field:nth-child(4) { grid-column: auto; }
+  }
+  @media (max-width: 480px) {
+    .fields-3col.lre-fields, .fields-3col.add-row-form { grid-template-columns: 1fr; }
+  }
+
   .icon-btn { padding: 4px 8px; font-size: 13px; line-height: 1; flex-shrink: 0; }
 
   .doc-area-label { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); font-weight: 700; margin: 18px 0 8px; }
@@ -414,6 +437,19 @@
   body.embed-mode #done-editing-btn-bottom,
   body.embed-mode .std-toolbar-row,
   body.embed-mode #sec-overview { display: none !important; }
+  /* This page was designed assuming it always had the full browser width
+     (the 980px max-width below), which wastes most of the workspace's
+     actual width once it's embedded in a narrower iframe pane inside
+     Client Control Center -- so in embed mode let it use however much
+     width the workspace actually gives it (Greg, 8/30/26, "a few of the
+     old pages were designed as if they still had the full browser
+     width"). The wizard's own little sidebar note ("Use Ask AI in the
+     top right") is also dead weight in embed mode -- that button lives in
+     the masthead header, which is hidden here -- so it's dropped too,
+     handing its 220px back to the actual form/table content. */
+  body.embed-mode .profile-shell { max-width: none; margin: 0; padding: 0 0 40px; }
+  body.embed-mode .wizard-sidebar { display: none !important; }
+  body.embed-mode .wizard-body { grid-template-columns: 1fr; }
 </style>
 </head>
 <body>
@@ -2040,6 +2076,12 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
   const COMPETITORS_CONFIG = {
     key: "competitors", table: "client_competitors", title: "Competitors",
     hint: "Import or export the list as a CSV with columns: Company, URL, Location, Notes.",
+    // Company/URL/Location/Notes rows get their own responsive grid (see
+    // .fields-3col below) instead of the generic equal-width flex-wrap
+    // every other list uses -- Company, URL and Location are genuinely
+    // different lengths of content, so treating them as 30/40/30 fits more
+    // real text before anything gets cramped (Greg, 8/30/26).
+    rowLayout: "company3",
     fields: [
       { name: "name", label: "Company", type: "text", required: true },
       { name: "website_url", label: "URL", type: "url" },
@@ -2065,6 +2107,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
   const TOP_CUSTOMERS_CONFIG = {
     key: "top_customers", table: "client_top_customers", title: "Top Customers",
     hint: COMPETITORS_CONFIG.hint,
+    rowLayout: COMPETITORS_CONFIG.rowLayout,
     fields: COMPETITORS_CONFIG.fields,
     csv: COMPETITORS_CONFIG.csv,
     render: COMPETITORS_CONFIG.render,
@@ -2120,6 +2163,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     for (const cfg of LIST_CONFIGS) {
       if (cfg.readOnly) continue; // Team Members has no add-form
       const form = $(`${cfg.key}-add-form`);
+      form.classList.toggle("fields-3col", cfg.rowLayout === "company3");
       form.innerHTML = `
         ${cfg.fields.map((f) => `
           <div class="field">
@@ -2378,7 +2422,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     list.innerHTML = rows.map((r) => `
       <div class="list-row-edit">
         ${cfg.isChecklist ? `<input type="checkbox" class="list-checkbox" data-toggle-id="${r.id}" ${r.completed ? "checked" : ""} ${r.auto_source ? "disabled" : ""} title="${r.auto_source ? "Completes automatically -- no need to check this by hand" : ""}" />` : ""}
-        <div class="lre-fields">
+        <div class="lre-fields ${cfg.rowLayout === "company3" ? "fields-3col" : ""}">
           ${cfg.fields.map((f, fIdx) => `
             <div class="field">
               <label>${escapeHtml(f.label)}${cfg.isChecklist && fIdx === 0 && r.auto_source ? ` <span class="auto-step-badge" title="This step checks itself off automatically -- see the Task's own note for how.">Auto</span>` : ""}</label>
