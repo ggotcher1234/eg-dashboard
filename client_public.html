@@ -462,13 +462,39 @@
   // source instead of running. Binary formats (pdf, docx, xlsx, pptx,
   // images) sniff correctly and don't need this detour.
   const TEXT_RENDER_TYPES = { html: "text/html", htm: "text/html", svg: "image/svg+xml" };
+  // Second layer of the same root-cause fix (Greg, 8/30/26): old exported
+  // "mini apps" -- like the AIM Targeted Intelligence GIS market maps Greg
+  // uploads here -- often hardcode their CSS/JS <script>/<link> tags to
+  // http:// instead of https://. The blob: URL these now render from is
+  // itself served under https://egdb.netlify.app, so browsers block those
+  // http:// subresource loads outright as mixed content -- the page's
+  // static HTML (header, labels, chrome) still shows, but everything a
+  // blocked script was supposed to populate (the map, its data) never
+  // appears. Confirmed via the browser console: "Mixed Content... This
+  // request has been blocked; the content must be served over HTTPS."
+  // Injecting the standard `upgrade-insecure-requests` CSP directive tells
+  // the browser to silently retry each blocked http:// asset over https://
+  // first instead of just failing -- no edits to the uploaded file needed,
+  // and it's a no-op for files that don't have this problem.
+  function upgradeInsecureRequests(html) {
+    const meta = '<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">';
+    if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (m) => m + meta);
+    if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (m) => m + "<head>" + meta + "</head>");
+    return meta + html;
+  }
   function openSignedDoc(path) {
     return async () => {
       const ext = fileExtension(path);
       if (TEXT_RENDER_TYPES[ext]) {
         const { data, error } = await sb.storage.from("client-documents").download(path);
         if (error) { alert("Couldn't open this file: " + error.message); return; }
-        const blob = new Blob([data], { type: TEXT_RENDER_TYPES[ext] });
+        let blob;
+        if (ext === "html" || ext === "htm") {
+          const text = await data.text();
+          blob = new Blob([upgradeInsecureRequests(text)], { type: "text/html" });
+        } else {
+          blob = new Blob([data], { type: TEXT_RENDER_TYPES[ext] });
+        }
         window.open(URL.createObjectURL(blob), "_blank");
         return;
       }
