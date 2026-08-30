@@ -134,11 +134,14 @@
   .badge-closed { background: #eef1f4; color: var(--muted); }
 
   /* Client summary -- sits directly on the page background (no boxed
-     border). Greg (8/30/26): drop the name/partner/hours-used repeat text
-     here -- the status toggle plus the In Progress box below say
-     everything this strip needs to. */
+     border). Greg (8/30/26): re-added a stacked header -- Client Name,
+     then Program Name, then Team Leader, each on their own line -- next
+     to the status toggle. */
   .ccc-summary { padding: 4px 4px 14px; }
-  .ccc-summary-top { display: flex; align-items: baseline; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+  .ccc-summary-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  #cm-name { margin: 0; font-size: 21px; font-weight: 700; color: var(--navy); }
+  #cm-program { font-size: 13.5px; color: var(--muted); margin-top: 4px; }
+  #cm-team-lead { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
 
   /* Status-age dot -- green under 30 days in the current status, yellow
      under 60, red 60+. Only ever shown for In Progress, since that's the
@@ -460,6 +463,11 @@
     <div id="ccc-content" class="hidden">
       <div class="ccc-summary">
         <div class="ccc-summary-top">
+          <div>
+            <h2 id="cm-name"></h2>
+            <div id="cm-program"></div>
+            <div id="cm-team-lead"></div>
+          </div>
           <span class="status-badge-wrap">
             <span class="status-dot hidden" id="cm-status-dot" title=""></span>
             <span class="badge hidden" id="cm-status-badge"></span>
@@ -941,11 +949,20 @@
     AI_CONTEXT_LABEL = `${client.name} — Engagement Workspace`;
     renderStatusAge(client);
 
+    const partner = client.econ_dev_companies;
+    $("cm-name").textContent = client.name;
+    $("cm-program").textContent = partner ? partner.name : "—";
+
     const { data: assignRows } = await sb
       .from("client_assignments")
       .select("is_team_lead, user_id, users(full_name)")
       .eq("client_id", client.id)
       .not("user_id", "is", null);
+    let teamLead = null;
+    for (const r of assignRows || []) {
+      if (r.is_team_lead && r.users && r.users.full_name) { teamLead = r.users.full_name; break; }
+    }
+    $("cm-team-lead").textContent = `Team Lead: ${teamLead || "—"}`;
     isTeamLeadHere = (assignRows || []).some((r) => r.is_team_lead && r.user_id === currentUser.id);
     renderStatusToggle(client);
 
