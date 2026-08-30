@@ -140,16 +140,19 @@
   .ccc-summary { padding: 4px 4px 14px; }
   .ccc-breadcrumb { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--muted); text-decoration: none; margin-bottom: 6px; }
   .ccc-breadcrumb:hover { color: var(--navy); text-decoration: underline; }
-  .ccc-summary-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  /* Greg (8/30/26): stack top-to-bottom -- name, then Partner, then the
+     status toggle directly underneath -- instead of the toggle floating
+     over on the right of the name row. */
   #cm-name { margin: 0; font-size: 21px; font-weight: 700; color: var(--navy); }
-  #cm-program { font-size: 13.5px; color: var(--muted); margin-top: 4px; display: flex; align-items: center; gap: 5px; }
+  #cm-program { font-size: 13.5px; color: var(--muted); margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+  #cm-program svg { color: var(--muted); flex-shrink: 0; }
   #cm-team-lead { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
 
   /* Status-age dot -- green under 30 days in the current status, yellow
      under 60, red 60+. Only ever shown for In Progress, since that's the
      status "overdue" actually means anything for (Accepted/On Hold/Closed
      don't have a "should be moving faster" expectation the same way). */
-  .status-badge-wrap { display: flex; align-items: center; gap: 7px; }
+  .status-badge-wrap { display: flex; align-items: center; gap: 7px; margin-top: 12px; }
   .status-dot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; }
   .status-dot-green { background: var(--accent); }
   .status-dot-yellow { background: var(--amber); }
@@ -471,18 +474,14 @@
     <div id="ccc-content" class="hidden">
       <div class="ccc-summary">
         <a href="index.html" class="ccc-breadcrumb">&larr; All Engagements</a>
-        <div class="ccc-summary-top">
-          <div>
-            <h2 id="cm-name"></h2>
-            <div id="cm-program"></div>
-            <div id="cm-team-lead"></div>
-          </div>
-          <span class="status-badge-wrap">
-            <span class="status-dot hidden" id="cm-status-dot" title=""></span>
-            <span class="badge hidden" id="cm-status-badge"></span>
-            <div class="segmented-control hidden" id="cm-status-toggle"></div>
-          </span>
-        </div>
+        <h2 id="cm-name"></h2>
+        <div id="cm-program"></div>
+        <div id="cm-team-lead"></div>
+        <span class="status-badge-wrap">
+          <span class="status-dot hidden" id="cm-status-dot" title=""></span>
+          <span class="badge hidden" id="cm-status-badge"></span>
+          <div class="segmented-control hidden" id="cm-status-toggle"></div>
+        </span>
         <div class="delay-note hidden" id="cm-delay-note">
           <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
             <div class="delay-note-label" id="cm-delay-note-label">Why is this taking longer than expected?</div>
@@ -909,13 +908,24 @@
 
     const partner = client.econ_dev_companies;
     $("cm-name").textContent = client.name;
-    $("cm-program").innerHTML = "";
-    const programIcon = document.createElement("span");
-    programIcon.setAttribute("aria-hidden", "true");
-    programIcon.textContent = "🏢";
+    // Greg (8/30/26): swapped the 🏢 emoji (renders differently -- and
+    // more colorfully -- across platforms) for a plain-line SVG icon that
+    // matches the nav's icon style, per the reference screenshot.
+    $("cm-program").innerHTML = `
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="4" y="3" width="10" height="18"></rect>
+        <rect x="14" y="9" width="6" height="12"></rect>
+        <line x1="7" y1="7" x2="7" y2="7.01"></line>
+        <line x1="11" y1="7" x2="11" y2="7.01"></line>
+        <line x1="7" y1="11" x2="7" y2="11.01"></line>
+        <line x1="11" y1="11" x2="11" y2="11.01"></line>
+        <line x1="7" y1="15" x2="7" y2="15.01"></line>
+        <line x1="11" y1="15" x2="11" y2="15.01"></line>
+      </svg>
+    `;
     const programText = document.createElement("span");
     programText.textContent = `Partner: ${partner ? partner.name : "—"}`;
-    $("cm-program").append(programIcon, programText);
+    $("cm-program").append(programText);
 
     const { data: assignRows } = await sb
       .from("client_assignments")
