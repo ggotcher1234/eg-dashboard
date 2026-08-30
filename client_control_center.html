@@ -193,7 +193,7 @@
   .cc-nav-btn.active { background: #e7eef7; color: var(--navy); }
   .cc-nav-btn svg { width: 17px; height: 17px; flex-shrink: 0; color: var(--muted); }
   .cc-nav-btn.active svg { color: var(--navy-light); }
-  .cc-nav-btn .cc-nav-external { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .cc-nav-btn:disabled { cursor: default; }
   .cc-pane { flex: 1; min-width: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px; }
   @media (max-width: 760px) {
     .cc-shell { flex-direction: column; }
@@ -261,9 +261,11 @@
   .modal .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
   .field { margin-bottom: 12px; }
   .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
-  .field input[type="text"], .field input[type="number"], .field input[type="date"], .field select {
-    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit;
+  .field input[type="text"], .field input[type="number"], .field input[type="date"], .field select, .field textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; box-sizing: border-box;
   }
+  .field textarea { resize: vertical; line-height: 1.5; }
+  .field input[readonly] { background: #f8fafb; color: var(--muted); }
   .required-star { color: var(--danger); }
   .history-summary { display: flex; gap: 18px; flex-wrap: wrap; background: #f4f6f8; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
   .history-summary strong { display: block; font-size: 15px; color: var(--text); }
@@ -572,6 +574,45 @@
               </table>
             </div>
             <button class="btn-secondary btn-sm hidden" id="tw-add-row-btn" style="margin-top:12px;">+ Add work area</button>
+          </div>
+
+          <div id="cc-pane-email" class="cc-pane-inner hidden">
+            <div class="modal-meta" style="margin:0 0 16px; font-size:12.5px; color:var(--muted);">Review and edit, then copy or open in your email app — nothing is sent from here.</div>
+            <div class="field">
+              <label>To</label>
+              <input type="text" id="em-to" readonly />
+            </div>
+            <div class="field">
+              <label>CC</label>
+              <input type="text" id="em-cc" readonly />
+            </div>
+            <div class="field">
+              <label>Research area</label>
+              <select id="em-question"></select>
+            </div>
+            <div class="field">
+              <label>Brief answer <span style="text-transform:none; font-weight:400;">(a sentence or two -- the full write-up is the attached document)</span></label>
+              <textarea id="em-answer" rows="3" placeholder="e.g. The specialty coffee market is growing fastest among 25-39 year olds who favor subscription models and transparent sourcing…"></textarea>
+            </div>
+            <div class="field">
+              <label>Subject</label>
+              <input type="text" id="em-subject" />
+            </div>
+            <div class="field">
+              <label>Body</label>
+              <textarea id="em-body" rows="14"></textarea>
+            </div>
+            <div id="em-no-contacts" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
+              This client has no contact emails on file yet — add one on the Client Info page before sending.
+            </div>
+            <div style="display:flex; gap:10px;">
+              <button type="button" class="btn-primary" id="em-copy-btn">Copy Email Text</button>
+              <a class="btn-secondary" id="em-mailto-btn" href="#">Open in Email App &rarr;</a>
+            </div>
+          </div>
+
+          <div id="cc-pane-iframe" class="cc-pane-inner hidden">
+            <iframe id="cc-iframe" title="Engagement content" style="width:100%; height:74vh; min-height:520px; border:none; border-radius:8px; background:#fff; display:block;"></iframe>
           </div>
 
         </div>
@@ -971,45 +1012,50 @@
   }
 
   // ---------- Left nav ----------
-  // Overview and Team & Hours are the two panes that actually live inside
-  // this page and swap in place with no navigation (Greg, 8/30/26 redesign).
-  // The other five still open their existing pages for now -- they'll fold
-  // in the same way, one at a time.
+  // Every item swaps in place inside this one page now (Greg, 8/30/26 --
+  // "make each left column topic display in the right column instead of
+  // opening a new page"). Overview, Team & Hours, and Email Client are
+  // native panes built into this file. Add Research, Update Dashboard (TL),
+  // Resource Vault (TL), and Client Dashboard reuse the existing pages
+  // wholesale via a single shared iframe pane (?embed=1 hides that page's
+  // own masthead so it doesn't show two navy headers stacked on top of
+  // each other) -- this avoids re-implementing three large, already-working
+  // pages just to get the "never leaves this screen" feel.
+  const IFRAME_PANE_KEYS = ["research", "setup", "vault", "dashboard"];
+  let iframeSrcLoaded = {}; // pane key -> true once its iframe src has been set (lazy-load, only on first visit)
+
   function navIconSvg(key) {
     const icons = {
       overview: '<path d="M3 9l9-7 9 7"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/>',
       team: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-      client_info: '<rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M15 8h4M15 12h4M7 16h10"/>',
-      setup: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
       research: '<circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>',
-      files: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+      email: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/>',
+      setup: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+      vault: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
       dashboard: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/>',
     };
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[key] || ""}</svg>`;
   }
 
+  let navItems = [];
   function renderNav(client) {
     const dashboardHref = client.slug ? new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href : null;
-    const items = [
-      { key: "overview", label: "Overview", kind: "pane" },
-      { key: "team", label: "Team & Hours", kind: "pane" },
-      { key: "client_info", label: "Client Info", kind: "link", href: `client_applications.html?client=${client.id}` },
-      { key: "setup", label: "Set Up Dashboard", kind: "link", href: `client_profile.html?client=${client.id}` },
-      { key: "research", label: "Add Research", kind: "link", href: `client_research.html?client=${client.id}&view=research` },
-      { key: "files", label: "Files", kind: "link", href: `client_research.html?client=${client.id}&view=vault` },
-      { key: "dashboard", label: "Client Dashboard", kind: "link", href: dashboardHref || "#", external: true, disabled: !dashboardHref },
+    navItems = [
+      { key: "overview", label: "Overview" },
+      { key: "team", label: "Team & Hours" },
+      { key: "research", label: "Add Research", src: `client_research.html?client=${client.id}&view=research&embed=1` },
+      { key: "email", label: "Email Client" },
+      { key: "setup", label: "Update Dashboard (TL)", src: `client_profile.html?client=${client.id}&embed=1` },
+      { key: "vault", label: "Resource Vault (TL)", src: `client_research.html?client=${client.id}&view=vault&embed=1` },
+      { key: "dashboard", label: "Client Dashboard", src: dashboardHref, disabled: !dashboardHref },
     ];
-    $("cc-nav").innerHTML = items.map((item) => {
-      if (item.kind === "pane") {
-        return `<button type="button" class="cc-nav-btn" data-pane="${item.key}">${navIconSvg(item.key)}<span>${item.label}</span></button>`;
-      }
-      const target = item.external ? ' target="_blank" rel="noopener"' : "";
-      const style = item.disabled ? ' style="opacity:0.5; pointer-events:none;"' : "";
-      return `<a class="cc-nav-btn" href="${item.href}"${target}${style}>${navIconSvg(item.key)}<span>${item.label}</span>${item.external ? '<span class="cc-nav-external">&#8599;</span>' : ""}</a>`;
-    }).join("");
+    $("cc-nav").innerHTML = navItems.map((item) => `
+      <button type="button" class="cc-nav-btn" data-pane="${item.key}" ${item.disabled ? 'style="opacity:0.5;" disabled' : ""}>${navIconSvg(item.key)}<span>${item.label}</span></button>
+    `).join("");
     $("cc-nav").querySelectorAll("[data-pane]").forEach((btn) => {
       btn.addEventListener("click", () => setActivePane(btn.dataset.pane));
     });
+    iframeSrcLoaded = {};
     setActivePane(activePane);
   }
 
@@ -1020,6 +1066,20 @@
     });
     $("cc-pane-overview").classList.toggle("hidden", key !== "overview");
     $("cc-pane-team").classList.toggle("hidden", key !== "team");
+    $("cc-pane-email").classList.toggle("hidden", key !== "email");
+    if (key === "email" && !emailPaneLoaded) loadEmailPane();
+
+    const isIframePane = IFRAME_PANE_KEYS.includes(key);
+    $("cc-pane-iframe").classList.toggle("hidden", !isIframePane);
+    if (isIframePane) {
+      const item = navItems.find((n) => n.key === key);
+      if (item && item.src && !iframeSrcLoaded[key]) {
+        $("cc-iframe").src = item.src;
+        iframeSrcLoaded[key] = true;
+      } else if (item && !item.src) {
+        $("cc-iframe").removeAttribute("src");
+      }
+    }
   }
 
   // ---------- Overview pane ----------
@@ -1678,6 +1738,174 @@
     `).join("");
   }
   $("tw-history-close").addEventListener("click", () => { $("tw-history-overlay").classList.remove("open"); });
+
+  // ---------- Email Client pane (rebuilt, Greg 8/30/26 -- recovered from
+  // git history at 32a5c5e^, the last commit before this was removed as a
+  // modal on 8/29. Same compose logic, now rendered directly in the right-
+  // hand pane instead of a popup -- nothing is ever sent from here, it just
+  // drafts text to copy or hand off to the user's own email app.) ----------
+  const RESEARCH_AREAS = [
+    ["market_dynamics", "Market Dynamics Research"],
+    ["outbound", "Outbound Marketing"],
+    ["inbound", "Inbound Marketing"],
+    ["watering_holes", "Watering Holes"],
+  ];
+  const RESEARCH_AREA_LABELS = Object.fromEntries(RESEARCH_AREAS);
+  const EMAIL_QUESTION_DROPDOWN_LABELS = {
+    market_dynamics: "Market Research Question",
+    outbound: "Outbound Marketing Question",
+    inbound: "Inbound Marketing Question",
+    watering_holes: "Watering Hole Question",
+  };
+  const EMAIL_SUBJECT_REPORT_LABELS = {
+    market_dynamics: "Market Research",
+    outbound: "Outbound Marketing",
+    inbound: "Inbound Marketing",
+    watering_holes: "Watering Hole",
+  };
+
+  let emailContacts = [];
+  let emailAreas = [];
+  let emailAreaDocs = {};
+  let emailSpecialtyLabel = "";
+  let emailTeamLeadName = "";
+  let emailPaneLoaded = false;
+
+  function updateMailtoHref() {
+    const toParam = $("em-to").value.split(",").map((s) => s.trim()).filter(Boolean).map(encodeURIComponent).join(",");
+    const ccParam = $("em-cc").value.split(",").map((s) => s.trim()).filter(Boolean).map(encodeURIComponent).join(",");
+    const ccQuery = ccParam ? `&cc=${ccParam}` : "";
+    $("em-mailto-btn").href = `mailto:${toParam}?subject=${encodeURIComponent($("em-subject").value)}${ccQuery}&body=${encodeURIComponent($("em-body").value)}`;
+  }
+  $("em-subject").addEventListener("input", updateMailtoHref);
+  $("em-body").addEventListener("input", updateMailtoHref);
+  $("em-answer").addEventListener("input", () => { composeEmailBody(); updateMailtoHref(); });
+  $("em-question").addEventListener("change", async () => {
+    await loadDocsForSelectedArea();
+    composeEmailBody();
+    updateMailtoHref();
+  });
+  $("em-copy-btn").addEventListener("click", async () => {
+    const ccLine = $("em-cc").value ? `\nCc: ${$("em-cc").value}` : "";
+    const text = `To: ${$("em-to").value}${ccLine}\nSubject: ${$("em-subject").value}\n\n${$("em-body").value}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      showBanner("Email text copied — paste it into your email client.", "success");
+    } catch (e) {
+      showBanner("Couldn't copy automatically — select the text below and copy manually.", "error");
+    }
+  });
+
+  async function loadEmailPane() {
+    if (!activeClient) return;
+    emailPaneLoaded = true;
+    $("em-to").value = "Loading…";
+    $("em-cc").value = "Loading…";
+    $("em-question").innerHTML = "";
+    $("em-answer").value = "";
+    $("em-subject").value = "";
+    $("em-body").value = "";
+    $("em-no-contacts").classList.add("hidden");
+
+    const [{ data: contacts }, { data: areaDocs }, { data: team }] = await Promise.all([
+      sb.from("client_contacts").select("name, email").eq("client_id", activeClient.id),
+      sb.from("documents").select("research_area").eq("client_id", activeClient.id).not("research_area", "is", null),
+      sb.from("client_assignments").select("users(id, email, full_name), is_team_lead, specialty_type, user_id").eq("client_id", activeClient.id).not("user_id", "is", null),
+    ]);
+
+    emailContacts = contacts || [];
+    const emails = emailContacts.map((c) => c.email).filter(Boolean);
+    $("em-to").value = emails.join(", ");
+    $("em-no-contacts").classList.toggle("hidden", emails.length > 0);
+
+    const teamRows = team || [];
+    const teamEmails = [...new Set(teamRows.map((r) => r.users && r.users.email).filter(Boolean))];
+    $("em-cc").value = teamEmails.join(", ");
+
+    const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
+    emailTeamLeadName = leadRow ? leadRow.users.full_name : "";
+    const mySlot = currentUser ? teamRows.find((r) => r.user_id === currentUser.id) : null;
+    emailSpecialtyLabel = mySlot ? (SPECIALTY_LABELS[mySlot.specialty_type] || mySlot.specialty_type) : "";
+
+    const areasWithDocs = new Set((areaDocs || []).map((d) => d.research_area));
+    emailAreas = RESEARCH_AREAS.map(([key]) => key).filter((key) => areasWithDocs.has(key));
+    if (emailAreas.length) {
+      $("em-question").innerHTML = emailAreas.map((key) => {
+        const label = EMAIL_QUESTION_DROPDOWN_LABELS[key] || `${RESEARCH_AREA_LABELS[key] || key} Question`;
+        return `<option value="${key}">${escapeHtml(label)}</option>`;
+      }).join("");
+      await loadDocsForSelectedArea();
+    } else {
+      $("em-question").innerHTML = `<option value="">(no research documents yet — upload one on the Add Research page first)</option>`;
+      emailAreaDocs = {};
+    }
+
+    composeEmailBody();
+    updateMailtoHref();
+  }
+
+  async function loadDocsForSelectedArea() {
+    const area = $("em-question").value;
+    if (!area || emailAreaDocs[area]) return;
+    const { data: docs } = await sb.from("documents")
+      .select("file_name, url")
+      .eq("client_id", activeClient.id)
+      .eq("research_area", area)
+      .eq("visibility", "client_facing");
+    emailAreaDocs[area] = docs || [];
+  }
+
+  function composeEmailBody() {
+    if (!activeClient) return;
+    const area = $("em-question").value;
+    const firstContactName = emailContacts[0] && emailContacts[0].name ? emailContacts[0].name.split(" ")[0] : "there";
+    const specialistLabel = emailSpecialtyLabel ? `${emailSpecialtyLabel} specialist` : "specialist";
+    const introBy = emailTeamLeadName ? `As ${emailTeamLeadName} mentioned, ` : "";
+    const areaLabel = area ? (RESEARCH_AREA_LABELS[area] || area) : "";
+    const answer = $("em-answer").value.trim();
+    const docs = area ? (emailAreaDocs[area] || []) : [];
+    const contactBits = [currentUser && currentUser.email, currentUser && currentUser.phone].filter(Boolean).join(" or ");
+
+    const programCode = activeClient.econ_dev_companies && activeClient.econ_dev_companies.code;
+    const reportLabel = area ? (EMAIL_SUBJECT_REPORT_LABELS[area] || areaLabel) : "";
+    $("em-subject").value = area
+      ? `${programCode ? `(${programCode}) ` : ""}${activeClient.name} - ${reportLabel} Report`
+      : `Update on your Economic Gardening research — ${activeClient.name}`;
+
+    if (!area) {
+      $("em-body").value = `Hi ${firstContactName},
+
+Wanted to share a quick update on your Economic Gardening engagement.
+
+${answer || "(brief summary goes here)"}
+
+Let us know if you have any questions.
+
+Best,
+${currentUser ? currentUser.full_name : ""}`;
+      return;
+    }
+
+    const shareUrl = activeClient.slug ? new URL(`c/${encodeURIComponent(activeClient.slug)}`, PUBLIC_SITE_BASE).href : "";
+    const attachLine = docs.length
+      ? `I've uploaded the research document${docs.length > 1 ? "s" : ""} to your EG Dashboard for you to review${shareUrl ? `:\n${shareUrl}` : "."}`
+      : `I've uploaded the research document to your EG Dashboard for you to review${shareUrl ? ` (${shareUrl})` : ""} — mark it client-facing under this research area on the Add Research page first if it isn't there yet.`;
+
+    $("em-body").value = `Hi ${firstContactName}:
+
+${introBy}I'm the ${specialistLabel} working on your ${areaLabel.toLowerCase()} in this Economic Gardening engagement.
+
+My brief answer:
+${answer || "(a sentence or two goes here — see the Brief answer box above)"}
+
+${attachLine}
+
+If you have any immediate questions about this material once you've had a chance to review it, please feel free to reach out${contactBits ? ` (${contactBits})` : ""}. Otherwise, I look forward to talking with you about this on our upcoming research review call.
+
+-${currentUser ? currentUser.full_name.split(" ")[0] : ""}
+
+${currentUser ? currentUser.full_name : ""}${currentUser && currentUser.email ? `\n${currentUser.email}` : ""}${currentUser && currentUser.phone ? `\n${currentUser.phone}` : ""}`;
+  }
 
   document.querySelectorAll(".overlay").forEach((ov) => {
     ov.addEventListener("click", (e) => { if (e.target === ov) ov.classList.remove("open"); });
