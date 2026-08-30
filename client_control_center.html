@@ -489,7 +489,15 @@
         <div id="cm-meta"></div>
         <div id="cm-status-strip">Loading status…</div>
         <div class="delay-note hidden" id="cm-delay-note">
-          <div class="delay-note-label" id="cm-delay-note-label">Why is this taking longer than expected?</div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <div class="delay-note-label" id="cm-delay-note-label">Why is this taking longer than expected?</div>
+            <button type="button" class="btn-ghost hidden" id="cm-fix-date-btn" style="padding:2px 6px; font-size:11px; color:var(--navy-light); flex-shrink:0;" title="Correct the date this engagement actually went In Progress">Edit date</button>
+          </div>
+          <div class="hidden" id="cm-fix-date-row" style="display:flex; align-items:center; gap:8px; margin:2px 0 10px; flex-wrap:wrap;">
+            <input type="date" id="cm-fix-date-input" style="padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12.5px;" />
+            <button type="button" class="btn-secondary" id="cm-fix-date-save" style="padding:5px 12px; font-size:12px;">Save date</button>
+            <button type="button" class="btn-ghost" id="cm-fix-date-cancel" style="padding:5px 8px; font-size:12px;">Cancel</button>
+          </div>
           <textarea id="cm-delay-reason" maxlength="300" placeholder="e.g. Waiting on a closing call to get on the client's calendar"></textarea>
           <div class="delay-note-actions">
             <button type="button" class="btn-secondary" id="cm-delay-save" style="padding:6px 14px; font-size:12.5px;">Save</button>
@@ -1226,7 +1234,45 @@
     }
     $("cm-delay-reason").value = client.delay_reason || "";
     $("cm-delay-saved").style.display = "none";
+
+    // Super Admin only -- lets Greg correct first_in_progress_at by hand
+    // when it's been wrong (e.g. a seeded/test client whose original entry
+    // date was never captured, or a data gap from before 096_fix_first_in_
+    // progress_at_on_insert.sql closed the insert-path hole). The trigger
+    // fix stops this from happening to NEW rows going forward; this is the
+    // manual escape hatch for rows already affected.
+    $("cm-fix-date-btn").classList.toggle("hidden", !isSuperAdmin);
+    $("cm-fix-date-row").classList.add("hidden");
   }
+
+  $("cm-fix-date-btn").addEventListener("click", () => {
+    if (!activeClient) return;
+    const current = activeClient.first_in_progress_at || activeClient.status_since;
+    $("cm-fix-date-input").value = current ? new Date(current).toISOString().slice(0, 10) : "";
+    $("cm-fix-date-row").classList.remove("hidden");
+  });
+  $("cm-fix-date-cancel").addEventListener("click", () => {
+    $("cm-fix-date-row").classList.add("hidden");
+  });
+  $("cm-fix-date-save").addEventListener("click", async () => {
+    if (!activeClient) return;
+    const val = $("cm-fix-date-input").value;
+    if (!val) { showBanner("Pick a date first.", "error"); return; }
+    const btn = $("cm-fix-date-save");
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    const { error } = await sb.from("clients").update({ first_in_progress_at: val }).eq("id", activeClient.id);
+    btn.disabled = false;
+    btn.textContent = "Save date";
+    if (error) {
+      showBanner("Couldn't save that date: " + error.message, "error");
+      return;
+    }
+    activeClient.first_in_progress_at = val;
+    $("cm-fix-date-row").classList.add("hidden");
+    showBanner("In Progress date corrected.", "success");
+    renderStatusAge(activeClient);
+  });
 
   // ---------- Standardized Search/Print/Export toolbar ----------
   let gsClients = [], gsUsers = [], gsPrograms = [];
