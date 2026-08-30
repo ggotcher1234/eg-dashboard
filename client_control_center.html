@@ -189,20 +189,6 @@
     .cc-nav-btn { width: auto; flex: 1 1 auto; }
   }
 
-  /* ---------- Team & Hours stat cards ---------- */
-  .tw-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
-  @media (max-width: 640px) { .tw-stats { grid-template-columns: repeat(2, 1fr); } }
-  .tw-stat { display: flex; align-items: center; gap: 10px; border-radius: 10px; padding: 12px 14px; }
-  .tw-stat-icon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .tw-stat-icon svg { width: 18px; height: 18px; }
-  .tw-stat-num { font-size: 19px; font-weight: 800; line-height: 1.1; }
-  .tw-stat-label { font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 2px; }
-  .tw-stat-input { width: 64px; border: none; background: transparent; font-size: 19px; font-weight: 800; padding: 0; font-family: inherit; }
-  .tw-stat-input:focus { outline: none; }
-  .tw-stat-blue { background: #dde5ee; } .tw-stat-blue .tw-stat-icon { background: #c7d6e3; color: #1f4a75; } .tw-stat-blue .tw-stat-num, .tw-stat-blue .tw-stat-input { color: #14304d; }
-  .tw-stat-green { background: #dfe9d5; } .tw-stat-green .tw-stat-icon { background: #cddabb; color: #46592f; } .tw-stat-green .tw-stat-num { color: #3d4f2a; }
-  .tw-stat-amber { background: #fbe9cf; } .tw-stat-amber .tw-stat-icon { background: #f3d7a3; color: #8a5c0a; } .tw-stat-amber .tw-stat-num { color: #7a5c17; }
-  .tw-stat-navy { background: #e2e6f0; } .tw-stat-navy .tw-stat-icon { background: #c9cfe6; color: #2f3a6b; } .tw-stat-navy .tw-stat-num { color: #232c52; }
 
   /* ---------- Team & Hours table (ported from client_workspace.html) ---------- */
   table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
@@ -471,29 +457,6 @@
         <div class="cc-pane">
 
           <div id="cc-pane-team" class="cc-pane-inner">
-            <div class="assignments-hint" style="font-size:12.5px; color:var(--muted); margin:-4px 0 14px;">Click an <strong>Hours Used</strong> number to see that person's full month-by-month billing history.</div>
-
-            <div class="tw-stats">
-              <div class="tw-stat tw-stat-blue">
-                <div class="tw-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
-                <div>
-                  <input type="number" id="tw-total-budget-input" class="tw-stat-input" min="0" step="0.5" />
-                  <div class="tw-stat-label">Total Hours</div>
-                </div>
-              </div>
-              <div class="tw-stat tw-stat-green">
-                <div class="tw-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-                <div><div class="tw-stat-num" id="tw-stat-assigned">0</div><div class="tw-stat-label">Assigned</div></div>
-              </div>
-              <div class="tw-stat tw-stat-amber">
-                <div class="tw-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-                <div><div class="tw-stat-num" id="tw-stat-notassigned">0</div><div class="tw-stat-label">Not Assigned</div></div>
-              </div>
-              <div class="tw-stat tw-stat-navy">
-                <div class="tw-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
-                <div><div class="tw-stat-num" id="tw-stat-used">0</div><div class="tw-stat-label">Used</div></div>
-              </div>
-            </div>
             <div class="field-error" id="tw-summary-error"></div>
 
             <div class="table-scroll">
@@ -1192,9 +1155,6 @@
     const editable = c.project_status !== "on_hold" && c.project_status !== "closed";
     const canManage = isSuperAdmin || (isTeamLeadHere && editable);
 
-    const totalBudgetInput = $("tw-total-budget-input");
-    totalBudgetInput.value = Number(c.budget_hours_available);
-    totalBudgetInput.disabled = !isSuperAdmin;
     $("tw-summary-error").style.display = "none";
     $("tw-add-row-btn").classList.toggle("hidden", !canManage);
     $("tw-actions-header").classList.toggle("hidden", !canManage);
@@ -1336,32 +1296,15 @@
   });
 
   function recalcTeamStats() {
-    const total = Number($("tw-total-budget-input").value) || 0;
+    const total = Number(activeClient && activeClient.budget_hours_available) || 0;
     let rowsSum = 0;
     document.querySelectorAll(".row-hours-input").forEach((input) => { rowsSum += Number(input.value) || 0; });
     const notAssigned = total - rowsSum;
-    $("tw-stat-assigned").textContent = rowsSum;
-    $("tw-stat-notassigned").textContent = notAssigned;
     $("tw-summary-error").style.display = notAssigned < 0 ? "block" : "none";
     if (notAssigned < 0) $("tw-summary-error").textContent = "Planned hours add up to more than Total Hours.";
-    const totalUsed = currentAssignments.reduce((sum, r) => sum + Number(r.hoursSpent), 0);
-    $("tw-stat-used").textContent = totalUsed;
     const totalEl = $("tw-total-planned");
     if (totalEl) totalEl.textContent = rowsSum;
   }
-
-  $("tw-total-budget-input").addEventListener("input", recalcTeamStats);
-  $("tw-total-budget-input").addEventListener("change", async () => {
-    if ($("tw-total-budget-input").disabled) return;
-    const { error } = await sb.from("clients").update({ budget_hours_available: Number($("tw-total-budget-input").value) }).eq("id", activeClient.id);
-    if (error) {
-      showBanner("Couldn't save: " + error.message, "error");
-      await reloadTeam();
-      return;
-    }
-    activeClient.budget_hours_available = Number($("tw-total-budget-input").value);
-    showBanner("Total hours updated.", "success");
-  });
 
   // ---------- Unassign / remove ----------
   let pendingRemoveId = null;
