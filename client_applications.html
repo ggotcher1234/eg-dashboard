@@ -841,15 +841,19 @@
                 </div>
               </details>
 
-              <!-- Social media links moved off application intake entirely
-                   (Greg, 8/29/26: "i don't want social media links here...
-                   they need to be on the company page with the website
-                   link") -- they now live as 6 dedicated fields (Facebook,
-                   LinkedIn, X/Twitter, Instagram, YouTube, Other) on the
-                   Company Information section of client_profile.html,
-                   alongside Website, once the engagement is a real client.
-                   Only News links + Tags stay here at the application
-                   stage. -->
+              <!-- Greg (8/29/26), correcting an earlier pass: social links
+                   DO belong on the application -- "i want the client to
+                   give them to us on the application. then we don't have
+                   to guess what they are and waste time finding them." The
+                   client-facing public application form is the primary way
+                   these get filled in (client_application_public.html, same
+                   6 platforms); this structured per-platform version
+                   replaces the old single "Social links (one per line)"
+                   blob textarea so a submitted draft's values land in their
+                   own labeled fields instead of an unlabeled list. On
+                   Accept, these copy straight onto the Company Information
+                   section of client_profile.html (094/095) -- no
+                   re-typing or re-Googling needed. -->
               <details class="accordion-card">
                 <summary>
                   <div class="section-card-icon icon-green"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
@@ -857,6 +861,18 @@
                   <span class="accordion-sub">Optional</span>
                 </summary>
                 <div class="accordion-body">
+                  <div class="grid-2">
+                    <div class="field"><label>Facebook</label><input type="text" id="f-social-facebook" placeholder="https://facebook.com/…" /></div>
+                    <div class="field"><label>LinkedIn</label><input type="text" id="f-social-linkedin" placeholder="https://linkedin.com/…" /></div>
+                  </div>
+                  <div class="grid-2">
+                    <div class="field"><label>X / Twitter</label><input type="text" id="f-social-twitter" placeholder="https://x.com/…" /></div>
+                    <div class="field"><label>Instagram</label><input type="text" id="f-social-instagram" placeholder="https://instagram.com/…" /></div>
+                  </div>
+                  <div class="grid-2">
+                    <div class="field"><label>YouTube</label><input type="text" id="f-social-youtube" placeholder="https://youtube.com/…" /></div>
+                    <div class="field"><label>Other</label><input type="text" id="f-social-other" placeholder="https://…" /></div>
+                  </div>
                   <div class="field"><label>News links <span class="hint">(one per line)</span></label><textarea id="f-news-links"></textarea></div>
                   <div class="field"><label>Tags <span class="hint">(comma-separated)</span></label><input type="text" id="f-tags" /></div>
                 </div>
@@ -1039,10 +1055,23 @@
 
       <fieldset>
         <legend>Links &amp; tags</legend>
-        <!-- Social links moved to the Company Information section of
-             client_profile.html once the engagement is a real client
-             (Greg, 8/29/26) -- see the matching note in the New
-             Application wizard above. -->
+        <!-- Structured per-platform, matching the New Application wizard
+             above (Greg, 8/29/26 correction: the client supplies these on
+             the application; see accept_client_application() in
+             095_application_structured_social_links.sql for how they land
+             on the Company page automatically). -->
+        <div class="grid-2">
+          <div class="field"><label>Facebook</label><input type="text" id="e-social-facebook" placeholder="https://facebook.com/…" /></div>
+          <div class="field"><label>LinkedIn</label><input type="text" id="e-social-linkedin" placeholder="https://linkedin.com/…" /></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>X / Twitter</label><input type="text" id="e-social-twitter" placeholder="https://x.com/…" /></div>
+          <div class="field"><label>Instagram</label><input type="text" id="e-social-instagram" placeholder="https://instagram.com/…" /></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>YouTube</label><input type="text" id="e-social-youtube" placeholder="https://youtube.com/…" /></div>
+          <div class="field"><label>Other</label><input type="text" id="e-social-other" placeholder="https://…" /></div>
+        </div>
         <div class="field"><label>News links <span class="hint">(one per line)</span></label><textarea id="e-news-links"></textarea></div>
         <div class="field"><label>Tags <span class="hint">(comma-separated)</span></label><input type="text" id="e-tags" /></div>
       </fieldset>
@@ -1921,6 +1950,14 @@
     const contactCards = [contactBlock("Primary", "p"), contactBlock("Secondary", "s"), contactBlock("3rd", "t")].join("");
     const ccEmailsList = val("f-cc-emails") ? val("f-cc-emails").split("\n").map((s) => s.trim()).filter(Boolean) : [];
     const newsLinksList = val("f-news-links") ? val("f-news-links").split("\n").map((s) => s.trim()).filter(Boolean) : [];
+    const socialList = [
+      val("f-social-facebook") && `Facebook: ${val("f-social-facebook")}`,
+      val("f-social-linkedin") && `LinkedIn: ${val("f-social-linkedin")}`,
+      val("f-social-twitter") && `X/Twitter: ${val("f-social-twitter")}`,
+      val("f-social-instagram") && `Instagram: ${val("f-social-instagram")}`,
+      val("f-social-youtube") && `YouTube: ${val("f-social-youtube")}`,
+      val("f-social-other") && `Other: ${val("f-social-other")}`,
+    ].filter(Boolean);
 
     const ynItem = (label, checked) => `<div class="yn-item"><span>${label}</span><span class="yn-badge ${checked ? "yes" : "no"}">${checked ? "Yes" : "No"}</span></div>`;
 
@@ -1981,6 +2018,7 @@
             reviewItem("FTEs 2025 / 2024", `${val("f-fte-2025") || "—"} / ${val("f-fte-2024") || "—"}`),
             reviewItem("Revenue 2025 / 2024", `${val("f-rev-2025") ? "$" + val("f-rev-2025") : "—"} / ${val("f-rev-2024") ? "$" + val("f-rev-2024") : "—"}`),
             reviewItem("% employees in-state", val("f-pct-instate") ? val("f-pct-instate") + "%" : ""),
+            reviewItem("Social links", socialList.join(", ")),
             reviewItem("News links", newsLinksList.join(", ")),
             reviewItem("Tags", val("f-tags")),
             reviewItem("Top Business Issues", val("f-top-issues")),
@@ -2139,6 +2177,12 @@
       veteran_owned: $("f-veteran").checked,
       disabled_owned: $("f-disabled").checked,
       pct_employees_in_state: numOrNull("f-pct-instate"),
+      social_facebook_url: strOrNull("f-social-facebook"),
+      social_linkedin_url: strOrNull("f-social-linkedin"),
+      social_twitter_url: strOrNull("f-social-twitter"),
+      social_instagram_url: strOrNull("f-social-instagram"),
+      social_youtube_url: strOrNull("f-social-youtube"),
+      social_other_url: strOrNull("f-social-other"),
       news_links: toLines("f-news-links"),
       tags: toTags("f-tags"),
       top_business_issues: $("f-top-issues").value.trim() || null,
@@ -2372,7 +2416,7 @@
       (a.fte_2022 != null || a.fte_2023 != null || a.fte_2024 != null || a.fte_2025 != null),
       (a.revenue_2022 != null || a.revenue_2023 != null || a.revenue_2024 != null || a.revenue_2025 != null),
       !!a.primary_officer_name, !!a.secondary_officer_name, !!a.tertiary_officer_name,
-      !!((a.social_links && a.social_links.length) || (a.news_links && a.news_links.length)),
+      !!(a.social_facebook_url || a.social_linkedin_url || a.social_twitter_url || a.social_instagram_url || a.social_youtube_url || a.social_other_url || (a.social_links && a.social_links.length) || (a.news_links && a.news_links.length)),
       !!(a.tags && a.tags.length), !!a.top_business_issues,
     ];
     const filledCount = completenessChecks.filter(Boolean).length;
@@ -2531,7 +2575,23 @@
     `);
 
     // ---------- Links & Tags (collapsed by default) ----------
-    const hasLinksOrTags = !!((a.social_links && a.social_links.length) || (a.news_links && a.news_links.length) || (a.tags && a.tags.length));
+    // Structured per-platform columns (095) are what new applications
+    // populate; the old unlabeled `social_links` array (pre-dates this
+    // repo's migrations) is kept read-only here too, for applications
+    // submitted before this change.
+    const hasStructuredSocials = !!(a.social_facebook_url || a.social_linkedin_url || a.social_twitter_url || a.social_instagram_url || a.social_youtube_url || a.social_other_url);
+    const hasLegacySocials = !!(a.social_links && a.social_links.length);
+    const hasLinksOrTags = !!(hasStructuredSocials || hasLegacySocials || (a.news_links && a.news_links.length) || (a.tags && a.tags.length));
+    const socialRows = hasStructuredSocials
+      ? [
+          a.social_facebook_url && `Facebook: ${linkAction(a.social_facebook_url)}`,
+          a.social_linkedin_url && `LinkedIn: ${linkAction(a.social_linkedin_url)}`,
+          a.social_twitter_url && `X/Twitter: ${linkAction(a.social_twitter_url)}`,
+          a.social_instagram_url && `Instagram: ${linkAction(a.social_instagram_url)}`,
+          a.social_youtube_url && `YouTube: ${linkAction(a.social_youtube_url)}`,
+          a.social_other_url && `Other: ${linkAction(a.social_other_url)}`,
+        ].filter(Boolean).map((l) => `<div>${l}</div>`).join("")
+      : (hasLegacySocials ? a.social_links.map((l) => `<div>${linkAction(l)}</div>`).join("") : "");
     html += `
       <details class="accordion-card">
         <summary>
@@ -2542,7 +2602,7 @@
         </summary>
         <div class="accordion-body">
           ${reviewGrid([
-            item("Social links", (a.social_links && a.social_links.length) ? a.social_links.map((l) => `<div>${linkAction(l)}</div>`).join("") : "", !(a.social_links && a.social_links.length)),
+            item("Social links", socialRows, !socialRows),
             item("News links", (a.news_links && a.news_links.length) ? a.news_links.map((l) => `<div>${linkAction(l)}</div>`).join("") : "", !(a.news_links && a.news_links.length)),
             item("Tags", (a.tags && a.tags.length) ? a.tags.map(escapeHtml).join(", ") : "", !(a.tags && a.tags.length)),
           ])}
@@ -2837,6 +2897,12 @@
     $("e-minority").checked = !!a.minority_owned;
     $("e-veteran").checked = !!a.veteran_owned;
     $("e-disabled").checked = !!a.disabled_owned;
+    $("e-social-facebook").value = a.social_facebook_url || "";
+    $("e-social-linkedin").value = a.social_linkedin_url || "";
+    $("e-social-twitter").value = a.social_twitter_url || "";
+    $("e-social-instagram").value = a.social_instagram_url || "";
+    $("e-social-youtube").value = a.social_youtube_url || "";
+    $("e-social-other").value = a.social_other_url || "";
     $("e-news-links").value = (a.news_links || []).join("\n");
     $("e-tags").value = (a.tags || []).join(", ");
     $("e-top-issues").value = a.top_business_issues || "";
@@ -2904,6 +2970,12 @@
       revenue_2023: numOrNull("e-rev-2023"),
       revenue_2022: numOrNull("e-rev-2022"),
       pct_employees_in_state: numOrNull("e-pct-instate"),
+      social_facebook_url: strOrNull("e-social-facebook"),
+      social_linkedin_url: strOrNull("e-social-linkedin"),
+      social_twitter_url: strOrNull("e-social-twitter"),
+      social_instagram_url: strOrNull("e-social-instagram"),
+      social_youtube_url: strOrNull("e-social-youtube"),
+      social_other_url: strOrNull("e-social-other"),
       sales_1_to_50m: $("e-sales-range").checked,
       sales_primarily_external: $("e-sales-external").checked,
       woman_owned: $("e-woman").checked,
