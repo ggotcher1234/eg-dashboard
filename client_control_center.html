@@ -169,16 +169,6 @@
   .segmented-control .status-pill.active { background: var(--navy); color: #fff; }
   .segmented-control .status-pill:disabled { cursor: default; }
 
-  .delay-note { margin-top: 12px; padding: 12px 14px; border-radius: 8px; background: #f4f6f8; border: 1px solid var(--border); }
-  .delay-note.delay-yellow { background: #fdf7ec; border-color: #f0dca6; }
-  .delay-note.delay-red { background: #fbe9e9; border-color: #f0c2c0; }
-  .delay-note-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; }
-  .delay-note textarea {
-    width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
-    font-size: 13px; font-family: inherit; resize: vertical; box-sizing: border-box;
-  }
-  .delay-note-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-  .delay-note-saved { font-size: 12px; color: var(--accent-dark); display: none; }
 
   /* ---------- Left nav + content pane shell ---------- */
   .cc-shell { display: flex; align-items: flex-start; gap: 18px; }
@@ -473,22 +463,6 @@
             <span class="badge hidden" id="cm-status-badge"></span>
             <div class="segmented-control hidden" id="cm-status-toggle"></div>
           </span>
-        </div>
-        <div class="delay-note hidden" id="cm-delay-note">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-            <div class="delay-note-label" id="cm-delay-note-label">Why is this taking longer than expected?</div>
-            <button type="button" class="btn-ghost hidden" id="cm-fix-date-btn" style="padding:2px 6px; font-size:11px; color:var(--navy-light); flex-shrink:0;" title="Correct the date this engagement actually went In Progress">Edit date</button>
-          </div>
-          <div class="hidden" id="cm-fix-date-row" style="display:flex; align-items:center; gap:8px; margin:2px 0 10px; flex-wrap:wrap;">
-            <input type="date" id="cm-fix-date-input" style="padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12.5px;" />
-            <button type="button" class="btn-secondary" id="cm-fix-date-save" style="padding:5px 12px; font-size:12px;">Save date</button>
-            <button type="button" class="btn-ghost" id="cm-fix-date-cancel" style="padding:5px 8px; font-size:12px;">Cancel</button>
-          </div>
-          <textarea id="cm-delay-reason" maxlength="300"></textarea>
-          <div class="delay-note-actions">
-            <button type="button" class="btn-secondary" id="cm-delay-save" style="padding:6px 14px; font-size:12.5px;">Save</button>
-            <span class="delay-note-saved" id="cm-delay-saved">Saved</span>
-          </div>
         </div>
       </div>
 
@@ -1090,75 +1064,25 @@
   // banner in that spot on the page. The reason field and Save button stay
   // available from day one; only the label and tint change once it tips
   // into the 60+ day "Overdue" tier.
+  // Greg (8/30/26): dropped the "In Progress for N days" box -- the
+  // colored dot next to the status toggle (with the same info in its
+  // tooltip) is enough on its own now.
   function renderStatusAge(client) {
     const dot = $("cm-status-dot");
-    const note = $("cm-delay-note");
     if (client.project_status !== "in_progress") {
       dot.classList.add("hidden");
-      note.classList.add("hidden");
       return;
     }
     const anchor = client.first_in_progress_at || client.status_since;
     const days = daysSince(anchor);
     const tier = statusAgeTier(days);
-    // Greg (8/30/26): simple day count + a plain-language status word --
-    // "On schedule" through day 59, "Overdue" from day 60 on (the same
-    // 60-day line statusAgeTier() already draws for the red tier).
     const dayWord = `${days} day${days === 1 ? "" : "s"}`;
+    dot.classList.remove("hidden");
     dot.className = `status-dot status-dot-${tier}`;
-    note.classList.remove("hidden");
-    if (tier !== "red") {
-      dot.title = `In Progress for ${dayWord} — On Schedule`;
-      note.classList.remove("delay-yellow", "delay-red");
-      $("cm-delay-note-label").textContent = `In Progress for ${dayWord}: On Schedule`;
-    } else {
-      dot.title = `In Progress for ${dayWord} — Overdue`;
-      note.classList.remove("delay-yellow");
-      note.classList.add("delay-red");
-      $("cm-delay-note-label").textContent =
-        `In Progress for ${dayWord}: Overdue — why is it taking longer than expected?`;
-    }
-    $("cm-delay-reason").value = client.delay_reason || "";
-    $("cm-delay-saved").style.display = "none";
-
-    // Super Admin only -- lets Greg correct first_in_progress_at by hand
-    // when it's been wrong (e.g. a seeded/test client whose original entry
-    // date was never captured, or a data gap from before 096_fix_first_in_
-    // progress_at_on_insert.sql closed the insert-path hole). The trigger
-    // fix stops this from happening to NEW rows going forward; this is the
-    // manual escape hatch for rows already affected.
-    $("cm-fix-date-btn").classList.toggle("hidden", !isSuperAdmin);
-    $("cm-fix-date-row").classList.add("hidden");
+    dot.title = tier !== "red"
+      ? `In Progress for ${dayWord} — On Schedule`
+      : `In Progress for ${dayWord} — Overdue`;
   }
-
-  $("cm-fix-date-btn").addEventListener("click", () => {
-    if (!activeClient) return;
-    const current = activeClient.first_in_progress_at || activeClient.status_since;
-    $("cm-fix-date-input").value = current ? new Date(current).toISOString().slice(0, 10) : "";
-    $("cm-fix-date-row").classList.remove("hidden");
-  });
-  $("cm-fix-date-cancel").addEventListener("click", () => {
-    $("cm-fix-date-row").classList.add("hidden");
-  });
-  $("cm-fix-date-save").addEventListener("click", async () => {
-    if (!activeClient) return;
-    const val = $("cm-fix-date-input").value;
-    if (!val) { showBanner("Pick a date first.", "error"); return; }
-    const btn = $("cm-fix-date-save");
-    btn.disabled = true;
-    btn.textContent = "Saving…";
-    const { error } = await sb.from("clients").update({ first_in_progress_at: val }).eq("id", activeClient.id);
-    btn.disabled = false;
-    btn.textContent = "Save date";
-    if (error) {
-      showBanner("Couldn't save that date: " + error.message, "error");
-      return;
-    }
-    activeClient.first_in_progress_at = val;
-    $("cm-fix-date-row").classList.add("hidden");
-    showBanner("In Progress date corrected.", "success");
-    renderStatusAge(activeClient);
-  });
 
   // ---------- Standardized Search/Print/Export toolbar ----------
   let gsClients = [], gsUsers = [], gsPrograms = [];
@@ -1240,23 +1164,6 @@
       rows.push([SPECIALTY_LABELS[r.specialty_type] || r.specialty_type, person ? person.full_name : "Not assigned", r.hours_allotted, r.hoursSpent]);
     }
     downloadCsv(`${activeClient.name.replace(/[^a-z0-9]+/gi, "-")}-team-hours-${new Date().toISOString().slice(0, 10)}.csv`, rows);
-  });
-
-  $("cm-delay-save").addEventListener("click", async () => {
-    if (!activeClient) return;
-    const reason = $("cm-delay-reason").value.trim();
-    const btn = $("cm-delay-save");
-    btn.disabled = true;
-    btn.textContent = "Saving…";
-    const { error } = await sb.from("clients").update({ delay_reason: reason || null }).eq("id", activeClient.id);
-    btn.disabled = false;
-    btn.textContent = "Save";
-    if (error) {
-      showBanner("Couldn't save that note: " + error.message, "error");
-      return;
-    }
-    activeClient.delay_reason = reason || null;
-    $("cm-delay-saved").style.display = "inline";
   });
 
   // ---------- Team & Hours (ported from client_workspace.html's
