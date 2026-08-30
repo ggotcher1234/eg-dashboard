@@ -521,41 +521,6 @@
             <button class="btn-secondary btn-sm hidden" id="tw-add-row-btn" style="margin-top:12px;">+ Add work area</button>
           </div>
 
-          <div id="cc-pane-email" class="cc-pane-inner hidden">
-            <div class="modal-meta" style="margin:0 0 16px; font-size:12.5px; color:var(--muted);">Review and edit, then copy or open in your email app — nothing is sent from here.</div>
-            <div class="field">
-              <label>To</label>
-              <input type="text" id="em-to" readonly />
-            </div>
-            <div class="field">
-              <label>CC</label>
-              <input type="text" id="em-cc" readonly />
-            </div>
-            <div class="field">
-              <label>Research area</label>
-              <select id="em-question"></select>
-            </div>
-            <div class="field">
-              <label>Brief answer <span style="text-transform:none; font-weight:400;">(a sentence or two -- the full write-up is the attached document)</span></label>
-              <textarea id="em-answer" rows="3" placeholder="e.g. The specialty coffee market is growing fastest among 25-39 year olds who favor subscription models and transparent sourcing…"></textarea>
-            </div>
-            <div class="field">
-              <label>Subject</label>
-              <input type="text" id="em-subject" />
-            </div>
-            <div class="field">
-              <label>Body</label>
-              <textarea id="em-body" rows="14"></textarea>
-            </div>
-            <div id="em-no-contacts" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
-              This client has no contact emails on file yet — add one on the Client Info page before sending.
-            </div>
-            <div style="display:flex; gap:10px;">
-              <button type="button" class="btn-primary" id="em-copy-btn">Copy Email Text</button>
-              <a class="btn-secondary" id="em-mailto-btn" href="#">Open in Email App &rarr;</a>
-            </div>
-          </div>
-
           <div id="cc-pane-iframe" class="cc-pane-inner hidden">
             <iframe id="cc-iframe" title="Engagement content" style="width:100%; height:74vh; min-height:520px; border:none; border-radius:8px; background:#fff; display:block;"></iframe>
           </div>
@@ -633,7 +598,7 @@
   let allUsers = [];
   let userSpecialties = {}; // user_id -> array of specialty keys
   let currentAssignments = [];
-  let activePane = "team"; // "team" | "email" -- the two native panes that actually swap in place
+  let activePane = "team"; // the one native pane that swaps in place (the rest are iframed)
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -949,8 +914,8 @@
   // ---------- Left nav ----------
   // Every item swaps in place inside this one page now (Greg, 8/30/26 --
   // "make each left column topic display in the right column instead of
-  // opening a new page"). Overview, Team & Hours, and Email Client are
-  // native panes built into this file. Add Research, Update Dashboard (TL),
+  // opening a new page"). Team & Hours is the one native pane built into
+  // this file. Add Research, Update Dashboard (TL),
   // Resource Vault (TL), and Client Dashboard reuse the existing pages
   // wholesale via a single shared iframe pane (?embed=1 hides that page's
   // own masthead so it doesn't show two navy headers stacked on top of
@@ -963,7 +928,6 @@
     const icons = {
       team: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
       research: '<circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>',
-      email: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/>',
       setup: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
       vault: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
       dashboard: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/>',
@@ -977,7 +941,6 @@
     navItems = [
       { key: "team", label: "Team & Hours" },
       { key: "research", label: "Add Research", src: `client_research.html?client=${client.id}&view=research&embed=1` },
-      { key: "email", label: "Email Client" },
       { key: "setup", label: "Update Dashboard (TL)", src: `client_profile.html?client=${client.id}&embed=1` },
       { key: "vault", label: "Resource Vault (TL)", src: `client_research.html?client=${client.id}&view=vault&embed=1` },
       { key: "dashboard", label: "Client Dashboard", src: dashboardHref, disabled: !dashboardHref },
@@ -998,8 +961,6 @@
       btn.classList.toggle("active", btn.dataset.pane === key);
     });
     $("cc-pane-team").classList.toggle("hidden", key !== "team");
-    $("cc-pane-email").classList.toggle("hidden", key !== "email");
-    if (key === "email" && !emailPaneLoaded) loadEmailPane();
 
     const isIframePane = IFRAME_PANE_KEYS.includes(key);
     $("cc-pane-iframe").classList.toggle("hidden", !isIframePane);
@@ -1551,174 +1512,6 @@
     `).join("");
   }
   $("tw-history-close").addEventListener("click", () => { $("tw-history-overlay").classList.remove("open"); });
-
-  // ---------- Email Client pane (rebuilt, Greg 8/30/26 -- recovered from
-  // git history at 32a5c5e^, the last commit before this was removed as a
-  // modal on 8/29. Same compose logic, now rendered directly in the right-
-  // hand pane instead of a popup -- nothing is ever sent from here, it just
-  // drafts text to copy or hand off to the user's own email app.) ----------
-  const RESEARCH_AREAS = [
-    ["market_dynamics", "Market Dynamics Research"],
-    ["outbound", "Outbound Marketing"],
-    ["inbound", "Inbound Marketing"],
-    ["watering_holes", "Watering Holes"],
-  ];
-  const RESEARCH_AREA_LABELS = Object.fromEntries(RESEARCH_AREAS);
-  const EMAIL_QUESTION_DROPDOWN_LABELS = {
-    market_dynamics: "Market Research Question",
-    outbound: "Outbound Marketing Question",
-    inbound: "Inbound Marketing Question",
-    watering_holes: "Watering Hole Question",
-  };
-  const EMAIL_SUBJECT_REPORT_LABELS = {
-    market_dynamics: "Market Research",
-    outbound: "Outbound Marketing",
-    inbound: "Inbound Marketing",
-    watering_holes: "Watering Hole",
-  };
-
-  let emailContacts = [];
-  let emailAreas = [];
-  let emailAreaDocs = {};
-  let emailSpecialtyLabel = "";
-  let emailTeamLeadName = "";
-  let emailPaneLoaded = false;
-
-  function updateMailtoHref() {
-    const toParam = $("em-to").value.split(",").map((s) => s.trim()).filter(Boolean).map(encodeURIComponent).join(",");
-    const ccParam = $("em-cc").value.split(",").map((s) => s.trim()).filter(Boolean).map(encodeURIComponent).join(",");
-    const ccQuery = ccParam ? `&cc=${ccParam}` : "";
-    $("em-mailto-btn").href = `mailto:${toParam}?subject=${encodeURIComponent($("em-subject").value)}${ccQuery}&body=${encodeURIComponent($("em-body").value)}`;
-  }
-  $("em-subject").addEventListener("input", updateMailtoHref);
-  $("em-body").addEventListener("input", updateMailtoHref);
-  $("em-answer").addEventListener("input", () => { composeEmailBody(); updateMailtoHref(); });
-  $("em-question").addEventListener("change", async () => {
-    await loadDocsForSelectedArea();
-    composeEmailBody();
-    updateMailtoHref();
-  });
-  $("em-copy-btn").addEventListener("click", async () => {
-    const ccLine = $("em-cc").value ? `\nCc: ${$("em-cc").value}` : "";
-    const text = `To: ${$("em-to").value}${ccLine}\nSubject: ${$("em-subject").value}\n\n${$("em-body").value}`;
-    try {
-      await navigator.clipboard.writeText(text);
-      showBanner("Email text copied — paste it into your email client.", "success");
-    } catch (e) {
-      showBanner("Couldn't copy automatically — select the text below and copy manually.", "error");
-    }
-  });
-
-  async function loadEmailPane() {
-    if (!activeClient) return;
-    emailPaneLoaded = true;
-    $("em-to").value = "Loading…";
-    $("em-cc").value = "Loading…";
-    $("em-question").innerHTML = "";
-    $("em-answer").value = "";
-    $("em-subject").value = "";
-    $("em-body").value = "";
-    $("em-no-contacts").classList.add("hidden");
-
-    const [{ data: contacts }, { data: areaDocs }, { data: team }] = await Promise.all([
-      sb.from("client_contacts").select("name, email").eq("client_id", activeClient.id),
-      sb.from("documents").select("research_area").eq("client_id", activeClient.id).not("research_area", "is", null),
-      sb.from("client_assignments").select("users(id, email, full_name), is_team_lead, specialty_type, user_id").eq("client_id", activeClient.id).not("user_id", "is", null),
-    ]);
-
-    emailContacts = contacts || [];
-    const emails = emailContacts.map((c) => c.email).filter(Boolean);
-    $("em-to").value = emails.join(", ");
-    $("em-no-contacts").classList.toggle("hidden", emails.length > 0);
-
-    const teamRows = team || [];
-    const teamEmails = [...new Set(teamRows.map((r) => r.users && r.users.email).filter(Boolean))];
-    $("em-cc").value = teamEmails.join(", ");
-
-    const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
-    emailTeamLeadName = leadRow ? leadRow.users.full_name : "";
-    const mySlot = currentUser ? teamRows.find((r) => r.user_id === currentUser.id) : null;
-    emailSpecialtyLabel = mySlot ? (SPECIALTY_LABELS[mySlot.specialty_type] || mySlot.specialty_type) : "";
-
-    const areasWithDocs = new Set((areaDocs || []).map((d) => d.research_area));
-    emailAreas = RESEARCH_AREAS.map(([key]) => key).filter((key) => areasWithDocs.has(key));
-    if (emailAreas.length) {
-      $("em-question").innerHTML = emailAreas.map((key) => {
-        const label = EMAIL_QUESTION_DROPDOWN_LABELS[key] || `${RESEARCH_AREA_LABELS[key] || key} Question`;
-        return `<option value="${key}">${escapeHtml(label)}</option>`;
-      }).join("");
-      await loadDocsForSelectedArea();
-    } else {
-      $("em-question").innerHTML = `<option value="">(no research documents yet — upload one on the Add Research page first)</option>`;
-      emailAreaDocs = {};
-    }
-
-    composeEmailBody();
-    updateMailtoHref();
-  }
-
-  async function loadDocsForSelectedArea() {
-    const area = $("em-question").value;
-    if (!area || emailAreaDocs[area]) return;
-    const { data: docs } = await sb.from("documents")
-      .select("file_name, url")
-      .eq("client_id", activeClient.id)
-      .eq("research_area", area)
-      .eq("visibility", "client_facing");
-    emailAreaDocs[area] = docs || [];
-  }
-
-  function composeEmailBody() {
-    if (!activeClient) return;
-    const area = $("em-question").value;
-    const firstContactName = emailContacts[0] && emailContacts[0].name ? emailContacts[0].name.split(" ")[0] : "there";
-    const specialistLabel = emailSpecialtyLabel ? `${emailSpecialtyLabel} specialist` : "specialist";
-    const introBy = emailTeamLeadName ? `As ${emailTeamLeadName} mentioned, ` : "";
-    const areaLabel = area ? (RESEARCH_AREA_LABELS[area] || area) : "";
-    const answer = $("em-answer").value.trim();
-    const docs = area ? (emailAreaDocs[area] || []) : [];
-    const contactBits = [currentUser && currentUser.email, currentUser && currentUser.phone].filter(Boolean).join(" or ");
-
-    const programCode = activeClient.econ_dev_companies && activeClient.econ_dev_companies.code;
-    const reportLabel = area ? (EMAIL_SUBJECT_REPORT_LABELS[area] || areaLabel) : "";
-    $("em-subject").value = area
-      ? `${programCode ? `(${programCode}) ` : ""}${activeClient.name} - ${reportLabel} Report`
-      : `Update on your Economic Gardening research — ${activeClient.name}`;
-
-    if (!area) {
-      $("em-body").value = `Hi ${firstContactName},
-
-Wanted to share a quick update on your Economic Gardening engagement.
-
-${answer || "(brief summary goes here)"}
-
-Let us know if you have any questions.
-
-Best,
-${currentUser ? currentUser.full_name : ""}`;
-      return;
-    }
-
-    const shareUrl = activeClient.slug ? new URL(`c/${encodeURIComponent(activeClient.slug)}`, PUBLIC_SITE_BASE).href : "";
-    const attachLine = docs.length
-      ? `I've uploaded the research document${docs.length > 1 ? "s" : ""} to your EG Dashboard for you to review${shareUrl ? `:\n${shareUrl}` : "."}`
-      : `I've uploaded the research document to your EG Dashboard for you to review${shareUrl ? ` (${shareUrl})` : ""} — mark it client-facing under this research area on the Add Research page first if it isn't there yet.`;
-
-    $("em-body").value = `Hi ${firstContactName}:
-
-${introBy}I'm the ${specialistLabel} working on your ${areaLabel.toLowerCase()} in this Economic Gardening engagement.
-
-My brief answer:
-${answer || "(a sentence or two goes here — see the Brief answer box above)"}
-
-${attachLine}
-
-If you have any immediate questions about this material once you've had a chance to review it, please feel free to reach out${contactBits ? ` (${contactBits})` : ""}. Otherwise, I look forward to talking with you about this on our upcoming research review call.
-
--${currentUser ? currentUser.full_name.split(" ")[0] : ""}
-
-${currentUser ? currentUser.full_name : ""}${currentUser && currentUser.email ? `\n${currentUser.email}` : ""}${currentUser && currentUser.phone ? `\n${currentUser.phone}` : ""}`;
-  }
 
   document.querySelectorAll(".overlay").forEach((ov) => {
     ov.addEventListener("click", (e) => { if (e.target === ov) ov.classList.remove("open"); });
