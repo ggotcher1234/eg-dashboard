@@ -1217,20 +1217,28 @@
       note.classList.add("hidden");
       return;
     }
-    const days = daysSince(client.first_in_progress_at || client.status_since);
+    const anchor = client.first_in_progress_at || client.status_since;
+    const days = daysSince(anchor);
     const tier = statusAgeTier(days);
+    // Greg (8/30/26): show the actual date it went In Progress, not a day
+    // count -- a count reads as "wrong" the moment the underlying date is
+    // off by even a little, where a plain date is unambiguous and lets him
+    // eyeball it against what he remembers directly.
+    const dateLabel = anchor
+      ? new Date(anchor).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+      : "an unknown date";
     dot.className = `status-dot status-dot-${tier}`;
     note.classList.remove("hidden");
     if (tier !== "red") {
-      dot.title = `In Progress for ${days} day${days === 1 ? "" : "s"}`;
+      dot.title = `In Progress since ${dateLabel}`;
       note.classList.remove("delay-yellow", "delay-red");
-      $("cm-delay-note-label").textContent = `In Progress for ${days} day${days === 1 ? "" : "s"}`;
+      $("cm-delay-note-label").textContent = `In Progress since ${dateLabel}`;
     } else {
-      dot.title = `Overdue — ${days} day${days === 1 ? "" : "s"}`;
+      dot.title = `Overdue — In Progress since ${dateLabel}`;
       note.classList.remove("delay-yellow");
       note.classList.add("delay-red");
       $("cm-delay-note-label").textContent =
-        `Overdue — ${days} day${days === 1 ? "" : "s"} in progress. Why is it taking longer than expected?`;
+        `Overdue — In Progress since ${dateLabel}. Why is it taking longer than expected?`;
     }
     $("cm-delay-reason").value = client.delay_reason || "";
     $("cm-delay-saved").style.display = "none";
