@@ -42,11 +42,17 @@
   .btn-primary:hover { background: var(--accent-dark); }
   .btn-secondary { background: #eef1f4; color: var(--text); }
   .btn-secondary:hover { background: #e2e6ea; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: var(--danger-dark); }
   .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
   .btn-ghost:hover { background: #eef1f4; }
+  button:disabled { opacity: 0.55; cursor: default; }
 
   /* Standardized Search/Print/Export/Import toolbar (Greg, 8/27/26) -- same
-     four controls, same order, on every internal page. */
+     four controls, same order, on every internal page. Print/Export/Import
+     are tucked into a "More" menu on this page only (Greg, 8/30/26 redesign:
+     they're administrative, not primary activities, so they don't deserve
+     the same visual weight as the work itself). */
   .btn-sm { padding: 8px 12px; font-size: 13px; height: 36px; border-radius: 8px; font-weight: 600; }
   .std-toolbar-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
   .global-search-wrap { position: relative; flex: 1; max-width: 480px; }
@@ -67,13 +73,20 @@
   .gsr-item:hover { background: #f4f6f8; }
   .gsr-item .gsr-name { font-weight: 600; color: var(--text); }
   .gsr-item .gsr-meta { font-size: 12px; color: var(--muted); flex-shrink: 0; }
-  .gsr-ask-ai { color: #6528a3; font-weight: 700; border-top: 1px solid var(--border); }
-  .std-toolbar-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-  .std-toolbar-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .cc-more-wrap { position: relative; flex-shrink: 0; }
+  .cc-more-menu {
+    position: absolute; top: calc(100% + 6px); right: 0; width: 160px; background: #fff; padding: 6px;
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); z-index: 60;
+  }
+  .cc-more-menu button { width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--text); }
+  .cc-more-menu button:hover:not(:disabled) { background: #f4f6f8; }
   @media print {
     .no-print { display: none !important; }
     body { background: #fff; }
     main { max-width: none; margin: 0; padding: 0; }
+    .cc-shell { display: block !important; }
+    .cc-nav { display: none !important; }
+    .cc-pane-inner.hidden { display: block !important; }
   }
   header .btn-ghost { color: #c9d6e3; }
   header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
@@ -98,7 +111,7 @@
   }
   .profile-dropdown button:hover, header .profile-dropdown button:hover { background: #eef1f4; color: var(--text); }
 
-  main { max-width: 780px; margin: 0 auto; padding: 28px 20px 80px; }
+  main { max-width: 980px; margin: 0 auto; padding: 28px 20px 80px; }
   .hidden { display: none !important; }
   #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
 
@@ -122,10 +135,10 @@
 
   /* Client summary -- sits directly on the page background (no boxed
      border) with just enough whitespace and a thin divider to separate it
-     from the action cards below. Answers "which client, where does it
+     from the content below. Answers "which client, where does it
      stand" in one glance: name + single status pill, then one muted meta
      line, then one muted status line. */
-  .ccc-summary { padding: 4px 4px 18px; }
+  .ccc-summary { padding: 4px 4px 14px; }
   .ccc-summary-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   #cm-name { margin: 0; font-size: 21px; font-weight: 700; color: var(--navy); }
   #cm-meta { font-size: 13px; color: var(--muted); margin-top: 5px; }
@@ -143,11 +156,7 @@
   .status-dot-red { background: var(--danger); }
 
   /* Editable status control (Team Lead / Admin only) -- lets you change an
-     engagement's status right here on its hub page, instead of only
-     displaying it read-only (Greg, 8/27/26: "lost the ability to change
-     status" -- it lived one click deeper, on the Dashboard Wizard, with no
-     hint that's where it was). Same segmented-control look as
-     client_profile.html's status toggle. */
+     engagement's status right here on its hub page. */
   .segmented-control {
     display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden;
     background: #f6f8fa;
@@ -173,113 +182,118 @@
   .delay-note-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
   .delay-note-saved { font-size: 12px; color: var(--accent-dark); display: none; }
 
-  .ccc-divider { border-top: 1px solid var(--border); margin: 0 4px 18px; }
-  .ccc-section-label {
-    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
-    color: var(--muted); margin: 0 4px 10px;
+  /* Next Step banner (Greg, 8/30/26 redesign) -- the one thing on the whole
+     page telling an occasional user what to do right now, drawn from the
+     same 4-item auto tracker (Discovery Call / Controlling Document /
+     Research Review / Close-Out Evaluation) that already powers the
+     Engagements list's "Next" column on index.html -- see loadNextStep(). */
+  .next-step-banner {
+    display: flex; align-items: center; gap: 14px; background: #eef5ea; border: 1px solid #cfe0c2;
+    border-radius: 12px; padding: 14px 18px; margin: 6px 4px 20px;
+  }
+  .nsb-icon {
+    width: 38px; height: 38px; border-radius: 999px; background: var(--accent); color: #fff; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nsb-icon svg { width: 18px; height: 18px; }
+  .nsb-body { flex: 1; min-width: 0; }
+  .nsb-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--accent-dark); }
+  .nsb-text { font-size: 14px; color: var(--text); margin-top: 2px; }
+
+  /* ---------- Left nav + content pane shell ---------- */
+  .cc-shell { display: flex; align-items: flex-start; gap: 18px; }
+  .cc-nav { width: 186px; flex-shrink: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 8px; }
+  .cc-nav-btn {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 11px; margin-bottom: 2px;
+    border: none; border-radius: 8px; background: transparent; font-size: 13.5px; font-weight: 600; color: var(--text);
+  }
+  .cc-nav-btn:hover:not(.active) { background: #f4f6f8; }
+  .cc-nav-btn.active { background: #e7eef7; color: var(--navy); }
+  .cc-nav-btn svg { width: 17px; height: 17px; flex-shrink: 0; color: var(--muted); }
+  .cc-nav-btn.active svg { color: var(--navy-light); }
+  .cc-nav-btn .cc-nav-external { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .cc-pane { flex: 1; min-width: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px; }
+  @media (max-width: 760px) {
+    .cc-shell { flex-direction: column; }
+    .cc-nav { width: 100%; display: flex; flex-wrap: wrap; gap: 4px; }
+    .cc-nav-btn { width: auto; flex: 1 1 auto; }
   }
 
-  .modal-action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 0 4px; }
-  .modal-action-card {
-    position: relative; display: flex; gap: 14px; align-items: flex-start; text-align: left; text-decoration: none;
-    color: var(--text); border: none; border-radius: 14px; padding: 19px 20px 19px 24px; cursor: pointer;
-    overflow: hidden; box-shadow: 0 1px 3px rgba(20,48,77,0.08), 0 4px 10px rgba(20,48,77,0.06);
-    transition: box-shadow 0.18s ease, transform 0.18s ease;
-  }
-  .modal-action-card::before {
-    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
-  }
-  .modal-action-card:hover { box-shadow: 0 10px 22px rgba(20,48,77,0.16), 0 2px 6px rgba(20,48,77,0.1); transform: translateY(-2px); }
-  .modal-action-card .mac-icon {
-    width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5), 0 1px 2px rgba(20,48,77,0.08);
-  }
-  .modal-action-card .mac-icon svg { width: 20px; height: 20px; }
-  .modal-action-card .mac-body { flex: 1; min-width: 0; }
-  .modal-action-card .mac-title-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-  .modal-action-card .mac-title { font-weight: 700; font-size: 14.5px; }
-  .modal-action-card .mac-arrow { font-size: 15px; flex-shrink: 0; font-weight: 700; }
-  .modal-action-card .mac-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+  /* ---------- Overview pane ---------- */
+  .ov-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+  @media (max-width: 560px) { .ov-grid { grid-template-columns: 1fr; } }
+  .ov-card { background: #f8fafb; border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; }
+  .ov-card-label { font-size: 11.5px; font-weight: 700; color: var(--muted); margin-bottom: 5px; }
+  .ov-card-body { font-size: 13.5px; color: var(--text); line-height: 1.45; }
+  .ov-card-body a { color: var(--navy-light); font-weight: 700; text-decoration: none; }
+  .ov-card-body a:hover { text-decoration: underline; }
+  .ov-progress-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin: 0 0 8px; }
+  .ov-progress-row { display: flex; justify-content: space-between; padding: 9px 2px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+  .ov-progress-row:last-child { border-bottom: none; }
+  .ov-progress-row .ov-progress-name { font-weight: 600; }
+  .ov-progress-row .ov-progress-status { color: var(--muted); }
 
-  /* Six distinct accent colors -- a left bar, a diagonal tint wash, a
-     matching icon chip, and colored title/arrow text -- so the grid reads
-     as bold and inviting rather than six identical gray boxes. Palette
-     pulled from the NCEG logo (navy, slate-blue, sage, pale green) instead
-     of an unrelated rainbow -- Chris (8/18/26): differentiated by shade
-     across a navy-to-green spectrum rather than by hue. */
-  .mac-sage { background: linear-gradient(135deg, #dfe9d5 0%, #f8faf5 72%); }
-  .mac-sage::before { background: #5c7248; }
-  .mac-sage .mac-icon { background: #cddabb; color: #46592f; }
-  .mac-sage .mac-title { color: #3d4f2a; }
-  .mac-sage .mac-arrow { color: #5c7248; }
+  /* ---------- Team & Hours stat cards ---------- */
+  .tw-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+  @media (max-width: 640px) { .tw-stats { grid-template-columns: repeat(2, 1fr); } }
+  .tw-stat { display: flex; align-items: center; gap: 10px; border-radius: 10px; padding: 12px 14px; }
+  .tw-stat-icon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .tw-stat-icon svg { width: 18px; height: 18px; }
+  .tw-stat-num { font-size: 19px; font-weight: 800; line-height: 1.1; }
+  .tw-stat-label { font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+  .tw-stat-input { width: 64px; border: none; background: transparent; font-size: 19px; font-weight: 800; padding: 0; font-family: inherit; }
+  .tw-stat-input:focus { outline: none; }
+  .tw-stat-blue { background: #dde5ee; } .tw-stat-blue .tw-stat-icon { background: #c7d6e3; color: #1f4a75; } .tw-stat-blue .tw-stat-num, .tw-stat-blue .tw-stat-input { color: #14304d; }
+  .tw-stat-green { background: #dfe9d5; } .tw-stat-green .tw-stat-icon { background: #cddabb; color: #46592f; } .tw-stat-green .tw-stat-num { color: #3d4f2a; }
+  .tw-stat-amber { background: #fbe9cf; } .tw-stat-amber .tw-stat-icon { background: #f3d7a3; color: #8a5c0a; } .tw-stat-amber .tw-stat-num { color: #7a5c17; }
+  .tw-stat-navy { background: #e2e6f0; } .tw-stat-navy .tw-stat-icon { background: #c9cfe6; color: #2f3a6b; } .tw-stat-navy .tw-stat-num { color: #232c52; }
 
-  .mac-navy { background: linear-gradient(135deg, #dde5ee 0%, #f7f9fb 72%); }
-  .mac-navy::before { background: #1f4a75; }
-  .mac-navy .mac-icon { background: #c7d6e3; color: #1f4a75; }
-  .mac-navy .mac-title { color: #14304d; }
-  .mac-navy .mac-arrow { color: #1f4a75; }
+  /* ---------- Team & Hours table (ported from client_workspace.html) ---------- */
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+  @media (max-width: 640px) { .table-scroll table { min-width: 560px; } }
+  thead th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); background: #f8fafb; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tfoot td { padding: 11px 14px; font-size: 13.5px; border-top: 2px solid var(--border); }
+  .spent-cell { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+  .spent-action { width: 26px; display: inline-flex; justify-content: flex-end; flex-shrink: 0; }
+  td.actions, .row-actions { text-align: right; white-space: nowrap; }
+  .row-input { width: 100%; padding: 5px 0 5px 7px; border: 1px solid transparent; border-radius: 5px; font-size: 13.5px; font-family: inherit; background: transparent; text-align: right; }
+  .row-input:hover, .row-input:focus { border-color: var(--border); background: #fff; }
+  .row-select { width: 100%; padding: 5px 7px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; font-family: inherit; background: #fff; }
+  .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+  .icon-btn { padding: 4px 8px; font-size: 13px; line-height: 1; }
+  input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+  .spent-link { background: none; border: none; padding: 0; font: inherit; font-weight: 700; color: var(--navy-light); cursor: pointer; text-decoration: underline; }
+  .spent-link:hover { color: var(--navy); }
+  .field-error { color: var(--danger); font-size: 12.5px; margin-top: 8px; display: none; }
 
-  .mac-amber { background: linear-gradient(135deg, #e6ead4 0%, #f9faf4 72%); }
-  .mac-amber::before { background: #74833d; }
-  .mac-amber .mac-icon { background: #d4dcb4; color: #4f5a1f; }
-  .mac-amber .mac-title { color: #4a5420; }
-  .mac-amber .mac-arrow { color: #74833d; }
-
-  .mac-teal { background: linear-gradient(135deg, #dcece8 0%, #f6fbfa 72%); }
-  .mac-teal::before { background: #3d8478; }
-  .mac-teal .mac-icon { background: #c3e0d9; color: #2b5f56; }
-  .mac-teal .mac-title { color: #25534b; }
-  .mac-teal .mac-arrow { color: #3d8478; }
-
-  .mac-plum { background: linear-gradient(135deg, #ecefdc 0%, #fafbf5 72%); }
-  .mac-plum::before { background: #8ea45a; }
-  .mac-plum .mac-icon { background: #dee6c1; color: #5f6f33; }
-  .mac-plum .mac-title { color: #56652d; }
-  .mac-plum .mac-arrow { color: #8ea45a; }
-
-  .mac-forest { background: linear-gradient(135deg, #d7e6dc 0%, #f6faf7 72%); }
-  .mac-forest::before { background: #2f6b4f; }
-  .mac-forest .mac-icon { background: #bcdbc9; color: #204a37; }
-  .mac-forest .mac-title { color: #1e4433; }
-  .mac-forest .mac-arrow { color: #2f6b4f; }
-
-  .modal-action-external { background: linear-gradient(135deg, #e2e9ef 0%, #f8fafb 72%); }
-  .modal-action-external::before { background: #5e7c97; }
-  .modal-action-external .mac-icon { background: #cfdae3; color: #3f5b73; }
-  .modal-action-external .mac-title { color: #354d61; }
-  .modal-action-external .mac-sub { color: var(--muted); }
-  .modal-action-external .mac-arrow { color: #5e7c97; }
-  .modal-action-external:hover { box-shadow: 0 10px 24px rgba(94,124,151,0.24), 0 2px 6px rgba(94,124,151,0.14); }
-
-  .modal-action-card.disabled-link { opacity: 0.5; pointer-events: none; }
-
-  /* Engagement Dashboard is the one link Team Leads actually hand to
-     clients -- Greg (8/22/26) wanted it to visually stand out from the
-     five internal-only cards above it, not just read as a seventh
-     identical tile. Solid border + stronger glow + a small "Client-Facing"
-     overline label instead of just another pastel wash. */
-  .modal-action-featured {
-    border: 2px solid #1f4a75;
-    box-shadow: 0 4px 14px rgba(31,74,117,0.22), 0 10px 26px rgba(31,74,117,0.14);
-  }
-  .modal-action-featured::before { width: 8px; }
-  .modal-action-featured:hover { box-shadow: 0 14px 30px rgba(31,74,117,0.3), 0 4px 10px rgba(31,74,117,0.18); }
-  .mac-featured-label {
-    display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;
-    color: #fff; background: #1f4a75; padding: 2px 9px; border-radius: 999px; margin-bottom: 6px;
-  }
-
-  /* Draft Update Email popup */
-  .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.4); align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+  /* ---------- Modals (Unassign confirm / Log hours / Billing history) ---------- */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 50; padding: 20px; }
   .overlay.open { display: flex; }
-  .modal { background: #fff; border-radius: 14px; width: 560px; max-width: 100%; max-height: 88vh; overflow-y: auto; padding: 28px; box-shadow: 0 16px 40px rgba(0,0,0,0.2); }
-  .modal h3 { margin: 0 0 4px; font-size: 20px; color: var(--navy); }
-  .modal .modal-meta { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-  .modal-header { display: flex; align-items: flex-start; justify-content: space-between; }
-
-  @media (max-width: 480px) {
-    .modal-action-grid { grid-template-columns: 1fr; }
+  .modal { background: #fff; border-radius: 10px; width: 400px; max-width: 92vw; padding: 26px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); max-height: 88vh; overflow-y: auto; }
+  .modal h3 { margin: 0 0 10px; font-size: 16.5px; color: var(--navy); }
+  .modal p { font-size: 13.5px; color: var(--muted); }
+  .modal .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
+  .field input[type="text"], .field input[type="number"], .field input[type="date"], .field select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit;
   }
+  .required-star { color: var(--danger); }
+  .history-summary { display: flex; gap: 18px; flex-wrap: wrap; background: #f4f6f8; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
+  .history-summary strong { display: block; font-size: 15px; color: var(--text); }
+  .history-summary span { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .history-list { max-height: 380px; overflow-y: auto; }
+  .history-month { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .history-month:last-child { border-bottom: none; }
+  .history-month-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13.5px; font-weight: 700; }
+  .history-month-meta { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .history-entry { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); padding: 4px 0 0 4px; }
+  .history-entry-note { color: var(--muted); font-style: italic; }
+  .history-empty { text-align: center; color: var(--muted); font-size: 13.5px; padding: 20px 0; }
 
   /* ---------- Top nav + Ask AI ---------- */
   header { position: relative; }
@@ -288,9 +302,6 @@
   header .nav-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
   header .nav-link.active { color: #fff; }
   header .nav-link.active::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -14px; height: 2px; background: #fff; }
-  /* Mobile nav toggle (Greg, 8/29/26) -- .site-nav just vanishes below
-     980px with nothing to replace it, so this button + dropdown panel
-     restores navigation on phones/tablets. Hidden on desktop. */
   .nav-toggle {
     display: none; align-items: center; justify-content: center; width: 34px; height: 34px;
     background: rgba(255,255,255,0.1); border: none; border-radius: 6px; color: #fff; cursor: pointer; flex-shrink: 0;
@@ -376,7 +387,7 @@
       <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
       <div>
         <h1>Engagement Workspace</h1>
-        <div class="sub"><a class="back-link" href="index.html">← All Clients</a></div>
+        <div class="sub"><a class="back-link" href="index.html">← All Engagements</a></div>
       </div>
     </div>
     <nav class="site-nav">
@@ -467,10 +478,13 @@
         </div>
         <div class="global-search-results hidden" id="global-search-results"></div>
       </div>
-      <div class="std-toolbar-actions">
-        <button type="button" class="btn-secondary btn-sm" id="std-print-btn" title="Print this engagement overview">Print</button>
-        <button type="button" class="btn-secondary btn-sm" id="std-export-btn" title="Export this engagement's summary as CSV">&#8595; Export</button>
-        <button type="button" class="btn-secondary btn-sm" id="std-import-btn" title="This page manages one engagement -- nothing to bulk import here" disabled>&#8593; Import</button>
+      <div class="cc-more-wrap">
+        <button type="button" class="btn-secondary btn-sm" id="cc-more-btn">More &#9662;</button>
+        <div class="cc-more-menu hidden" id="cc-more-menu">
+          <button type="button" class="btn-ghost" id="std-print-btn" title="Print this engagement overview">Print</button>
+          <button type="button" class="btn-ghost" id="std-export-btn" title="Export this engagement's team &amp; hours as CSV">Export</button>
+          <button type="button" class="btn-ghost" id="std-import-btn" title="This page manages one engagement -- nothing to bulk import here" disabled>Import</button>
+        </div>
       </div>
     </div>
 
@@ -499,65 +513,149 @@
           </div>
         </div>
       </div>
-      <div class="ccc-divider"></div>
-      <div class="ccc-section-label">Manage Engagement</div>
 
-      <div class="modal-action-grid">
-        <a class="modal-action-card mac-sage" id="cm-hours-link" href="#">
-          <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
-          <div class="mac-body">
-            <div class="mac-title-row"><span class="mac-title">Assignments</span><span class="mac-arrow">&rarr;</span></div>
-            <div class="mac-sub">Adjust hours budgeted/spent</div>
+      <div class="next-step-banner hidden" id="cc-next-step-banner">
+        <div class="nsb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+        <div class="nsb-body">
+          <div class="nsb-label">Next Step</div>
+          <div class="nsb-text" id="cc-next-step-text">—</div>
+        </div>
+        <a class="btn-primary btn-sm" id="cc-next-step-action" href="#">Open</a>
+      </div>
+
+      <div class="cc-shell">
+        <nav class="cc-nav" id="cc-nav"></nav>
+        <div class="cc-pane">
+
+          <div id="cc-pane-overview" class="cc-pane-inner">
+            <div class="ov-grid">
+              <div class="ov-card">
+                <div class="ov-card-label">What is this?</div>
+                <div class="ov-card-body" id="ov-what-is"></div>
+              </div>
+              <div class="ov-card">
+                <div class="ov-card-label">Where are we?</div>
+                <div class="ov-card-body" id="ov-where"></div>
+              </div>
+              <div class="ov-card">
+                <div class="ov-card-label">How are we doing?</div>
+                <div class="ov-card-body" id="ov-how"></div>
+              </div>
+              <div class="ov-card">
+                <div class="ov-card-label">What should I do next?</div>
+                <div class="ov-card-body" id="ov-next"></div>
+              </div>
+            </div>
+            <div class="ov-progress-label">Progress</div>
+            <div id="ov-progress"></div>
           </div>
-        </a>
-        <!-- Chris (8/29/26): any EG staff on the engagement should be able
-             to pull up the original intake application, read-only -- not
-             just the Team Lead/Admins. Placed right next to Assignments
-             per Greg's call, matching where this lived in Podio. Deep-links
-             into client_applications.html's existing review view (same
-             ?client= param the "Hours & Assignments" back-link there
-             already uses) -- 093_client_applications_assigned_read.sql
-             is what actually lets a regular Specialist's session load the
-             data once they land here. -->
-        <a class="modal-action-card mac-forest" id="cm-application-link" href="#">
-          <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg></div>
-          <div class="mac-body">
-            <div class="mac-title-row"><span class="mac-title">View Application</span><span class="mac-arrow">&rarr;</span></div>
-            <div class="mac-sub">Original intake form (read-only)</div>
+
+          <div id="cc-pane-team" class="cc-pane-inner hidden">
+            <div class="assignments-hint" style="font-size:12.5px; color:var(--muted); margin:-4px 0 14px;">Click an <strong>Hours Used</strong> number to see that person's full month-by-month billing history.</div>
+
+            <div class="tw-stats">
+              <div class="tw-stat tw-stat-blue">
+                <div class="tw-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+                <div>
+                  <input type="number" id="tw-total-budget-input" class="tw-stat-input" min="0" step="0.5" />
+                  <div class="tw-stat-label">Total Hours</div>
+                </div>
+              </div>
+              <div class="tw-stat tw-stat-green">
+                <div class="tw-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+                <div><div class="tw-stat-num" id="tw-stat-assigned">0</div><div class="tw-stat-label">Assigned</div></div>
+              </div>
+              <div class="tw-stat tw-stat-amber">
+                <div class="tw-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+                <div><div class="tw-stat-num" id="tw-stat-notassigned">0</div><div class="tw-stat-label">Not Assigned</div></div>
+              </div>
+              <div class="tw-stat tw-stat-navy">
+                <div class="tw-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+                <div><div class="tw-stat-num" id="tw-stat-used">0</div><div class="tw-stat-label">Used</div></div>
+              </div>
+            </div>
+            <div class="field-error" id="tw-summary-error"></div>
+
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Work Area</th>
+                    <th>Person</th>
+                    <th style="width:110px; text-align:right;">Planned Hours</th>
+                    <th style="width:110px;">Hours Used</th>
+                    <th id="tw-actions-header" class="hidden" style="width:90px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="tw-tbody"></tbody>
+                <tfoot>
+                  <tr>
+                    <td colspan="2" style="font-weight:700;">Totals</td>
+                    <td style="text-align:right; font-weight:700;" id="tw-total-planned">0</td>
+                    <td style="font-weight:700;" id="tw-total-used">0</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <button class="btn-secondary btn-sm hidden" id="tw-add-row-btn" style="margin-top:12px;">+ Add work area</button>
           </div>
-        </a>
-        <a class="modal-action-card mac-navy" id="cm-profile-link" href="#">
-          <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-          <div class="mac-body">
-            <div class="mac-title-row"><span class="mac-title">TL - Dashboard Wizard</span><span class="mac-arrow">&rarr;</span></div>
-            <div class="mac-sub">Add client info &amp; workflow documents</div>
-          </div>
-        </a>
-        <a class="modal-action-card mac-teal" id="cm-research-link" href="#">
-          <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
-          <div class="mac-body">
-            <div class="mac-title-row"><span class="mac-title">Add Your Research</span><span class="mac-arrow">&rarr;</span></div>
-            <div class="mac-sub">Add assigned question &amp; research</div>
-          </div>
-        </a>
-        <a class="modal-action-card mac-plum" id="cm-resources-link" href="#">
-          <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
-          <div class="mac-body">
-            <div class="mac-title-row"><span class="mac-title">TL - Resource Vault</span><span class="mac-arrow">&rarr;</span></div>
-            <div class="mac-sub">Pre-loaded</div>
-          </div>
-        </a>
-        <a class="modal-action-card modal-action-external modal-action-featured" id="cm-dashboard-btn" href="#" target="_blank" rel="noopener">
-          <div class="mac-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg></div>
-          <div class="mac-body">
-            <div class="mac-featured-label">Client-Facing</div>
-            <div class="mac-title-row"><span class="mac-title">Engagement Dashboard</span><span class="mac-arrow">&#8599;</span></div>
-            <div class="mac-sub">Client View</div>
-          </div>
-        </a>
+
+        </div>
       </div>
     </div>
   </main>
+</div>
+
+<!-- Unassign / remove confirm -->
+<div class="overlay" id="tw-remove-overlay">
+  <div class="modal" style="width:360px;">
+    <h3 id="tw-remove-title">Unassign this work area?</h3>
+    <p id="tw-remove-text"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="tw-remove-cancel">Cancel</button>
+      <button type="button" class="btn-danger" id="tw-remove-confirm">Unassign</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log hours -->
+<div class="overlay" id="tw-log-hours-overlay">
+  <div class="modal" style="width:360px;">
+    <h3>Log hours</h3>
+    <p id="tw-log-hours-text"></p>
+    <form id="tw-log-hours-form">
+      <div class="field">
+        <label>Hours <span class="required-star">*</span></label>
+        <input type="number" id="tw-log-hours-amount" min="0.25" step="0.25" required />
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="tw-log-hours-date" required />
+      </div>
+      <div class="field">
+        <label>Note <span class="hint">(optional)</span></label>
+        <input type="text" id="tw-log-hours-note" maxlength="200" />
+      </div>
+      <div class="field-error" id="tw-log-hours-error"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="tw-log-hours-cancel">Cancel</button>
+        <button type="submit" class="btn-primary" id="tw-log-hours-submit">Log hours</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Billing history -->
+<div class="overlay" id="tw-history-overlay">
+  <div class="modal" style="width:460px;">
+    <h3 id="tw-history-title">Billing History</h3>
+    <div class="history-summary" id="tw-history-summary"></div>
+    <div class="history-list" id="tw-history-list"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="tw-history-close">Close</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -573,12 +671,14 @@
   let activeClient = null;
   let isSuperAdmin = false;
   let isTeamLeadHere = false; // is currentUser the Team Lead on activeClient?
+  let allUsers = [];
+  let userSpecialties = {}; // user_id -> array of specialty keys
+  let currentAssignments = [];
+  let activePane = "overview"; // "overview" | "team" -- the two panes that actually swap in place
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
   // EG terminology: Consultant -> Specialist, Super Admin -> Admin.
-  // The underlying role VALUES in the database ("consultant", "super_admin", etc.)
-  // are unchanged -- only what is displayed on screen is remapped here.
   function roleLabel(role) {
     return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
   }
@@ -589,19 +689,30 @@
   const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
   const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
   const PROJECT_STATUSES = ["accepted", "in_progress", "on_hold", "closed"];
+  const SPECIALTY_LABELS = {
+    team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
+    gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
+  };
+  const usersById = () => Object.fromEntries(allUsers.map((u) => [u.id, u]));
+  function specialtyDescriptor(u) {
+    const specs = (userSpecialties[u.id] || []).map((s) => SPECIALTY_LABELS[s] || s);
+    return specs.length ? specs.join(", ") : roleLabel(u.role);
+  }
+  function userLabel(u) {
+    if (!u) return "";
+    const collides = allUsers.filter((x) => x.full_name === u.full_name).length > 1;
+    if (!collides) return u.full_name;
+    const descriptor = specialtyDescriptor(u);
+    const label = `${u.full_name} — ${descriptor}`;
+    const stillCollides = allUsers.filter((x) => x.full_name === u.full_name && specialtyDescriptor(x) === descriptor).length > 1;
+    return stillCollides && u.email ? `${label} (${u.email})` : label;
+  }
 
   /* ---------- Ask AI ----------
-     Browser -> eg-dashboard-ai Supabase Edge Function -> Claude API. The
-     Claude key lives only as a secret on that function; this page just
-     forwards the signed-in user's own session token (plus this engagement's
-     id) so the function can tell who's asking and, for Admins only, answer
-     from this engagement's live data. */
+     Browser -> eg-dashboard-ai Supabase Edge Function -> Claude API. */
   let AI_CONTEXT_LABEL = "Engagement Workspace";
   const AI_PAGE_KEY = "workspace";
   const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/eg-dashboard-ai`;
-  // Short-term memory for this drawer session only (not persisted) -- lets
-  // natural follow-ups like "what about her hours" work without the user
-  // having to restate context every time.
   let aiHistory = [];
 
   function aiSuggestedQuestions() {
@@ -665,9 +776,6 @@
     askAi(q);
   }
 
-  // Turns Claude's plain-text answer (occasional **bold**, blank-line
-  // paragraphs, "- " list items) into safe HTML -- text is escaped first,
-  // so nothing the model returns is ever interpreted as markup.
   function renderAiMarkup(text) {
     const escaped = escapeHtml(text || "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
     return escaped.split(/\n\n+/).map((block) => {
@@ -720,9 +828,6 @@
 
   initAskAi();
 
-  // One-time "I'm here if you have questions" popup pointing at the Ask AI
-  // button, shown once ever across the whole app (localStorage-gated), the
-  // first time someone lands on any page after signing in.
   function maybeShowAiNudge() {
     if (localStorage.getItem("eg_ai_nudge_seen")) return;
     localStorage.setItem("eg_ai_nudge_seen", "1");
@@ -775,24 +880,19 @@
   });
   document.addEventListener("click", (e) => {
     if (!$("profile-wrap").contains(e.target)) $("profile-dropdown").classList.add("hidden");
+    if (!e.target.closest(".cc-more-wrap")) $("cc-more-menu").classList.add("hidden");
   });
 
-  // Profile and client both only depend on IDs already in hand (the signed-in
-  // user's id, the ?client= id from the URL) — running them one after another
-  // meant two full network round trips had to finish before anything but the
-  // generic "Loading…" screen appeared, which is what showed up as a visible
-  // flash of a blank page before the real engagement page rendered. Running
-  // them together with Promise.all cuts that in half. Also uses the user
-  // object already on the session instead of a separate getUser() call —
-  // one less round trip on the critical path.
+  $("cc-more-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("cc-more-menu").classList.toggle("hidden");
+  });
+
   async function afterSignIn(user) {
     if (!user) return;
 
     const clientId = new URLSearchParams(location.search).get("client");
 
-    // Profile needs to resolve before loadClient() renders anything status-
-    // related -- the status control's Team Lead/Admin gating depends on
-    // knowing who's signed in (Greg, 8/27/26).
     const { data: profile, error: profileErr } = await sb
       .from("users").select("id, full_name, role, organization_id, email, phone").eq("id", user.id).single();
 
@@ -813,6 +913,7 @@
     await Promise.all([
       clientId ? loadClient(clientId) : Promise.resolve(),
       loadGlobalSearchIndex(),
+      loadUsers(),
     ]);
 
     if (!clientId) {
@@ -827,6 +928,24 @@
       redirectToLogin();
     }
   });
+
+  async function loadUsers() {
+    const [{ data, error }, { data: specialtyRows, error: specErr }] = await Promise.all([
+      sb.from("users").select("id, full_name, role, email").order("full_name"),
+      sb.from("user_specialties").select("user_id, specialty"),
+    ]);
+    if (error) return;
+    allUsers = data;
+    userSpecialties = {};
+    if (!specErr) {
+      (specialtyRows || []).forEach((r) => {
+        (userSpecialties[r.user_id] = userSpecialties[r.user_id] || []).push(r.specialty);
+      });
+    }
+    // Team & Hours may have already rendered with a stale/empty roster if
+    // this resolved after loadClient() -- re-render once names are in.
+    if (currentAssignments.length) renderTeamPane();
+  }
 
   // ---------- Client ----------
   async function loadClient(clientId) {
@@ -862,62 +981,147 @@
       if (r.is_team_lead && r.users && r.users.full_name) { teamLead = r.users.full_name; break; }
     }
     isTeamLeadHere = (assignRows || []).some((r) => r.is_team_lead && r.user_id === currentUser.id);
-    // A single status control -- project_status (accepted/in progress/on
-    // hold/closed) is the one that actually matters day-to-day for a
-    // specialist; client.status (active/finalized/archived) is an
-    // admin-level lifecycle field and was redundant to show alongside it.
-    // Editable by Admin or this engagement's own Team Lead, same rule as
-    // client_profile.html's status toggle (Greg, 8/27/26: this used to be
-    // reachable only via the "TL - Dashboard Wizard" card, with no hint
-    // that's where status lived -- now it's right here on the hub page).
     renderStatusToggle(client);
-    // Trimmed to just the partner name and Team Lead -- the full specialist
-    // roster lives one click away on the Engagement card, and repeating it
-    // here was adding a line without answering "which client / where does
-    // it stand," the two questions this summary needs to answer fast.
     const metaParts = [];
     if (partner) metaParts.push(escapeHtml(partner.name));
     metaParts.push(`Team Lead: ${teamLead ? escapeHtml(teamLead) : "—"}`);
     $("cm-meta").innerHTML = metaParts.join(" &middot; ");
 
-    $("cm-hours-link").href = `client_workspace.html?client=${client.id}`;
-    $("cm-application-link").href = `client_applications.html?client=${client.id}`;
-    $("cm-profile-link").href = `client_profile.html?client=${client.id}`;
-    $("cm-research-link").href = `client_research.html?client=${client.id}&view=research`;
-    $("cm-resources-link").href = `client_research.html?client=${client.id}&view=vault`;
-    if (client.slug) {
-      $("cm-dashboard-btn").href = new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href;
-      $("cm-dashboard-btn").classList.remove("disabled-link");
-    } else {
-      $("cm-dashboard-btn").href = "#";
-      $("cm-dashboard-btn").classList.add("disabled-link");
-    }
+    renderNav(client);
+
+    await loadAssignments();
+    renderTeamPane();
+    renderOverviewPane();
+    await loadNextStep();
 
     loadStatusStrip(client);
   }
 
-  // A thin, real-data status line: hours logged vs. budget, the next
-  // incomplete Project Next Step (standing in for "next deliverable" — there's
-  // no separate due-date field in the data model), and when the client record
-  // last changed.
-  // Admin and Quality Control are sunk costs on the Assignments & Hours page
-  // (client_workspace.html) — spent equals allotted the moment hours are
-  // assigned, with no time_entries logging. Mirror that rule here so this
-  // strip's total matches the workspace's total instead of only summing
-  // logged time_entries.
-  // A Program can opt out via econ_dev_companies.bill_admin_qc_upfront
-  // (Greg, 8/23/26: GRE bills Admin/QC as actually performed instead).
-  const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
-  function isSunkCostSpecialty(specialtyType, client) {
-    if (!SUNK_COST_SPECIALTIES.includes(specialtyType)) return false;
-    const partner = client && client.econ_dev_companies;
-    return !partner || partner.bill_admin_qc_upfront !== false;
+  // ---------- Left nav ----------
+  // Overview and Team & Hours are the two panes that actually live inside
+  // this page and swap in place with no navigation (Greg, 8/30/26 redesign).
+  // The other five still open their existing pages for now -- they'll fold
+  // in the same way, one at a time.
+  function navIconSvg(key) {
+    const icons = {
+      overview: '<path d="M3 9l9-7 9 7"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/>',
+      team: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+      client_info: '<rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M15 8h4M15 12h4M7 16h10"/>',
+      setup: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+      research: '<circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>',
+      files: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+      dashboard: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/>',
+    };
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[key] || ""}</svg>`;
+  }
+
+  function renderNav(client) {
+    const dashboardHref = client.slug ? new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href : null;
+    const items = [
+      { key: "overview", label: "Overview", kind: "pane" },
+      { key: "team", label: "Team & Hours", kind: "pane" },
+      { key: "client_info", label: "Client Info", kind: "link", href: `client_applications.html?client=${client.id}` },
+      { key: "setup", label: "Set Up Dashboard", kind: "link", href: `client_profile.html?client=${client.id}` },
+      { key: "research", label: "Add Research", kind: "link", href: `client_research.html?client=${client.id}&view=research` },
+      { key: "files", label: "Files", kind: "link", href: `client_research.html?client=${client.id}&view=vault` },
+      { key: "dashboard", label: "Client Dashboard", kind: "link", href: dashboardHref || "#", external: true, disabled: !dashboardHref },
+    ];
+    $("cc-nav").innerHTML = items.map((item) => {
+      if (item.kind === "pane") {
+        return `<button type="button" class="cc-nav-btn" data-pane="${item.key}">${navIconSvg(item.key)}<span>${item.label}</span></button>`;
+      }
+      const target = item.external ? ' target="_blank" rel="noopener"' : "";
+      const style = item.disabled ? ' style="opacity:0.5; pointer-events:none;"' : "";
+      return `<a class="cc-nav-btn" href="${item.href}"${target}${style}>${navIconSvg(item.key)}<span>${item.label}</span>${item.external ? '<span class="cc-nav-external">&#8599;</span>' : ""}</a>`;
+    }).join("");
+    $("cc-nav").querySelectorAll("[data-pane]").forEach((btn) => {
+      btn.addEventListener("click", () => setActivePane(btn.dataset.pane));
+    });
+    setActivePane(activePane);
+  }
+
+  function setActivePane(key) {
+    activePane = key;
+    $("cc-nav").querySelectorAll("[data-pane]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.pane === key);
+    });
+    $("cc-pane-overview").classList.toggle("hidden", key !== "overview");
+    $("cc-pane-team").classList.toggle("hidden", key !== "team");
+  }
+
+  // ---------- Overview pane ----------
+  function renderOverviewPane() {
+    const c = activeClient;
+    if (!c) return;
+    const partner = c.econ_dev_companies;
+
+    $("ov-what-is").innerHTML = `An EG engagement for <strong>${escapeHtml(c.name)}</strong>${partner ? `, referred by ${escapeHtml(partner.name)}` : ""}.`;
+
+    const total = currentAssignments.reduce((sum, r) => sum + Number(r.hours_allotted || 0), 0);
+    const assignedSlots = currentAssignments.filter((r) => r.user_id).length;
+    $("ov-where").textContent = `${PROJECT_STATUS_LABELS[c.project_status] || c.project_status}. ${assignedSlots} of ${FIXED_SLOTS.length} work areas assigned.`;
+
+    const used = currentAssignments.reduce((sum, r) => sum + Number(r.hoursSpent || 0), 0);
+    const budget = Number(c.budget_hours_available) || 0;
+    $("ov-how").textContent = `${used} of ${budget} planned hours used.`;
+
+    // "What should I do next?" is filled in by loadNextStep() once it
+    // resolves -- it needs a client_content + evaluation query first.
+    $("ov-next").textContent = "Checking…";
+
+    $("ov-progress").innerHTML = [
+      progressRow("Team", `${assignedSlots} of ${FIXED_SLOTS.length} work areas assigned`),
+      progressRow("Dashboard", c.finalized_at ? "Published" : "Setup in progress"),
+      progressRow("Client Dashboard", c.slug ? "Ready to view" : "No dashboard link yet"),
+    ].join("");
+  }
+  function progressRow(label, status) {
+    return `<div class="ov-progress-row"><span class="ov-progress-name">${escapeHtml(label)}</span><span class="ov-progress-status">${escapeHtml(status)}</span></div>`;
+  }
+
+  // ---------- Next Step (same 4-item auto tracker as index.html's
+  // Engagements list -- Discovery Call / Controlling Document / Research
+  // Review / Close-Out Evaluation. This page's status strip used to read
+  // the older, since-replaced client_next_steps table instead; repointed
+  // here so "Next step" matches what the Home page shows for this same
+  // client, Greg 8/30/26.) ----------
+  const PROGRESS_STEPS = [
+    { pathKey: "discovery_doc_storage_path", urlKey: "discovery_doc_url", label: "Discovery Call" },
+    { pathKey: "controlling_doc_storage_path", urlKey: "controlling_doc_url", label: "Controlling Document" },
+    { pathKey: "research_review_storage_path", urlKey: "research_review_url", label: "Research Review" },
+    { label: "Close-Out Evaluation", isEval: true },
+  ];
+  async function loadNextStep() {
+    const c = activeClient;
+    if (!c) return;
+    const [{ data: content }, { data: evalRows }] = await Promise.all([
+      sb.from("client_content").select("discovery_doc_storage_path, discovery_doc_url, controlling_doc_storage_path, controlling_doc_url, research_review_storage_path, research_review_url").eq("client_id", c.id).maybeSingle(),
+      sb.from("client_evaluation_responses").select("id").eq("client_id", c.id).limit(1),
+    ]);
+    const submitted = !!(evalRows && evalRows.length);
+    let label = null;
+    if (content) {
+      const stepsFilled = PROGRESS_STEPS.map((step) => step.isEval ? submitted : !!(content[step.pathKey] || content[step.urlKey]));
+      const firstOpenIdx = stepsFilled.findIndex((filled) => !filled);
+      if (firstOpenIdx !== -1) label = PROGRESS_STEPS[firstOpenIdx].label;
+    }
+    if (!activeClient || activeClient.id !== c.id) return;
+
+    const wizardUrl = `client_profile.html?client=${c.id}`;
+    if (label) {
+      $("cc-next-step-banner").classList.remove("hidden");
+      $("cc-next-step-text").textContent = label;
+      $("cc-next-step-action").href = wizardUrl;
+      $("ov-next").innerHTML = `<a href="${wizardUrl}">${escapeHtml(label)} &rarr;</a>`;
+    } else {
+      $("cc-next-step-banner").classList.add("hidden");
+      $("ov-next").textContent = "All caught up.";
+    }
+    $("cm-status-strip").dataset.nextStep = label || "";
+    updateStatusStripNextStep();
   }
 
   // ---------- Status control (Admin / Team Lead can change it here) ----------
-  // Same segmented control as client_profile.html's status toggle, gated
-  // the same way (isSuperAdmin || isTeamLeadHere). Everyone else sees the
-  // old read-only pill instead (Greg, 8/27/26).
   function renderStatusToggle(client) {
     const canEdit = isSuperAdmin || isTeamLeadHere;
     if (!canEdit) {
@@ -948,21 +1152,11 @@
         showBanner("Status updated.", "success");
         renderStatusToggle(activeClient);
         renderStatusAge(activeClient);
+        renderOverviewPane();
       });
     });
   }
 
-  // ---------- Status age (overdue indicator + delay reason) ----------
-  // Greg (8/18/26): flag engagements that have sat In Progress too long --
-  // usually because a closing call can't get scheduled -- with a place to
-  // note why, so nobody has to ask and nobody has to re-explain it. Only
-  // shown for In Progress; the other statuses don't carry the same
-  // "should be moving" expectation. Days shown = time since the engagement
-  // was ORIGINALLY put In Progress (first_in_progress_at, added in
-  // 086_first_in_progress_at.sql) -- that timestamp is stamped once and
-  // never reset, unlike status_since (051_engagement_status_tracking.sql),
-  // which restarts on every status change and is kept only as a fallback
-  // for rows from before 086 backfilled it.
   function daysSince(iso) {
     if (!iso) return 0;
     return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24)));
@@ -981,21 +1175,15 @@
       note.classList.add("hidden");
       return;
     }
-
     const days = daysSince(client.first_in_progress_at || client.status_since);
     const tier = statusAgeTier(days);
     dot.className = `status-dot status-dot-${tier}`;
-
-    // Greg (8/28/26): no need for a delay reason until an engagement is
-    // actually overdue (60+ days) -- the note only appears at that point,
-    // and the label switches from "In Progress" framing to "Overdue".
     if (tier !== "red") {
       dot.title = `In Progress for ${days} day${days === 1 ? "" : "s"}`;
       note.classList.add("hidden");
       note.classList.remove("delay-yellow", "delay-red");
       return;
     }
-
     dot.title = `Overdue — ${days} day${days === 1 ? "" : "s"}`;
     note.classList.remove("hidden", "delay-yellow");
     note.classList.add("delay-red");
@@ -1005,10 +1193,7 @@
     $("cm-delay-saved").style.display = "none";
   }
 
-  // ---------- Standardized Search/Print/Export/Import toolbar ----------
-  // Same four controls, same order, on every internal page (Greg, 8/27/26).
-  // This is a single-engagement page, so Import is disabled -- nothing to
-  // bulk-import here.
+  // ---------- Standardized Search/Print/Export toolbar ----------
   let gsClients = [], gsUsers = [], gsPrograms = [];
   async function loadGlobalSearchIndex() {
     const [{ data: clients }, { data: users }, { data: programs }] = await Promise.all([
@@ -1075,18 +1260,19 @@
     a.click();
     URL.revokeObjectURL(a.href);
   }
-  $("std-print-btn").addEventListener("click", () => window.print());
+  $("std-print-btn").addEventListener("click", () => { $("cc-more-menu").classList.add("hidden"); window.print(); });
   $("std-export-btn").addEventListener("click", () => {
-    if (!activeClient) return;
-    const partner = activeClient.econ_dev_companies;
-    const rows = [
-      ["Field", "Value"],
-      ["Engagement", activeClient.name],
-      ["Program", partner ? partner.code : ""],
-      ["Status", GS_STATUS_LABELS[activeClient.project_status] || activeClient.project_status],
-      ["Delay reason", activeClient.delay_reason || ""],
-    ];
-    downloadCsv(`${activeClient.name.replace(/[^a-z0-9]+/gi, "-")}-overview-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    $("cc-more-menu").classList.add("hidden");
+    if (!activeClient || !currentAssignments.length) {
+      showBanner("Open an engagement first to export its team & hours.", "error");
+      return;
+    }
+    const rows = [["Work Area", "Person", "Planned Hours", "Hours Used"]];
+    for (const r of currentAssignments) {
+      const person = usersById()[r.user_id];
+      rows.push([SPECIALTY_LABELS[r.specialty_type] || r.specialty_type, person ? person.full_name : "Not assigned", r.hours_allotted, r.hoursSpent]);
+    }
+    downloadCsv(`${activeClient.name.replace(/[^a-z0-9]+/gi, "-")}-team-hours-${new Date().toISOString().slice(0, 10)}.csv`, rows);
   });
 
   $("cm-delay-save").addEventListener("click", async () => {
@@ -1106,52 +1292,428 @@
     $("cm-delay-saved").style.display = "inline";
   });
 
-  async function loadStatusStrip(client) {
-    const strip = $("cm-status-strip");
-    strip.textContent = "Loading status…";
-
-    const [{ data: assignments }, { data: nextSteps }] = await Promise.all([
-      sb.from("client_assignments").select("id, specialty_type, hours_allotted").eq("client_id", client.id),
-      sb.from("client_next_steps").select("description").eq("client_id", client.id).eq("completed", false).order("sort_order").limit(1),
-    ]);
-
-    let hoursUsed = 0;
-    const rows = assignments || [];
-    const loggedIds = rows.filter((a) => !isSunkCostSpecialty(a.specialty_type, client)).map((a) => a.id);
-    let hoursByAssignment = {};
-    if (loggedIds.length) {
-      const { data: entries } = await sb.from("time_entries").select("assignment_id, hours").in("assignment_id", loggedIds);
-      for (const e of entries || []) hoursByAssignment[e.assignment_id] = (hoursByAssignment[e.assignment_id] || 0) + Number(e.hours || 0);
-    }
-    hoursUsed = rows.reduce((sum, a) => sum + (isSunkCostSpecialty(a.specialty_type, client) ? Number(a.hours_allotted || 0) : (hoursByAssignment[a.id] || 0)), 0);
-
-    if (!activeClient || activeClient.id !== client.id) return;
-
-    const budget = client.budget_hours_available;
-    const hoursPart = budget != null ? `<strong>${hoursUsed} of ${budget}</strong> hours used` : `<strong>${hoursUsed}</strong> hours used`;
-    const nextStepText = nextSteps && nextSteps[0] ? nextSteps[0].description : "—";
-    const lastActivity = client.last_activity_at || client.updated_at;
-    const updatedPart = lastActivity ? formatLastActivity(lastActivity) : "—";
-
-    strip.innerHTML = `${hoursPart} &middot; Next step: ${escapeHtml(nextStepText)} &middot; Updated ${updatedPart}`;
+  let lastNextStepText = "";
+  function updateStatusStripNextStep() {
+    lastNextStepText = $("cm-status-strip").dataset.nextStep || "";
+    if (activeClient) renderStatusStripText(activeClient);
   }
 
-  // Email Client card + Draft Update Email feature removed entirely (Greg,
-  // 8/29/26) -- Chris's annotated critique crossed it out. It had no other
-  // entry point in the app (only the now-removed "Email Client" quicklink
-  // card above), so its RESEARCH_AREAS/SPECIALTY_LABELS constants,
-  // openEmailDraftModal()/composeEmailBody()/etc., and the email-draft-*
-  // modal markup all went with it -- none of them were shared with
-  // anything else on this page.
+  function renderStatusStripText(client) {
+    const used = currentAssignments.reduce((sum, r) => sum + Number(r.hoursSpent || 0), 0);
+    const budget = client.budget_hours_available;
+    const hoursPart = budget != null ? `<strong>${used} of ${budget}</strong> hours used` : `<strong>${used}</strong> hours used`;
+    const nextStepText = lastNextStepText || "All caught up";
+    const lastActivity = client.last_activity_at || client.updated_at;
+    const updatedPart = lastActivity ? formatLastActivity(lastActivity) : "—";
+    $("cm-status-strip").innerHTML = `${hoursPart} &middot; Next step: ${escapeHtml(nextStepText)} &middot; Updated ${updatedPart}`;
+  }
+
+  function loadStatusStrip(client) {
+    // Real numbers come from currentAssignments (already loaded by
+    // loadAssignments()) and loadNextStep() -- this just renders once both
+    // are in.
+    renderStatusStripText(client);
+  }
+
+  // ---------- Team & Hours (ported from client_workspace.html's
+  // Assignments & Hours page, Greg 8/30/26 redesign) ----------
+  const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+  function isSunkCostSpecialty(specialtyType, client) {
+    if (!SUNK_COST_SPECIALTIES.includes(specialtyType)) return false;
+    const partner = client && client.econ_dev_companies;
+    return !partner || partner.bill_admin_qc_upfront !== false;
+  }
+
+  const FIXED_SLOTS = [
+    ["team_lead", 1], ["market_research", 1], ["digital_marketing", 1],
+    ["gis", 1], ["watering_holes", 1], ["admin", 1], ["quality_control", 1],
+  ];
+  function fixedSlotIndex(specialty, slot) {
+    return FIXED_SLOTS.findIndex(([s, n]) => s === specialty && n === slot);
+  }
+  function sortedAssignments() {
+    return [...currentAssignments].sort((a, b) => {
+      const ia = fixedSlotIndex(a.specialty_type, a.slot_number);
+      const ib = fixedSlotIndex(b.specialty_type, b.slot_number);
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+      return a.specialty_type.localeCompare(b.specialty_type) || a.slot_number - b.slot_number;
+    });
+  }
+  function specialtyOptionsHtml() {
+    const opts = [
+      ["team_lead", "Team Lead"], ["market_research", "Market Research"], ["digital_marketing", "Digital Marketing"], ["gis", "GIS"],
+      ["watering_holes", "Watering Holes"], ["admin", "Admin"], ["quality_control", "Quality Control"],
+    ];
+    return '<option value="">Select…</option>' + opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+  }
+  function consultantOptionsHtml(selectedId) {
+    return '<option value="">Not assigned</option>' + allUsers.map((u) => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${escapeHtml(userLabel(u))}</option>`).join("");
+  }
+
+  async function loadAssignments() {
+    const { data: rows, error } = await sb
+      .from("client_assignments")
+      .select("*")
+      .eq("client_id", activeClient.id)
+      .order("specialty_type")
+      .order("slot_number");
+    if (error) { showBanner("Couldn't load team & hours: " + error.message, "error"); return; }
+
+    let hoursByAssignment = {};
+    const ids = rows.map((r) => r.id);
+    if (ids.length) {
+      const { data: entries, error: tErr } = await sb.from("time_entries").select("assignment_id, hours").in("assignment_id", ids);
+      if (!tErr) for (const e of entries) hoursByAssignment[e.assignment_id] = (hoursByAssignment[e.assignment_id] || 0) + Number(e.hours);
+    }
+    currentAssignments = rows.map((r) => ({
+      ...r,
+      hoursSpent: isSunkCostSpecialty(r.specialty_type, activeClient) ? Number(r.hours_allotted) : (hoursByAssignment[r.id] || 0),
+    }));
+    isTeamLeadHere = isTeamLeadHere || currentAssignments.some((r) => r.user_id === currentUser.id && r.is_team_lead);
+  }
+
+  function renderTeamPane() {
+    const c = activeClient;
+    if (!c) return;
+    const editable = c.project_status !== "on_hold" && c.project_status !== "closed";
+    const canManage = isSuperAdmin || (isTeamLeadHere && editable);
+
+    const totalBudgetInput = $("tw-total-budget-input");
+    totalBudgetInput.value = Number(c.budget_hours_available);
+    totalBudgetInput.disabled = !isSuperAdmin;
+    $("tw-summary-error").style.display = "none";
+    $("tw-add-row-btn").classList.toggle("hidden", !canManage);
+    $("tw-actions-header").classList.toggle("hidden", !canManage);
+
+    renderTeamTable(canManage);
+    recalcTeamStats();
+    renderStatusStripText(c);
+  }
+
+  function renderTeamTable(canManage) {
+    const tbody = $("tw-tbody");
+    tbody.innerHTML = "";
+    for (const r of sortedAssignments()) {
+      const person = usersById()[r.user_id];
+      const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
+      const tr = document.createElement("tr");
+      tr.dataset.assignmentId = r.id;
+      const personCell = canManage
+        ? `<select class="row-select row-consultant-select">${consultantOptionsHtml(r.user_id)}</select>`
+        : `${person ? escapeHtml(userLabel(person)) : `<span style="color:var(--muted);">Not assigned</span>`}`;
+      const isFixed = fixedSlotIndex(r.specialty_type, r.slot_number) !== -1;
+      const actionBtn = isFixed
+        ? `<button class="btn-secondary icon-btn" data-clear="${r.id}">Unassign</button>`
+        : `<button class="btn-danger icon-btn" data-remove="${r.id}">Remove</button>`;
+      const isSunkCost = isSunkCostSpecialty(r.specialty_type, activeClient);
+      const canLogHours = !isSunkCost && !!person && (isSuperAdmin || person.id === currentUser.id);
+      const canViewHistory = !isSunkCost && !!person;
+      const usedDisplay = canViewHistory
+        ? `<button type="button" class="spent-link" data-history="${r.id}" title="View billing history">${r.hoursSpent}</button>`
+        : `<span>${r.hoursSpent}</span>`;
+      const usedCell = `<div class="spent-cell">${usedDisplay}<span class="spent-action">${canLogHours ? `<button class="btn-secondary icon-btn" data-log="${r.id}" title="Log hours">+</button>` : ""}</span></div>`;
+      tr.innerHTML = `
+        <td>${escapeHtml(label)}</td>
+        <td>${personCell}</td>
+        <td style="text-align:right;"><input type="number" class="row-input row-hours-input" min="0" step="0.5" value="${Number(r.hours_allotted)}" ${canManage ? "" : "disabled"} /></td>
+        <td style="white-space:nowrap;">${usedCell}</td>
+        ${canManage ? `<td class="row-actions">${actionBtn}</td>` : ""}
+      `;
+      tbody.appendChild(tr);
+    }
+
+    document.querySelectorAll(".row-consultant-select").forEach((select) => {
+      select.addEventListener("change", async () => {
+        const tr = select.closest("tr");
+        const assignmentId = tr.dataset.assignmentId;
+        const row = currentAssignments.find((x) => x.id === assignmentId);
+        select.disabled = true;
+        const payload = { user_id: select.value || null };
+        if (row && row.specialty_type === "team_lead") payload.is_team_lead = true;
+        const { error } = await sb.from("client_assignments").update(payload).eq("id", assignmentId);
+        select.disabled = false;
+        if (error) {
+          showBanner("Couldn't update person: " + error.message, "error");
+          return;
+        }
+        showBanner(select.value ? "Person assigned." : "Work area unassigned.", "success");
+        await reloadTeam();
+      });
+    });
+
+    document.querySelectorAll(".row-hours-input").forEach((input) => {
+      input.addEventListener("input", recalcTeamStats);
+      input.addEventListener("change", async () => {
+        const tr = input.closest("tr");
+        const assignmentId = tr.dataset.assignmentId;
+        const { error } = await sb.from("client_assignments").update({ hours_allotted: Number(input.value) }).eq("id", assignmentId);
+        if (error) {
+          showBanner(error.message.includes("exceed Budget") ? "That would exceed the client's Total Hours." : "Couldn't save: " + error.message, "error");
+          await reloadTeam();
+          return;
+        }
+        showBanner("Hours updated.", "success");
+        await reloadTeam();
+      });
+    });
+    document.querySelectorAll("[data-remove]").forEach((btn) => {
+      btn.addEventListener("click", () => openRemove(btn.dataset.remove, "delete"));
+    });
+    document.querySelectorAll("[data-clear]").forEach((btn) => {
+      btn.addEventListener("click", () => openRemove(btn.dataset.clear, "clear"));
+    });
+    document.querySelectorAll("[data-log]").forEach((btn) => {
+      btn.addEventListener("click", () => openLogHours(btn.dataset.log));
+    });
+    document.querySelectorAll("[data-history]").forEach((btn) => {
+      btn.addEventListener("click", () => openHistory(btn.dataset.history));
+    });
+
+    const totalPlanned = currentAssignments.reduce((sum, r) => sum + Number(r.hours_allotted), 0);
+    $("tw-total-planned").textContent = totalPlanned;
+    const totalUsed = currentAssignments.reduce((sum, r) => sum + Number(r.hoursSpent), 0);
+    $("tw-total-used").textContent = totalUsed;
+  }
+
+  async function reloadTeam() {
+    await loadAssignments();
+    renderTeamPane();
+    renderOverviewPane();
+  }
+
+  $("tw-add-row-btn").addEventListener("click", () => {
+    const tbody = $("tw-tbody");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><select class="row-select new-specialty">${specialtyOptionsHtml()}</select></td>
+      <td><select class="row-select new-consultant">${consultantOptionsHtml()}</select></td>
+      <td style="text-align:right;"><input type="number" class="row-input row-hours-input new-hours" min="0" step="0.5" value="0" /></td>
+      <td style="text-align:right; color:var(--muted);">—</td>
+      <td class="row-actions">
+        <button type="button" class="btn-primary icon-btn" data-save-row>&check;</button>
+        <button type="button" class="btn-secondary icon-btn" data-cancel-row>&times;</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+
+    tr.querySelector(".new-hours").addEventListener("input", recalcTeamStats);
+    tr.querySelector("[data-cancel-row]").addEventListener("click", () => { tr.remove(); recalcTeamStats(); });
+    tr.querySelector("[data-save-row]").addEventListener("click", async () => {
+      const specialty = tr.querySelector(".new-specialty").value;
+      const userId = tr.querySelector(".new-consultant").value;
+      const hours = Number(tr.querySelector(".new-hours").value);
+      if (!specialty) {
+        showBanner("Pick a work area before adding the row.", "error");
+        return;
+      }
+      const existing = currentAssignments.filter((r) => r.specialty_type === specialty);
+      const nextSlot = existing.length ? Math.max(...existing.map((r) => r.slot_number)) + 1 : 1;
+      const { error } = await sb.from("client_assignments").insert({
+        client_id: activeClient.id, user_id: userId || null, specialty_type: specialty, slot_number: nextSlot, hours_allotted: hours,
+        is_team_lead: specialty === "team_lead",
+      });
+      if (error) {
+        showBanner(error.message.includes("exceed Budget") ? "That would exceed the client's Total Hours." : "Couldn't add: " + error.message, "error");
+        return;
+      }
+      showBanner("Work area added.", "success");
+      await reloadTeam();
+    });
+
+    recalcTeamStats();
+  });
+
+  function recalcTeamStats() {
+    const total = Number($("tw-total-budget-input").value) || 0;
+    let rowsSum = 0;
+    document.querySelectorAll(".row-hours-input").forEach((input) => { rowsSum += Number(input.value) || 0; });
+    const notAssigned = total - rowsSum;
+    $("tw-stat-assigned").textContent = rowsSum;
+    $("tw-stat-notassigned").textContent = notAssigned;
+    $("tw-summary-error").style.display = notAssigned < 0 ? "block" : "none";
+    if (notAssigned < 0) $("tw-summary-error").textContent = "Planned hours add up to more than Total Hours.";
+    const totalUsed = currentAssignments.reduce((sum, r) => sum + Number(r.hoursSpent), 0);
+    $("tw-stat-used").textContent = totalUsed;
+    const totalEl = $("tw-total-planned");
+    if (totalEl) totalEl.textContent = rowsSum;
+  }
+
+  $("tw-total-budget-input").addEventListener("input", recalcTeamStats);
+  $("tw-total-budget-input").addEventListener("change", async () => {
+    if ($("tw-total-budget-input").disabled) return;
+    const { error } = await sb.from("clients").update({ budget_hours_available: Number($("tw-total-budget-input").value) }).eq("id", activeClient.id);
+    if (error) {
+      showBanner("Couldn't save: " + error.message, "error");
+      await reloadTeam();
+      return;
+    }
+    activeClient.budget_hours_available = Number($("tw-total-budget-input").value);
+    showBanner("Total hours updated.", "success");
+    renderStatusStripText(activeClient);
+  });
+
+  // ---------- Unassign / remove ----------
+  let pendingRemoveId = null;
+  let pendingRemoveMode = "delete";
+  function openRemove(assignmentId, mode) {
+    const r = currentAssignments.find((x) => x.id === assignmentId);
+    if (!r) return;
+    const person = usersById()[r.user_id];
+    pendingRemoveId = assignmentId;
+    pendingRemoveMode = mode;
+    const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
+    if (mode === "clear") {
+      $("tw-remove-title").textContent = "Unassign this work area?";
+      $("tw-remove-confirm").textContent = "Unassign";
+      $("tw-remove-text").textContent = `Reset ${label} back to not assigned with 0 hours? Logged hours stay on record.`;
+    } else {
+      $("tw-remove-title").textContent = "Remove this row?";
+      $("tw-remove-confirm").textContent = "Remove";
+      $("tw-remove-text").textContent = `Remove ${person ? userLabel(person) : "this person"} from ${label}? Their logged hours stay on record.`;
+    }
+    $("tw-remove-overlay").classList.add("open");
+  }
+  $("tw-remove-cancel").addEventListener("click", () => { $("tw-remove-overlay").classList.remove("open"); pendingRemoveId = null; });
+  $("tw-remove-confirm").addEventListener("click", async () => {
+    if (!pendingRemoveId) return;
+    const { error } = pendingRemoveMode === "clear"
+      ? await sb.from("client_assignments").update({ user_id: null, hours_allotted: 0 }).eq("id", pendingRemoveId)
+      : await sb.from("client_assignments").delete().eq("id", pendingRemoveId);
+    $("tw-remove-overlay").classList.remove("open");
+    pendingRemoveId = null;
+    if (error) {
+      showBanner((pendingRemoveMode === "clear" ? "Couldn't unassign: " : "Couldn't remove: ") + error.message, "error");
+      return;
+    }
+    showBanner(pendingRemoveMode === "clear" ? "Work area unassigned." : "Row removed.", "success");
+    await reloadTeam();
+  });
+
+  // ---------- Log hours ----------
+  let pendingLogAssignmentId = null;
+  function openLogHours(assignmentId) {
+    const r = currentAssignments.find((x) => x.id === assignmentId);
+    if (!r) return;
+    const person = usersById()[r.user_id];
+    if (!person) return;
+    const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
+    pendingLogAssignmentId = assignmentId;
+    $("tw-log-hours-form").reset();
+    $("tw-log-hours-error").style.display = "none";
+    $("tw-log-hours-text").textContent = isSuperAdmin && person.id !== currentUser.id
+      ? `Logging hours for ${userLabel(person)} on ${label}.`
+      : `Logging your hours on ${label}.`;
+    $("tw-log-hours-date").value = new Date().toISOString().slice(0, 10);
+    $("tw-log-hours-overlay").classList.add("open");
+  }
+  $("tw-log-hours-cancel").addEventListener("click", () => { $("tw-log-hours-overlay").classList.remove("open"); pendingLogAssignmentId = null; });
+  $("tw-log-hours-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!pendingLogAssignmentId) return;
+    const r = currentAssignments.find((x) => x.id === pendingLogAssignmentId);
+    if (!r) return;
+    $("tw-log-hours-error").style.display = "none";
+    const btn = $("tw-log-hours-submit");
+    btn.disabled = true;
+    btn.textContent = "Logging…";
+    const { error } = await sb.from("time_entries").insert({
+      assignment_id: pendingLogAssignmentId,
+      consultant_id: r.user_id,
+      hours: Number($("tw-log-hours-amount").value),
+      entry_date: $("tw-log-hours-date").value,
+      note: $("tw-log-hours-note").value.trim() || null,
+    });
+    btn.disabled = false;
+    btn.textContent = "Log hours";
+    if (error) {
+      $("tw-log-hours-error").textContent = error.message;
+      $("tw-log-hours-error").style.display = "block";
+      return;
+    }
+    $("tw-log-hours-overlay").classList.remove("open");
+    pendingLogAssignmentId = null;
+    showBanner("Hours logged.", "success");
+    await reloadTeam();
+  });
+
+  // ---------- Billing history ----------
+  function round2(n) { return Math.round(n * 100) / 100; }
+  function groupEntriesByMonth(entries) {
+    const sorted = [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+    const months = {};
+    for (const e of sorted) {
+      const key = e.entry_date.slice(0, 7);
+      (months[key] ||= { total: 0, entries: [] });
+      months[key].total += Number(e.hours);
+      months[key].entries.push(e);
+    }
+    let cumulative = 0;
+    return Object.keys(months).sort().map((key) => {
+      cumulative += months[key].total;
+      return { monthKey: key, total: round2(months[key].total), cumulative: round2(cumulative), entries: months[key].entries };
+    });
+  }
+  function monthKeyLabel(key) {
+    const d = new Date(key + "-02");
+    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+  async function openHistory(assignmentId) {
+    const r = currentAssignments.find((x) => x.id === assignmentId);
+    if (!r) return;
+    const person = usersById()[r.user_id];
+    const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
+    $("tw-history-title").textContent = `Billing History — ${label}${person ? " · " + userLabel(person) : ""}`;
+    $("tw-history-summary").innerHTML = "";
+    $("tw-history-list").innerHTML = `<div class="history-empty">Loading…</div>`;
+    $("tw-history-overlay").classList.add("open");
+
+    const { data: entries, error } = await sb.from("time_entries").select("hours, entry_date, note").eq("assignment_id", assignmentId);
+    if (error) {
+      $("tw-history-list").innerHTML = `<div class="history-empty">Couldn't load billing history: ${escapeHtml(error.message)}</div>`;
+      return;
+    }
+    const allotted = Number(r.hours_allotted) || 0;
+    const totalBilled = round2((entries || []).reduce((sum, e) => sum + Number(e.hours), 0));
+    const remaining = round2(allotted - totalBilled);
+    $("tw-history-summary").innerHTML = `
+      <div><strong>${allotted}</strong><span>Planned (hrs)</span></div>
+      <div><strong>${totalBilled}</strong><span>Used to date</span></div>
+      <div><strong>${remaining}</strong><span>Remaining</span></div>
+    `;
+    if (!entries || !entries.length) {
+      $("tw-history-list").innerHTML = `<div class="history-empty">No hours logged yet.</div>`;
+      return;
+    }
+    const months = groupEntriesByMonth(entries).reverse();
+    $("tw-history-list").innerHTML = months.map((m) => `
+      <div class="history-month">
+        <div class="history-month-row">
+          <span>${monthKeyLabel(m.monthKey)} — ${m.total} hrs</span>
+          <span class="history-month-meta">Cumulative ${m.cumulative} / ${allotted} · Remaining ${round2(allotted - m.cumulative)}</span>
+        </div>
+        ${m.entries.slice().sort((a, b) => b.entry_date.localeCompare(a.entry_date)).map((e) => `
+          <div class="history-entry">
+            <span>${e.entry_date} — ${e.hours} hrs</span>
+            <span class="history-entry-note">${e.note ? escapeHtml(e.note) : ""}</span>
+          </div>
+        `).join("")}
+      </div>
+    `).join("");
+  }
+  $("tw-history-close").addEventListener("click", () => { $("tw-history-overlay").classList.remove("open"); });
+
+  document.querySelectorAll(".overlay").forEach((ov) => {
+    ov.addEventListener("click", (e) => { if (e.target === ov) ov.classList.remove("open"); });
+  });
 </script>
 <script>
   // Mobile nav toggle (Greg, 8/29/26) -- header .site-nav is display:none
   // below 980px with nothing else to reach it, so this wires up the
   // .nav-toggle button (added right after each </nav>) to flip a .open
   // class the @media (max-width: 980px) CSS above turns into a dropdown
-  // panel. Class-based/generic on purpose: some pages render two
-  // <header>s (a skeleton one while auth/role resolves, then the real
-  // one), so this wires whichever ones exist rather than assuming one.
+  // panel.
   document.querySelectorAll(".nav-toggle").forEach((btn) => {
     const nav = btn.closest("header")?.querySelector(".site-nav");
     if (!nav) return;
