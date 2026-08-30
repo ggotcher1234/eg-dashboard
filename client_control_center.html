@@ -134,16 +134,11 @@
   .badge-closed { background: #eef1f4; color: var(--muted); }
 
   /* Client summary -- sits directly on the page background (no boxed
-     border) with just enough whitespace and a thin divider to separate it
-     from the content below. Answers "which client, where does it
-     stand" in one glance: name + single status pill, then one muted meta
-     line, then one muted status line. */
+     border). Greg (8/30/26): drop the name/partner/hours-used repeat text
+     here -- the status toggle plus the In Progress box below say
+     everything this strip needs to. */
   .ccc-summary { padding: 4px 4px 14px; }
-  .ccc-summary-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-  #cm-name { margin: 0; font-size: 21px; font-weight: 700; color: var(--navy); }
-  #cm-meta { font-size: 13px; color: var(--muted); margin-top: 5px; }
-  #cm-status-strip { font-size: 13px; color: var(--muted); margin-top: 10px; }
-  #cm-status-strip strong { color: var(--text); font-weight: 700; }
+  .ccc-summary-top { display: flex; align-items: baseline; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
 
   /* Status-age dot -- green under 30 days in the current status, yellow
      under 60, red 60+. Only ever shown for In Progress, since that's the
@@ -465,15 +460,12 @@
     <div id="ccc-content" class="hidden">
       <div class="ccc-summary">
         <div class="ccc-summary-top">
-          <h2 id="cm-name"></h2>
           <span class="status-badge-wrap">
             <span class="status-dot hidden" id="cm-status-dot" title=""></span>
             <span class="badge hidden" id="cm-status-badge"></span>
             <div class="segmented-control hidden" id="cm-status-toggle"></div>
           </span>
         </div>
-        <div id="cm-meta"></div>
-        <div id="cm-status-strip">Loading status…</div>
         <div class="delay-note hidden" id="cm-delay-note">
           <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
             <div class="delay-note-label" id="cm-delay-note-label">Why is this taking longer than expected?</div>
@@ -484,7 +476,7 @@
             <button type="button" class="btn-secondary" id="cm-fix-date-save" style="padding:5px 12px; font-size:12px;">Save date</button>
             <button type="button" class="btn-ghost" id="cm-fix-date-cancel" style="padding:5px 8px; font-size:12px;">Cancel</button>
           </div>
-          <textarea id="cm-delay-reason" maxlength="300" placeholder="e.g. Waiting on a closing call to get on the client's calendar"></textarea>
+          <textarea id="cm-delay-reason" maxlength="300"></textarea>
           <div class="delay-note-actions">
             <button type="button" class="btn-secondary" id="cm-delay-save" style="padding:6px 14px; font-size:12.5px;">Save</button>
             <span class="delay-note-saved" id="cm-delay-saved">Saved</span>
@@ -834,11 +826,6 @@
     if (type === "success") setTimeout(() => { el.className = ""; }, 4000);
   }
 
-  function formatLastActivity(iso) {
-    if (!iso) return "—";
-    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  }
-
   function recordRecent(client) {
     let recents = [];
     try { recents = JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]"); } catch { recents = []; }
@@ -951,8 +938,6 @@
     document.title = `EG Dashboard — ${client.name}`;
     $("ccc-content").classList.remove("hidden");
 
-    const partner = client.econ_dev_companies;
-    $("cm-name").textContent = client.name;
     AI_CONTEXT_LABEL = `${client.name} — Engagement Workspace`;
     renderStatusAge(client);
 
@@ -961,24 +946,13 @@
       .select("is_team_lead, user_id, users(full_name)")
       .eq("client_id", client.id)
       .not("user_id", "is", null);
-    let teamLead = null;
-    for (const r of assignRows || []) {
-      if (r.is_team_lead && r.users && r.users.full_name) { teamLead = r.users.full_name; break; }
-    }
     isTeamLeadHere = (assignRows || []).some((r) => r.is_team_lead && r.user_id === currentUser.id);
     renderStatusToggle(client);
-    const metaParts = [];
-    if (partner) metaParts.push(escapeHtml(partner.name));
-    metaParts.push(`Team Lead: ${teamLead ? escapeHtml(teamLead) : "—"}`);
-    $("cm-meta").innerHTML = metaParts.join(" &middot; ");
 
     renderNav(client);
 
     await loadAssignments();
     renderTeamPane();
-    await loadNextStep();
-
-    loadStatusStrip(client);
   }
 
   // ---------- Left nav ----------
@@ -1049,38 +1023,6 @@
     }
   }
 
-  // ---------- Next Step (same 4-item auto tracker as index.html's
-  // Engagements list -- Discovery Call / Controlling Document / Research
-  // Review / Close-Out Evaluation. This page's status strip used to read
-  // the older, since-replaced client_next_steps table instead; repointed
-  // here so "Next step" matches what the Home page shows for this same
-  // client, Greg 8/30/26.) ----------
-  const PROGRESS_STEPS = [
-    { pathKey: "discovery_doc_storage_path", urlKey: "discovery_doc_url", label: "Discovery Call" },
-    { pathKey: "controlling_doc_storage_path", urlKey: "controlling_doc_url", label: "Controlling Document" },
-    { pathKey: "research_review_storage_path", urlKey: "research_review_url", label: "Research Review" },
-    { label: "Close-Out Evaluation", isEval: true },
-  ];
-  async function loadNextStep() {
-    const c = activeClient;
-    if (!c) return;
-    const [{ data: content }, { data: evalRows }] = await Promise.all([
-      sb.from("client_content").select("discovery_doc_storage_path, discovery_doc_url, controlling_doc_storage_path, controlling_doc_url, research_review_storage_path, research_review_url").eq("client_id", c.id).maybeSingle(),
-      sb.from("client_evaluation_responses").select("id").eq("client_id", c.id).limit(1),
-    ]);
-    const submitted = !!(evalRows && evalRows.length);
-    let label = null;
-    if (content) {
-      const stepsFilled = PROGRESS_STEPS.map((step) => step.isEval ? submitted : !!(content[step.pathKey] || content[step.urlKey]));
-      const firstOpenIdx = stepsFilled.findIndex((filled) => !filled);
-      if (firstOpenIdx !== -1) label = PROGRESS_STEPS[firstOpenIdx].label;
-    }
-    if (!activeClient || activeClient.id !== c.id) return;
-
-    $("cm-status-strip").dataset.nextStep = label || "";
-    updateStatusStripNextStep();
-  }
-
   // ---------- Status control (Admin / Team Lead can change it here) ----------
   function renderStatusToggle(client) {
     const canEdit = isSuperAdmin || isTeamLeadHere;
@@ -1142,25 +1084,22 @@
     const anchor = client.first_in_progress_at || client.status_since;
     const days = daysSince(anchor);
     const tier = statusAgeTier(days);
-    // Greg (8/30/26): show the actual date it went In Progress, not a day
-    // count -- a count reads as "wrong" the moment the underlying date is
-    // off by even a little, where a plain date is unambiguous and lets him
-    // eyeball it against what he remembers directly.
-    const dateLabel = anchor
-      ? new Date(anchor).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-      : "an unknown date";
+    // Greg (8/30/26): simple day count + a plain-language status word --
+    // "On schedule" through day 59, "Overdue" from day 60 on (the same
+    // 60-day line statusAgeTier() already draws for the red tier).
+    const dayWord = `${days} day${days === 1 ? "" : "s"}`;
     dot.className = `status-dot status-dot-${tier}`;
     note.classList.remove("hidden");
     if (tier !== "red") {
-      dot.title = `Date Accepted: ${dateLabel}`;
+      dot.title = `In Progress for ${dayWord} — On Schedule`;
       note.classList.remove("delay-yellow", "delay-red");
-      $("cm-delay-note-label").textContent = `Date Accepted: ${dateLabel}`;
+      $("cm-delay-note-label").textContent = `In Progress for ${dayWord}: On Schedule`;
     } else {
-      dot.title = `Overdue — Date Accepted: ${dateLabel}`;
+      dot.title = `In Progress for ${dayWord} — Overdue`;
       note.classList.remove("delay-yellow");
       note.classList.add("delay-red");
       $("cm-delay-note-label").textContent =
-        `Overdue — Date Accepted: ${dateLabel}. Why is it taking longer than expected?`;
+        `In Progress for ${dayWord}: Overdue — why is it taking longer than expected?`;
     }
     $("cm-delay-reason").value = client.delay_reason || "";
     $("cm-delay-saved").style.display = "none";
@@ -1303,29 +1242,6 @@
     $("cm-delay-saved").style.display = "inline";
   });
 
-  let lastNextStepText = "";
-  function updateStatusStripNextStep() {
-    lastNextStepText = $("cm-status-strip").dataset.nextStep || "";
-    if (activeClient) renderStatusStripText(activeClient);
-  }
-
-  function renderStatusStripText(client) {
-    const used = currentAssignments.reduce((sum, r) => sum + Number(r.hoursSpent || 0), 0);
-    const budget = client.budget_hours_available;
-    const hoursPart = budget != null ? `<strong>${used} of ${budget}</strong> hours used` : `<strong>${used}</strong> hours used`;
-    const nextStepText = lastNextStepText || "All caught up";
-    const lastActivity = client.last_activity_at || client.updated_at;
-    const updatedPart = lastActivity ? formatLastActivity(lastActivity) : "—";
-    $("cm-status-strip").innerHTML = `${hoursPart} &middot; Next step: ${escapeHtml(nextStepText)} &middot; Updated ${updatedPart}`;
-  }
-
-  function loadStatusStrip(client) {
-    // Real numbers come from currentAssignments (already loaded by
-    // loadAssignments()) and loadNextStep() -- this just renders once both
-    // are in.
-    renderStatusStripText(client);
-  }
-
   // ---------- Team & Hours (ported from client_workspace.html's
   // Assignments & Hours page, Greg 8/30/26 redesign) ----------
   const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
@@ -1400,7 +1316,6 @@
 
     renderTeamTable(canManage);
     recalcTeamStats();
-    renderStatusStripText(c);
   }
 
   function renderTeamTable(canManage) {
@@ -1561,7 +1476,6 @@
     }
     activeClient.budget_hours_available = Number($("tw-total-budget-input").value);
     showBanner("Total hours updated.", "success");
-    renderStatusStripText(activeClient);
   });
 
   // ---------- Unassign / remove ----------
