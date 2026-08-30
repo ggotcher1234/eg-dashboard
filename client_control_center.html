@@ -201,20 +201,6 @@
     .cc-nav-btn { width: auto; flex: 1 1 auto; }
   }
 
-  /* ---------- Overview pane ---------- */
-  .ov-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
-  @media (max-width: 560px) { .ov-grid { grid-template-columns: 1fr; } }
-  .ov-card { background: #f8fafb; border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; }
-  .ov-card-label { font-size: 11.5px; font-weight: 700; color: var(--muted); margin-bottom: 5px; }
-  .ov-card-body { font-size: 13.5px; color: var(--text); line-height: 1.45; }
-  .ov-card-body a { color: var(--navy-light); font-weight: 700; text-decoration: none; }
-  .ov-card-body a:hover { text-decoration: underline; }
-  .ov-progress-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin: 0 0 8px; }
-  .ov-progress-row { display: flex; justify-content: space-between; padding: 9px 2px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
-  .ov-progress-row:last-child { border-bottom: none; }
-  .ov-progress-row .ov-progress-name { font-weight: 600; }
-  .ov-progress-row .ov-progress-status { color: var(--muted); }
-
   /* ---------- Team & Hours stat cards ---------- */
   .tw-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
   @media (max-width: 640px) { .tw-stats { grid-template-columns: repeat(2, 1fr); } }
@@ -510,30 +496,7 @@
         <nav class="cc-nav" id="cc-nav"></nav>
         <div class="cc-pane">
 
-          <div id="cc-pane-overview" class="cc-pane-inner">
-            <div class="ov-grid">
-              <div class="ov-card">
-                <div class="ov-card-label">What is this?</div>
-                <div class="ov-card-body" id="ov-what-is"></div>
-              </div>
-              <div class="ov-card">
-                <div class="ov-card-label">Where are we?</div>
-                <div class="ov-card-body" id="ov-where"></div>
-              </div>
-              <div class="ov-card">
-                <div class="ov-card-label">How are we doing?</div>
-                <div class="ov-card-body" id="ov-how"></div>
-              </div>
-              <div class="ov-card">
-                <div class="ov-card-label">What should I do next?</div>
-                <div class="ov-card-body" id="ov-next"></div>
-              </div>
-            </div>
-            <div class="ov-progress-label">Progress</div>
-            <div id="ov-progress"></div>
-          </div>
-
-          <div id="cc-pane-team" class="cc-pane-inner hidden">
+          <div id="cc-pane-team" class="cc-pane-inner">
             <div class="assignments-hint" style="font-size:12.5px; color:var(--muted); margin:-4px 0 14px;">Click an <strong>Hours Used</strong> number to see that person's full month-by-month billing history.</div>
 
             <div class="tw-stats">
@@ -696,7 +659,7 @@
   let allUsers = [];
   let userSpecialties = {}; // user_id -> array of specialty keys
   let currentAssignments = [];
-  let activePane = "overview"; // "overview" | "team" -- the two panes that actually swap in place
+  let activePane = "team"; // "team" | "email" -- the two native panes that actually swap in place
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -1013,7 +976,6 @@
 
     await loadAssignments();
     renderTeamPane();
-    renderOverviewPane();
     await loadNextStep();
 
     loadStatusStrip(client);
@@ -1034,7 +996,6 @@
 
   function navIconSvg(key) {
     const icons = {
-      overview: '<path d="M3 9l9-7 9 7"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/>',
       team: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
       research: '<circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>',
       email: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/>',
@@ -1049,7 +1010,6 @@
   function renderNav(client) {
     const dashboardHref = client.slug ? new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href : null;
     navItems = [
-      { key: "overview", label: "Overview" },
       { key: "team", label: "Team & Hours" },
       { key: "research", label: "Add Research", src: `client_research.html?client=${client.id}&view=research&embed=1` },
       { key: "email", label: "Email Client" },
@@ -1072,7 +1032,6 @@
     $("cc-nav").querySelectorAll("[data-pane]").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.pane === key);
     });
-    $("cc-pane-overview").classList.toggle("hidden", key !== "overview");
     $("cc-pane-team").classList.toggle("hidden", key !== "team");
     $("cc-pane-email").classList.toggle("hidden", key !== "email");
     if (key === "email" && !emailPaneLoaded) loadEmailPane();
@@ -1088,36 +1047,6 @@
         $("cc-iframe").removeAttribute("src");
       }
     }
-  }
-
-  // ---------- Overview pane ----------
-  function renderOverviewPane() {
-    const c = activeClient;
-    if (!c) return;
-    const partner = c.econ_dev_companies;
-
-    $("ov-what-is").innerHTML = `An EG engagement for <strong>${escapeHtml(c.name)}</strong>${partner ? `, referred by ${escapeHtml(partner.name)}` : ""}.`;
-
-    const total = currentAssignments.reduce((sum, r) => sum + Number(r.hours_allotted || 0), 0);
-    const assignedSlots = currentAssignments.filter((r) => r.user_id).length;
-    $("ov-where").textContent = `${PROJECT_STATUS_LABELS[c.project_status] || c.project_status}. ${assignedSlots} of ${FIXED_SLOTS.length} work areas assigned.`;
-
-    const used = currentAssignments.reduce((sum, r) => sum + Number(r.hoursSpent || 0), 0);
-    const budget = Number(c.budget_hours_available) || 0;
-    $("ov-how").textContent = `${used} of ${budget} planned hours used.`;
-
-    // "What should I do next?" is filled in by loadNextStep() once it
-    // resolves -- it needs a client_content + evaluation query first.
-    $("ov-next").textContent = "Checking…";
-
-    $("ov-progress").innerHTML = [
-      progressRow("Team", `${assignedSlots} of ${FIXED_SLOTS.length} work areas assigned`),
-      progressRow("Dashboard", c.finalized_at ? "Published" : "Setup in progress"),
-      progressRow("Client Dashboard", c.slug ? "Ready to view" : "No dashboard link yet"),
-    ].join("");
-  }
-  function progressRow(label, status) {
-    return `<div class="ov-progress-row"><span class="ov-progress-name">${escapeHtml(label)}</span><span class="ov-progress-status">${escapeHtml(status)}</span></div>`;
   }
 
   // ---------- Next Step (same 4-item auto tracker as index.html's
@@ -1148,12 +1077,6 @@
     }
     if (!activeClient || activeClient.id !== c.id) return;
 
-    const wizardUrl = `client_profile.html?client=${c.id}`;
-    if (label) {
-      $("ov-next").innerHTML = `<a href="${wizardUrl}">${escapeHtml(label)} &rarr;</a>`;
-    } else {
-      $("ov-next").textContent = "All caught up.";
-    }
     $("cm-status-strip").dataset.nextStep = label || "";
     updateStatusStripNextStep();
   }
@@ -1189,7 +1112,6 @@
         showBanner("Status updated.", "success");
         renderStatusToggle(activeClient);
         renderStatusAge(activeClient);
-        renderOverviewPane();
       });
     });
   }
@@ -1569,7 +1491,6 @@
   async function reloadTeam() {
     await loadAssignments();
     renderTeamPane();
-    renderOverviewPane();
   }
 
   $("tw-add-row-btn").addEventListener("click", () => {
