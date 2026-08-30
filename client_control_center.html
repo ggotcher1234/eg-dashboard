@@ -138,9 +138,11 @@
      then Program Name, then Team Leader, each on their own line -- next
      to the status toggle. */
   .ccc-summary { padding: 4px 4px 14px; }
+  .ccc-breadcrumb { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--muted); text-decoration: none; margin-bottom: 6px; }
+  .ccc-breadcrumb:hover { color: var(--navy); text-decoration: underline; }
   .ccc-summary-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   #cm-name { margin: 0; font-size: 21px; font-weight: 700; color: var(--navy); }
-  #cm-program { font-size: 13.5px; color: var(--muted); margin-top: 4px; }
+  #cm-program { font-size: 13.5px; color: var(--muted); margin-top: 4px; display: flex; align-items: center; gap: 5px; }
   #cm-team-lead { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
 
   /* Status-age dot -- green under 30 days in the current status, yellow
@@ -165,9 +167,20 @@
     cursor: pointer; font-family: inherit; transition: background 0.15s ease, color 0.15s ease;
   }
   .segmented-control .status-pill:last-child { border-right: none; }
-  .segmented-control .status-pill:hover:not(:disabled):not(.active) { background: #eceff2; color: var(--text); }
-  .segmented-control .status-pill.active { background: var(--navy); color: #fff; }
   .segmented-control .status-pill:disabled { cursor: default; }
+  /* Each status pill carries its own color (same palette as the .badge-*
+     classes above), so the toggle reads at a glance instead of everything
+     being gray-until-active. The active pill gets the bolder/solid variant
+     of its own color; inactive pills stay in the pale variant. */
+  .segmented-control .status-pill-accepted { background: #e9f5ee; color: var(--accent-dark); }
+  .segmented-control .status-pill-in_progress { background: #e7eef7; color: var(--navy-light); }
+  .segmented-control .status-pill-on_hold { background: #fdf1dc; color: var(--amber); }
+  .segmented-control .status-pill-closed { background: #eef1f4; color: var(--muted); }
+  .segmented-control .status-pill:hover:not(:disabled):not(.active) { filter: brightness(0.96); }
+  .segmented-control .status-pill-accepted.active { background: var(--accent-dark); color: #fff; }
+  .segmented-control .status-pill-in_progress.active { background: var(--navy); color: #fff; }
+  .segmented-control .status-pill-on_hold.active { background: var(--amber); color: #fff; }
+  .segmented-control .status-pill-closed.active { background: var(--muted); color: #fff; }
 
 
   /* ---------- Left nav + content pane shell ---------- */
@@ -438,6 +451,7 @@
 
     <div id="ccc-content" class="hidden">
       <div class="ccc-summary">
+        <a href="index.html" class="ccc-breadcrumb">&larr; All Engagements</a>
         <div class="ccc-summary-top">
           <div>
             <h2 id="cm-name"></h2>
@@ -853,7 +867,13 @@
 
     const partner = client.econ_dev_companies;
     $("cm-name").textContent = client.name;
-    $("cm-program").textContent = partner ? partner.name : "—";
+    $("cm-program").innerHTML = "";
+    const programIcon = document.createElement("span");
+    programIcon.setAttribute("aria-hidden", "true");
+    programIcon.textContent = "🏢";
+    const programText = document.createElement("span");
+    programText.textContent = `Partner: ${partner ? partner.name : "—"}`;
+    $("cm-program").append(programIcon, programText);
 
     const { data: assignRows } = await sb
       .from("client_assignments")
@@ -952,7 +972,7 @@
     const toggle = $("cm-status-toggle");
     toggle.classList.remove("hidden");
     toggle.innerHTML = PROJECT_STATUSES.map((s) => `
-      <button type="button" data-pstatus="${s}" class="status-pill ${s === client.project_status ? "active" : ""}">${PROJECT_STATUS_LABELS[s]}</button>
+      <button type="button" data-pstatus="${s}" class="status-pill status-pill-${s} ${s === client.project_status ? "active" : ""}">${PROJECT_STATUS_LABELS[s]}</button>
     `).join("");
     toggle.querySelectorAll("button").forEach((btn) => {
       btn.addEventListener("click", async () => {
