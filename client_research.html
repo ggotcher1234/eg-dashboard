@@ -157,27 +157,24 @@
   .lre-fields label { font-size: 11px; }
   .rv-readonly { font-size: 13.5px; padding: 8px 0 4px; color: var(--text); }
   .rv-shared-badge { display: inline-block; background: #eef1f4; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; padding: 2px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
-  /* Wrapped to two lines with a narrow max-width (Greg, 8/30/26, round 4:
-     "make Delete for all Clients two lines to shorten that column and
-     widen the others") -- the actions column is grid auto-sized to fit
-     its widest item, so shrinking this one button's footprint hands the
-     freed-up space straight to Title/Description/Link URL/File. */
-  .rv-tpl-delete-all {
-    background: none; border: none; color: var(--danger); font-size: 11.5px; text-decoration: underline;
-    cursor: pointer; padding: 2px 0; font-weight: 600; max-width: 84px; white-space: normal; line-height: 1.3; text-align: left;
-  }
-  .rv-tpl-delete-all:hover { color: var(--danger-dark); }
   .rv-file-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; }
   .rv-file-link:hover { text-decoration: underline; }
 
   /* Resource Vault: real spreadsheet-style table -- Title | Description |
-     Link URL | File | actions, one header row, one line per resource,
-     instead of stacked field-pairs (Greg, 8/30/26: "make it look exactly
-     like the [reference] page"). Inputs stay borderless/transparent until
-     hovered or focused so editable cells still read as plain table text,
-     matching the reference's look, even though every field still
+     Link/URL | Replace | Replace All, one header row, one line per
+     resource, instead of stacked field-pairs (Greg, 8/30/26: "make it look
+     exactly like the [reference] page"). Inputs stay borderless/transparent
+     until hovered or focused so editable cells still read as plain table
+     text, matching the reference's look, even though every field still
      autosaves on blur exactly as before -- this is a reskin, not a
-     behavior change. */
+     behavior change.
+     Round 7 (8/31/26): the old 5th column ("File", a whole separate
+     upload/replace button) plus a 3-button actions cell (Replace, Delete
+     for all clients, and a remove-× ) was too much crammed into one row.
+     File now lives inside the Link/URL cell, stacked under the URL input,
+     and the two removal actions -- remove from just this client, delete
+     for every client -- are their own dedicated columns rendered as plain
+     red × icons: "Replace" and "Replace All". */
   #panel-vault .accordion-header-right { background: #eef3f9; border-radius: 999px; padding: 5px 12px; gap: 6px; }
   #panel-vault .accordion-count { background: none; padding: 0; }
   #panel-vault .accordion-chevron { color: var(--navy-light); }
@@ -195,12 +192,13 @@
   body.embed-mode .page-shell { max-width: none; margin: 0; padding: 0 0 40px; }
   .rv-table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .rv-table-wrap .list-row-edit, .rv-table-head {
-    display: grid; grid-template-columns: 1.3fr 1.3fr 1fr 1.3fr auto; gap: 18px; align-items: center;
-    min-width: 700px; padding: 14px 18px; margin: 0; border-bottom: 1px solid #f0f2f4;
+    display: grid; grid-template-columns: 1.2fr 1.3fr 1.3fr 68px 90px; gap: 18px; align-items: center;
+    min-width: 620px; padding: 14px 18px; margin: 0; border-bottom: 1px solid #f0f2f4;
   }
   .rv-table-wrap .list-row-edit:last-child { border-bottom: none; }
   .rv-table-head { background: #f8fafb; border-bottom: 1px solid var(--border); }
   .rv-table-head span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; }
+  .rv-table-head span:nth-child(4), .rv-table-head span:nth-child(5) { text-align: center; }
   .rv-table-wrap .field { margin-bottom: 0; min-width: 0; }
   .rv-table-wrap .field label { display: none; }
   .rv-title-cell { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
@@ -219,8 +217,29 @@
     padding: 0; font-size: 13.5px; line-height: 1.4; word-break: break-word;
   }
   .rv-table-wrap .rv-file-link { font-size: 13px; line-height: 1.4; word-break: break-word; }
-  .rv-actions-cell { display: flex; align-items: center; gap: 12px; justify-self: end; white-space: nowrap; flex-shrink: 0; }
-  .rv-actions-cell .btn-secondary.btn-sm, .rv-actions-cell label.btn-secondary.btn-sm { flex-shrink: 0; }
+  /* Link/URL cell: the URL input (or its read-only text) stacks above the
+     file row, so both fields stay visible and editable without needing
+     their own grid column. */
+  .rv-link-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .rv-file-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .rv-file-inline-btn {
+    background: none; border: none; color: var(--navy-light); font-size: 12px; font-weight: 600;
+    text-decoration: underline; cursor: pointer; padding: 0; flex-shrink: 0;
+  }
+  .rv-file-inline-btn:hover { color: var(--navy); }
+  .rv-file-upload-label {
+    color: var(--navy-light); font-size: 12px; font-weight: 600; text-decoration: underline; cursor: pointer;
+  }
+  .rv-file-upload-label:hover { color: var(--navy); }
+  /* Replace / Replace All columns: plain red × icons, not filled buttons --
+     these are the two removal actions (unlink from this client, delete for
+     every client), just each one line, centered in its own narrow column. */
+  .rv-action-cell { display: flex; align-items: center; justify-content: center; }
+  .rv-x-btn {
+    background: none; border: none; color: var(--danger); font-size: 19px; font-weight: 700; line-height: 1;
+    cursor: pointer; padding: 4px 10px; border-radius: 6px;
+  }
+  .rv-x-btn:hover { color: var(--danger-dark); background: #fdecea; }
 
   /* Documents & Links, flat under each research area (Greg/Chris, 8/26/26:
      removed the Research Questions layer -- specialists now just upload a
@@ -1091,11 +1110,13 @@
   }
 
   // Column-header row for the Resource Vault table -- Title | Description |
-  // Link URL | File | (actions). Rendered once above the rows, sharing the
-  // same 5-column grid template as every data row (see .rv-table-wrap CSS)
-  // so everything lines up like a real spreadsheet (Greg, 8/30/26).
+  // Link/URL | Replace | Replace All. Rendered once above the rows, sharing
+  // the same 5-column grid template as every data row (see .rv-table-wrap
+  // CSS) so everything lines up like a real spreadsheet (Greg, 8/30/26;
+  // columns simplified 8/31/26 -- File folded into Link/URL, and the old
+  // 3-button actions cell split into two single-icon columns).
   const RV_TABLE_HEAD_HTML = `
-    <div class="rv-table-head"><span>Title</span><span>Description</span><span>Link URL</span><span>File</span><span></span></div>
+    <div class="rv-table-head"><span>Title</span><span>Description</span><span>Link/URL</span><span>Replace</span><span>Replace All</span></div>
   `;
 
   function renderResourceVaultRows(rows) {
@@ -1128,16 +1149,19 @@
             <div class="field">
               <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="description" value="${escapeHtml(r.description || "")}" placeholder="Add description" />
             </div>
-            <div class="field">
+            <div class="field rv-link-cell">
               <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="url" value="${escapeHtml(r.url || "")}" placeholder="https://…" />
+              <div class="rv-file-row">
+                ${r.storagePath
+                  ? `${fileHtml}<button type="button" class="rv-file-inline-btn" data-rv-tpl-replace="${r.templateId}">Change file</button>`
+                  : `<label class="rv-file-upload-label">+ Upload file<input type="file" class="rv-tpl-upload-input" data-tpl-id="${r.templateId}" style="display:none;" /></label>`}
+              </div>
             </div>
-            <div class="field">${fileHtml}</div>
-            <div class="rv-actions-cell">
-              ${r.storagePath
-                ? `<button type="button" class="btn-secondary btn-sm" data-rv-tpl-replace="${r.templateId}">Replace</button>`
-                : `<label class="btn-secondary btn-sm" style="cursor:pointer;">Upload file<input type="file" class="rv-tpl-upload-input" data-tpl-id="${r.templateId}" style="display:none;" /></label>`}
-              <button type="button" class="rv-tpl-delete-all" data-rv-tpl-delete="${r.templateId}" data-rv-tpl-title="${escapeHtml(r.title)}">&#128465;&#65039; Delete for all clients</button>
-              <button type="button" class="btn-danger icon-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
+            <div class="rv-action-cell">
+              <button type="button" class="rv-x-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
+            </div>
+            <div class="rv-action-cell">
+              <button type="button" class="rv-x-btn" data-rv-tpl-delete="${r.templateId}" data-rv-tpl-title="${escapeHtml(r.title)}" title="Delete for all clients">&times;</button>
             </div>
           </div>
         `;
@@ -1151,11 +1175,14 @@
               <span class="rv-shared-badge">Shared</span>
             </div>
             <div class="field"><div class="rv-readonly">${escapeHtml(r.description || "—")}</div></div>
-            <div class="field">${urlHtml}</div>
-            <div class="field">${fileHtml}</div>
-            <div class="rv-actions-cell">
-              <button type="button" class="btn-danger icon-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
+            <div class="field rv-link-cell">
+              ${urlHtml}
+              ${r.storagePath ? `<div class="rv-file-row">${fileHtml}</div>` : ``}
             </div>
+            <div class="rv-action-cell">
+              <button type="button" class="rv-x-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
+            </div>
+            <div class="rv-action-cell"></div>
           </div>
         `;
       }
@@ -1168,16 +1195,18 @@
           <div class="field">
             <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="description" value="${escapeHtml(r.description || "")}" placeholder="Add description" />
           </div>
-          <div class="field">
+          <div class="field rv-link-cell">
             <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="url" value="${escapeHtml(r.url || "")}" placeholder="https://…" />
+            <div class="rv-file-row">
+              ${r.storagePath
+                ? `${fileHtml}<button type="button" class="rv-file-inline-btn" data-remove-file="${r.id}">Remove file</button>`
+                : `<label class="rv-file-upload-label">+ Upload file<input type="file" class="rv-upload-input" data-row-id="${r.id}" style="display:none;" /></label>`}
+            </div>
           </div>
-          <div class="field">${fileHtml}</div>
-          <div class="rv-actions-cell">
-            ${r.storagePath
-              ? `<button type="button" class="btn-secondary btn-sm" data-remove-file="${r.id}">Remove file</button>`
-              : `<label class="btn-secondary btn-sm" style="cursor:pointer;">Upload file<input type="file" class="rv-upload-input" data-row-id="${r.id}" style="display:none;" /></label>`}
-            <button type="button" class="btn-danger icon-btn" data-delete-id="${r.id}" title="Delete">&times;</button>
+          <div class="rv-action-cell">
+            <button type="button" class="rv-x-btn" data-delete-id="${r.id}" title="Delete">&times;</button>
           </div>
+          <div class="rv-action-cell"></div>
         </div>
       `;
     }).join("");
