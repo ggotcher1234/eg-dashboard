@@ -392,11 +392,67 @@
   .wizard-panel-hint { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
   .wizard-subcard + .wizard-subcard { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
 
+  /* Project Files (Workflow Docs, step 1) makeover -- numbered navy badge +
+     bordered row per item instead of a plain "1. Label" text field, and
+     outlined pill action buttons instead of the app's usual flat gray
+     btn-secondary (Greg, 8/31/26, matching a reference mockup). Scoped to
+     this one panel (.wf-*) rather than changing btn-secondary/btn-danger
+     globally, since those are shared by every other page in the app. */
+  .wf-items { display: flex; flex-direction: column; gap: 12px; }
+  .wf-item-row {
+    display: flex; align-items: flex-start; gap: 16px;
+    border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px;
+  }
+  .wf-item-num {
+    width: 30px; height: 30px; border-radius: 50%; background: var(--navy); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .wf-item-body { flex: 1; min-width: 0; }
+  .wf-item-title { font-size: 14.5px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+  .wf-item-hint { font-size: 12.5px; color: var(--muted); margin: 2px 0 10px; line-height: 1.5; }
+  .wf-btn {
+    display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--navy-light);
+    border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 7px 16px;
+    font-size: 12.5px; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .wf-btn:hover { background: #eef4fb; }
+  .wf-btn-danger { border-color: var(--danger); color: var(--danger); }
+  .wf-btn-danger:hover { background: #fdecea; }
+  .wf-btn-icon-upload::before { content: "\2B06\00A0"; }
+  .wf-btn-icon-upload:disabled::before { content: ""; }
+  .wf-btn-icon-link::before { content: "\1F517\00A0"; }
+  .wf-btn-icon-email::before { content: "\2709\00A0"; }
+  .wf-btn-icon-email:disabled::before { content: ""; }
+  .wf-file-cell { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .wf-file-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; }
+  .wf-file-link:hover { text-decoration: underline; }
+  /* One "Change" trigger opens a small menu (Replace file / Remove file)
+     instead of two permanent buttons sitting side by side (Greg, 8/31/26).
+     Same pattern for the empty state's "+ Add file" trigger. */
+  .wf-change-wrap { position: relative; flex-shrink: 0; }
+  .wf-menu {
+    position: absolute; top: calc(100% + 6px); left: 0; min-width: 150px; background: #fff;
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    padding: 6px; z-index: 20;
+  }
+  .wf-menu button {
+    display: block; width: 100%; text-align: left; background: none; border: none; padding: 8px 10px;
+    border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; font-family: inherit;
+  }
+  .wf-menu button:hover { background: #f4f6f8; }
+  .wf-menu button.wf-menu-danger { color: var(--danger); }
+  .wf-menu button.wf-menu-danger:hover { background: #fdecea; }
+
   .wizard-bottom-bar {
     position: sticky; bottom: 0; background: #fff; border-top: 1px solid var(--border); margin: 22px -20px -100px;
     padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   }
   .wizard-bottom-right { display: flex; align-items: center; gap: 10px; }
+  /* Bigger pill CTA for the wizard's own Continue/Back/Preview buttons --
+     scoped by id so this doesn't touch .btn-primary/.btn-ghost anywhere
+     else in the app. */
+  #wiz-continue, #wiz-preview-btn { border-radius: 999px; padding: 12px 26px; font-size: 14.5px; }
+  #wiz-back { border-radius: 999px; padding: 12px 18px; font-size: 14.5px; }
 
   @media (max-width: 640px) {
     .field-grid { grid-template-columns: 1fr; }
@@ -659,7 +715,7 @@
       <!-- ===== Dashboard Wizard chrome ===== -->
       <div class="wizard-topbar">
         <div>
-          <h2>Dashboard Wizard</h2>
+          <h2>Setup Wizard</h2>
           <div class="wizard-progress-text">Step <span id="wiz-step-num">1</span> of <span id="wiz-step-total">8</span> &middot; <span id="wiz-pct">13%</span> complete</div>
         </div>
       </div>
@@ -685,32 +741,38 @@
                the Workflow Docs to the number one position as they will
                be accessed more than the rest." -->
           <div class="wizard-panel-card wizard-panel" data-step="1">
-            <h3>EG Workflow Documents</h3>
-            <div class="wizard-panel-hint">Discovery, Controlling, and Research Review can each be an uploaded file or a link — whichever's easier. Close-Out is handled below via the evaluation link, not a file upload.</div>
-            <div class="field-grid">
-              <div>
-                <div class="field">
-                  <label>1. Discovery Document</label>
+            <h3>Project Files</h3>
+            <div class="wizard-panel-hint">Upload a file or add a link for each item. Step 4 will send an email.</div>
+            <div class="wf-items">
+              <div class="wf-item-row">
+                <span class="wf-item-num">1</span>
+                <div class="wf-item-body">
+                  <div class="wf-item-title">Discovery Document</div>
                   <div id="wf-discovery-file"></div>
                 </div>
-                <div class="field">
-                  <label>2. Controlling Document</label>
+              </div>
+              <div class="wf-item-row">
+                <span class="wf-item-num">2</span>
+                <div class="wf-item-body">
+                  <div class="wf-item-title">Controlling Document</div>
                   <div id="wf-controlling-file"></div>
                 </div>
               </div>
-              <div>
-                <div class="field">
-                  <label>3. Research Review Recording</label>
+              <div class="wf-item-row">
+                <span class="wf-item-num">3</span>
+                <div class="wf-item-body">
+                  <div class="wf-item-title">Research Review Recording</div>
                   <div id="wf-review-file"></div>
                 </div>
               </div>
-            </div>
-            <div class="field" style="margin-top:14px;">
-              <label>4. Send Close-Out Evaluation Email (to the CEO, from the Team Lead)</label>
-              <div class="field-hint" style="text-transform:none; font-weight:400; margin-bottom:8px;">
-                Create Email drafts a short note to the CEO with a link to their Close-Out Evaluation form, ready to send from the Team Lead. Review and edit it, then send it from here or copy it into Outlook. Their answers come straight back here, no email reply or PDF needed — you'll see the response below once it's in.
+              <div class="wf-item-row">
+                <span class="wf-item-num">4</span>
+                <div class="wf-item-body">
+                  <div class="wf-item-title">Send Close-Out Evaluation Email (to the CEO, from the Team Lead)</div>
+                  <div class="wf-item-hint">Write a short note to the CEO with a link to the Close-Out Evaluation form. Review and send the email. You'll get their reply right here.</div>
+                  <div id="wf-eval-link"></div>
+                </div>
               </div>
-              <div id="wf-eval-link"></div>
             </div>
           </div>
 
@@ -1787,6 +1849,11 @@
     renderEvalLinkField();
   }
 
+  // Greg (8/31/26): "Replace and Remove are secondary actions on the same
+  // thing -- two permanent buttons add clutter. Use one Change button that
+  // opens a small menu (Replace file / Remove file, Remove in red)." Same
+  // rule for the empty state too: one "+ Add file" trigger opening
+  // {Upload file, Add a link} instead of two buttons sitting side by side.
   function renderWorkflowFileField(f) {
     const container = $(`wf-${f.key}-file`);
     const path = workflowData && workflowData[f.pathColumn];
@@ -1794,10 +1861,15 @@
 
     if (path) {
       container.innerHTML = `
-        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <span class="wf-file-link" style="cursor:pointer; color:var(--navy-light); font-weight:600; font-size:13px;">${fileIconFor(path)} ${escapeHtml(fileNameFromPath(path))}</span>
-          <button type="button" class="btn-secondary btn-sm" data-wf-replace>Replace</button>
-          <button type="button" class="btn-secondary btn-sm" data-wf-remove>Remove</button>
+        <div class="wf-file-cell">
+          <span class="wf-file-link">${fileIconFor(path)} ${escapeHtml(fileNameFromPath(path))}</span>
+          <div class="wf-change-wrap">
+            <button type="button" class="wf-btn" data-wf-change>Change &#9662;</button>
+            <div class="wf-menu hidden">
+              <button type="button" data-wf-replace>Replace file</button>
+              <button type="button" class="wf-menu-danger" data-wf-remove>Remove file</button>
+            </div>
+          </div>
         </div>
       `;
       container.querySelector(".wf-file-link").addEventListener("click", async () => {
@@ -1805,34 +1877,73 @@
         if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
         window.open(data.signedUrl, "_blank");
       });
-      container.querySelector("[data-wf-replace]").addEventListener("click", () => pickWorkflowFile(f));
-      container.querySelector("[data-wf-remove]").addEventListener("click", () => removeWorkflowItem(f));
+      wireWfChangeMenu(container, [
+        { sel: "[data-wf-replace]", fn: () => pickWorkflowFile(f) },
+        { sel: "[data-wf-remove]", fn: () => removeWorkflowItem(f) },
+      ]);
       return;
     }
 
     if (url) {
       container.innerHTML = `
-        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="color:var(--navy-light); font-weight:600; font-size:13px; text-decoration:none; word-break:break-all;">&#128279; ${escapeHtml(url)}</a>
-          <button type="button" class="btn-secondary btn-sm" data-wf-change-link>Change link</button>
-          <button type="button" class="btn-secondary btn-sm" data-wf-remove>Remove</button>
+        <div class="wf-file-cell">
+          <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="wf-file-link" style="text-decoration:none; word-break:break-all;">&#128279; ${escapeHtml(url)}</a>
+          <div class="wf-change-wrap">
+            <button type="button" class="wf-btn" data-wf-change>Change &#9662;</button>
+            <div class="wf-menu hidden">
+              <button type="button" data-wf-edit-link>Edit link</button>
+              <button type="button" class="wf-menu-danger" data-wf-remove>Remove link</button>
+            </div>
+          </div>
         </div>
       `;
-      container.querySelector("[data-wf-change-link]").addEventListener("click", () => renderWorkflowLinkForm(f, url));
-      container.querySelector("[data-wf-remove]").addEventListener("click", () => removeWorkflowItem(f));
+      wireWfChangeMenu(container, [
+        { sel: "[data-wf-edit-link]", fn: () => renderWorkflowLinkForm(f, url) },
+        { sel: "[data-wf-remove]", fn: () => removeWorkflowItem(f) },
+      ]);
       return;
     }
 
     container.innerHTML = `
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload file<input type="file" class="wf-upload-input" style="display:none;" /></label>
-        <button type="button" class="btn-secondary btn-sm" data-wf-add-link>Add link</button>
+      <div class="wf-change-wrap">
+        <button type="button" class="wf-btn" data-wf-change>+ Add file &#9662;</button>
+        <div class="wf-menu hidden">
+          <button type="button" data-wf-upload>Upload file</button>
+          <button type="button" data-wf-add-link>Add a link</button>
+        </div>
       </div>
+      <input type="file" class="wf-upload-input hidden" />
     `;
     container.querySelector(".wf-upload-input").addEventListener("change", (e) => {
       if (e.target.files.length) uploadWorkflowFile(f, e.target.files[0]);
     });
-    container.querySelector("[data-wf-add-link]").addEventListener("click", () => renderWorkflowLinkForm(f, ""));
+    wireWfChangeMenu(container, [
+      { sel: "[data-wf-upload]", fn: () => container.querySelector(".wf-upload-input").click() },
+      { sel: "[data-wf-add-link]", fn: () => renderWorkflowLinkForm(f, "") },
+    ]);
+  }
+
+  // Shared trigger/menu wiring for the Change / + Add file dropdowns above --
+  // one open menu at a time, closes on an outside click or after an action
+  // fires.
+  function closeAllWfMenus() {
+    document.querySelectorAll(".wf-menu").forEach((m) => m.classList.add("hidden"));
+  }
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".wf-change-wrap")) closeAllWfMenus();
+  });
+  function wireWfChangeMenu(container, actions) {
+    const trigger = container.querySelector("[data-wf-change]");
+    const menu = container.querySelector(".wf-menu");
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const wasHidden = menu.classList.contains("hidden");
+      closeAllWfMenus();
+      menu.classList.toggle("hidden", !wasHidden);
+    });
+    actions.forEach(({ sel, fn }) => {
+      menu.querySelector(sel).addEventListener("click", () => { closeAllWfMenus(); fn(); });
+    });
   }
 
   function renderWorkflowLinkForm(f, currentUrl) {
@@ -1931,7 +2042,7 @@
     // button entirely -- there's no dashboard button anymore (removed from
     // client_public.html), just this one button that drafts the email.
     const linkHtml = `
-      <button type="button" class="btn-secondary btn-sm" id="eval-email-create-btn">Create Email</button>
+      <button type="button" class="wf-btn wf-btn-icon-email" id="eval-email-create-btn">Create Email</button>
     `;
 
     let responseHtml = "";
