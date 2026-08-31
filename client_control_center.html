@@ -647,6 +647,16 @@
   let userSpecialties = {}; // user_id -> array of specialty keys
   let currentAssignments = [];
   let activePane = "team"; // the one native pane that swaps in place (the rest are iframed)
+  // Greg (8/30/26): the overdue delay-reason box is Team & Hours-specific
+  // context (it's about the assignments/hours work being late), not
+  // something that belongs floating above every other pane -- Add
+  // Research, Update Dashboard, Resource Vault, Client Dashboard. Tracked
+  // separately from the tier-based hidden state below so a pane switch
+  // can re-check visibility without re-running the whole day-count calc.
+  let delayNoteApplicable = false;
+  function refreshDelayNoteVisibility() {
+    $("cm-delay-note").classList.toggle("hidden", !delayNoteApplicable || activePane !== "team");
+  }
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -1033,6 +1043,7 @@
     });
     $("cc-pane-team").classList.toggle("hidden", key !== "team");
     document.querySelector(".cc-shell").classList.toggle("wide-workspace", WIDE_WORKSPACE_PANE_KEYS.includes(key));
+    refreshDelayNoteVisibility();
 
     const isIframePane = IFRAME_PANE_KEYS.includes(key);
     $("cc-pane-iframe").classList.toggle("hidden", !isIframePane);
@@ -1154,7 +1165,8 @@
     const note = $("cm-delay-note");
     if (client.project_status !== "in_progress") {
       dot.classList.add("hidden");
-      note.classList.add("hidden");
+      delayNoteApplicable = false;
+      refreshDelayNoteVisibility();
       return;
     }
     const anchor = client.first_in_progress_at || client.status_since;
@@ -1166,7 +1178,8 @@
     const dayWord = `${days} day${days === 1 ? "" : "s"}`;
     dot.classList.remove("hidden");
     dot.className = `status-dot status-dot-${tier}`;
-    note.classList.remove("hidden");
+    delayNoteApplicable = true;
+    refreshDelayNoteVisibility();
     // Greg (8/30/26): the reason textarea + Save button only make sense
     // once something's actually gone wrong -- On Schedule just shows the
     // day-count label, and the box to explain the delay only appears once
