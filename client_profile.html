@@ -1389,6 +1389,7 @@
     renderShareLink(client);
 
     renderStatusToggle(client);
+    await backfillSocialFields(client);
     fillCompanyForm(client);
     listData.team = await TEAM_CONFIG.customLoad(client.id);
     renderListSections();
@@ -1504,6 +1505,58 @@
     const el = $(id);
     if (RICH_TEXT_FIELD_IDS.has(id)) el.innerHTML = richTextToHtml(value);
     else el.value = value;
+  }
+
+  // Greg (8/31/26): "make sure that the social media information flows
+  // through to these fields from both the application and the Discovery
+  // Call document." accept_client_application() (095) already copies the
+  // application's social fields onto `clients` once, at acceptance -- but
+  // only once, and only going forward, so any client accepted before that
+  // migration (or whose application simply left a field blank) can still
+  // show up here empty even though the data exists a hop away, either on
+  // the original application or on a since-submitted Discovery Call Notes
+  // form. Rather than silently keep showing blanks, this fills in each
+  // still-empty field here from whichever of those two has it (checking
+  // the application first, then Discovery Call Notes) and saves it onto
+  // `clients` right away -- same as if the Team Lead had typed it in and
+  // tabbed away -- so it's a real value from here on (and client_public.html,
+  // which reads these same `clients` columns for the client-facing
+  // dashboard, immediately benefits too instead of waiting on a manual re-entry.
+  const SOCIAL_FALLBACK_COLUMNS = [
+    { clientCol: "website_url", appCol: "website", discoveryCol: "discovery_website_url" },
+    { clientCol: "facebook_url", appCol: "social_facebook_url", discoveryCol: "discovery_facebook_url" },
+    { clientCol: "linkedin_url", appCol: "social_linkedin_url", discoveryCol: "discovery_linkedin_url" },
+    { clientCol: "twitter_url", appCol: "social_twitter_url", discoveryCol: "discovery_twitter_url" },
+    { clientCol: "instagram_url", appCol: "social_instagram_url", discoveryCol: "discovery_instagram_url" },
+    { clientCol: "youtube_url", appCol: "social_youtube_url", discoveryCol: "discovery_youtube_url" },
+    { clientCol: "other_social_url", appCol: "social_other_url", discoveryCol: "discovery_other_social_url" },
+  ];
+  async function backfillSocialFields(client) {
+    const missing = SOCIAL_FALLBACK_COLUMNS.filter((f) => !client[f.clientCol]);
+    if (!missing.length) return;
+    const [appRes, contentRes] = await Promise.all([
+      sb.from("client_applications")
+        .select("website, social_facebook_url, social_linkedin_url, social_twitter_url, social_instagram_url, social_youtube_url, social_other_url")
+        .eq("client_id", client.id)
+        .maybeSingle(),
+      sb.from("client_content")
+        .select("discovery_website_url, discovery_facebook_url, discovery_linkedin_url, discovery_twitter_url, discovery_youtube_url, discovery_instagram_url, discovery_other_social_url")
+        .eq("client_id", client.id)
+        .maybeSingle(),
+    ]);
+    const app = appRes.data;
+    const content = contentRes.data;
+    const patch = {};
+    missing.forEach((f) => {
+      const value = (app && app[f.appCol]) || (content && content[f.discoveryCol]);
+      if (value) {
+        client[f.clientCol] = value;
+        patch[f.clientCol] = value;
+      }
+    });
+    if (Object.keys(patch).length) {
+      await sb.from("clients").update(patch).eq("id", client.id);
+    }
   }
 
   function fillCompanyForm(c) {
