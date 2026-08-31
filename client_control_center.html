@@ -54,7 +54,25 @@
      they're administrative, not primary activities, so they don't deserve
      the same visual weight as the work itself). */
   .btn-sm { padding: 8px 12px; font-size: 13px; height: 36px; border-radius: 8px; font-weight: 600; }
-  .std-toolbar-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
+  /* Greg (8/30/26): full-bleed dark bar behind Search/Print/More, flush
+     against the navy masthead header above it so the two read as one
+     continuous dark band at the top of the page. Breaking out of main's
+     980px/centered container needs the classic width:100vw + left:50% +
+     negative margin trick, since this row itself has to stay inside
+     main's normal DOM flow. */
+  .std-toolbar-row {
+    display: flex; gap: 10px; align-items: center;
+    background: var(--navy);
+    width: 100vw; position: relative; left: 50%; margin-left: -50vw;
+    padding: 14px 24px;
+    margin-top: -28px; margin-bottom: 24px;
+  }
+  .toolbar-pill-btn {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap;
+    background: #fff; color: var(--navy); border: none; border-radius: 999px;
+    height: 36px; padding: 0 16px; font-size: 13.5px; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .toolbar-pill-btn:hover { background: #e7eef7; }
   .global-search-wrap { position: relative; flex: 1; max-width: 480px; }
   .global-search-wrap .search-box { position: relative; }
   .global-search-wrap .search-box input {
@@ -137,7 +155,10 @@
      border). Greg (8/30/26): re-added a stacked header -- Client Name,
      then Program Name, then Team Leader, each on their own line -- next
      to the status toggle. */
-  .ccc-summary { padding: 4px 4px 14px; }
+  /* Greg (8/30/26): now lives inside .cc-pane (right column) instead of
+     spanning full width above both columns -- a bottom border + margin
+     separates it from the table/wizard content sharing the same card. */
+  .ccc-summary { padding: 0 0 18px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
   .ccc-breadcrumb { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--muted); text-decoration: none; margin-bottom: 6px; }
   .ccc-breadcrumb:hover { color: var(--navy); text-decoration: underline; }
   /* Greg (8/30/26): stack top-to-bottom -- name, then Partner, then the
@@ -204,24 +225,36 @@
      forcing the column wider than the viewport (Greg, 8/30/26). The
      "wide-workspace" modifier narrows the nav further for data-heavy
      panes (Update Dashboard / Add Research) so those get a little extra
-     room without the user having to do anything. */
-  .cc-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
+     room without the user having to do anything.
+     Greg (8/30/26): moved the client-name/status header (.ccc-summary)
+     inside .cc-pane so it's part of the right column instead of a
+     full-width banner above both columns -- which frees the nav to start
+     right at the top of the row instead of waiting below that banner.
+     align-items: stretch (was start) makes the nav match the pane's
+     now-taller height, and .cc-nav switches to a flex column with
+     justify-content: space-evenly so its 5 buttons actually spread out to
+     fill that height instead of clumping at the top. */
+  .cc-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: stretch; }
   .cc-shell.wide-workspace { grid-template-columns: 180px minmax(0, 1fr); }
-  .cc-nav { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 8px; }
+  .cc-nav {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 14px;
+    display: flex; flex-direction: column; justify-content: space-evenly; gap: 6px;
+  }
   .cc-nav-btn {
-    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 11px; margin-bottom: 2px;
-    border: none; border-radius: 8px; background: transparent; font-size: 13.5px; font-weight: 600; color: var(--text);
+    display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 15px 14px;
+    border: none; border-radius: 10px; background: transparent; font-size: 14.5px; font-weight: 600; color: var(--text);
   }
   .cc-nav-btn:hover:not(.active) { background: #f4f6f8; }
   .cc-nav-btn.active { background: #e7eef7; color: var(--navy); }
-  .cc-nav-btn svg { width: 17px; height: 17px; flex-shrink: 0; color: var(--muted); }
+  .cc-nav-btn svg { width: 19px; height: 19px; flex-shrink: 0; color: var(--muted); }
   .cc-nav-btn.active svg { color: var(--navy-light); }
   .cc-nav-btn:disabled { cursor: default; }
   .cc-pane { min-width: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px; }
   @media (max-width: 760px) {
-    .cc-shell, .cc-shell.wide-workspace { grid-template-columns: 1fr; }
-    .cc-nav { width: 100%; display: flex; flex-wrap: wrap; gap: 4px; }
-    .cc-nav-btn { width: auto; flex: 1 1 auto; }
+    .cc-shell, .cc-shell.wide-workspace { grid-template-columns: 1fr; align-items: start; }
+    .cc-nav { width: 100%; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: 4px; height: auto; padding: 8px; }
+    .cc-nav-btn { width: auto; flex: 1 1 auto; padding: 10px 11px; font-size: 13.5px; }
+    .cc-nav-btn svg { width: 17px; height: 17px; }
   }
 
 
@@ -457,10 +490,10 @@
         </div>
         <div class="global-search-results hidden" id="global-search-results"></div>
       </div>
+      <button type="button" class="toolbar-pill-btn" id="std-print-btn" title="Print this engagement overview">&#128424; Print</button>
       <div class="cc-more-wrap">
-        <button type="button" class="btn-secondary btn-sm" id="cc-more-btn">More &#9662;</button>
+        <button type="button" class="toolbar-pill-btn" id="cc-more-btn">&#8943; More &#9662;</button>
         <div class="cc-more-menu hidden" id="cc-more-menu">
-          <button type="button" class="btn-ghost" id="std-print-btn" title="Print this engagement overview">Print</button>
           <button type="button" class="btn-ghost" id="std-export-btn" title="Export this engagement's team &amp; hours as CSV">Export</button>
           <button type="button" class="btn-ghost" id="std-import-btn" title="This page manages one engagement -- nothing to bulk import here" disabled>Import</button>
         </div>
@@ -472,37 +505,37 @@
     </div>
 
     <div id="ccc-content" class="hidden">
-      <div class="ccc-summary">
-        <a href="index.html" class="ccc-breadcrumb">&larr; All Engagements</a>
-        <h2 id="cm-name"></h2>
-        <div id="cm-program"></div>
-        <div id="cm-team-lead"></div>
-        <span class="status-badge-wrap">
-          <span class="status-dot hidden" id="cm-status-dot" title=""></span>
-          <span class="badge hidden" id="cm-status-badge"></span>
-          <div class="segmented-control hidden" id="cm-status-toggle"></div>
-        </span>
-        <div class="delay-note hidden" id="cm-delay-note">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-            <div class="delay-note-label" id="cm-delay-note-label">Why is this taking longer than expected?</div>
-            <button type="button" class="btn-ghost hidden" id="cm-fix-date-btn" style="padding:2px 6px; font-size:11px; color:var(--navy-light); flex-shrink:0;" title="Correct the date this engagement actually went In Progress">Edit date</button>
-          </div>
-          <div class="hidden" id="cm-fix-date-row" style="display:flex; align-items:center; gap:8px; margin:2px 0 10px; flex-wrap:wrap;">
-            <input type="date" id="cm-fix-date-input" style="padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12.5px;" />
-            <button type="button" class="btn-secondary" id="cm-fix-date-save" style="padding:5px 12px; font-size:12px;">Save date</button>
-            <button type="button" class="btn-ghost" id="cm-fix-date-cancel" style="padding:5px 8px; font-size:12px;">Cancel</button>
-          </div>
-          <textarea id="cm-delay-reason" maxlength="300" class="hidden"></textarea>
-          <div class="delay-note-actions hidden" id="cm-delay-actions">
-            <button type="button" class="btn-secondary" id="cm-delay-save" style="padding:6px 14px; font-size:12.5px;">Save</button>
-            <span class="delay-note-saved" id="cm-delay-saved">Saved</span>
-          </div>
-        </div>
-      </div>
-
       <div class="cc-shell">
         <nav class="cc-nav" id="cc-nav"></nav>
         <div class="cc-pane">
+
+          <div class="ccc-summary">
+            <a href="index.html" class="ccc-breadcrumb">&larr; All Engagements</a>
+            <h2 id="cm-name"></h2>
+            <div id="cm-program"></div>
+            <div id="cm-team-lead"></div>
+            <span class="status-badge-wrap">
+              <span class="status-dot hidden" id="cm-status-dot" title=""></span>
+              <span class="badge hidden" id="cm-status-badge"></span>
+              <div class="segmented-control hidden" id="cm-status-toggle"></div>
+            </span>
+            <div class="delay-note hidden" id="cm-delay-note">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                <div class="delay-note-label" id="cm-delay-note-label">Why is this taking longer than expected?</div>
+                <button type="button" class="btn-ghost hidden" id="cm-fix-date-btn" style="padding:2px 6px; font-size:11px; color:var(--navy-light); flex-shrink:0;" title="Correct the date this engagement actually went In Progress">Edit date</button>
+              </div>
+              <div class="hidden" id="cm-fix-date-row" style="display:flex; align-items:center; gap:8px; margin:2px 0 10px; flex-wrap:wrap;">
+                <input type="date" id="cm-fix-date-input" style="padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12.5px;" />
+                <button type="button" class="btn-secondary" id="cm-fix-date-save" style="padding:5px 12px; font-size:12px;">Save date</button>
+                <button type="button" class="btn-ghost" id="cm-fix-date-cancel" style="padding:5px 8px; font-size:12px;">Cancel</button>
+              </div>
+              <textarea id="cm-delay-reason" maxlength="300" class="hidden"></textarea>
+              <div class="delay-note-actions hidden" id="cm-delay-actions">
+                <button type="button" class="btn-secondary" id="cm-delay-save" style="padding:6px 14px; font-size:12.5px;">Save</button>
+                <span class="delay-note-saved" id="cm-delay-saved">Saved</span>
+              </div>
+            </div>
+          </div>
 
           <div id="cc-pane-team" class="cc-pane-inner">
             <div class="field-error" id="tw-summary-error"></div>
@@ -1241,7 +1274,7 @@
     a.click();
     URL.revokeObjectURL(a.href);
   }
-  $("std-print-btn").addEventListener("click", () => { $("cc-more-menu").classList.add("hidden"); window.print(); });
+  $("std-print-btn").addEventListener("click", () => { window.print(); });
   $("std-export-btn").addEventListener("click", () => {
     $("cc-more-menu").classList.add("hidden");
     if (!activeClient || !currentAssignments.length) {
