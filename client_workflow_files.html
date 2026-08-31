@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Workflow Files</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  .hidden { display: none !important; }
+
+  header { background: var(--navy); color: #fff; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 16.5px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 12px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  header a.back-link.disabled-link { opacity: 0.5; pointer-events: none; }
+  header .sub .crumb-sep { margin: 0 6px; opacity: 0.6; }
+  #userbox { display: flex; align-items: center; gap: 14px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  button { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: var(--danger-dark); }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12.5px; }
+  button:disabled { opacity: 0.55; cursor: default; }
+
+  /* Standardized Search/Print/Export/Import toolbar (Greg, 8/27/26) -- same
+     four controls, same order, on every internal page. */
+  .std-toolbar-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .global-search-wrap { position: relative; flex: 1; max-width: 480px; }
+  .global-search-wrap .search-box { position: relative; }
+  .global-search-wrap .search-box input {
+    width: 100%; height: 36px; padding: 0 14px 0 38px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13.5px; background: #fff;
+  }
+  .global-search-wrap .search-box input:focus { outline: none; border-color: var(--navy-light); }
+  .global-search-wrap .search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
+  .global-search-results {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #fff;
+    border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(20,48,77,0.15);
+    z-index: 70; max-height: 420px; overflow-y: auto;
+  }
+  .gsr-group-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; padding: 10px 14px 4px; }
+  .gsr-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; cursor: pointer; font-size: 13.5px; }
+  .gsr-item:hover { background: #f4f6f8; }
+  .gsr-item .gsr-name { font-weight: 600; color: var(--text); }
+  .gsr-item .gsr-meta { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .std-toolbar-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .std-toolbar-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #fff; }
+    main, .page-shell { max-width: none; margin: 0; padding: 0; }
+  }
+
+  /* Account menu -- Change Password + Sign out tucked into one dropdown. */
+  #profile-wrap { position: relative; }
+  #profile-btn { display: flex; align-items: center; gap: 4px; padding: 4px 6px; }
+  #profile-btn .avatar-icon {
+    width: 24px; height: 24px; border-radius: 999px; background: rgba(255,255,255,0.14);
+    display: flex; align-items: center; justify-content: center; color: #c9d6e3;
+  }
+  #profile-btn .avatar-icon svg { width: 14px; height: 14px; }
+  #profile-btn .chevron { font-size: 9px; color: #c9d6e3; }
+  .profile-dropdown {
+    position: absolute; top: 40px; right: 0; width: 150px; padding: 6px; background: #fff; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60;
+  }
+  .profile-dropdown button, header .profile-dropdown button {
+    width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--text);
+  }
+  .profile-dropdown button:hover, header .profile-dropdown button:hover { background: #eef1f4; color: var(--text); }
+
+  .page-shell { max-width: 900px; margin: 24px auto; padding: 0 20px 80px; }
+
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+
+  .badge { font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; padding: 3px 9px; border-radius: 999px; }
+  .badge-accepted { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-in_progress { background: #e7eef7; color: var(--navy-light); }
+  .badge-on_hold { background: #fdf1dc; color: var(--amber); }
+  .badge-closed { background: #eef1f4; color: var(--muted); }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 22px 26px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
+  .card h2 { margin-top: 0; font-size: 16px; color: var(--navy); }
+  .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  .card-hint { font-size: 12.5px; color: var(--muted); margin: -4px 0 16px; }
+
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
+  .field input[type="text"], .field textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; }
+
+  /* Project Files (Workflow Docs) makeover -- numbered navy badge +
+     bordered row per item, outlined pill action buttons (Greg, 8/31/26,
+     matching a reference mockup). Moved verbatim off the Dashboard Wizard
+     (Greg, 8/31/26: "remove this page from the wizard and create a new
+     page and left menu item called Workflow Files (TL)"). */
+  .wf-items { display: flex; flex-direction: column; gap: 12px; }
+  .wf-item-row {
+    display: flex; align-items: flex-start; gap: 16px;
+    border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px;
+  }
+  .wf-item-num {
+    width: 30px; height: 30px; border-radius: 50%; background: var(--navy); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .wf-item-body { flex: 1; min-width: 0; }
+  .wf-item-title { font-size: 14.5px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+  .wf-item-hint { font-size: 12.5px; color: var(--muted); margin: 2px 0 10px; line-height: 1.5; }
+  .wf-btn {
+    display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--navy-light);
+    border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 7px 16px;
+    font-size: 12.5px; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .wf-btn:hover { background: #eef4fb; }
+  .wf-btn-danger { border-color: var(--danger); color: var(--danger); }
+  .wf-btn-danger:hover { background: #fdecea; }
+  .wf-btn-icon-upload::before { content: "\2B06\00A0"; }
+  .wf-btn-icon-upload:disabled::before { content: ""; }
+  .wf-btn-icon-link::before { content: "\1F517\00A0"; }
+  .wf-btn-icon-email::before { content: "\2709\00A0"; }
+  .wf-btn-icon-email:disabled::before { content: ""; }
+  .wf-file-cell { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .wf-file-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; }
+  .wf-file-link:hover { text-decoration: underline; }
+  .wf-change-wrap { position: relative; flex-shrink: 0; }
+  .wf-menu {
+    position: absolute; top: calc(100% + 6px); left: 0; min-width: 150px; background: #fff;
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    padding: 6px; z-index: 20;
+  }
+  .wf-menu button {
+    display: block; width: 100%; text-align: left; background: none; border: none; padding: 8px 10px;
+    border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; font-family: inherit;
+  }
+  .wf-menu button:hover { background: #f4f6f8; }
+  .wf-menu button.wf-menu-danger { color: var(--danger); }
+  .wf-menu button.wf-menu-danger:hover { background: #fdecea; }
+
+  /* Close-Out Evaluation email modal */
+  .eem-overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); z-index: 200; align-items: center; justify-content: center; }
+  .eem-overlay.open { display: flex; }
+  .eem-modal { background: #fff; border-radius: 10px; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 22px 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+  .eem-modal-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+  .eem-modal-header h3 { margin: 0 0 4px; color: var(--navy); }
+  .eem-modal-meta { font-size: 12.5px; color: var(--muted); }
+  .eem-modal-close { background: none; border: none; font-size: 20px; line-height: 1; cursor: pointer; color: var(--muted); padding: 2px 6px; }
+  #eem-body input, #eem-body textarea { width: 100%; font-family: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; }
+  #eem-body textarea { resize: vertical; }
+
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+  .no-client-note { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 14px; }
+  header .brand-row { display: flex; align-items: center; gap: 12px; }
+  .brand-badge { background: #fff; border-radius: 7px; padding: 4px 8px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 20px; display: block; }
+
+  /* ---------- Top nav + Ask AI (same pattern as every other internal page) ---------- */
+  header { position: relative; }
+  header .site-nav { display: flex; align-items: center; gap: 4px; }
+  header .nav-link { color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 8px 12px; border-radius: 6px; position: relative; }
+  header .nav-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  header .nav-link.active { color: #fff; }
+  header .nav-link.active::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -14px; height: 2px; background: #fff; }
+  .nav-toggle {
+    display: none; align-items: center; justify-content: center; width: 34px; height: 34px;
+    background: rgba(255,255,255,0.1); border: none; border-radius: 6px; color: #fff; cursor: pointer; flex-shrink: 0;
+  }
+  .nav-toggle:hover { background: rgba(255,255,255,0.18); }
+  .nav-toggle svg { width: 20px; height: 20px; display: block; }
+  @media (max-width: 980px) {
+    .nav-toggle { display: inline-flex; }
+    header .site-nav {
+      display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; gap: 2px;
+      background: var(--navy); padding: 8px; box-shadow: 0 10px 24px rgba(0,0,0,0.28); z-index: 96;
+      border-radius: 0 0 10px 10px;
+    }
+    header .site-nav.open { display: flex; }
+    header .nav-link { padding: 12px 14px; border-radius: 6px; }
+    header .nav-link.active { background: rgba(255,255,255,0.14); }
+    header .nav-link.active::after { display: none; }
+  }
+
+  .ask-ai-btn {
+    display: inline-flex; align-items: center; gap: 6px; background: rgba(124,63,196,0.18); color: #d9c8f5;
+    border: 1px solid rgba(124,63,196,0.5); padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  }
+  .ask-ai-btn:hover { background: rgba(124,63,196,0.3); color: #fff; }
+  .ask-ai-btn svg { width: 14px; height: 14px; }
+  .ask-ai-wrap { position: relative; }
+  .ai-nudge { position: absolute; top: calc(100% + 12px); right: 0; width: 220px; background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.22); padding: 12px 26px 12px 14px; font-size: 12.5px; line-height: 1.45; z-index: 95; }
+  .ai-nudge.hidden { display: none; }
+  .ai-nudge::before { content: ""; position: absolute; top: -6px; right: 22px; width: 11px; height: 11px; background: #fff; border-left: 1px solid var(--border); border-top: 1px solid var(--border); transform: rotate(45deg); }
+  .ai-nudge-close { position: absolute; top: 6px; right: 8px; background: transparent; border: none; color: var(--muted); font-size: 15px; line-height: 1; padding: 2px; cursor: pointer; }
+
+  .ai-drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.25); z-index: 90; }
+  .ai-drawer-overlay.open { display: block; }
+  .ai-drawer {
+    position: fixed; top: 0; right: -460px; width: 440px; max-width: 92vw; height: 100vh; background: #fff;
+    box-shadow: -8px 0 28px rgba(20,48,77,0.18); z-index: 91; display: flex; flex-direction: column; transition: right 0.22s ease;
+  }
+  .ai-drawer.open { right: 0; }
+  .ai-drawer-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 20px 22px 14px; border-bottom: 1px solid var(--border); }
+  .ai-drawer-header h3 { margin: 0; font-size: 18px; color: var(--navy); display: flex; align-items: center; gap: 8px; }
+  .ai-drawer-header h3 svg { color: #7c3fc4; width: 19px; height: 19px; }
+  .ai-drawer-header .card-hint { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+  .ai-drawer-close { background: transparent; border: none; color: var(--muted); font-size: 20px; padding: 4px; cursor: pointer; line-height: 1; }
+  .ai-drawer-close:hover { color: var(--text); }
+  .ai-drawer-body { flex: 1; overflow-y: auto; padding: 18px 22px; }
+  .ai-context-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; }
+  .ai-context-chip { display: flex; align-items: center; gap: 8px; background: #f4f6f8; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--text); margin-bottom: 18px; }
+  .ai-context-chip svg { color: var(--navy-light); flex-shrink: 0; width: 15px; height: 15px; }
+  .ai-greeting-bubble { background: #f4f0fb; color: var(--text); border: 1px solid #e3d5f7; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.5; margin-bottom: 18px; }
+  .ai-ask-label { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+  .ai-ask-row { display: flex; gap: 8px; margin-bottom: 18px; }
+  .ai-ask-row input { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13.5px; font-family: inherit; }
+  .ai-ask-row input:focus { outline: none; border-color: #7c3fc4; }
+  .ai-ask-send { width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #7c3fc4; color: #fff; border-radius: 8px; }
+  .ai-ask-send:hover { background: #6528a3; }
+  .ai-ask-send svg { width: 17px; height: 17px; }
+  .ai-suggested-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 8px; }
+  .ai-suggested-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 20px; }
+  .ai-suggested-chip { text-align: left; background: #f4f0fb; color: #5a2494; border: 1px solid #e3d5f7; border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; width: 100%; }
+  .ai-suggested-chip:hover { background: #ecdffa; }
+  .ai-suggested-chip svg { width: 13px; height: 13px; flex-shrink: 0; color: #7c3fc4; }
+  .ai-answer-block { border-top: 1px solid var(--border); padding-top: 16px; }
+  .ai-answer-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .ai-answer-meta .ai-answer-title { font-size: 13px; font-weight: 700; color: var(--navy); }
+  .ai-answer-meta .ai-answer-time { font-size: 11.5px; color: var(--muted); }
+  .ai-answer-card { background: #f4f0fb; border-radius: 10px; padding: 14px 16px; font-size: 13.5px; line-height: 1.55; color: var(--text); }
+  .ai-answer-card ul { margin: 8px 0; padding-left: 18px; }
+  .ai-answer-card li { margin-bottom: 3px; }
+  .ai-answer-card strong { color: var(--navy); }
+  .ai-answer-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .ai-answer-actions button { background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; color: var(--muted); font-size: 12px; }
+  .ai-answer-actions button:hover { color: var(--text); background: #f4f6f8; }
+  .ai-drawer-footer { padding: 12px 22px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); text-align: center; }
+
+  /* Embed mode (Greg, 8/30/26) -- when this page is loaded inside an
+     iframe pane on client_control_center.html's left-nav workspace
+     (?embed=1), the masthead header (logo/nav/Ask AI/breadcrumb) is
+     redundant with the workspace's own header one level up. */
+  body.embed-mode header,
+  body.embed-mode .ai-drawer,
+  body.embed-mode .ai-drawer-overlay,
+  body.embed-mode .std-toolbar-row,
+  body.embed-mode #sec-overview { display: none !important; }
+  body.embed-mode .page-shell { max-width: none; margin: 0; padding: 0 0 40px; }
+</style>
+</head>
+<body>
+<script>
+  if (new URLSearchParams(location.search).get("embed") === "1") document.body.classList.add("embed-mode");
+</script>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="app-view" class="hidden">
+  <header class="no-print">
+    <div class="brand-row">
+      <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
+      <div>
+      <h1>Workflow Files</h1>
+      <div class="sub">
+        <a class="back-link" id="header-back-link" href="index.html">← Engagement Workspace</a><span class="crumb-sep">&middot;</span><a class="back-link" id="header-dashboard-link" href="#" target="_blank" rel="noopener">Engagement Dashboard (Client View) &#8599;</a>
+      </div>
+    </div>
+    </div>
+    <nav class="site-nav">
+      <a class="nav-link active" href="index.html">Engagements</a>
+      <a class="nav-link" href="econ_dev_partners_admin.html">Programs</a>
+      <a class="nav-link" href="team_directory.html">Roster</a>
+      <a class="nav-link" href="invoicing_report.html">Invoicing</a>
+    </nav>
+    <button type="button" class="nav-toggle" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div id="userbox">
+      <div class="ask-ai-wrap">
+        <button class="ask-ai-btn" id="ask-ai-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6L12 2z"/><path d="M19 15l.9 2.6L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.4L19 15z"/></svg>
+          Ask AI
+        </button>
+        <div class="ai-nudge hidden" id="ai-nudge">
+          <button type="button" class="ai-nudge-close" id="ai-nudge-close" aria-label="Dismiss">&times;</button>
+          I'm here if you have any questions — just click <strong>Ask AI</strong> any time.
+        </div>
+      </div>
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span>
+      <div id="profile-wrap">
+        <button class="btn-ghost" id="profile-btn" title="Account menu">
+          <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="chevron">&#9662;</span>
+        </button>
+        <div id="profile-dropdown" class="profile-dropdown hidden">
+          <button class="btn-ghost" id="change-password-btn">Change Password</button>
+          <button class="btn-ghost" id="signout-btn">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="ai-drawer-overlay no-print" id="ai-drawer-overlay"></div>
+  <aside class="ai-drawer no-print" id="ai-drawer">
+    <div class="ai-drawer-header">
+      <div>
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z"/><path d="M19 14l.9 2.6L22 17.5l-2.1.9L19 21l-.9-2.6L16 17.5l2.1-.9L19 14z"/></svg>
+          Ask AI
+        </h3>
+        <div class="card-hint">Ask about this page or anything across EG Group.</div>
+      </div>
+      <button class="ai-drawer-close" id="ai-drawer-close">&times;</button>
+    </div>
+    <div class="ai-drawer-body">
+      <div class="ai-context-label">Context</div>
+      <div class="ai-context-chip" id="ai-context-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span id="ai-context-text">Workflow Files</span>
+      </div>
+      <div class="ai-greeting-bubble">Hi! I'm your EG Group assistant. Ask me anything about this engagement's workflow files or the close-out evaluation, or about other engagements, applications, hours, and team data across the app.</div>
+      <div class="ai-ask-label">Ask a question</div>
+      <div class="ai-ask-row">
+        <input type="text" id="ai-question-input" placeholder="e.g. Has the Controlling Document been uploaded?" />
+        <button class="ai-ask-send" id="ai-ask-send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div class="ai-suggested-label">Suggested questions</div>
+      <div class="ai-suggested-list" id="ai-suggested-list"></div>
+      <div class="ai-answer-block hidden" id="ai-answer-block">
+        <div class="ai-answer-meta">
+          <span class="ai-answer-title">Answer</span>
+          <span class="ai-answer-time" id="ai-answer-time"></span>
+        </div>
+        <div class="ai-answer-card" id="ai-answer-card"></div>
+        <div class="ai-answer-actions">
+          <button id="ai-copy-answer">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="ai-drawer-footer">Answers are AI-generated from EG Group data and may not always be accurate.</div>
+  </aside>
+
+  <div class="page-shell">
+    <div id="banner"></div>
+
+    <div class="std-toolbar-row no-print">
+      <div class="global-search-wrap">
+        <div class="search-box">
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="global-search-input" placeholder="Search…" autocomplete="off" />
+        </div>
+        <div class="global-search-results hidden" id="global-search-results"></div>
+      </div>
+      <div class="std-toolbar-actions">
+        <button type="button" class="btn-secondary btn-sm" id="std-print-btn" title="Print this page">Print</button>
+        <button type="button" class="btn-secondary btn-sm" id="std-export-btn" title="Export file status as CSV">&#8595; Export</button>
+        <button type="button" class="btn-secondary btn-sm" id="std-import-btn" title="This page manages one engagement -- nothing to bulk import here" disabled>&#8593; Import</button>
+      </div>
+    </div>
+
+    <div id="no-client-view" class="no-client-note hidden">
+      Open a client from <a href="client_workspace.html">the Workspace</a> first, then use the "Workflow Files" link on its Engagement Workspace page to get here.
+    </div>
+
+    <div id="workflow-view" class="hidden">
+      <div class="card" id="sec-overview">
+        <div class="card-header" style="margin-bottom:2px;">
+          <h2 id="p-name" style="margin:0;"></h2>
+          <span class="badge" id="p-lifecycle-badge"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Project Files</h2>
+        <div class="card-hint">Upload a file or add a link for each item. Item 4 drafts an email.</div>
+        <div class="wf-items">
+          <div class="wf-item-row">
+            <span class="wf-item-num">1</span>
+            <div class="wf-item-body">
+              <div class="wf-item-title">Discovery Document</div>
+              <div id="wf-discovery-file"></div>
+            </div>
+          </div>
+          <div class="wf-item-row">
+            <span class="wf-item-num">2</span>
+            <div class="wf-item-body">
+              <div class="wf-item-title">Controlling Document</div>
+              <div id="wf-controlling-file"></div>
+            </div>
+          </div>
+          <div class="wf-item-row">
+            <span class="wf-item-num">3</span>
+            <div class="wf-item-body">
+              <div class="wf-item-title">Research Review Recording</div>
+              <div id="wf-review-file"></div>
+            </div>
+          </div>
+          <div class="wf-item-row">
+            <span class="wf-item-num">4</span>
+            <div class="wf-item-body">
+              <div class="wf-item-title">Send Close-Out Evaluation Email (to the CEO, from the Team Lead)</div>
+              <div class="wf-item-hint">Write a short note to the CEO with a link to the Close-Out Evaluation form. Review and send the email. You'll get their reply right here.</div>
+              <div id="wf-eval-link"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="eem-overlay" id="eval-email-overlay">
+  <div class="eem-modal">
+    <div class="eem-modal-header">
+      <div>
+        <h3>Close-Out Evaluation Email</h3>
+        <div class="eem-modal-meta">Review and edit, then send it from here or copy it into Outlook.</div>
+      </div>
+      <button class="eem-modal-close" id="eem-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="eem-body">
+      <div class="field">
+        <label>To</label>
+        <input type="text" id="eem-to" />
+      </div>
+      <div id="eem-no-contact" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
+        No contact email found on file for this client — add the CEO's email in Company Contacts, or type it in above.
+      </div>
+      <div class="field">
+        <label>Subject</label>
+        <input type="text" id="eem-subject" />
+      </div>
+      <div class="field">
+        <label>Body</label>
+        <textarea id="eem-body-text" rows="12"></textarea>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button type="button" class="btn-secondary btn-sm" id="eem-copy-btn">Copy Email Text</button>
+        <a class="btn-primary btn-sm" id="eem-mailto-btn" href="#">Send Email &rarr;</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Same client-facing share-link base used on Client Profile / Client
+  // Control Center -- kept as a literal constant here too (rather than
+  // imported) since each page in this app is a standalone file.
+  const PUBLIC_SITE_BASE = "https://egdb.netlify.app/";
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentUser = null;
+  let isSuperAdmin = false;
+  let currentClient = null;
+
+  const $ = (id) => document.getElementById(id);
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
+  function redirectToLogin() {
+    const dest = location.pathname.split("/").pop() + location.search;
+    location.href = "index.html?return=" + encodeURIComponent(dest);
+  }
+  const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
+  const sanitizeFilename = (name) => name.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+  function fileNameFromPath(path) {
+    if (!path) return "";
+    const last = path.split("/").pop();
+    return last.replace(/^\d+-/, "");
+  }
+  const FILE_TYPE_ICONS = {
+    pdf: "\u{1F4D5}",
+    doc: "\u{1F4D8}", docx: "\u{1F4D8}",
+    xls: "\u{1F4D7}", xlsx: "\u{1F4D7}", csv: "\u{1F4D7}",
+    ppt: "\u{1F4D9}", pptx: "\u{1F4D9}",
+    png: "\u{1F5BC}\u{FE0F}", jpg: "\u{1F5BC}\u{FE0F}", jpeg: "\u{1F5BC}\u{FE0F}", gif: "\u{1F5BC}\u{FE0F}",
+    zip: "\u{1F5C3}\u{FE0F}",
+  };
+  function fileIconFor(path) {
+    const name = (path.split("/").pop() || "").toLowerCase();
+    const dot = name.lastIndexOf(".");
+    const ext = dot === -1 ? "" : name.slice(dot + 1);
+    return FILE_TYPE_ICONS[ext] || "\u{1F4C4}";
+  }
+
+  /* ---------- Ask AI ---------- */
+  let AI_CONTEXT_LABEL = "Workflow Files";
+  const AI_PAGE_KEY = "workflow_files";
+  const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/eg-dashboard-ai`;
+  let aiHistory = [];
+
+  function aiSuggestedQuestions() {
+    return [
+      "Which workflow files are still missing?",
+      "Has the Close-Out Evaluation email been sent?",
+      "What did the client say in their close-out evaluation?",
+    ];
+  }
+
+  function initAskAi() {
+    const btn = $("ask-ai-btn");
+    if (!btn) return;
+    renderAiSuggested();
+    btn.addEventListener("click", openAiDrawer);
+    $("ai-drawer-close").addEventListener("click", closeAiDrawer);
+    $("ai-drawer-overlay").addEventListener("click", closeAiDrawer);
+    $("ai-ask-send").addEventListener("click", submitAiQuestion);
+    $("ai-question-input").addEventListener("keydown", (e) => { if (e.key === "Enter") submitAiQuestion(); });
+    $("ai-copy-answer").addEventListener("click", () => {
+      const text = $("ai-answer-card").innerText;
+      navigator.clipboard?.writeText(text);
+    });
+  }
+
+  function renderAiSuggested() {
+    const list = $("ai-suggested-list");
+    const questions = aiSuggestedQuestions();
+    list.innerHTML = questions.map((q, i) => `
+      <button class="ai-suggested-chip" data-idx="${i}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"/><path d="M12 17h.01"/></svg>
+        ${escapeHtml(q)}
+      </button>
+    `).join("");
+    list.querySelectorAll(".ai-suggested-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const q = questions[Number(chip.dataset.idx)];
+        $("ai-question-input").value = q;
+        askAi(q);
+      });
+    });
+  }
+
+  function openAiDrawer() {
+    $("ai-context-text").textContent = AI_CONTEXT_LABEL;
+    renderAiSuggested();
+    $("ai-drawer-overlay").classList.add("open");
+    $("ai-drawer").classList.add("open");
+  }
+
+  function closeAiDrawer() {
+    $("ai-drawer-overlay").classList.remove("open");
+    $("ai-drawer").classList.remove("open");
+  }
+
+  function submitAiQuestion() {
+    const q = $("ai-question-input").value.trim();
+    if (!q) return;
+    askAi(q);
+  }
+
+  function renderAiMarkup(text) {
+    const escaped = escapeHtml(text || "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    return escaped.split(/\n\n+/).map((block) => {
+      const lines = block.split("\n").filter((l) => l.trim());
+      if (lines.length && lines.every((l) => /^\s*-\s+/.test(l))) {
+        return `<ul>${lines.map((l) => `<li>${l.replace(/^\s*-\s+/, "")}</li>`).join("")}</ul>`;
+      }
+      return `<p>${lines.join("<br>")}</p>`;
+    }).join("");
+  }
+
+  async function askAi(question) {
+    $("ai-answer-block").classList.remove("hidden");
+    $("ai-answer-card").innerHTML = `<p style="color:var(--muted);">Thinking…</p>`;
+    $("ai-answer-time").textContent = "";
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error("No active session");
+      const res = await fetch(AI_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": SUPABASE_ANON_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question,
+          pageKey: AI_PAGE_KEY,
+          pageContext: AI_CONTEXT_LABEL,
+          clientId: currentClient ? currentClient.id : undefined,
+          history: aiHistory,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || `Request failed (${res.status})`);
+      showAiAnswer(renderAiMarkup(data.answer));
+      aiHistory.push({ role: "user", content: question }, { role: "assistant", content: data.answer });
+      aiHistory = aiHistory.slice(-6);
+    } catch (err) {
+      console.error("Ask AI error:", err);
+      showAiAnswer(`<p>Sorry, I couldn't reach the AI service just now. Try again in a moment.</p>`);
+    }
+  }
+
+  function showAiAnswer(html) {
+    $("ai-answer-card").innerHTML = html;
+    $("ai-answer-block").classList.remove("hidden");
+    $("ai-answer-time").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  initAskAi();
+
+  function maybeShowAiNudge() {
+    if (localStorage.getItem("eg_ai_nudge_seen")) return;
+    localStorage.setItem("eg_ai_nudge_seen", "1");
+    setTimeout(() => {
+      const nudge = $("ai-nudge");
+      if (!nudge) return;
+      nudge.classList.remove("hidden");
+      const hide = () => nudge.classList.add("hidden");
+      $("ai-nudge-close").addEventListener("click", hide);
+      $("ask-ai-btn").addEventListener("click", hide, { once: true });
+      setTimeout(hide, 10000);
+    }, 900);
+  }
+
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 4000);
+  }
+
+  // ---------- Auth ----------
+  $("change-password-btn").addEventListener("click", () => {
+    location.href = "reset_password.html";
+  });
+
+  $("signout-btn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    redirectToLogin();
+  });
+
+  $("profile-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("profile-dropdown").classList.toggle("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!$("profile-wrap").contains(e.target)) $("profile-dropdown").classList.add("hidden");
+  });
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users")
+      .select("id, full_name, role, organization_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      await sb.auth.signOut();
+      redirectToLogin();
+      return;
+    }
+
+    currentUser = profile;
+    isSuperAdmin = profile.role === "super_admin";
+
+    $("loading-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+    maybeShowAiNudge();
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = roleLabel(profile.role);
+
+    loadGlobalSearchIndex();
+
+    const clientId = new URLSearchParams(location.search).get("client");
+    if (clientId) {
+      await loadClient(clientId);
+    } else {
+      location.href = "index.html";
+    }
+  }
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      afterSignIn();
+    } else {
+      redirectToLogin();
+    }
+  });
+
+  // ---------- Standardized Search/Print/Export/Import toolbar ----------
+  let gsClients = [], gsUsers = [], gsPrograms = [];
+  async function loadGlobalSearchIndex() {
+    const [{ data: clients }, { data: users }, { data: programs }] = await Promise.all([
+      sb.from("clients").select("id, name, project_status"),
+      sb.from("users").select("id, full_name"),
+      sb.from("econ_dev_companies").select("id, name, code"),
+    ]);
+    gsClients = clients || []; gsUsers = users || []; gsPrograms = programs || [];
+  }
+  const GS_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+  function renderGlobalSearchResults(query) {
+    const box = $("global-search-results");
+    const q = query.trim().toLowerCase();
+    if (!q) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+    const engMatches = gsClients.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 5);
+    const specMatches = gsUsers.filter((u) => u.full_name && u.full_name.toLowerCase().includes(q)).slice(0, 5);
+    const progMatches = gsPrograms.filter((p) => (p.name || "").toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q)).slice(0, 5);
+    let html = "";
+    if (engMatches.length) {
+      html += `<div class="gsr-group-label">Engagements</div>` + engMatches.map((c) => `
+        <div class="gsr-item" data-gsr-nav="client_control_center.html?client=${c.id}">
+          <span class="gsr-name">${escapeHtml(c.name)}</span>
+          <span class="gsr-meta">${escapeHtml(GS_STATUS_LABELS[c.project_status] || c.project_status)}</span>
+        </div>
+      `).join("");
+    }
+    if (specMatches.length) {
+      html += `<div class="gsr-group-label">Specialists</div>` + specMatches.map((u) => `
+        <div class="gsr-item" data-gsr-nav="team_directory.html"><span class="gsr-name">${escapeHtml(u.full_name)}</span></div>
+      `).join("");
+    }
+    if (progMatches.length) {
+      html += `<div class="gsr-group-label">Programs</div>` + progMatches.map((p) => `
+        <div class="gsr-item" data-gsr-nav="econ_dev_partners_admin.html?program=${p.id}">
+          <span class="gsr-name">${escapeHtml(p.name)}</span>
+          <span class="gsr-meta">${escapeHtml(p.code || "")}</span>
+        </div>
+      `).join("");
+    }
+    if (!html) html = `<div class="gsr-item" style="cursor:default;"><span class="gsr-name" style="color:var(--muted); font-weight:400;">No matches.</span></div>`;
+    box.innerHTML = html;
+    box.classList.remove("hidden");
+    box.querySelectorAll("[data-gsr-nav]").forEach((el) => {
+      el.addEventListener("click", () => { window.location.href = el.dataset.gsrNav; });
+    });
+  }
+  $("global-search-input").addEventListener("input", () => renderGlobalSearchResults($("global-search-input").value));
+  $("global-search-input").addEventListener("focus", () => {
+    if ($("global-search-input").value.trim()) renderGlobalSearchResults($("global-search-input").value);
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".global-search-wrap")) $("global-search-results").classList.add("hidden");
+  });
+  function csvField(value) {
+    const v = value == null ? "" : String(value);
+    return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  }
+  function downloadCsv(filename, rows) {
+    const csv = rows.map((r) => r.map(csvField).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  $("std-print-btn").addEventListener("click", () => window.print());
+  $("std-export-btn").addEventListener("click", () => {
+    if (!currentClient) return;
+    const itemStatus = (f) => {
+      if (workflowData && workflowData[f.pathColumn]) return "Uploaded";
+      if (workflowData && workflowData[f.urlColumn]) return "Linked";
+      return "Missing";
+    };
+    const rows = [
+      ["Field", "Value"],
+      ["Engagement", currentClient.name],
+      ["Status", GS_STATUS_LABELS[currentClient.project_status] || currentClient.project_status],
+      ...WORKFLOW_FIELDS.map((f) => [f.label, itemStatus(f)]),
+      ["Close-Out Evaluation", evalResponse ? "Submitted" : "Not yet submitted"],
+    ];
+    downloadCsv(`${currentClient.name.replace(/[^a-z0-9]+/gi, "-")}-workflow-files-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  });
+
+  // ---------- Load client + minimal contact/team data for the eval email ----------
+  async function loadEvalEmailContext(clientId) {
+    const { data: contacts } = await sb.from("client_contacts").select("*").eq("client_id", clientId);
+    listData.contacts = contacts || [];
+    const { data: team } = await sb
+      .from("client_assignments")
+      .select("id, user_id, specialty_type, is_team_lead, users(full_name, email, phone)")
+      .eq("client_id", clientId)
+      .not("user_id", "is", null)
+      .order("is_team_lead", { ascending: false });
+    listData.team = team || [];
+  }
+  const listData = {};
+
+  async function loadClient(clientId) {
+    const { data: client, error } = await sb.from("clients").select("*").eq("id", clientId).single();
+    if (error || !client) {
+      $("no-client-view").classList.remove("hidden");
+      showBanner("Couldn't load that client — you may not be assigned to it.", "error");
+      return;
+    }
+    currentClient = client;
+
+    $("workflow-view").classList.remove("hidden");
+    $("p-name").textContent = client.name;
+    AI_CONTEXT_LABEL = `${client.name} — Workflow Files`;
+    $("header-back-link").href = `client_control_center.html?client=${client.id}`;
+    $("header-back-link").textContent = `← Engagement Workspace`;
+    const dashboardLink = $("header-dashboard-link");
+    if (client.slug) {
+      dashboardLink.href = new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href;
+      dashboardLink.classList.remove("disabled-link");
+    } else {
+      dashboardLink.href = "#";
+      dashboardLink.classList.add("disabled-link");
+    }
+    $("p-lifecycle-badge").className = `badge badge-${client.project_status}`;
+    $("p-lifecycle-badge").textContent = client.project_status;
+
+    await loadWorkflowLinks(client.id);
+    await loadEvalResponse(client.id);
+    await loadEvalEmailContext(client.id);
+  }
+
+  // ---------- Project Files (Discovery/Controlling/Research Review) ----------
+  // "Close-Out Survey" (closeout_survey_storage_path/_url) used to be a 4th
+  // upload-or-link slot here, same as the other three -- removed per Greg's
+  // 8/25/26 call once the evaluation link + direct-submit flow made it
+  // redundant. The columns and the workflow-tracker's fallback checks for
+  // them are left alone (existing finalized clients may still have a file
+  // there), just nothing in this UI writes to them anymore.
+  const WORKFLOW_FIELDS = [
+    { key: "discovery", label: "Discovery Document", pathColumn: "discovery_doc_storage_path", urlColumn: "discovery_doc_url" },
+    { key: "controlling", label: "Controlling Document", pathColumn: "controlling_doc_storage_path", urlColumn: "controlling_doc_url" },
+    { key: "review", label: "Research Review Recording", pathColumn: "research_review_storage_path", urlColumn: "research_review_url" },
+  ];
+  let workflowData = null;
+
+  async function loadWorkflowLinks(clientId) {
+    const { data, error } = await sb.from("client_content").select("*").eq("client_id", clientId).maybeSingle();
+    if (error) { showBanner("Couldn't load workflow documents: " + error.message, "error"); return; }
+    workflowData = data || {};
+    WORKFLOW_FIELDS.forEach(renderWorkflowFileField);
+    renderEvalLinkField();
+  }
+
+  // Greg (8/31/26): "Replace and Remove are secondary actions on the same
+  // thing -- two permanent buttons add clutter. Use one Change button that
+  // opens a small menu (Replace file / Remove file, Remove in red)." Same
+  // rule for the empty state too: one "+ Add file" trigger opening
+  // {Upload file, Add a link} instead of two buttons sitting side by side.
+  function renderWorkflowFileField(f) {
+    const container = $(`wf-${f.key}-file`);
+    const path = workflowData && workflowData[f.pathColumn];
+    const url = workflowData && workflowData[f.urlColumn];
+
+    if (path) {
+      container.innerHTML = `
+        <div class="wf-file-cell">
+          <span class="wf-file-link">${fileIconFor(path)} ${escapeHtml(fileNameFromPath(path))}</span>
+          <div class="wf-change-wrap">
+            <button type="button" class="wf-btn" data-wf-change>Change &#9662;</button>
+            <div class="wf-menu hidden">
+              <button type="button" data-wf-replace>Replace file</button>
+              <button type="button" class="wf-menu-danger" data-wf-remove>Remove file</button>
+            </div>
+          </div>
+        </div>
+      `;
+      container.querySelector(".wf-file-link").addEventListener("click", async () => {
+        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, 60);
+        if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+        window.open(data.signedUrl, "_blank");
+      });
+      wireWfChangeMenu(container, [
+        { sel: "[data-wf-replace]", fn: () => pickWorkflowFile(f) },
+        { sel: "[data-wf-remove]", fn: () => removeWorkflowItem(f) },
+      ]);
+      return;
+    }
+
+    if (url) {
+      container.innerHTML = `
+        <div class="wf-file-cell">
+          <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="wf-file-link" style="text-decoration:none; word-break:break-all;">&#128279; ${escapeHtml(url)}</a>
+          <div class="wf-change-wrap">
+            <button type="button" class="wf-btn" data-wf-change>Change &#9662;</button>
+            <div class="wf-menu hidden">
+              <button type="button" data-wf-edit-link>Edit link</button>
+              <button type="button" class="wf-menu-danger" data-wf-remove>Remove link</button>
+            </div>
+          </div>
+        </div>
+      `;
+      wireWfChangeMenu(container, [
+        { sel: "[data-wf-edit-link]", fn: () => renderWorkflowLinkForm(f, url) },
+        { sel: "[data-wf-remove]", fn: () => removeWorkflowItem(f) },
+      ]);
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="wf-change-wrap">
+        <button type="button" class="wf-btn" data-wf-change>+ Add file &#9662;</button>
+        <div class="wf-menu hidden">
+          <button type="button" data-wf-upload>Upload file</button>
+          <button type="button" data-wf-add-link>Add a link</button>
+        </div>
+      </div>
+      <input type="file" class="wf-upload-input hidden" />
+    `;
+    container.querySelector(".wf-upload-input").addEventListener("change", (e) => {
+      if (e.target.files.length) uploadWorkflowFile(f, e.target.files[0]);
+    });
+    wireWfChangeMenu(container, [
+      { sel: "[data-wf-upload]", fn: () => container.querySelector(".wf-upload-input").click() },
+      { sel: "[data-wf-add-link]", fn: () => renderWorkflowLinkForm(f, "") },
+    ]);
+  }
+
+  // Shared trigger/menu wiring for the Change / + Add file dropdowns above --
+  // one open menu at a time, closes on an outside click or after an action
+  // fires.
+  function closeAllWfMenus() {
+    document.querySelectorAll(".wf-menu").forEach((m) => m.classList.add("hidden"));
+  }
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".wf-change-wrap")) closeAllWfMenus();
+  });
+  function wireWfChangeMenu(container, actions) {
+    const trigger = container.querySelector("[data-wf-change]");
+    const menu = container.querySelector(".wf-menu");
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const wasHidden = menu.classList.contains("hidden");
+      closeAllWfMenus();
+      menu.classList.toggle("hidden", !wasHidden);
+    });
+    actions.forEach(({ sel, fn }) => {
+      menu.querySelector(sel).addEventListener("click", () => { closeAllWfMenus(); fn(); });
+    });
+  }
+
+  function renderWorkflowLinkForm(f, currentUrl) {
+    const container = $(`wf-${f.key}-file`);
+    container.innerHTML = `
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <input type="url" class="wf-link-input" value="${escapeHtml(currentUrl)}" placeholder="https://…" style="flex:1; min-width:200px; padding:7px 9px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit;" />
+        <button type="button" class="btn-primary btn-sm" data-wf-save-link>Save</button>
+        <button type="button" class="btn-secondary btn-sm" data-wf-cancel-link>Cancel</button>
+      </div>
+    `;
+    const input = container.querySelector(".wf-link-input");
+    input.focus();
+    container.querySelector("[data-wf-save-link]").addEventListener("click", () => saveWorkflowLink(f, input.value.trim()));
+    container.querySelector("[data-wf-cancel-link]").addEventListener("click", () => renderWorkflowFileField(f));
+  }
+
+  async function saveWorkflowLink(f, url) {
+    if (!url) { showBanner("Enter a URL first.", "error"); return; }
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    const { error } = await sb.from("client_content").update({ [f.urlColumn]: url }).eq("client_id", currentClient.id);
+    if (error) { showBanner("Couldn't save the link: " + error.message, "error"); return; }
+    workflowData[f.urlColumn] = url;
+    renderWorkflowFileField(f);
+    showBanner(`${f.label} link saved.`, "success");
+  }
+
+  function pickWorkflowFile(f) {
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.addEventListener("change", () => { if (picker.files.length) uploadWorkflowFile(f, picker.files[0]); });
+    picker.click();
+  }
+
+  async function uploadWorkflowFile(f, file) {
+    const oldPath = workflowData && workflowData[f.pathColumn];
+    const path = `clients/${currentClient.id}/workflow/${f.key}/${Date.now()}-${sanitizeFilename(file.name)}`;
+    const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+    if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    // A field is one or the other -- uploading a file clears any link
+    // previously saved in this same slot, same rule Resource Vault uses.
+    const { error } = await sb.from("client_content").update({ [f.pathColumn]: path, [f.urlColumn]: null }).eq("client_id", currentClient.id);
+    if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
+    if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
+    workflowData[f.pathColumn] = path;
+    workflowData[f.urlColumn] = null;
+    renderWorkflowFileField(f);
+    showBanner(`${f.label} uploaded.`, "success");
+  }
+
+  async function removeWorkflowItem(f) {
+    const oldPath = workflowData && workflowData[f.pathColumn];
+    const { error } = await sb.from("client_content").update({ [f.pathColumn]: null, [f.urlColumn]: null }).eq("client_id", currentClient.id);
+    if (error) { showBanner("Couldn't remove it: " + error.message, "error"); return; }
+    if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
+    workflowData[f.pathColumn] = null;
+    workflowData[f.urlColumn] = null;
+    renderWorkflowFileField(f);
+    showBanner(`${f.label} removed.`, "success");
+  }
+
+  // ---------- Close-Out Evaluation Link ----------
+  // Greg (8/25/26): every Team Lead needs to be able to generate this
+  // client's close-out evaluation from inside the app instead of Greg
+  // hand-editing evaluation.html and emailing it out himself. "Generate"
+  // pulls this client's real research questions, bakes them into a copy of
+  // the standalone evaluation.html tool (same client-file format that
+  // tool's own admin bar produces), and publishes it to a public storage
+  // bucket. The resulting link is saved on client_content and picked up by
+  // get_client_public_view()/finalize_client() (077), which is what makes
+  // it show up as a "Complete Your Close-Out Evaluation" button on the
+  // client's own dashboard (client_public.html) -- no separate email step.
+  let evalResponse = null;
+
+  async function loadEvalResponse(clientId) {
+    const { data, error } = await sb
+      .from("client_evaluation_responses")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("submitted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) { console.error("Couldn't load evaluation response:", error.message); return; }
+    evalResponse = data || null;
+    renderEvalLinkField();
+  }
+
+  function renderEvalLinkField() {
+    const container = $("wf-eval-link");
+    if (!container) return;
+
+    // Greg (8/25/26): "instead of putting a button on the dashboard that
+    // links to the evaluation form, change number 4 to Send email with a
+    // link to the Evaluation form to the CEO from the Team Lead." Replaces
+    // the old checkbox/"live on the dashboard" toggle and CEO-facing CTA
+    // button entirely -- there's no dashboard button anymore (removed from
+    // client_public.html), just this one button that drafts the email.
+    const linkHtml = `
+      <button type="button" class="wf-btn wf-btn-icon-email" id="eval-email-create-btn">Create Email</button>
+    `;
+
+    let responseHtml = "";
+    if (evalResponse) {
+      const r = evalResponse;
+      const submittedDate = new Date(r.submitted_at).toLocaleDateString();
+      responseHtml = `
+        <div style="margin-top:14px; padding:14px 16px; background:#f3f6f1; border:1px solid var(--border); border-radius:8px;">
+          <div style="font-weight:700; color:var(--navy); margin-bottom:6px;">
+            &#9989; Submitted ${escapeHtml(submittedDate)}${r.respondent_name ? " by " + escapeHtml(r.respondent_name) : ""}
+          </div>
+          <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">
+            ${r.very_useful_count} Very Useful, ${r.partially_useful_count} Partially Useful, ${r.not_useful_count} Not Useful &mdash; Weighted Score ${r.weighted_score}/${r.weighted_max}
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn-secondary btn-sm" id="eval-response-toggle-btn">View Full Response</button>
+            ${isSuperAdmin ? `<button type="button" class="btn-danger btn-sm" id="eval-response-delete-btn">Delete Response</button>` : ""}
+          </div>
+          <div id="eval-response-detail" class="hidden" style="margin-top:10px;"></div>
+        </div>
+      `;
+    }
+
+    container.innerHTML = linkHtml + responseHtml;
+
+    container.querySelector("#eval-email-create-btn").addEventListener("click", openEvalEmailModal);
+
+    if (evalResponse) {
+      const toggleBtn = container.querySelector("#eval-response-toggle-btn");
+      const detail = container.querySelector("#eval-response-detail");
+      toggleBtn.addEventListener("click", () => {
+        const isHidden = detail.classList.contains("hidden");
+        if (isHidden) {
+          detail.innerHTML = renderEvalResponseDetail(evalResponse);
+          detail.classList.remove("hidden");
+          toggleBtn.textContent = "Hide Full Response";
+        } else {
+          detail.classList.add("hidden");
+          toggleBtn.textContent = "View Full Response";
+        }
+      });
+
+      const deleteBtn = container.querySelector("#eval-response-delete-btn");
+      if (deleteBtn) deleteBtn.addEventListener("click", deleteEvalResponse);
+    }
+  }
+
+  // Super-Admin only (081) -- clears a test/duplicate submission so the
+  // client goes back to "not yet submitted" without needing anyone to run
+  // SQL by hand (Greg, 8/25/26: "i just filled out a form for a client and
+  // i need to delete it").
+  async function deleteEvalResponse() {
+    if (!evalResponse) return;
+    if (!confirm("Delete this submitted evaluation response? This cannot be undone.")) return;
+    const { error } = await sb.from("client_evaluation_responses").delete().eq("id", evalResponse.id);
+    if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
+    evalResponse = null;
+    if (workflowData) workflowData.evaluation_response = null;
+    renderEvalLinkField();
+    showBanner("Evaluation response deleted.", "success");
+  }
+
+  function renderEvalResponseDetail(r) {
+    const ratings = Array.isArray(r.question_ratings) ? r.question_ratings : [];
+    const referrals = (Array.isArray(r.referrals) ? r.referrals : []).filter((rr) => rr.name || rr.company || rr.contact);
+    const ratingLabel = { very: "Very Useful", partial: "Partially Useful", not: "Not Useful" };
+    return `
+      <div style="font-size:13px; line-height:1.6; color:var(--text);">
+        <div style="font-weight:600; margin-bottom:4px;">Research Question Ratings</div>
+        <ul style="margin:0 0 10px 18px; padding:0;">
+          ${ratings.map((q) => `<li>${escapeHtml(q.question || "(no question text)")}: <strong>${escapeHtml(ratingLabel[q.rating] || "—")}</strong></li>`).join("")}
+        </ul>
+        <div style="margin-bottom:10px;"><strong>Explanation:</strong> ${r.q1_explain ? escapeHtml(r.q1_explain) : "<em>None provided.</em>"}</div>
+        <div style="margin-bottom:10px;"><strong>Adequately prepared?</strong> ${r.prepared === "yes" ? "Yes" : r.prepared === "no" ? "No" : "—"}${r.prepared_explain ? " — " + escapeHtml(r.prepared_explain) : ""}</div>
+        <div style="margin-bottom:10px;"><strong>What could we have done better:</strong> ${r.improvement_suggestions ? escapeHtml(r.improvement_suggestions) : "<em>None provided.</em>"}</div>
+        <div style="margin-bottom:10px;"><strong>Likelihood to recommend (1&ndash;10):</strong> ${r.nps_score ?? "—"}${r.nps_explain ? " — " + escapeHtml(r.nps_explain) : ""}</div>
+        <div style="margin-bottom:10px;"><strong>Referrals:</strong> ${referrals.length ? `<ul style="margin:4px 0 0 18px; padding:0;">${referrals.map((rr) => `<li>${escapeHtml(rr.name || "")}${rr.company ? " — " + escapeHtml(rr.company) : ""}${rr.contact ? " (" + escapeHtml(rr.contact) + ")" : ""}</li>`).join("")}</ul>` : ` <em>None provided.</em>`}</div>
+        <div><strong>Testimonial:</strong> ${r.testimonial ? escapeHtml(r.testimonial) : "<em>None provided.</em>"}</div>
+      </div>
+    `;
+  }
+
+  // Ensures the client's deterministic evaluation link is saved to
+  // client_content.evaluation_link_url (evaluation_public.html / 079 fetches
+  // the client's name/sponsor/research questions live from Supabase every
+  // time the link is opened, so the URL itself never needs to change).
+  async function ensureEvalLinkUrl() {
+    // Greg (8/26/26): research pages no longer track per-question text --
+    // specialists just upload documents/links under a research area. So the
+    // gate here is simply "has at least one research document been
+    // uploaded for this client," instead of checking for question text.
+    const { count, error: qErr } = await sb
+      .from("documents")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", currentClient.id)
+      .not("research_area", "is", null);
+    if (qErr) { showBanner("Couldn't check research documents: " + qErr.message, "error"); return null; }
+    if (!count) {
+      showBanner("Upload at least one research document or link (on the Research page) before emailing the evaluation link.", "error");
+      return null;
+    }
+
+    const url = `${PUBLIC_SITE_BASE}evaluation_public.html?client=${currentClient.id}`;
+    if (workflowData.evaluation_link_url !== url) {
+      const { error: saveErr } = await sb.from("client_content").update({ evaluation_link_url: url }).eq("client_id", currentClient.id);
+      if (saveErr) { showBanner("Couldn't save the evaluation link: " + saveErr.message, "error"); return null; }
+      workflowData.evaluation_link_url = url;
+    }
+    return url;
+  }
+
+  // ---------- Close-Out Evaluation email (Greg, 8/25/26) ----------
+  // "instead of putting a button on the dashboard that links to the
+  // evaluation form, change number 4 to Send email with a link to the
+  // Evaluation form to the CEO from the Team Lead." Same
+  // draft-review-then-send-or-copy pattern as Draft Update Email
+  // (client_control_center.html) -- nothing is actually sent from this app;
+  // "Open in Email App" hands it to the Team Lead's own mail client
+  // (Outlook or otherwise) ready to send, and Copy Email Text covers
+  // pasting it in by hand instead.
+  async function openEvalEmailModal() {
+    const createBtn = document.querySelector("#eval-email-create-btn");
+    if (createBtn) { createBtn.disabled = true; createBtn.textContent = "Preparing…"; }
+    const url = await ensureEvalLinkUrl();
+    if (createBtn) { createBtn.disabled = false; createBtn.textContent = "Create Email"; }
+    if (!url) return;
+
+    const contacts = listData.contacts || [];
+    const ceoContact = contacts.find((c) => (c.title || "").toLowerCase().includes("ceo")) || contacts[0] || null;
+    const teamRows = listData.team || [];
+    const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
+    const teamLeadName = leadRow ? leadRow.users.full_name : "";
+    const teamLeadFirstName = teamLeadName ? teamLeadName.split(" ")[0] : "";
+
+    let programName = "";
+    if (currentClient.econ_dev_company_id) {
+      const { data: partner } = await sb.from("econ_dev_companies").select("name").eq("id", currentClient.econ_dev_company_id).single();
+      programName = (partner && partner.name) || "";
+    }
+
+    $("eem-to").value = (ceoContact && ceoContact.email) || "";
+    $("eem-no-contact").classList.toggle("hidden", !!(ceoContact && ceoContact.email));
+
+    const ceoFirstName = ceoContact && ceoContact.name ? ceoContact.name.split(" ")[0] : "there";
+    $("eem-subject").value = `Your Close-Out Evaluation — ${currentClient.name}`;
+    const sponsorLine = programName
+      ? `It also gets shared with ${programName}, your program sponsor, so it carries real weight heading into that conversation.`
+      : `It also gets shared with your program sponsor, so it carries real weight heading into that conversation.`;
+    $("eem-body-text").value = `Hi ${ceoFirstName},
+
+As we wrap up our engagement, we'd love to get your feedback on how the Economic Gardening program worked for ${currentClient.name}. It only takes a few minutes, and it genuinely helps us fine-tune how we support CEOs like you. ${sponsorLine}
+
+Could you take a moment to fill it out ahead of our upcoming close-out call?
+
+${url}
+
+Thank you again for the opportunity to work with you and your team.
+
+${teamLeadFirstName || "Your EG Team Lead"}`;
+
+    updateEvalEmailMailto();
+    $("eval-email-overlay").classList.add("open");
+  }
+
+  function updateEvalEmailMailto() {
+    const toParam = $("eem-to").value.split(",").map((s) => s.trim()).filter(Boolean).map(encodeURIComponent).join(",");
+    $("eem-mailto-btn").href = `mailto:${toParam}?subject=${encodeURIComponent($("eem-subject").value)}&body=${encodeURIComponent($("eem-body-text").value)}`;
+  }
+
+  $("eem-close").addEventListener("click", () => $("eval-email-overlay").classList.remove("open"));
+  $("eval-email-overlay").addEventListener("click", (e) => {
+    if (e.target === $("eval-email-overlay")) $("eval-email-overlay").classList.remove("open");
+  });
+  $("eem-to").addEventListener("input", updateEvalEmailMailto);
+  $("eem-subject").addEventListener("input", updateEvalEmailMailto);
+  $("eem-body-text").addEventListener("input", updateEvalEmailMailto);
+  $("eem-copy-btn").addEventListener("click", async () => {
+    const text = `To: ${$("eem-to").value}\nSubject: ${$("eem-subject").value}\n\n${$("eem-body-text").value}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      showBanner("Email text copied — paste it into your email client.", "success");
+    } catch (e) {
+      showBanner("Couldn't copy automatically — select the text below and copy manually.", "error");
+    }
+  });
+</script>
+<script>
+  // Mobile nav toggle -- header .site-nav is display:none below 980px with
+  // nothing else to reach it, so this wires up the .nav-toggle button to
+  // flip a .open class the @media (max-width: 980px) CSS above turns into
+  // a dropdown panel.
+  document.querySelectorAll(".nav-toggle").forEach((btn) => {
+    const nav = btn.closest("header")?.querySelector(".site-nav");
+    if (!nav) return;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = nav.classList.toggle("open");
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  });
+</script>
+</body>
+</html>
