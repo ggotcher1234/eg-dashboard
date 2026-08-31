@@ -1080,6 +1080,20 @@
   // debounce every observer tick through one animation frame so a burst
   // of rapid-fire mutations collapses into a single measurement instead
   // of chasing each other.
+  // Greg (8/31/26): "it is still there" after the wizard-bottom-bar margin
+  // fix -- that fix was real but not the main cause. The actual bug: a
+  // same-origin iframe's own <html> element can never report a
+  // scrollHeight shorter than the iframe's OWN current rendered height --
+  // the root element's containing block is the iframe's viewport, so it's
+  // always at least that tall no matter how short the real content is.
+  // Once a tall step (a big table, say) pushed the iframe to e.g. 1400px,
+  // measuring a later, shorter step (Contacts, Description, ...) would
+  // still read back >= 1400px forever -- a one-way ratchet that left a
+  // permanent blank gray box under every shorter step. Fix: collapse the
+  // iframe to 0 immediately before measuring so the doc's own root element
+  // has no artificial floor, then measure its real content height, then
+  // set the true height -- both writes happen synchronously inside the
+  // same animation frame, so the 0px collapse is never actually painted.
   let ccIframeResizeObserver = null;
   let ccIframeResizeRaf = null;
   let ccIframeLastHeight = 0;
@@ -1091,11 +1105,10 @@
       try {
         const doc = iframe.contentDocument;
         if (!doc || !doc.documentElement) return;
+        iframe.style.height = "0px";
         const h = Math.max(doc.documentElement.scrollHeight, doc.body ? doc.body.scrollHeight : 0, 520);
-        if (Math.abs(h - ccIframeLastHeight) > 2) {
-          ccIframeLastHeight = h;
-          iframe.style.height = `${h}px`;
-        }
+        ccIframeLastHeight = h;
+        iframe.style.height = `${h}px`;
         if (!ccIframeResizeObserver && window.ResizeObserver && doc.body) {
           ccIframeResizeObserver = new ResizeObserver(() => fitIframeToContent());
           ccIframeResizeObserver.observe(doc.body);
