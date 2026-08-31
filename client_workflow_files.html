@@ -128,7 +128,13 @@
   .wf-item-row {
     display: flex; align-items: flex-start; gap: 16px;
     border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
   }
+  /* Greg (8/31/26): "clicking Discovery Document should just bring up the
+     Discovery Document." When the CCC left-nav Documents group links here
+     with ?doc=, this briefly highlights the matching row so it's obvious
+     that's the one you asked for. */
+  .wf-item-row.wf-row-highlight { background: #eef4fb; border-color: var(--navy-light); }
   .wf-item-num {
     width: 30px; height: 30px; border-radius: 50%; background: var(--navy); color: #fff;
     display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0;
@@ -405,7 +411,7 @@
         <h2>Project Files</h2>
         <div class="card-hint">Upload a file or add a link for each item. Item 4 drafts an email.</div>
         <div class="wf-items">
-          <div class="wf-item-row">
+          <div class="wf-item-row" id="wf-row-discovery">
             <span class="wf-item-num">1</span>
             <div class="wf-item-body">
               <div class="wf-item-title">Discovery Document</div>
@@ -413,24 +419,24 @@
               <div id="wf-discovery-file"></div>
             </div>
           </div>
-          <div class="wf-item-row">
+          <div class="wf-item-row" id="wf-row-controlling">
             <span class="wf-item-num">2</span>
             <div class="wf-item-body">
               <div class="wf-item-title">Controlling Document</div>
               <div id="wf-controlling-file"></div>
             </div>
           </div>
-          <div class="wf-item-row">
+          <div class="wf-item-row" id="wf-row-review">
             <span class="wf-item-num">3</span>
             <div class="wf-item-body">
-              <div class="wf-item-title">Research Review Recording</div>
+              <div class="wf-item-title">Research Review Document</div>
               <div id="wf-review-file"></div>
             </div>
           </div>
-          <div class="wf-item-row">
+          <div class="wf-item-row" id="wf-row-eval">
             <span class="wf-item-num">4</span>
             <div class="wf-item-body">
-              <div class="wf-item-title">Send Close-Out Evaluation Email (to the CEO, from the Team Lead)</div>
+              <div class="wf-item-title">Close-Out Document -- Send Evaluation Email (to the CEO, from the Team Lead)</div>
               <div class="wf-item-hint">Write a short note to the CEO with a link to the Close-Out Evaluation form. Review and send the email. You'll get their reply right here.</div>
               <div id="wf-eval-link"></div>
             </div>
@@ -846,6 +852,23 @@
     await loadWorkflowLinks(client.id);
     await loadEvalResponse(client.id);
     await loadEvalEmailContext(client.id);
+    scrollToRequestedDoc();
+  }
+
+  // Greg (8/31/26): "clicking on Discovery Document would just bring up the
+  // Discovery Document" -- the CCC left-nav's Documents group links here
+  // with ?doc=discovery/controlling/review/eval so the Team Lead lands
+  // right on that item instead of the top of a long page.
+  const DOC_ROW_IDS = { discovery: "wf-row-discovery", controlling: "wf-row-controlling", review: "wf-row-review", eval: "wf-row-eval" };
+  function scrollToRequestedDoc() {
+    const doc = new URLSearchParams(location.search).get("doc");
+    const rowId = DOC_ROW_IDS[doc];
+    if (!rowId) return;
+    const row = document.getElementById(rowId);
+    if (!row) return;
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.classList.add("wf-row-highlight");
+    setTimeout(() => row.classList.remove("wf-row-highlight"), 2200);
   }
 
   // ---------- Project Files (Discovery/Controlling/Research Review) ----------
