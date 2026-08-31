@@ -5,7 +5,11 @@
 -- want it to be a fillable form just like the Close-Out Evaluation
 -- fillable form", then "all fields in this form need to be editable",
 -- then "Digital Presence should have distinct fields for Website,
--- FaceBook, LinkedIn, X/Twitter, YouTube, Instagram and other." These
+-- FaceBook, LinkedIn, X/Twitter, YouTube, Instagram and other", then
+-- "change cc list to Program Manager" (discovery_program_manager --
+-- still pre-filled from the same source, the Application's cc_emails,
+-- just relabeled/renamed to match what that contact actually is on this
+-- form). These
 -- columns back the live, in-app fillable form (discovery_call_notes.html):
 -- every field -- both the ones only a person on the actual call can
 -- supply (participants, call link, notes) and the ones normally
@@ -29,7 +33,7 @@ alter table client_content add column if not exists discovery_program_name text;
 alter table client_content add column if not exists discovery_company_name text;
 alter table client_content add column if not exists discovery_company_address text;
 alter table client_content add column if not exists discovery_company_contacts text;
-alter table client_content add column if not exists discovery_cc_list text;
+alter table client_content add column if not exists discovery_program_manager text;
 alter table client_content add column if not exists discovery_company_description text;
 alter table client_content add column if not exists discovery_business_issues text;
 alter table client_content add column if not exists discovery_website_url text;
