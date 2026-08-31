@@ -38,7 +38,21 @@
      permanently reserves that space whether or not a scrollbar is
      actually needed, so the outer scrollbar can never again change this
      page's width and the loop can't start. */
-  html { scrollbar-gutter: stable; }
+  /* Greg (8/31/26, round 6): "not shaking but now blinking on and off" --
+     the debounce fix above stopped the iframe from chasing a moving
+     target, but that only stops the height value itself from thrashing.
+     It doesn't stop the browser's OWN decision to show or hide its
+     scrollbar, which is a separate yes/no flip that happens whenever this
+     page's total height sits within a hair of the viewport's height --
+     any tiny, legitimate re-measurement (a font finishing its load, a
+     cursor blinking in a focused field, anything) can tip it over that
+     line and back, and each flip is visible as the scrollbar blinking in
+     and out even though nothing is actually still fighting itself.
+     scrollbar-gutter:stable only reserves the WIDTH so a real toggle
+     doesn't reflow content -- it doesn't stop the toggle from happening.
+     overflow-y:scroll below removes the yes/no decision entirely by
+     always showing the scrollbar, so there's nothing left to blink. */
+  html { scrollbar-gutter: stable; overflow-y: scroll; }
   body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
 
   header { background: var(--navy); color: #fff; padding: 15px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
@@ -1178,6 +1192,16 @@
     ccIframePendingHeight = null;
     fitIframeToContent();
   });
+  // Belt-and-suspenders (Greg, 8/31/26): the ResizeObserver above watches
+  // the embedded page's own body, which covers content changes (switching
+  // wizard steps, adding a row). It should also cover the outer browser
+  // window being resized -- that changes #cc-iframe's own width, which
+  // reflows the embedded body too -- but iframe-driven width changes
+  // triggered from outside don't always fire that observer promptly.
+  // Listening for the outer window's own resize directly is a second,
+  // independent path to the same fitIframeToContent() call, so a real
+  // window resize always gets picked up even if the observer doesn't fire.
+  window.addEventListener("resize", () => fitIframeToContent());
 
   // ---------- Status control (Admin / Team Lead can change it here) ----------
   function renderStatusToggle(client) {
