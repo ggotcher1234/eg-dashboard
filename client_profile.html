@@ -278,6 +278,25 @@
     .fields-3col.lre-fields, .fields-3col.add-row-form { grid-template-columns: 1fr; }
   }
 
+  /* Company Contacts: Name/Title/Email/Phone in one row -- the generic
+     equal-width flex-wrap (used by every other list) was letting Phone
+     wrap down to its own line even with room to spare, since 4 fields at
+     140px+gaps doesn't leave much slack (Greg, 8/30/26: "make this fit on
+     one line"). fr-based widths (not %) so the browser divides up
+     whatever space is actually left after the gaps, rather than the
+     fixed-percentage math the 3-column layout above uses. */
+  .fields-contact4.lre-fields, .fields-contact4.add-row-form {
+    display: grid; grid-template-columns: 1.1fr 1.1fr 1.4fr 1fr; gap: 12px 16px; align-items: end;
+  }
+  .fields-contact4 .field { margin-bottom: 0; flex: none; min-width: 0; }
+  .fields-contact4.add-row-form button[type="submit"] { grid-column: 1 / -1; justify-self: start; }
+  @media (max-width: 720px) {
+    .fields-contact4.lre-fields, .fields-contact4.add-row-form { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 420px) {
+    .fields-contact4.lre-fields, .fields-contact4.add-row-form { grid-template-columns: 1fr; }
+  }
+
   .icon-btn { padding: 4px 8px; font-size: 13px; line-height: 1; flex-shrink: 0; }
 
   .doc-area-label { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); font-weight: 700; margin: 18px 0 8px; }
@@ -2065,6 +2084,10 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
   // and CSV import/export logic as before, just mounted one config per step.
   const CONTACTS_CONFIG = {
     key: "contacts", table: "client_contacts", title: "Company Contacts",
+    // Name/Title/Email/Phone in one row -- the generic equal-width
+    // flex-wrap was letting Phone wrap to its own line even when there
+    // was plenty of width (Greg, 8/30/26: "make this fit on one line").
+    rowLayout: "contact4",
     fields: [
       { name: "name", label: "Name", type: "text", required: true },
       { name: "title", label: "Title", type: "text" },
@@ -2164,6 +2187,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
       if (cfg.readOnly) continue; // Team Members has no add-form
       const form = $(`${cfg.key}-add-form`);
       form.classList.toggle("fields-3col", cfg.rowLayout === "company3");
+      form.classList.toggle("fields-contact4", cfg.rowLayout === "contact4");
       form.innerHTML = `
         ${cfg.fields.map((f) => `
           <div class="field">
@@ -2422,7 +2446,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     list.innerHTML = rows.map((r) => `
       <div class="list-row-edit">
         ${cfg.isChecklist ? `<input type="checkbox" class="list-checkbox" data-toggle-id="${r.id}" ${r.completed ? "checked" : ""} ${r.auto_source ? "disabled" : ""} title="${r.auto_source ? "Completes automatically -- no need to check this by hand" : ""}" />` : ""}
-        <div class="lre-fields ${cfg.rowLayout === "company3" ? "fields-3col" : ""}">
+        <div class="lre-fields ${cfg.rowLayout === "company3" ? "fields-3col" : ""} ${cfg.rowLayout === "contact4" ? "fields-contact4" : ""}">
           ${cfg.fields.map((f, fIdx) => `
             <div class="field">
               <label>${escapeHtml(f.label)}${cfg.isChecklist && fIdx === 0 && r.auto_source ? ` <span class="auto-step-badge" title="This step checks itself off automatically -- see the Task's own note for how.">Auto</span>` : ""}</label>
