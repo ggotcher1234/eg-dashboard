@@ -192,13 +192,23 @@
   body.embed-mode .page-shell { max-width: none; margin: 0; padding: 0 0 40px; }
   .rv-table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .rv-table-wrap .list-row-edit, .rv-table-head {
-    display: grid; grid-template-columns: 1.2fr 1.3fr 1.3fr 68px 90px; gap: 18px; align-items: center;
+    display: grid; grid-template-columns: 1.2fr 1.3fr 1.3fr 130px; gap: 18px; align-items: center;
     min-width: 620px; padding: 14px 18px; margin: 0; border-bottom: 1px solid #f0f2f4;
   }
   .rv-table-wrap .list-row-edit:last-child { border-bottom: none; }
   .rv-table-head { background: #f8fafb; border-bottom: 1px solid var(--border); }
   .rv-table-head span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; }
-  .rv-table-head span:nth-child(4), .rv-table-head span:nth-child(5) { text-align: center; }
+  /* Replace + Replace All used to be their own two grid columns, 18px
+     apart like every other column -- with headers that didn't fit their
+     own width, "REPLACE ALL" overflowed right out of the table (Greg,
+     8/31/26). Folded into one grid column (last one, above) with its own
+     tight internal flex row instead, so the two × actions -- and their
+     header labels -- sit close together and "Replace All" has room to
+     wrap onto two lines within its own half instead of spilling out. */
+  .rv-actions-head { display: flex; gap: 8px; }
+  .rv-actions-head span {
+    flex: 1; text-align: center; white-space: normal; line-height: 1.25;
+  }
   .rv-table-wrap .field { margin-bottom: 0; min-width: 0; }
   .rv-table-wrap .field label { display: none; }
   .rv-title-cell { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
@@ -231,10 +241,12 @@
     color: var(--navy-light); font-size: 12px; font-weight: 600; text-decoration: underline; cursor: pointer;
   }
   .rv-file-upload-label:hover { color: var(--navy); }
-  /* Replace / Replace All columns: plain red × icons, not filled buttons --
-     these are the two removal actions (unlink from this client, delete for
-     every client), just each one line, centered in its own narrow column. */
-  .rv-action-cell { display: flex; align-items: center; justify-content: center; }
+  /* Replace / Replace All: plain red × icons, not filled buttons -- these
+     are the two removal actions (unlink from this client, delete for
+     every client), sitting close together in one shared flex row (see
+     .rv-actions-head above for why this is one grid column, not two). */
+  .rv-actions-group { display: flex; gap: 8px; }
+  .rv-action-cell { display: flex; align-items: center; justify-content: center; flex: 1; }
   .rv-x-btn {
     background: none; border: none; color: var(--danger); font-size: 19px; font-weight: 700; line-height: 1;
     cursor: pointer; padding: 4px 10px; border-radius: 6px;
@@ -1116,7 +1128,7 @@
   // columns simplified 8/31/26 -- File folded into Link/URL, and the old
   // 3-button actions cell split into two single-icon columns).
   const RV_TABLE_HEAD_HTML = `
-    <div class="rv-table-head"><span>Title</span><span>Description</span><span>Link/URL</span><span>Replace</span><span>Replace All</span></div>
+    <div class="rv-table-head"><span>Title</span><span>Description</span><span>Link/URL</span><div class="rv-actions-head"><span>Replace</span><span>Replace All</span></div></div>
   `;
 
   function renderResourceVaultRows(rows) {
@@ -1157,11 +1169,13 @@
                   : `<label class="rv-file-upload-label">+ Upload file<input type="file" class="rv-tpl-upload-input" data-tpl-id="${r.templateId}" style="display:none;" /></label>`}
               </div>
             </div>
-            <div class="rv-action-cell">
-              <button type="button" class="rv-x-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
-            </div>
-            <div class="rv-action-cell">
-              <button type="button" class="rv-x-btn" data-rv-tpl-delete="${r.templateId}" data-rv-tpl-title="${escapeHtml(r.title)}" title="Delete for all clients">&times;</button>
+            <div class="rv-actions-group">
+              <div class="rv-action-cell">
+                <button type="button" class="rv-x-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
+              </div>
+              <div class="rv-action-cell">
+                <button type="button" class="rv-x-btn" data-rv-tpl-delete="${r.templateId}" data-rv-tpl-title="${escapeHtml(r.title)}" title="Delete for all clients">&times;</button>
+              </div>
             </div>
           </div>
         `;
@@ -1179,10 +1193,12 @@
               ${urlHtml}
               ${r.storagePath ? `<div class="rv-file-row">${fileHtml}</div>` : ``}
             </div>
-            <div class="rv-action-cell">
-              <button type="button" class="rv-x-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
+            <div class="rv-actions-group">
+              <div class="rv-action-cell">
+                <button type="button" class="rv-x-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
+              </div>
+              <div class="rv-action-cell"></div>
             </div>
-            <div class="rv-action-cell"></div>
           </div>
         `;
       }
@@ -1203,10 +1219,12 @@
                 : `<label class="rv-file-upload-label">+ Upload file<input type="file" class="rv-upload-input" data-row-id="${r.id}" style="display:none;" /></label>`}
             </div>
           </div>
-          <div class="rv-action-cell">
-            <button type="button" class="rv-x-btn" data-delete-id="${r.id}" title="Delete">&times;</button>
+          <div class="rv-actions-group">
+            <div class="rv-action-cell">
+              <button type="button" class="rv-x-btn" data-delete-id="${r.id}" title="Delete">&times;</button>
+            </div>
+            <div class="rv-action-cell"></div>
           </div>
-          <div class="rv-action-cell"></div>
         </div>
       `;
     }).join("");
