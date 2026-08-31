@@ -173,42 +173,44 @@
   #panel-vault .accordion-header-right { background: #eef3f9; border-radius: 999px; padding: 5px 12px; gap: 6px; }
   #panel-vault .accordion-count { background: none; padding: 0; }
   #panel-vault .accordion-chevron { color: var(--navy-light); }
-  /* Greg (8/30/26, round 2): a forced min-width here made the table wider
-     than the Client Control Center iframe pane, which just spilled off
-     the edge with no visible way to reach the rest -- "cut off." A real
-     spreadsheet narrows its columns and truncates long text with an
-     ellipsis rather than force a fixed width, so that's what this does
-     instead: flexible fr columns (no min-width) that always fit whatever
-     width the pane actually has, with overflow-x:auto kept only as a
-     last-resort safety net on genuinely tiny screens. */
+  /* Greg (8/30/26, round 3): the real problem was never the column
+     widths -- .page-shell was still capped at max-width:900px even in
+     embed mode, so once .card's own padding came out of that, the table
+     had barely 750px to work with and the previous min-width (760px)
+     missed by a hair. Squeezing every column down with forced ellipsis
+     to compensate just mangled the Title cell (the Shared badge and the
+     truncated title ran together). Fixed at the source instead: embed
+     mode now uncaps .page-shell exactly like client_profile.html already
+     does for .profile-shell, so the vault gets the iframe's actual full
+     width and the table below can use comfortable, reference-matching
+     column widths without needing to crush anything. */
+  body.embed-mode .page-shell { max-width: none; margin: 0; padding: 0 0 40px; }
   .rv-table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .rv-table-wrap .list-row-edit, .rv-table-head {
-    display: grid; grid-template-columns: 1fr 1fr 0.85fr 1fr auto; gap: 12px; align-items: center;
-    padding: 11px 16px; margin: 0; border-bottom: 1px solid #f0f2f4;
+    display: grid; grid-template-columns: 1.3fr 1.3fr 1fr 1.3fr auto; gap: 18px; align-items: center;
+    min-width: 700px; padding: 14px 18px; margin: 0; border-bottom: 1px solid #f0f2f4;
   }
   .rv-table-wrap .list-row-edit:last-child { border-bottom: none; }
   .rv-table-head { background: #f8fafb; border-bottom: 1px solid var(--border); }
-  .rv-table-head span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); font-weight: 700; }
+  .rv-table-head span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; }
   .rv-table-wrap .field { margin-bottom: 0; min-width: 0; }
   .rv-table-wrap .field label { display: none; }
-  .rv-title-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
-  .rv-title-cell .rv-shared-badge { flex-shrink: 0; }
-  .rv-title-cell input.row-input-edit, .rv-title-cell .rv-readonly { flex: 1; min-width: 0; }
+  .rv-title-cell { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .rv-title-cell .rv-shared-badge { flex-shrink: 0; margin-left: 0; }
+  .rv-title-cell input.row-input-edit, .rv-title-cell .rv-readonly { flex: 1 1 auto; min-width: 80px; font-weight: 600; }
   .rv-table-wrap input.row-input-edit {
-    width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid transparent; border-radius: 6px;
-    font-size: 13.5px; background: transparent; font-family: inherit; box-sizing: border-box;
-    overflow: hidden; text-overflow: ellipsis;
+    width: 100%; padding: 7px 9px; border: 1px solid transparent; border-radius: 6px;
+    font-size: 13.5px; line-height: 1.4; background: transparent; font-family: inherit; box-sizing: border-box;
   }
   .rv-table-wrap input.row-input-edit:hover, .rv-table-wrap input.row-input-edit:focus {
     border-color: var(--border); background: #fff;
   }
   .rv-table-wrap .rv-readonly,
-  .rv-table-wrap .rv-file-link,
   .rv-table-wrap .field > .field-hint {
-    padding: 0; font-size: 13.5px; display: block; min-width: 0;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    padding: 0; font-size: 13.5px; line-height: 1.4; word-break: break-word;
   }
-  .rv-actions-cell { display: flex; align-items: center; gap: 10px; justify-self: end; white-space: nowrap; flex-shrink: 0; }
+  .rv-table-wrap .rv-file-link { font-size: 13px; line-height: 1.4; word-break: break-word; }
+  .rv-actions-cell { display: flex; align-items: center; gap: 12px; justify-self: end; white-space: nowrap; flex-shrink: 0; }
   .rv-actions-cell .btn-secondary.btn-sm, .rv-actions-cell label.btn-secondary.btn-sm { flex-shrink: 0; }
 
   /* Documents & Links, flat under each research area (Greg/Chris, 8/26/26:
@@ -496,8 +498,8 @@
               <span class="accordion-chevron">&#9656;</span>
             </div>
           </div>
-          <div class="accordion-body open" id="resource_vault-body">
-            <div class="field-hint" style="margin-bottom:10px;">Each resource can be a Link URL (opens in a new tab — a video, quiz, external doc, etc.) or an uploaded file (downloads), whichever fits. Rows marked "Shared" show for every client — Admins can edit those right here and the change applies everywhere. Add anything client-specific below.</div>
+          <div class="accordion-body open" id="resource_vault-body" style="margin-top:16px;">
+            <div class="field-hint" style="margin-bottom:18px; line-height:1.55; max-width:840px;">Each resource can be a Link URL (opens in a new tab — a video, quiz, external doc, etc.) or an uploaded file (downloads), whichever fits. Rows marked "Shared" show for every client — Admins can edit those right here and the change applies everywhere. Add anything client-specific below.</div>
             <div class="rv-table-wrap">
               <div id="resource_vault-list"></div>
             </div>
