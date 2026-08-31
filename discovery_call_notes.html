@@ -72,6 +72,31 @@
   .save-row button:disabled { opacity: 0.55; cursor: default; }
   .save-hint { font-size: 12px; color: var(--muted); }
 
+  /* Attach a File or Link for Call Notes -- same upload-or-link + Change
+     menu pattern as the Workflow Files page. */
+  .wf-btn {
+    display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--navy-light);
+    border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 7px 16px;
+    font-size: 12.5px; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .wf-btn:hover { background: #eef4fb; }
+  .wf-file-cell { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .wf-file-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; }
+  .wf-file-link:hover { text-decoration: underline; }
+  .wf-change-wrap { position: relative; flex-shrink: 0; }
+  .wf-menu {
+    position: absolute; top: calc(100% + 6px); left: 0; min-width: 150px; background: #fff;
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    padding: 6px; z-index: 20;
+  }
+  .wf-menu button {
+    display: block; width: 100%; text-align: left; background: none; border: none; padding: 8px 10px;
+    border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; font-family: inherit;
+  }
+  .wf-menu button:hover { background: #f4f6f8; }
+  .wf-menu button.wf-menu-danger { color: var(--danger); }
+  .wf-menu button.wf-menu-danger:hover { background: #fdecea; }
+
   @media print {
     .no-print { display: none !important; }
     body { background: #fff; }
@@ -217,6 +242,10 @@
           <label for="f-notes">Notes</label>
           <textarea id="f-notes" rows="14" placeholder="Discovery call notes…"></textarea>
         </div>
+        <div class="field">
+          <label>Attach a File or Link</label>
+          <div id="notes-attachment"></div>
+        </div>
         <div class="save-row">
           <button type="button" id="save-btn">Save Notes</button>
           <span class="save-hint" id="save-hint"></span>
@@ -243,6 +272,29 @@
     return (div.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
   }
 
+  const sanitizeFilename = (name) => name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  function fileNameFromPath(path) {
+    if (!path) return "";
+    const last = path.split("/").pop();
+    return last.replace(/^\d+-/, "");
+  }
+  const FILE_TYPE_ICONS = {
+    pdf: "\u{1F4D5}",
+    doc: "\u{1F4D8}", docx: "\u{1F4D8}",
+    xls: "\u{1F4D7}", xlsx: "\u{1F4D7}", csv: "\u{1F4D7}",
+    ppt: "\u{1F4D9}", pptx: "\u{1F4D9}",
+    png: "\u{1F5BC}\u{FE0F}", jpg: "\u{1F5BC}\u{FE0F}", jpeg: "\u{1F5BC}\u{FE0F}", gif: "\u{1F5BC}\u{FE0F}",
+    zip: "\u{1F5C3}\u{FE0F}",
+    mp3: "\u{1F3A7}", m4a: "\u{1F3A7}", wav: "\u{1F3A7}",
+    mp4: "\u{1F3A5}", mov: "\u{1F3A5}",
+  };
+  function fileIconFor(path) {
+    const name = (path.split("/").pop() || "").toLowerCase();
+    const dot = name.lastIndexOf(".");
+    const ext = dot === -1 ? "" : name.slice(dot + 1);
+    return FILE_TYPE_ICONS[ext] || "\u{1F4C4}";
+  }
+
   function redirectToLogin() {
     const dest = location.pathname.split("/").pop() + location.search;
     location.href = "index.html?return=" + encodeURIComponent(dest);
@@ -266,6 +318,160 @@
   // changes elsewhere) -- same as any other fillable form.
   function fieldValue(saved, liveDefault) {
     return (saved !== null && saved !== undefined && saved !== "") ? saved : (liveDefault || "");
+  }
+
+  // ---------- Attach a File or Link for Call Notes (Greg, 8/31/26) ----------
+  // Same upload-or-link + Change-menu pattern as the Workflow Files page:
+  // one "+ Add file" trigger opening {Upload file, Add a link} in the
+  // empty state, one "Change" trigger opening {Replace/Edit, Remove}
+  // once something's attached. Saves straight to client_content the
+  // moment a file/link is picked -- independent of the Save Notes
+  // button, which only covers the typed fields.
+  function closeAllWfMenus() {
+    document.querySelectorAll(".wf-menu").forEach((m) => m.classList.add("hidden"));
+  }
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".wf-change-wrap")) closeAllWfMenus();
+  });
+  function wireWfChangeMenu(container, actions) {
+    const trigger = container.querySelector("[data-wf-change]");
+    const menu = container.querySelector(".wf-menu");
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const wasHidden = menu.classList.contains("hidden");
+      closeAllWfMenus();
+      menu.classList.toggle("hidden", !wasHidden);
+    });
+    actions.forEach(({ sel, fn }) => {
+      menu.querySelector(sel).addEventListener("click", () => { closeAllWfMenus(); fn(); });
+    });
+  }
+
+  function renderNotesAttachment() {
+    const container = $("notes-attachment");
+    const path = contentRow && contentRow.discovery_notes_storage_path;
+    const url = contentRow && contentRow.discovery_notes_url;
+
+    if (path) {
+      container.innerHTML = `
+        <div class="wf-file-cell">
+          <span class="wf-file-link">${fileIconFor(path)} ${escapeHtml(fileNameFromPath(path))}</span>
+          <div class="wf-change-wrap">
+            <button type="button" class="wf-btn" data-wf-change>Change &#9662;</button>
+            <div class="wf-menu hidden">
+              <button type="button" data-wf-replace>Replace file</button>
+              <button type="button" class="wf-menu-danger" data-wf-remove>Remove file</button>
+            </div>
+          </div>
+        </div>
+      `;
+      container.querySelector(".wf-file-link").addEventListener("click", async () => {
+        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, 60);
+        if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+        window.open(data.signedUrl, "_blank");
+      });
+      wireWfChangeMenu(container, [
+        { sel: "[data-wf-replace]", fn: () => pickNotesFile() },
+        { sel: "[data-wf-remove]", fn: () => removeNotesAttachment() },
+      ]);
+      return;
+    }
+
+    if (url) {
+      container.innerHTML = `
+        <div class="wf-file-cell">
+          <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="wf-file-link" style="text-decoration:none; word-break:break-all;">&#128279; ${escapeHtml(url)}</a>
+          <div class="wf-change-wrap">
+            <button type="button" class="wf-btn" data-wf-change>Change &#9662;</button>
+            <div class="wf-menu hidden">
+              <button type="button" data-wf-edit-link>Edit link</button>
+              <button type="button" class="wf-menu-danger" data-wf-remove>Remove link</button>
+            </div>
+          </div>
+        </div>
+      `;
+      wireWfChangeMenu(container, [
+        { sel: "[data-wf-edit-link]", fn: () => renderNotesLinkForm(url) },
+        { sel: "[data-wf-remove]", fn: () => removeNotesAttachment() },
+      ]);
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="wf-change-wrap">
+        <button type="button" class="wf-btn" data-wf-change>+ Add file &#9662;</button>
+        <div class="wf-menu hidden">
+          <button type="button" data-wf-upload>Upload file</button>
+          <button type="button" data-wf-add-link>Add a link</button>
+        </div>
+      </div>
+      <input type="file" class="wf-upload-input hidden" />
+    `;
+    container.querySelector(".wf-upload-input").addEventListener("change", (e) => {
+      if (e.target.files.length) uploadNotesFile(e.target.files[0]);
+    });
+    wireWfChangeMenu(container, [
+      { sel: "[data-wf-upload]", fn: () => container.querySelector(".wf-upload-input").click() },
+      { sel: "[data-wf-add-link]", fn: () => renderNotesLinkForm("") },
+    ]);
+  }
+
+  function renderNotesLinkForm(currentUrl) {
+    const container = $("notes-attachment");
+    container.innerHTML = `
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <input type="url" class="wf-link-input" value="${escapeHtml(currentUrl)}" placeholder="https://…" style="flex:1; min-width:200px; padding:7px 9px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit;" />
+        <button type="button" class="save-row-btn" data-wf-save-link style="font-family:inherit; cursor:pointer; border:none; border-radius:6px; font-size:13px; padding:8px 16px; font-weight:600; background:var(--accent); color:#fff;">Save</button>
+        <button type="button" data-wf-cancel-link style="font-family:inherit; cursor:pointer; border:1.5px solid var(--border); border-radius:6px; font-size:13px; padding:8px 16px; font-weight:600; background:#fff; color:var(--text);">Cancel</button>
+      </div>
+    `;
+    const input = container.querySelector(".wf-link-input");
+    input.focus();
+    container.querySelector("[data-wf-save-link]").addEventListener("click", () => saveNotesLink(input.value.trim()));
+    container.querySelector("[data-wf-cancel-link]").addEventListener("click", () => renderNotesAttachment());
+  }
+
+  async function saveNotesLink(url) {
+    if (!url) { showBanner("Enter a URL first.", "error"); return; }
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    const { error } = await sb.from("client_content").update({ discovery_notes_url: url, discovery_notes_storage_path: null }).eq("client_id", currentClient.id);
+    if (error) { showBanner("Couldn't save the link: " + error.message, "error"); return; }
+    contentRow.discovery_notes_url = url;
+    contentRow.discovery_notes_storage_path = null;
+    renderNotesAttachment();
+    showBanner("Link saved.", "success");
+  }
+
+  function pickNotesFile() {
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.addEventListener("change", () => { if (picker.files.length) uploadNotesFile(picker.files[0]); });
+    picker.click();
+  }
+
+  async function uploadNotesFile(file) {
+    const oldPath = contentRow && contentRow.discovery_notes_storage_path;
+    const path = `clients/${currentClient.id}/workflow/discovery-notes/${Date.now()}-${sanitizeFilename(file.name)}`;
+    const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+    if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    const { error } = await sb.from("client_content").update({ discovery_notes_storage_path: path, discovery_notes_url: null }).eq("client_id", currentClient.id);
+    if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
+    if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
+    contentRow.discovery_notes_storage_path = path;
+    contentRow.discovery_notes_url = null;
+    renderNotesAttachment();
+    showBanner("File uploaded.", "success");
+  }
+
+  async function removeNotesAttachment() {
+    const oldPath = contentRow && contentRow.discovery_notes_storage_path;
+    const { error } = await sb.from("client_content").update({ discovery_notes_storage_path: null, discovery_notes_url: null }).eq("client_id", currentClient.id);
+    if (error) { showBanner("Couldn't remove it: " + error.message, "error"); return; }
+    if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
+    contentRow.discovery_notes_storage_path = null;
+    contentRow.discovery_notes_url = null;
+    renderNotesAttachment();
+    showBanner("Attachment removed.", "success");
   }
 
   async function loadClient(clientId) {
@@ -324,6 +530,7 @@
     if (contentRow.discovery_call_notes || contentRow.discovery_call_participants) {
       $("save-hint").textContent = "Previously saved notes loaded below.";
     }
+    renderNotesAttachment();
 
     $("form-view").classList.remove("hidden");
   }

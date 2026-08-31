@@ -9,7 +9,11 @@
 -- "change cc list to Program Manager" (discovery_program_manager --
 -- still pre-filled from the same source, the Application's cc_emails,
 -- just relabeled/renamed to match what that contact actually is on this
--- form). These
+-- form), then "add a section to add a file or link for call notes"
+-- (discovery_notes_storage_path/discovery_notes_url -- same
+-- upload-or-link slot pattern as the other Workflow Files fields, for a
+-- recording/transcript/shared doc attached alongside the typed Notes).
+-- These
 -- columns back the live, in-app fillable form (discovery_call_notes.html):
 -- every field -- both the ones only a person on the actual call can
 -- supply (participants, call link, notes) and the ones normally
@@ -43,3 +47,5 @@ alter table client_content add column if not exists discovery_twitter_url text;
 alter table client_content add column if not exists discovery_youtube_url text;
 alter table client_content add column if not exists discovery_instagram_url text;
 alter table client_content add column if not exists discovery_other_social_url text;
+alter table client_content add column if not exists discovery_notes_storage_path text;
+alter table client_content add column if not exists discovery_notes_url text;
