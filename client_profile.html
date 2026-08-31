@@ -368,6 +368,13 @@
 
   .wizard-body { display: grid; grid-template-columns: 220px 1fr; gap: 18px; align-items: start; }
   @media (max-width: 800px) { .wizard-body { grid-template-columns: 1fr; } .wizard-sidebar { order: 2; } }
+  /* Without this, a grid item's default min-width:auto sizes to its widest
+     descendant's min-content -- here, the 620px min-width buried in the
+     Competitors/Top Customers table CSS -- which blows out this whole
+     column (and the page) instead of letting the table's own
+     overflow-x:auto scroll internally. Same fix as .cc-pane and .page-shell
+     elsewhere in this app (Greg, 8/30/26, round 6). */
+  .wizard-main { min-width: 0; }
   .wizard-sidebar { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 20px; }
   .wizard-ai-note { display: flex; align-items: flex-start; gap: 10px; background: #f4f0fb; border: 1px solid #e3d5f7; border-radius: 10px; padding: 12px 14px; cursor: pointer; }
   .wizard-ai-note:hover { background: #ecdffa; }
@@ -2219,31 +2226,36 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     for (const cfg of LIST_CONFIGS) {
       if (cfg.readOnly) continue; // Team Members has no add-form
       const form = $(`${cfg.key}-add-form`);
-      form.classList.toggle("fields-3col", cfg.rowLayout === "company3");
-      form.classList.toggle("fields-contact4", cfg.rowLayout === "contact4");
-      // Competitors/Top Customers now render as a real spreadsheet table
-      // (Greg, 8/30/26) -- the add-row form is styled as one more table
-      // row, so it gets the same column grid + a compact "+" button
-      // instead of the labeled fields + "+ Add" text button every other
-      // list still uses.
-      form.classList.toggle("company-table-addform", cfg.rowLayout === "company3");
-      form.innerHTML = `
-        ${cfg.fields.map((f) => `
-          <div class="field">
-            <label for="${cfg.key}-new-${f.name}">${escapeHtml(f.label)}</label>
-            ${f.type === "select" ? `
-            <select id="${cfg.key}-new-${f.name}" ${f.required ? "required" : ""}>
-              <option value="">${escapeHtml(f.blankLabel || "—")}</option>
-              ${f.options().map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join("")}
-            </select>
-            ` : `
-            <input type="${f.type}" id="${cfg.key}-new-${f.name}" ${f.required ? "required" : ""} />
-            `}
-          </div>
-        `).join("")}
-        <button type="submit" class="btn-secondary btn-sm" title="Add row">${cfg.rowLayout === "company3" ? "+" : "+ Add"}</button>
-      `;
-      form.addEventListener("submit", (e) => { e.preventDefault(); addListRow(cfg); });
+      // Competitors/Top Customers: dropped the blank "+" row entirely
+      // (Greg, 8/30/26, round 6 -- it read as a stray empty table, not an
+      // obvious way to add something). Import CSV / Export CSV / Clear
+      // Contents above the table already cover adding, updating and
+      // wiping this list in bulk, which is the point of a CSV-backed
+      // list in the first place -- so there's nothing lost by not also
+      // offering a one-row-at-a-time form underneath it.
+      if (cfg.rowLayout === "company3") {
+        form.classList.add("hidden");
+        form.innerHTML = "";
+      } else {
+        form.classList.toggle("fields-contact4", cfg.rowLayout === "contact4");
+        form.innerHTML = `
+          ${cfg.fields.map((f) => `
+            <div class="field">
+              <label for="${cfg.key}-new-${f.name}">${escapeHtml(f.label)}</label>
+              ${f.type === "select" ? `
+              <select id="${cfg.key}-new-${f.name}" ${f.required ? "required" : ""}>
+                <option value="">${escapeHtml(f.blankLabel || "—")}</option>
+                ${f.options().map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join("")}
+              </select>
+              ` : `
+              <input type="${f.type}" id="${cfg.key}-new-${f.name}" ${f.required ? "required" : ""} />
+              `}
+            </div>
+          `).join("")}
+          <button type="submit" class="btn-secondary btn-sm">+ Add</button>
+        `;
+        form.addEventListener("submit", (e) => { e.preventDefault(); addListRow(cfg); });
+      }
 
       if (cfg.csv) {
         const fileInput = $(`${cfg.key}-csv-file`);
