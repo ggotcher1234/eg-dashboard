@@ -413,7 +413,7 @@
         <h2 id="wf-card-title">Project Files</h2>
         <div class="card-hint" id="wf-card-hint">Upload a file or add a link for each item. Item 4 drafts an email.</div>
         <div class="wf-items" id="wf-items">
-          <div class="wf-item-row" id="wf-row-discovery">
+          <div class="wf-item-row hidden" id="wf-row-discovery">
             <span class="wf-item-num">1</span>
             <div class="wf-item-body">
               <div class="wf-item-title">Discovery Document</div>
@@ -421,21 +421,21 @@
               <div id="wf-discovery-file"></div>
             </div>
           </div>
-          <div class="wf-item-row" id="wf-row-controlling">
+          <div class="wf-item-row hidden" id="wf-row-controlling">
             <span class="wf-item-num">2</span>
             <div class="wf-item-body">
               <div class="wf-item-title">Controlling Document</div>
               <div id="wf-controlling-file"></div>
             </div>
           </div>
-          <div class="wf-item-row" id="wf-row-review">
+          <div class="wf-item-row hidden" id="wf-row-review">
             <span class="wf-item-num">3</span>
             <div class="wf-item-body">
               <div class="wf-item-title">Research Review Document</div>
               <div id="wf-review-file"></div>
             </div>
           </div>
-          <div class="wf-item-row" id="wf-row-eval">
+          <div class="wf-item-row hidden" id="wf-row-eval">
             <span class="wf-item-num">4</span>
             <div class="wf-item-body">
               <div class="wf-item-title">Close-Out Document -- Send Evaluation Email (to the CEO, from the Team Lead)</div>
@@ -445,6 +445,35 @@
           </div>
         </div>
       </div>
+      <!-- Greg (8/31/26): "I don't like the hiding part -- it shows for a
+           second before it hides. Create separate entities for each."
+           Each of the 4 rows above starts hidden right in the markup (not
+           shown-then-hidden by JS after the page loads), and this tiny
+           script -- which runs the instant the browser parses this point,
+           before any of the slower client/data loading further down --
+           reveals only the one row that matches ?doc=, or all 4 if there's
+           no ?doc= at all. Nothing ever flashes visible and then
+           disappears. -->
+      <script>
+        (function () {
+          var ROW_IDS = { discovery: "wf-row-discovery", controlling: "wf-row-controlling", review: "wf-row-review", eval: "wf-row-eval" };
+          var LABELS = { discovery: "Discovery Document", controlling: "Controlling Document", review: "Research Review Document", eval: "Close-Out Document" };
+          var doc = new URLSearchParams(location.search).get("doc");
+          var rowId = ROW_IDS[doc];
+          if (rowId) {
+            var row = document.getElementById(rowId);
+            if (row) row.classList.remove("hidden");
+            document.getElementById("wf-items").classList.add("doc-filtered");
+            document.getElementById("wf-card-title").textContent = LABELS[doc];
+            document.getElementById("wf-card-hint").textContent = "";
+          } else {
+            Object.keys(ROW_IDS).forEach(function (k) {
+              var el = document.getElementById(ROW_IDS[k]);
+              if (el) el.classList.remove("hidden");
+            });
+          }
+        })();
+      </script>
     </div>
   </div>
 </div>
@@ -851,43 +880,27 @@
     $("p-lifecycle-badge").className = `badge badge-${client.project_status}`;
     $("p-lifecycle-badge").textContent = client.project_status;
 
+    updateViewAllLink(client.id);
+
     await loadWorkflowLinks(client.id);
     await loadEvalResponse(client.id);
     await loadEvalEmailContext(client.id);
-    applyDocFilter();
   }
 
   // Greg (8/31/26): "customize the page for each one to only show that
-  // document not all of them." The CCC left-nav's Documents group links
-  // here with ?doc=discovery/controlling/review/eval so the Team Lead sees
-  // just that one item's card -- not the whole Project Files list. No
-  // ?doc= (e.g. the back-link from the Discovery Call Notes form) still
-  // shows all 4, same as before.
-  const DOC_ROW_IDS = { discovery: "wf-row-discovery", controlling: "wf-row-controlling", review: "wf-row-review", eval: "wf-row-eval" };
-  const DOC_LABELS = { discovery: "Discovery Document", controlling: "Controlling Document", review: "Research Review Document", eval: "Close-Out Document" };
-  const ALL_ITEMS_HINT = "Upload a file or add a link for each item. Item 4 drafts an email.";
-  function applyDocFilter() {
-    const doc = new URLSearchParams(location.search).get("doc");
-    const rowId = DOC_ROW_IDS[doc];
-    const allRowIds = Object.values(DOC_ROW_IDS);
-    if (!rowId) {
-      allRowIds.forEach((id) => document.getElementById(id) && document.getElementById(id).classList.remove("hidden"));
-      $("wf-items").classList.remove("doc-filtered");
-      $("wf-card-title").textContent = "Project Files";
-      $("wf-card-hint").textContent = ALL_ITEMS_HINT;
-      $("wf-view-all-link").classList.add("hidden");
-      return;
-    }
-    allRowIds.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) el.classList.toggle("hidden", id !== rowId);
-    });
-    $("wf-items").classList.add("doc-filtered");
-    $("wf-card-title").textContent = DOC_LABELS[doc];
-    $("wf-card-hint").textContent = "";
+  // document not all of them," then "I don't like the hiding part -- it
+  // shows for a second before it hides. Create separate entities for
+  // each." Which single row is visible (or all 4) is now decided by the
+  // tiny inline script sitting right after the Project Files markup --
+  // that runs before any of this slower client/data-loading code, so
+  // there's no show-then-hide flash. All this does is point the "All
+  // Project Files" link back at the unfiltered page once currentClient.id
+  // is known -- it doesn't touch row visibility.
+  function updateViewAllLink(clientId) {
+    if (!new URLSearchParams(location.search).get("doc")) return;
     const embed = new URLSearchParams(location.search).get("embed") === "1";
     const viewAllLink = $("wf-view-all-link");
-    viewAllLink.href = `client_workflow_files.html?client=${currentClient.id}${embed ? "&embed=1" : ""}`;
+    viewAllLink.href = `client_workflow_files.html?client=${clientId}${embed ? "&embed=1" : ""}`;
     viewAllLink.classList.remove("hidden");
   }
 
