@@ -55,11 +55,14 @@
      the same visual weight as the work itself). */
   .btn-sm { padding: 8px 12px; font-size: 13px; height: 36px; border-radius: 8px; font-weight: 600; }
   /* Greg (8/30/26 GPT reference): plain row on the page background --
-     search on the left, Print/More as bordered white pill buttons on the
-     right. No full-bleed dark bar; that read badly against the masthead
-     above it, per Greg's feedback. */
+     Print/More as bordered white pill buttons on the right. No full-bleed
+     dark bar; that read badly against the masthead above it, per Greg's
+     feedback. Greg (8/30/26, round 5): dropped the global search box
+     entirely -- this page doesn't need it -- and right-aligned the row so
+     Print/More stay exactly where they were instead of drifting left into
+     the space search used to occupy. */
   .std-toolbar-row {
-    display: flex; gap: 10px; align-items: center;
+    display: flex; gap: 10px; align-items: center; justify-content: flex-end;
     margin-bottom: 24px;
   }
   .toolbar-pill-btn {
@@ -69,24 +72,6 @@
     box-shadow: 0 1px 2px rgba(20,48,77,0.06);
   }
   .toolbar-pill-btn:hover { background: #f4f6f8; }
-  .global-search-wrap { position: relative; flex: 1; max-width: 480px; }
-  .global-search-wrap .search-box { position: relative; }
-  .global-search-wrap .search-box input {
-    width: 100%; height: 36px; padding: 0 14px 0 38px; border: 1px solid var(--border); border-radius: 8px;
-    font-size: 13.5px; background: #fff;
-  }
-  .global-search-wrap .search-box input:focus { outline: none; border-color: var(--navy-light); }
-  .global-search-wrap .search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
-  .global-search-results {
-    position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #fff;
-    border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(20,48,77,0.15);
-    z-index: 70; max-height: 420px; overflow-y: auto;
-  }
-  .gsr-group-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; padding: 10px 14px 4px; }
-  .gsr-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; cursor: pointer; font-size: 13.5px; }
-  .gsr-item:hover { background: #f4f6f8; }
-  .gsr-item .gsr-name { font-weight: 600; color: var(--text); }
-  .gsr-item .gsr-meta { font-size: 12px; color: var(--muted); flex-shrink: 0; }
   .cc-more-wrap { position: relative; flex-shrink: 0; }
   .cc-more-menu {
     position: absolute; top: calc(100% + 6px); right: 0; width: 160px; background: #fff; padding: 6px;
@@ -480,13 +465,6 @@
     <div id="banner"></div>
 
     <div class="std-toolbar-row no-print">
-      <div class="global-search-wrap">
-        <div class="search-box">
-          <span class="search-icon">&#128269;</span>
-          <input type="text" id="global-search-input" placeholder="Search…" autocomplete="off" />
-        </div>
-        <div class="global-search-results hidden" id="global-search-results"></div>
-      </div>
       <button type="button" class="toolbar-pill-btn" id="std-print-btn" title="Print this engagement overview">&#128424; Print</button>
       <div class="cc-more-wrap">
         <button type="button" class="toolbar-pill-btn" id="cc-more-btn">&#8943; More &#9662;</button>
@@ -889,7 +867,6 @@
 
     await Promise.all([
       clientId ? loadClient(clientId) : Promise.resolve(),
-      loadGlobalSearchIndex(),
       loadUsers(),
     ]);
 
@@ -1239,60 +1216,10 @@
     renderStatusAge(activeClient);
   });
 
-  // ---------- Standardized Search/Print/Export toolbar ----------
-  let gsClients = [], gsUsers = [], gsPrograms = [];
-  async function loadGlobalSearchIndex() {
-    const [{ data: clients }, { data: users }, { data: programs }] = await Promise.all([
-      sb.from("clients").select("id, name, project_status"),
-      sb.from("users").select("id, full_name"),
-      sb.from("econ_dev_companies").select("id, name, code"),
-    ]);
-    gsClients = clients || []; gsUsers = users || []; gsPrograms = programs || [];
-  }
-  const GS_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
-  function renderGlobalSearchResults(query) {
-    const box = $("global-search-results");
-    const q = query.trim().toLowerCase();
-    if (!q) { box.classList.add("hidden"); box.innerHTML = ""; return; }
-    const engMatches = gsClients.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 5);
-    const specMatches = gsUsers.filter((u) => u.full_name && u.full_name.toLowerCase().includes(q)).slice(0, 5);
-    const progMatches = gsPrograms.filter((p) => (p.name || "").toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q)).slice(0, 5);
-    let html = "";
-    if (engMatches.length) {
-      html += `<div class="gsr-group-label">Engagements</div>` + engMatches.map((c) => `
-        <div class="gsr-item" data-gsr-nav="client_control_center.html?client=${c.id}">
-          <span class="gsr-name">${escapeHtml(c.name)}</span>
-          <span class="gsr-meta">${escapeHtml(GS_STATUS_LABELS[c.project_status] || c.project_status)}</span>
-        </div>
-      `).join("");
-    }
-    if (specMatches.length) {
-      html += `<div class="gsr-group-label">Specialists</div>` + specMatches.map((u) => `
-        <div class="gsr-item" data-gsr-nav="team_directory.html"><span class="gsr-name">${escapeHtml(u.full_name)}</span></div>
-      `).join("");
-    }
-    if (progMatches.length) {
-      html += `<div class="gsr-group-label">Programs</div>` + progMatches.map((p) => `
-        <div class="gsr-item" data-gsr-nav="econ_dev_partners_admin.html?program=${p.id}">
-          <span class="gsr-name">${escapeHtml(p.name)}</span>
-          <span class="gsr-meta">${escapeHtml(p.code || "")}</span>
-        </div>
-      `).join("");
-    }
-    if (!html) html = `<div class="gsr-item" style="cursor:default;"><span class="gsr-name" style="color:var(--muted); font-weight:400;">No matches.</span></div>`;
-    box.innerHTML = html;
-    box.classList.remove("hidden");
-    box.querySelectorAll("[data-gsr-nav]").forEach((el) => {
-      el.addEventListener("click", () => { window.location.href = el.dataset.gsrNav; });
-    });
-  }
-  $("global-search-input").addEventListener("input", () => renderGlobalSearchResults($("global-search-input").value));
-  $("global-search-input").addEventListener("focus", () => {
-    if ($("global-search-input").value.trim()) renderGlobalSearchResults($("global-search-input").value);
-  });
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest(".global-search-wrap")) $("global-search-results").classList.add("hidden");
-  });
+  // ---------- Standardized Print/Export toolbar ----------
+  // Greg (8/30/26, round 5): the global search box that used to live here
+  // is gone -- this page doesn't need it -- so the global-search-index
+  // load and the search-results dropdown it drove are gone too.
   function csvField(value) {
     const v = value == null ? "" : String(value);
     return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
