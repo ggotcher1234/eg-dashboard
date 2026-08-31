@@ -97,6 +97,20 @@
   .wf-menu button.wf-menu-danger { color: var(--danger); }
   .wf-menu button.wf-menu-danger:hover { background: #fdecea; }
 
+  /* Greg (8/31/26): "wrong. one row = 1 person = 3 fields per person. Add
+     Row button." Each CC List entry is its own row of 3 real inputs
+     (Name/Title/Email), not one comma-joined line of text. */
+  .cc-row { display: grid; grid-template-columns: 1.1fr 1fr 1.4fr auto; gap: 10px 12px; align-items: end; margin-bottom: 10px; }
+  .cc-row .field { margin-bottom: 0; }
+  .cc-row-remove {
+    background: none; border: none; color: var(--danger); font-size: 20px; line-height: 1;
+    cursor: pointer; padding: 8px 6px; font-family: inherit;
+  }
+  .cc-row-remove:hover { color: #b3261e; }
+  @media (max-width: 640px) {
+    .cc-row { grid-template-columns: 1fr; }
+  }
+
   @media print {
     .no-print { display: none !important; }
     body { background: #fff; }
@@ -167,8 +181,9 @@
           <textarea id="f-company-address" rows="2"></textarea>
         </div>
         <div class="field">
-          <label for="f-cc-list">CC List</label>
-          <textarea id="f-cc-list" rows="3" placeholder="One person per line: Name, Title, Email"></textarea>
+          <label>CC List</label>
+          <div id="cc-list-rows"></div>
+          <button type="button" class="wf-btn" id="cc-list-add-row" style="margin-top:2px;">+ Add Row</button>
         </div>
         <div class="field">
           <label for="f-company-contacts">Company Contacts</label>
@@ -323,6 +338,64 @@
   function fieldValue(saved, liveDefault) {
     return (saved !== null && saved !== undefined && saved !== "") ? saved : (liveDefault || "");
   }
+
+  // ---------- CC List (Greg, 8/31/26) ----------
+  // "one row = 1 person = 3 fields per person. Add Row button." -- a real
+  // repeatable row editor (Name/Title/Email inputs, not one comma-joined
+  // line of freeform text). Saved as JSON in the same discovery_cc_list
+  // snapshot column as before (still just this form's own copy -- editing
+  // it here doesn't write back to the Company page's CC List table,
+  // client_cc_list, same one-way relationship every other field on this
+  // form has with its live source).
+  let ccListRows = [];
+
+  function parseCcListSnapshot(raw) {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map((r) => ({ name: r.name || "", title: r.title || "", email: r.email || "" }));
+    } catch (e) {
+      // Ignore -- fall through to null so the caller uses the live default instead.
+    }
+    return null;
+  }
+
+  function renderCcListRows() {
+    const container = $("cc-list-rows");
+    container.innerHTML = ccListRows.map((row, i) => `
+      <div class="cc-row" data-row-index="${i}">
+        <div class="field"><label>Name</label><input type="text" data-cc-field="name" value="${escapeAttr(row.name)}" /></div>
+        <div class="field"><label>Title</label><input type="text" data-cc-field="title" value="${escapeAttr(row.title)}" /></div>
+        <div class="field"><label>Email</label><input type="email" data-cc-field="email" value="${escapeAttr(row.email)}" /></div>
+        <button type="button" class="cc-row-remove" data-cc-remove title="Remove this person">&times;</button>
+      </div>
+    `).join("");
+    container.querySelectorAll("[data-cc-field]").forEach((inp) => {
+      inp.addEventListener("input", () => {
+        const i = Number(inp.closest("[data-row-index]").dataset.rowIndex);
+        ccListRows[i][inp.dataset.ccField] = inp.value;
+      });
+    });
+    container.querySelectorAll("[data-cc-remove]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const i = Number(btn.closest("[data-row-index]").dataset.rowIndex);
+        ccListRows.splice(i, 1);
+        if (!ccListRows.length) ccListRows.push({ name: "", title: "", email: "" });
+        renderCcListRows();
+      });
+    });
+  }
+
+  function escapeAttr(s) {
+    return String(s || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  }
+
+  $("cc-list-add-row").addEventListener("click", () => {
+    ccListRows.push({ name: "", title: "", email: "" });
+    renderCcListRows();
+    const rows = $("cc-list-rows").querySelectorAll("[data-cc-field='name']");
+    if (rows.length) rows[rows.length - 1].focus();
+  });
 
   // ---------- Attach a File or Link for Call Notes (Greg, 8/31/26) ----------
   // Same upload-or-link + Change-menu pattern as the Workflow Files page:
@@ -509,7 +582,7 @@
     // (client_cc_list, Dashboard Wizard > Contacts step) the first time
     // this form is opened; a saved snapshot here takes precedence after
     // that, same as every other field on this form.
-    const ccListLines = (ccList || []).map((c) => [c.name, c.title, c.email].filter(Boolean).join(", ")).join("\n");
+    const liveCcListRows = (ccList || []).map((c) => ({ name: c.name || "", title: c.title || "", email: c.email || "" }));
 
     // Greg (8/31/26): "make sure the Program Manager and Address flow
     // through from the application." Program Manager is the Program
@@ -543,7 +616,9 @@
     $("f-program-name").value = fieldValue(contentRow.discovery_program_name, programName);
     $("f-program-manager").value = fieldValue(contentRow.discovery_program_manager, programManager);
     $("f-company-address").value = fieldValue(contentRow.discovery_company_address, client.address);
-    $("f-cc-list").value = fieldValue(contentRow.discovery_cc_list, ccListLines);
+    ccListRows = parseCcListSnapshot(contentRow.discovery_cc_list) || liveCcListRows;
+    if (!ccListRows.length) ccListRows = [{ name: "", title: "", email: "" }];
+    renderCcListRows();
     $("f-company-contacts").value = fieldValue(contentRow.discovery_company_contacts, contactLines);
     $("f-website-url").value = fieldValue(contentRow.discovery_website_url, client.website_url);
     $("f-facebook-url").value = fieldValue(contentRow.discovery_facebook_url, client.facebook_url);
@@ -583,7 +658,7 @@
         discovery_program_name: $("f-program-name").value,
         discovery_company_name: $("f-company-name").value,
         discovery_company_address: $("f-company-address").value,
-        discovery_cc_list: $("f-cc-list").value,
+        discovery_cc_list: JSON.stringify(ccListRows.filter((r) => r.name || r.title || r.email)),
         discovery_company_contacts: $("f-company-contacts").value,
         discovery_program_manager: $("f-program-manager").value,
         discovery_company_description: $("f-company-description").value,
