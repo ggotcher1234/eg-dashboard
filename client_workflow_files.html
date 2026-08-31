@@ -128,13 +128,14 @@
   .wf-item-row {
     display: flex; align-items: flex-start; gap: 16px;
     border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px;
-    transition: background-color 0.3s ease, border-color 0.3s ease;
   }
-  /* Greg (8/31/26): "clicking Discovery Document should just bring up the
-     Discovery Document." When the CCC left-nav Documents group links here
-     with ?doc=, this briefly highlights the matching row so it's obvious
-     that's the one you asked for. */
-  .wf-item-row.wf-row-highlight { background: #eef4fb; border-color: var(--navy-light); }
+  /* Greg (8/31/26): "customize the page for each one to only show that
+     document not all of them." When the CCC left-nav Documents group
+     links here with ?doc=, only the matching row shows and the numbered
+     badge (meaningless for a single item) is hidden. */
+  .wf-view-all-link { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--muted); text-decoration: none; margin-bottom: 10px; }
+  .wf-view-all-link:hover { color: var(--navy); text-decoration: underline; }
+  .wf-items.doc-filtered .wf-item-num { display: none; }
   .wf-item-num {
     width: 30px; height: 30px; border-radius: 50%; background: var(--navy); color: #fff;
     display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0;
@@ -408,9 +409,10 @@
       </div>
 
       <div class="card">
-        <h2>Project Files</h2>
-        <div class="card-hint">Upload a file or add a link for each item. Item 4 drafts an email.</div>
-        <div class="wf-items">
+        <a href="#" id="wf-view-all-link" class="wf-view-all-link hidden">&larr; All Project Files</a>
+        <h2 id="wf-card-title">Project Files</h2>
+        <div class="card-hint" id="wf-card-hint">Upload a file or add a link for each item. Item 4 drafts an email.</div>
+        <div class="wf-items" id="wf-items">
           <div class="wf-item-row" id="wf-row-discovery">
             <span class="wf-item-num">1</span>
             <div class="wf-item-body">
@@ -852,23 +854,41 @@
     await loadWorkflowLinks(client.id);
     await loadEvalResponse(client.id);
     await loadEvalEmailContext(client.id);
-    scrollToRequestedDoc();
+    applyDocFilter();
   }
 
-  // Greg (8/31/26): "clicking on Discovery Document would just bring up the
-  // Discovery Document" -- the CCC left-nav's Documents group links here
-  // with ?doc=discovery/controlling/review/eval so the Team Lead lands
-  // right on that item instead of the top of a long page.
+  // Greg (8/31/26): "customize the page for each one to only show that
+  // document not all of them." The CCC left-nav's Documents group links
+  // here with ?doc=discovery/controlling/review/eval so the Team Lead sees
+  // just that one item's card -- not the whole Project Files list. No
+  // ?doc= (e.g. the back-link from the Discovery Call Notes form) still
+  // shows all 4, same as before.
   const DOC_ROW_IDS = { discovery: "wf-row-discovery", controlling: "wf-row-controlling", review: "wf-row-review", eval: "wf-row-eval" };
-  function scrollToRequestedDoc() {
+  const DOC_LABELS = { discovery: "Discovery Document", controlling: "Controlling Document", review: "Research Review Document", eval: "Close-Out Document" };
+  const ALL_ITEMS_HINT = "Upload a file or add a link for each item. Item 4 drafts an email.";
+  function applyDocFilter() {
     const doc = new URLSearchParams(location.search).get("doc");
     const rowId = DOC_ROW_IDS[doc];
-    if (!rowId) return;
-    const row = document.getElementById(rowId);
-    if (!row) return;
-    row.scrollIntoView({ behavior: "smooth", block: "center" });
-    row.classList.add("wf-row-highlight");
-    setTimeout(() => row.classList.remove("wf-row-highlight"), 2200);
+    const allRowIds = Object.values(DOC_ROW_IDS);
+    if (!rowId) {
+      allRowIds.forEach((id) => document.getElementById(id) && document.getElementById(id).classList.remove("hidden"));
+      $("wf-items").classList.remove("doc-filtered");
+      $("wf-card-title").textContent = "Project Files";
+      $("wf-card-hint").textContent = ALL_ITEMS_HINT;
+      $("wf-view-all-link").classList.add("hidden");
+      return;
+    }
+    allRowIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle("hidden", id !== rowId);
+    });
+    $("wf-items").classList.add("doc-filtered");
+    $("wf-card-title").textContent = DOC_LABELS[doc];
+    $("wf-card-hint").textContent = "";
+    const embed = new URLSearchParams(location.search).get("embed") === "1";
+    const viewAllLink = $("wf-view-all-link");
+    viewAllLink.href = `client_workflow_files.html?client=${currentClient.id}${embed ? "&embed=1" : ""}`;
+    viewAllLink.classList.remove("hidden");
   }
 
   // ---------- Project Files (Discovery/Controlling/Research Review) ----------
