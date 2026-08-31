@@ -349,8 +349,8 @@
 
   function renderNotesAttachment() {
     const container = $("notes-attachment");
-    const path = contentRow && contentRow.discovery_notes_storage_path;
-    const url = contentRow && contentRow.discovery_notes_url;
+    const path = contentRow && contentRow.discovery_doc_storage_path;
+    const url = contentRow && contentRow.discovery_doc_url;
 
     if (path) {
       container.innerHTML = `
@@ -434,10 +434,10 @@
   async function saveNotesLink(url) {
     if (!url) { showBanner("Enter a URL first.", "error"); return; }
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-    const { error } = await sb.from("client_content").update({ discovery_notes_url: url, discovery_notes_storage_path: null }).eq("client_id", currentClient.id);
+    const { error } = await sb.from("client_content").update({ discovery_doc_url: url, discovery_doc_storage_path: null }).eq("client_id", currentClient.id);
     if (error) { showBanner("Couldn't save the link: " + error.message, "error"); return; }
-    contentRow.discovery_notes_url = url;
-    contentRow.discovery_notes_storage_path = null;
+    contentRow.discovery_doc_url = url;
+    contentRow.discovery_doc_storage_path = null;
     renderNotesAttachment();
     showBanner("Link saved.", "success");
   }
@@ -450,26 +450,26 @@
   }
 
   async function uploadNotesFile(file) {
-    const oldPath = contentRow && contentRow.discovery_notes_storage_path;
-    const path = `clients/${currentClient.id}/workflow/discovery-notes/${Date.now()}-${sanitizeFilename(file.name)}`;
+    const oldPath = contentRow && contentRow.discovery_doc_storage_path;
+    const path = `clients/${currentClient.id}/workflow/discovery/${Date.now()}-${sanitizeFilename(file.name)}`;
     const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
     if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
-    const { error } = await sb.from("client_content").update({ discovery_notes_storage_path: path, discovery_notes_url: null }).eq("client_id", currentClient.id);
+    const { error } = await sb.from("client_content").update({ discovery_doc_storage_path: path, discovery_doc_url: null }).eq("client_id", currentClient.id);
     if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
-    contentRow.discovery_notes_storage_path = path;
-    contentRow.discovery_notes_url = null;
+    contentRow.discovery_doc_storage_path = path;
+    contentRow.discovery_doc_url = null;
     renderNotesAttachment();
     showBanner("File uploaded.", "success");
   }
 
   async function removeNotesAttachment() {
-    const oldPath = contentRow && contentRow.discovery_notes_storage_path;
-    const { error } = await sb.from("client_content").update({ discovery_notes_storage_path: null, discovery_notes_url: null }).eq("client_id", currentClient.id);
+    const oldPath = contentRow && contentRow.discovery_doc_storage_path;
+    const { error } = await sb.from("client_content").update({ discovery_doc_storage_path: null, discovery_doc_url: null }).eq("client_id", currentClient.id);
     if (error) { showBanner("Couldn't remove it: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
-    contentRow.discovery_notes_storage_path = null;
-    contentRow.discovery_notes_url = null;
+    contentRow.discovery_doc_storage_path = null;
+    contentRow.discovery_doc_url = null;
     renderNotesAttachment();
     showBanner("Attachment removed.", "success");
   }
@@ -483,11 +483,11 @@
     }
     currentClient = client;
 
-    const [{ data: content }, { data: contacts }, { data: team }, { data: application }, partnerRes] = await Promise.all([
+    const [{ data: content }, { data: contacts }, { data: team }, { data: partnerSelections }, partnerRes] = await Promise.all([
       sb.from("client_content").select("*").eq("client_id", clientId).maybeSingle(),
       sb.from("client_contacts").select("*").eq("client_id", clientId),
       sb.from("client_assignments").select("id, is_team_lead, users(full_name, email)").eq("client_id", clientId).not("user_id", "is", null).order("is_team_lead", { ascending: false }),
-      sb.from("client_applications").select("cc_emails").eq("client_id", clientId).order("submitted_at", { ascending: false }).limit(1).maybeSingle(),
+      sb.from("client_team_partner_contacts").select("partner_contact_id").eq("client_id", clientId),
       client.econ_dev_company_id
         ? sb.from("econ_dev_companies").select("name").eq("id", client.econ_dev_company_id).single()
         : Promise.resolve({ data: null }),
@@ -497,7 +497,25 @@
     const leadRow = (team || []).find((r) => r.is_team_lead && r.users && r.users.full_name);
     const teamLead = leadRow ? [leadRow.users.full_name, leadRow.users.email].filter(Boolean).join(", ") : "";
     const contactLines = (contacts || []).map((c) => [c.name, c.title, c.email, c.phone].filter(Boolean).join(", ")).join("\n");
-    const programManager = (application && application.cc_emails && application.cc_emails.length) ? application.cc_emails.join(", ") : "";
+
+    // Greg (8/31/26): "make sure the Program Manager and Address flow
+    // through from the application." Program Manager is the Program
+    // Contact picked on the original Application (program_contact_id),
+    // which accept_client_application() (056) copies onto
+    // client_team_partner_contacts -- NOT the application's freeform
+    // cc_emails (that's a separate, email-only field used elsewhere for
+    // the Close-Out Evaluation email's CC line). This looks the contact
+    // up the same two-step way client_profile.html's Team section does:
+    // selected partner_contact_id's first, then the real contact rows.
+    const partnerContactIds = (partnerSelections || []).map((s) => s.partner_contact_id);
+    let programManager = "";
+    if (partnerContactIds.length) {
+      const { data: partnerContacts } = await sb
+        .from("econ_dev_partner_contacts")
+        .select("name, title, email, phone")
+        .in("id", partnerContactIds);
+      programManager = (partnerContacts || []).map((c) => [c.name, c.title, c.email, c.phone].filter(Boolean).join(", ")).join("\n");
+    }
 
     $("back-link").href = `client_workflow_files.html?client=${client.id}`;
     $("lh-company-name").textContent = client.name || "";
@@ -567,15 +585,15 @@
       // Greg (8/31/26): "when i go back and look at the Workflow Documents
       // page it is not showing up... perhaps we should hit a submit
       // button instead of save." Submitting is what makes this show up
-      // in Project Files as Discovery Notes -- if nothing's been
+      // in Project Files as the Discovery Document -- if nothing's been
       // manually attached yet via "Attach a File or Link" above, submit
-      // links Discovery Notes back to this filled-out form itself (a
-      // real attachment there always takes precedence and is left
+      // links the Discovery Document back to this filled-out form itself
+      // (a real attachment there always takes precedence and is left
       // alone).
-      if (!contentRow.discovery_notes_storage_path && !contentRow.discovery_notes_url) {
+      if (!contentRow.discovery_doc_storage_path && !contentRow.discovery_doc_url) {
         const selfLink = new URL(location.pathname, location.origin);
         selfLink.search = `?client=${currentClient.id}`;
-        payload.discovery_notes_url = selfLink.toString();
+        payload.discovery_doc_url = selfLink.toString();
       }
 
       const { error } = await sb.from("client_content").update(payload).eq("client_id", currentClient.id);
