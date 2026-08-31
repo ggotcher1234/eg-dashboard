@@ -162,6 +162,39 @@
   .rv-file-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; }
   .rv-file-link:hover { text-decoration: underline; }
 
+  /* Resource Vault: real spreadsheet-style table -- Title | Description |
+     Link URL | File | actions, one header row, one line per resource,
+     instead of stacked field-pairs (Greg, 8/30/26: "make it look exactly
+     like the [reference] page"). Inputs stay borderless/transparent until
+     hovered or focused so editable cells still read as plain table text,
+     matching the reference's look, even though every field still
+     autosaves on blur exactly as before -- this is a reskin, not a
+     behavior change. */
+  #panel-vault .accordion-header-right { background: #eef3f9; border-radius: 999px; padding: 5px 12px; gap: 6px; }
+  #panel-vault .accordion-count { background: none; padding: 0; }
+  #panel-vault .accordion-chevron { color: var(--navy-light); }
+  .rv-table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .rv-table-wrap .list-row-edit, .rv-table-head {
+    display: grid; grid-template-columns: 1.1fr 1.1fr 0.9fr 1.2fr auto; gap: 16px; align-items: center;
+    min-width: 760px; padding: 11px 16px; margin: 0; border-bottom: 1px solid #f0f2f4;
+  }
+  .rv-table-wrap .list-row-edit:last-child { border-bottom: none; }
+  .rv-table-head { background: #f8fafb; border-bottom: 1px solid var(--border); }
+  .rv-table-head span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); font-weight: 700; }
+  .rv-table-wrap .field { margin-bottom: 0; }
+  .rv-table-wrap .field label { display: none; }
+  .rv-title-cell { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .rv-table-wrap input.row-input-edit {
+    width: 100%; padding: 6px 8px; border: 1px solid transparent; border-radius: 6px;
+    font-size: 13.5px; background: transparent; font-family: inherit; box-sizing: border-box;
+  }
+  .rv-table-wrap input.row-input-edit:hover, .rv-table-wrap input.row-input-edit:focus {
+    border-color: var(--border); background: #fff;
+  }
+  .rv-table-wrap .rv-readonly { padding: 0; font-size: 13.5px; }
+  .rv-actions-cell { display: flex; align-items: center; gap: 12px; justify-self: end; white-space: nowrap; }
+  .rv-actions-cell .btn-secondary.btn-sm, .rv-actions-cell label.btn-secondary.btn-sm { flex-shrink: 0; }
+
   /* Documents & Links, flat under each research area (Greg/Chris, 8/26/26:
      removed the Research Questions layer -- specialists now just upload a
      file or add a link directly under the area, no per-question grouping).
@@ -449,7 +482,9 @@
           </div>
           <div class="accordion-body open" id="resource_vault-body">
             <div class="field-hint" style="margin-bottom:10px;">Each resource can be a Link URL (opens in a new tab — a video, quiz, external doc, etc.) or an uploaded file (downloads), whichever fits. Rows marked "Shared" show for every client — Admins can edit those right here and the change applies everywhere. Add anything client-specific below.</div>
-            <div id="resource_vault-list"></div>
+            <div class="rv-table-wrap">
+              <div id="resource_vault-list"></div>
+            </div>
 
             <div id="rv-template-add-wrap" class="hidden" style="margin-top:14px; padding:12px; background:#f8fafb; border:1px dashed var(--border); border-radius:8px;">
               <div class="field-hint" style="margin-bottom:8px;"><strong>Shared resource</strong> — appears in every client's Resource Vault right away.</div>
@@ -1028,44 +1063,54 @@
     window.open(data.signedUrl, "_blank");
   }
 
+  // Column-header row for the Resource Vault table -- Title | Description |
+  // Link URL | File | (actions). Rendered once above the rows, sharing the
+  // same 5-column grid template as every data row (see .rv-table-wrap CSS)
+  // so everything lines up like a real spreadsheet (Greg, 8/30/26).
+  const RV_TABLE_HEAD_HTML = `
+    <div class="rv-table-head"><span>Title</span><span>Description</span><span>Link URL</span><span>File</span><span></span></div>
+  `;
+
   function renderResourceVaultRows(rows) {
     const list = $("resource_vault-list");
-    list.innerHTML = rows.map((r) => {
+    if (!rows.length) {
+      list.innerHTML = RV_TABLE_HEAD_HTML + `<div class="list-empty" style="padding:16px;">Nothing added yet.</div>`;
+      return;
+    }
+    list.innerHTML = RV_TABLE_HEAD_HTML + rows.map((r) => {
+      // Title, Description, Link URL and File are always their own columns
+      // now (Greg, 8/30/26 -- matching the reference table layout) rather
+      // than Link/File merged into one cell. On the live client dashboard a
+      // link still wins over an uploaded file when both are set -- that
+      // resolution is unchanged, this is just how the two fields display
+      // to whoever's editing them here.
       const fileHtml = r.storagePath
         ? `<span class="rv-file-link" data-path="${escapeHtml(r.storagePath)}">${fileIconFor(r.storagePath)} ${escapeHtml(fileNameFromPath(r.storagePath))}</span>`
-        : `<span class="field-hint">No file uploaded yet${r.isTemplate ? " — add one from Resource Templates." : "."}</span>`;
-      // A link takes priority over an uploaded file when both are set —
-      // matches how the client-facing dashboard resolves it.
-      const resolvedHtml = r.url
-        ? `<a class="rv-file-link" href="${escapeHtml(r.url)}" target="_blank" rel="noopener">&#128279; ${escapeHtml(r.url)}</a>`
-        : fileHtml;
+        : `<span class="field-hint">—</span>`;
+      const urlHtml = r.url
+        ? `<a class="rv-file-link" href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.url)}</a>`
+        : `<span class="field-hint">—</span>`;
 
       if (r.isTemplate && isSuperAdmin) {
         return `
           <div class="list-row-edit">
-            <div class="lre-fields">
-              <div class="field">
-                <label>Title <span class="rv-shared-badge">Shared</span></label>
-                <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="title" value="${escapeHtml(r.title)}" required />
-              </div>
-              <div class="field">
-                <label>Description (shows below icon)</label>
-                <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="description" value="${escapeHtml(r.description || "")}" />
-              </div>
-              <div class="field">
-                <label>Link URL <span class="field-hint" style="display:inline;">(wins over a file if both are set)</span></label>
-                <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="url" value="${escapeHtml(r.url || "")}" placeholder="https://…" />
-              </div>
-              <div class="field">
-                <label>File</label>
-                ${r.storagePath
-                  ? `<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">${fileHtml}<button type="button" class="btn-secondary btn-sm" data-rv-tpl-replace="${r.templateId}">Replace</button></div>`
-                  : `<label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload file<input type="file" class="rv-tpl-upload-input" data-tpl-id="${r.templateId}" style="display:none;" /></label>`}
-              </div>
+            <div class="field rv-title-cell">
+              <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="title" value="${escapeHtml(r.title)}" required />
+              <span class="rv-shared-badge">Shared</span>
             </div>
-            <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
+            <div class="field">
+              <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="description" value="${escapeHtml(r.description || "")}" placeholder="Add description" />
+            </div>
+            <div class="field">
+              <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="url" value="${escapeHtml(r.url || "")}" placeholder="https://…" />
+            </div>
+            <div class="field">${fileHtml}</div>
+            <div class="rv-actions-cell">
+              ${r.storagePath
+                ? `<button type="button" class="btn-secondary btn-sm" data-rv-tpl-replace="${r.templateId}">Replace</button>`
+                : `<label class="btn-secondary btn-sm" style="cursor:pointer;">Upload file<input type="file" class="rv-tpl-upload-input" data-tpl-id="${r.templateId}" style="display:none;" /></label>`}
+              <button type="button" class="rv-tpl-delete-all" data-rv-tpl-delete="${r.templateId}" data-rv-tpl-title="${escapeHtml(r.title)}">&#128465;&#65039; Delete for all clients</button>
               <button type="button" class="btn-danger icon-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
-              <button type="button" class="rv-tpl-delete-all" data-rv-tpl-delete="${r.templateId}" data-rv-tpl-title="${escapeHtml(r.title)}">Delete for all clients</button>
             </div>
           </div>
         `;
@@ -1074,39 +1119,38 @@
       if (r.isTemplate) {
         return `
           <div class="list-row-edit">
-            <div class="lre-fields">
-              <div class="field"><label>Title <span class="rv-shared-badge">Shared</span></label><div class="rv-readonly">${escapeHtml(r.title)}</div></div>
-              <div class="field"><label>Description (shows below icon)</label><div class="rv-readonly">${escapeHtml(r.description || "—")}</div></div>
-              <div class="field"><label>Link / File</label>${resolvedHtml}</div>
+            <div class="field rv-title-cell">
+              <div class="rv-readonly">${escapeHtml(r.title)}</div>
+              <span class="rv-shared-badge">Shared</span>
             </div>
-            <button type="button" class="btn-danger icon-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
+            <div class="field"><div class="rv-readonly">${escapeHtml(r.description || "—")}</div></div>
+            <div class="field">${urlHtml}</div>
+            <div class="field">${fileHtml}</div>
+            <div class="rv-actions-cell">
+              <button type="button" class="btn-danger icon-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
+            </div>
           </div>
         `;
       }
 
       return `
         <div class="list-row-edit">
-          <div class="lre-fields">
-            <div class="field">
-              <label>Title</label>
-              <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="title" value="${escapeHtml(r.title)}" required />
-            </div>
-            <div class="field">
-              <label>Description (shows below icon)</label>
-              <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="description" value="${escapeHtml(r.description || "")}" />
-            </div>
-            <div class="field">
-              <label>Link URL <span class="field-hint" style="display:inline;">(wins over a file if both are set)</span></label>
-              <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="url" value="${escapeHtml(r.url || "")}" placeholder="https://…" />
-            </div>
-            <div class="field">
-              <label>File</label>
-              ${r.storagePath
-                ? `<div style="display:flex; align-items:center; gap:10px;">${fileHtml}<button type="button" class="btn-secondary btn-sm" data-remove-file="${r.id}">Remove</button></div>`
-                : `<label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload file<input type="file" class="rv-upload-input" data-row-id="${r.id}" style="display:none;" /></label>`}
-            </div>
+          <div class="field">
+            <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="title" value="${escapeHtml(r.title)}" required />
           </div>
-          <button type="button" class="btn-danger icon-btn" data-delete-id="${r.id}" title="Delete">&times;</button>
+          <div class="field">
+            <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="description" value="${escapeHtml(r.description || "")}" placeholder="Add description" />
+          </div>
+          <div class="field">
+            <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="url" value="${escapeHtml(r.url || "")}" placeholder="https://…" />
+          </div>
+          <div class="field">${fileHtml}</div>
+          <div class="rv-actions-cell">
+            ${r.storagePath
+              ? `<button type="button" class="btn-secondary btn-sm" data-remove-file="${r.id}">Remove file</button>`
+              : `<label class="btn-secondary btn-sm" style="cursor:pointer;">Upload file<input type="file" class="rv-upload-input" data-row-id="${r.id}" style="display:none;" /></label>`}
+            <button type="button" class="btn-danger icon-btn" data-delete-id="${r.id}" title="Delete">&times;</button>
+          </div>
         </div>
       `;
     }).join("");

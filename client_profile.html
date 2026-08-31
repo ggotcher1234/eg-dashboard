@@ -255,27 +255,50 @@
   .add-row-form .field { margin-bottom: 0; flex: 1; min-width: 140px; }
   .add-row-form label { font-size: 11px; }
 
-  /* Company/URL/Location/Notes rows (Competitors, Top Customers) --
-     explicit 30/40/30 columns instead of equal-width flex-wrap, since
-     Company, URL and Location genuinely need different amounts of room;
-     Notes/NAICS Code always gets its own full-width row underneath. Below
-     900px that collapses to a natural 2x2 grid (Company+URL / Location+
-     Notes), and below 480px to one field per row -- no horizontal
-     scrolling at any width (Greg, 8/30/26). */
+  /* Competitors / Top Customers: rendered as a real spreadsheet-style
+     table (Company | URL | Location | Notes/NAICS Code, one column-
+     header row, one line per item, delete "x" inline at the end of the
+     row) instead of stacked field pairs -- matches the CSV this list
+     round-trips with and the reference layout Greg supplied (8/30/26:
+     "make it look exactly like the sheet"). .company-table wraps the
+     list container; the same 4-column grid template is shared by the
+     header row, every data row's .fields-3col, and the add-row form so
+     everything lines up like real spreadsheet columns. A horizontal
+     .table-scroll wrapper (added in markup) handles narrow viewports
+     instead of collapsing columns, since a spreadsheet's columns don't
+     restack -- they scroll. */
   .fields-3col.lre-fields, .fields-3col.add-row-form {
-    display: grid; grid-template-columns: 30% 40% 30%; gap: 12px 16px; align-items: end;
+    display: grid; grid-template-columns: 1fr 1.3fr 1fr 1.3fr; gap: 0 14px; align-items: center;
+    min-width: 620px;
   }
   .fields-3col .field { margin-bottom: 0; flex: none; min-width: 0; }
-  .fields-3col.lre-fields .field:nth-child(4) { grid-column: 1 / -1; }
-  .fields-3col.add-row-form .field:nth-child(4) { grid-column: 1 / -1; }
-  .fields-3col.add-row-form button[type="submit"] { grid-column: 1 / -1; justify-self: start; }
-  @media (max-width: 900px) {
-    .fields-3col.lre-fields, .fields-3col.add-row-form { grid-template-columns: 1fr 1fr; }
-    .fields-3col.lre-fields .field:nth-child(4),
-    .fields-3col.add-row-form .field:nth-child(4) { grid-column: auto; }
+  .company-table-wrap {
+    border: 1px solid var(--border); border-radius: 8px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
   }
-  @media (max-width: 480px) {
-    .fields-3col.lre-fields, .fields-3col.add-row-form { grid-template-columns: 1fr; }
+  .company-table .list-row-edit {
+    display: grid; grid-template-columns: 1fr 34px; gap: 10px; align-items: center;
+    padding: 9px 14px; margin: 0; border-bottom: 1px solid #f0f2f4;
+  }
+  .company-table .list-row-edit:last-child { border-bottom: none; }
+  .company-table .list-row-edit .icon-btn { justify-self: center; }
+  .company-table .field label { display: none; }
+  .company-table input.row-input-edit { padding: 7px 9px; font-size: 13.5px; }
+  .lre-table-head {
+    background: #f8fafb; border-bottom: 1px solid var(--border);
+  }
+  .lre-table-head span {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); font-weight: 700;
+  }
+  .company-table-addform.add-row-form {
+    display: grid; grid-template-columns: 1fr 1.3fr 1fr 1.3fr 34px; gap: 0 14px; align-items: center;
+    min-width: 620px; margin: 0; padding: 9px 14px; border: none; border-top: 1px solid var(--border);
+    background: #fafbfc;
+  }
+  .company-table-addform .field { margin-bottom: 0; }
+  .company-table-addform .field label { display: none; }
+  .company-table-addform button[type="submit"] {
+    grid-column: 5 / 6; justify-self: center; width: 28px; height: 28px; padding: 0; font-size: 16px; line-height: 1; border-radius: 6px;
   }
 
   /* Company Contacts: Name/Title/Email/Phone in one row -- the generic
@@ -833,8 +856,10 @@
               <input type="file" accept=".csv,text/csv" id="competitors-csv-file" style="display:none;" />
             </div>
             <span class="accordion-count" id="competitors-count" style="display:inline-block; margin-bottom:10px;"></span>
-            <div id="competitors-list"></div>
-            <form class="add-row-form" id="competitors-add-form"></form>
+            <div class="company-table-wrap">
+              <div id="competitors-list"></div>
+              <form class="add-row-form" id="competitors-add-form"></form>
+            </div>
           </div>
 
           <!-- Step 6 (was 5): Top Customers -->
@@ -848,8 +873,10 @@
               <input type="file" accept=".csv,text/csv" id="top_customers-csv-file" style="display:none;" />
             </div>
             <span class="accordion-count" id="top_customers-count" style="display:inline-block; margin-bottom:10px;"></span>
-            <div id="top_customers-list"></div>
-            <form class="add-row-form" id="top_customers-add-form"></form>
+            <div class="company-table-wrap">
+              <div id="top_customers-list"></div>
+              <form class="add-row-form" id="top_customers-add-form"></form>
+            </div>
           </div>
 
         </div>
@@ -2188,6 +2215,12 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
       const form = $(`${cfg.key}-add-form`);
       form.classList.toggle("fields-3col", cfg.rowLayout === "company3");
       form.classList.toggle("fields-contact4", cfg.rowLayout === "contact4");
+      // Competitors/Top Customers now render as a real spreadsheet table
+      // (Greg, 8/30/26) -- the add-row form is styled as one more table
+      // row, so it gets the same column grid + a compact "+" button
+      // instead of the labeled fields + "+ Add" text button every other
+      // list still uses.
+      form.classList.toggle("company-table-addform", cfg.rowLayout === "company3");
       form.innerHTML = `
         ${cfg.fields.map((f) => `
           <div class="field">
@@ -2202,7 +2235,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
             `}
           </div>
         `).join("")}
-        <button type="submit" class="btn-secondary btn-sm">+ Add</button>
+        <button type="submit" class="btn-secondary btn-sm" title="Add row">${cfg.rowLayout === "company3" ? "+" : "+ Add"}</button>
       `;
       form.addEventListener("submit", (e) => { e.preventDefault(); addListRow(cfg); });
 
@@ -2412,13 +2445,30 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     }
   }
 
+  // Competitors/Top Customers column-header row, shared by the header
+  // itself and every data row via the same .fields-3col grid template
+  // (Greg, 8/30/26 -- "make it look exactly like the sheet"). Kept as its
+  // own helper since it's rendered once above the rows, not per-row.
+  function companyTableHeadHtml(cfg) {
+    return `
+      <div class="list-row-edit lre-table-head">
+        <div class="lre-fields fields-3col">
+          ${cfg.fields.map((f) => `<span>${escapeHtml(f.label)}</span>`).join("")}
+        </div>
+        <span></span>
+      </div>
+    `;
+  }
+
   function renderListRows(cfg) {
     const rows = listData[cfg.key] || [];
     const countLabel = rows.length ? `${rows.length} item${rows.length === 1 ? "" : "s"}` : "";
     $(`${cfg.key}-count`).textContent = countLabel;
     const list = $(`${cfg.key}-list`);
+    list.classList.toggle("company-table", cfg.rowLayout === "company3");
     if (!rows.length) {
-      list.innerHTML = `<div class="list-empty">Nothing added yet.</div>`;
+      list.innerHTML = (cfg.rowLayout === "company3" ? companyTableHeadHtml(cfg) : "") +
+        `<div class="list-empty" style="padding:${cfg.rowLayout === "company3" ? "16px 14px" : "8px 0"};">Nothing added yet.</div>`;
       return;
     }
 
@@ -2443,7 +2493,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
       return;
     }
 
-    list.innerHTML = rows.map((r) => `
+    list.innerHTML = (cfg.rowLayout === "company3" ? companyTableHeadHtml(cfg) : "") + rows.map((r) => `
       <div class="list-row-edit">
         ${cfg.isChecklist ? `<input type="checkbox" class="list-checkbox" data-toggle-id="${r.id}" ${r.completed ? "checked" : ""} ${r.auto_source ? "disabled" : ""} title="${r.auto_source ? "Completes automatically -- no need to check this by hand" : ""}" />` : ""}
         <div class="lre-fields ${cfg.rowLayout === "company3" ? "fields-3col" : ""} ${cfg.rowLayout === "contact4" ? "fields-contact4" : ""}">
