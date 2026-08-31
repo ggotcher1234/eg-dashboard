@@ -1249,32 +1249,27 @@
   // never produce the "confirmed" reading this requires, and the iframe
   // simply holds still at its last good height instead of visibly
   // chasing the loop.
-  // Greg (8/31/26, round 7): "the scroll bar just started blinking on and
-  // off again... i don't think we made any changes to it" -- correct, this
-  // function itself wasn't touched today. The round-5 debounce-and-confirm
-  // logic below only ever *applied* a height if two readings 140ms apart
-  // were within 4px of each other -- but "within 4px" is still a fuzzy
-  // window, and a value that's genuinely drifting by a few px per tick
-  // (the exact horizontal-scrollbar-toggle feedback loop round 5 already
-  // diagnosed) can still land inside that window on two DIFFERENT nearby
-  // values often enough to keep re-applying, each apply nudging this outer
-  // page's height and re-flashing the browser's own scrollbar indicator
-  // even with round 6's overflow-y:scroll fix (that fix stops the
-  // scrollbar's on/off *existence* decision from flipping, but macOS's
-  // overlay-scrollbar style still flashes briefly on any real resize of a
-  // scroll container, which an outer height change is).
-  // The fix: round every reading UP to the nearest 32px "bucket" before
-  // ever comparing or applying. Two consecutive readings only count as
-  // "confirmed" if they land in the exact same bucket -- a real content
-  // change (switching wizard steps, adding a row) is almost always much
-  // bigger than 32px and still applies on the very next settle tick, but
-  // the kind of few-pixel drift that was causing repeated re-applies now
-  // can't cross a bucket boundary consistently enough to keep re-firing.
-  // Trade-off: up to ~32px of empty space can sit below short content
-  // instead of a pixel-perfect fit -- worth it to stop the visible
-  // flashing. Also widened the settle window 140ms -> 200ms to give slow
-  // reflows (fonts, images) more room to fully finish before measuring.
-  const CC_IFRAME_HEIGHT_BUCKET = 32;
+  // Greg (8/31/26, round 8): "that stopped it on step 5, now it's doing it
+  // on step 4???" -- round 7's fix (round every reading to a fixed 32px
+  // bucket, only apply when two readings land in the SAME bucket) didn't
+  // actually remove the failure mode, it just relocated it: that logic
+  // still compares each new reading to the PREVIOUS reading, so a value
+  // that happens to hover right at a bucket boundary for a GIVEN step's
+  // particular content height can still alternate between two adjacent
+  // buckets forever on that step, while a step whose content sits further
+  // from any boundary looks perfectly stable. Fixing step 5 just meant its
+  // real height didn't happen to sit near an edge; step 4's did.
+  // Real fix: stop comparing reading-to-reading (a moving, transient
+  // target) and compare instead to the height ALREADY ON SCREEN (a fixed,
+  // stable anchor that only moves when we deliberately move it). Any new
+  // reading within CC_IFRAME_HEIGHT_DEADBAND px of the current anchor is
+  // ignored completely, full stop -- it's never even stored as a
+  // "candidate," so there's no edge for it to hover near or alternate
+  // across, no matter how many times it repeats or which two values land
+  // next to each other. The anchor only moves for a genuinely large change
+  // (>28px), and even then only once confirmed by a second reading within
+  // 28px of that first candidate, 200ms later.
+  const CC_IFRAME_HEIGHT_DEADBAND = 28;
   let ccIframeResizeObserver = null;
   let ccIframeSettleTimer = null;
   let ccIframeLastHeight = 0;
@@ -1289,14 +1284,18 @@
       // pane's real content is still loading, not a "typical page" floor
       // (Greg, 8/31/26: "remove this unneeded box below each of the
       // document sections" -- short panes should actually get short).
-      const hRaw = Math.max(doc.body.scrollHeight, doc.body.getBoundingClientRect().height, 120);
-      const h = Math.ceil(hRaw / CC_IFRAME_HEIGHT_BUCKET) * CC_IFRAME_HEIGHT_BUCKET;
+      const h = Math.round(Math.max(doc.body.scrollHeight, doc.body.getBoundingClientRect().height, 120));
 
-      if (ccIframePendingHeight !== null && h === ccIframePendingHeight) {
-        if (h !== ccIframeLastHeight) {
-          ccIframeLastHeight = h;
-          iframe.style.height = `${h}px`;
-        }
+      // Anything within the deadband of what's already showing is ignored
+      // outright -- no pending candidate, no scheduled recheck, nothing
+      // for a future tick to compare against. This is what actually stops
+      // the whack-a-mole: the reference point is fixed, not the last
+      // transient reading.
+      if (Math.abs(h - ccIframeLastHeight) <= CC_IFRAME_HEIGHT_DEADBAND) {
+        ccIframePendingHeight = null;
+      } else if (ccIframePendingHeight !== null && Math.abs(h - ccIframePendingHeight) <= CC_IFRAME_HEIGHT_DEADBAND) {
+        ccIframeLastHeight = h;
+        iframe.style.height = `${h}px`;
         ccIframePendingHeight = null;
       } else {
         ccIframePendingHeight = h;
