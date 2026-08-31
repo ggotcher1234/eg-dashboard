@@ -125,21 +125,6 @@
   .badge-on_hold { background: #fdf1dc; color: var(--amber); }
   .badge-closed { background: #eef1f4; color: var(--muted); }
 
-  /* True segmented control -- one joined pill-shaped bar with a single
-     solid "on" segment, instead of four separate translucent buttons. */
-  .segmented-control {
-    display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden;
-    background: #f6f8fa;
-  }
-  .segmented-control .status-pill {
-    border: none; border-right: 1px solid var(--border); border-radius: 0; padding: 9px 18px;
-    font-size: 12.5px; font-weight: 700; background: transparent; color: var(--muted);
-    transition: background 0.15s ease, color 0.15s ease;
-  }
-  .segmented-control .status-pill:last-child { border-right: none; }
-  .segmented-control .status-pill:hover:not(:disabled):not(.active) { background: #eceff2; color: var(--text); }
-  .segmented-control .status-pill.active { background: var(--navy); color: #fff; }
-  .segmented-control .status-pill:disabled { cursor: default; }
   .badge-internal { background: #eef1f4; color: var(--muted); }
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 22px 26px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
@@ -731,15 +716,13 @@
                a new page and left menu item called Workflow Files (TL)") --
                see client_workflow_files.html. -->
           <div class="wizard-panel-card wizard-panel" data-step="1">
-            <h3>Client Status &amp; Company Information</h3>
-            <div class="wizard-panel-hint">Engagement status, the company's basic details, and where clients/partners can find it online.</div>
 
-            <div class="wizard-subcard">
-              <div class="subcard-title">Status &amp; Engagement</div>
-              <div class="card-hint" style="margin-top:-6px;">Controls whether the client appears in active lists (does not show on the exported dashboard).</div>
-              <div class="segmented-control" id="p-status-toggle"></div>
-            </div>
-
+            <!-- Greg (8/31/26, annotated screenshot): the heading here and
+                 the whole "Status & Engagement" subcard were redundant --
+                 the Client Control Center header one level up already
+                 shows this same company name/status and already has its
+                 own editable status control (#431, same clients.project_status
+                 column). Both removed; Company Details starts the panel now. -->
             <div class="wizard-subcard">
               <div class="subcard-title">Company Details</div>
               <form id="company-form-1">
@@ -950,9 +933,6 @@
   let currentClient = null;
   let canEdit = false; // Super Admin or assigned to this client
   let isTeamLeadHere = false;
-
-  const PROJECT_STATUSES = ["accepted", "in_progress", "on_hold", "closed"];
-  const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -1409,7 +1389,6 @@
     $("p-research-link").href = `client_research.html?client=${client.id}`;
     renderShareLink(client);
 
-    renderStatusToggle(client);
     await backfillSocialFields(client);
     fillCompanyForm(client);
     listData.team = await TEAM_CONFIG.customLoad(client.id);
@@ -1464,35 +1443,6 @@
       showBanner("Couldn't copy automatically — the link is selected, press Cmd/Ctrl+C.", "error");
     }
   });
-
-  // ---------- Client Status ----------
-  function renderStatusToggle(c) {
-    const canEditStatus = isSuperAdmin || isTeamLeadHere;
-    // True segmented control now (not colored status badges) -- one solid
-    // "on" segment, the rest quiet/neutral, per the redesign.
-    $("p-status-toggle").innerHTML = PROJECT_STATUSES.map((s) => `
-      <button type="button" data-pstatus="${s}" class="status-pill ${s === c.project_status ? "active" : ""}" ${canEditStatus ? "" : "disabled"}>${PROJECT_STATUS_LABELS[s]}</button>
-    `).join("");
-    document.querySelectorAll("#p-status-toggle button").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const newStatus = btn.dataset.pstatus;
-        if (newStatus === currentClient.project_status) return;
-        document.querySelectorAll("#p-status-toggle button").forEach((b) => (b.disabled = true));
-        setSaveStatus("saving");
-        const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", currentClient.id);
-        if (error) {
-          showBanner("Couldn't update project status: " + error.message, "error");
-          setSaveStatus("error");
-          renderStatusToggle(currentClient);
-          return;
-        }
-        currentClient.project_status = newStatus;
-        showBanner("Project status updated.", "success");
-        setSaveStatus("saved");
-        renderStatusToggle(currentClient);
-      });
-    });
-  }
 
   // ---------- Company Information ----------
   // URL fields double as "link fields" now (label + input + a small open
