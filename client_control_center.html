@@ -1116,34 +1116,66 @@
   // body's own rendered height -- and dropping documentElement.scrollHeight
   // from the calculation entirely -- reports the page's true content
   // height and shrinks correctly on every step.
+  // Greg (8/31/26, round 5): scrollbar-gutter:stable (see the html rule
+  // near the top of this file) and a bigger >4px threshold still didn't
+  // stop it on Resource Vault specifically -- confirmed live that the real
+  // problem is a genuine feedback loop, not sub-pixel noise: resizing the
+  // iframe can itself change what the NEXT measurement reads (e.g. a table
+  // a few pixels too wide for its pane toggles its own horizontal
+  // scrollbar, which changes body's height, which resizes the iframe,
+  // which can flip the table's available width back), and a single
+  // rAF-per-tick can chase that indefinitely, repainting a visibly
+  // different height every cycle. Rather than reason about that specific
+  // trigger again, this is now debounce-and-confirm instead of measure-
+  // and-apply: every trigger waits 140ms of quiet, then takes ONE
+  // measurement and holds it without touching the iframe; only if the
+  // *next* measurement, another 140ms later, agrees with the held one
+  // (within 4px) does it actually get applied. A real content change
+  // (switching wizard steps, adding a row) settles instantly and clears
+  // this in one extra beat. A genuine oscillation between two heights, by
+  // definition, never reads the same value twice in a row -- so it can
+  // never produce the "confirmed" reading this requires, and the iframe
+  // simply holds still at its last good height instead of visibly
+  // chasing the loop.
   let ccIframeResizeObserver = null;
-  let ccIframeResizeRaf = null;
+  let ccIframeSettleTimer = null;
   let ccIframeLastHeight = 0;
-  function fitIframeToContent() {
-    if (ccIframeResizeRaf) cancelAnimationFrame(ccIframeResizeRaf);
-    ccIframeResizeRaf = requestAnimationFrame(() => {
-      ccIframeResizeRaf = null;
-      const iframe = $("cc-iframe");
-      try {
-        const doc = iframe.contentDocument;
-        if (!doc || !doc.body) return;
-        const h = Math.round(Math.max(doc.body.scrollHeight, doc.body.getBoundingClientRect().height, 520));
+  let ccIframePendingHeight = null;
+  function ccMeasureAndMaybeApplyHeight() {
+    ccIframeSettleTimer = null;
+    const iframe = $("cc-iframe");
+    try {
+      const doc = iframe.contentDocument;
+      if (!doc || !doc.body) return;
+      const h = Math.round(Math.max(doc.body.scrollHeight, doc.body.getBoundingClientRect().height, 520));
+
+      if (ccIframePendingHeight !== null && Math.abs(h - ccIframePendingHeight) <= 4) {
         if (Math.abs(h - ccIframeLastHeight) > 4) {
           ccIframeLastHeight = h;
           iframe.style.height = `${h}px`;
         }
-        if (!ccIframeResizeObserver && window.ResizeObserver) {
-          ccIframeResizeObserver = new ResizeObserver(() => fitIframeToContent());
-          ccIframeResizeObserver.observe(doc.body);
-        }
-      } catch (e) {
-        // Cross-origin or not-yet-loaded -- fall back to the CSS min-height.
+        ccIframePendingHeight = null;
+      } else {
+        ccIframePendingHeight = h;
+        ccIframeSettleTimer = setTimeout(ccMeasureAndMaybeApplyHeight, 140);
       }
-    });
+
+      if (!ccIframeResizeObserver && window.ResizeObserver) {
+        ccIframeResizeObserver = new ResizeObserver(() => fitIframeToContent());
+        ccIframeResizeObserver.observe(doc.body);
+      }
+    } catch (e) {
+      // Cross-origin or not-yet-loaded -- fall back to the CSS min-height.
+    }
+  }
+  function fitIframeToContent() {
+    if (ccIframeSettleTimer) clearTimeout(ccIframeSettleTimer);
+    ccIframeSettleTimer = setTimeout(ccMeasureAndMaybeApplyHeight, 140);
   }
   $("cc-iframe").addEventListener("load", () => {
     if (ccIframeResizeObserver) { ccIframeResizeObserver.disconnect(); ccIframeResizeObserver = null; }
     ccIframeLastHeight = 0;
+    ccIframePendingHeight = null;
     fitIframeToContent();
   });
 
