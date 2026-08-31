@@ -324,6 +324,17 @@
   .fields-contact4.add-row-form button[type="submit"] { grid-column: 1 / -1; justify-self: start; }
   .contact-scroll-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
+  /* Greg (8/31/26): "I need to be able to add a few people to cc list on
+     an engagement -- one line per cc person with fields name title email."
+     Same one-line-per-row grid as Contacts (.fields-contact4) but 3
+     columns instead of 4, since CC List has no Phone field. */
+  .fields-cc3.lre-fields, .fields-cc3.add-row-form {
+    display: grid; grid-template-columns: 1.1fr 1fr 1.4fr; gap: 12px 16px; align-items: end;
+    min-width: 520px;
+  }
+  .fields-cc3 .field { margin-bottom: 0; flex: none; min-width: 0; }
+  .fields-cc3.add-row-form button[type="submit"] { grid-column: 1 / -1; justify-self: start; }
+
   .icon-btn { padding: 4px 8px; font-size: 13px; line-height: 1; flex-shrink: 0; }
 
   .doc-area-label { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); font-weight: 700; margin: 18px 0 8px; }
@@ -850,6 +861,16 @@
             <div class="contact-scroll-wrap">
               <div id="contacts-list"></div>
               <form class="add-row-form" id="contacts-add-form"></form>
+            </div>
+
+            <div class="wizard-subcard">
+              <div class="subcard-title">CC List</div>
+              <div class="card-hint" style="margin-top:-6px;">People to keep in the loop on engagement emails who aren't already a Company Contact above.</div>
+              <span class="accordion-count" id="cc_list-count" style="display:inline-block; margin-bottom:10px;"></span>
+              <div class="contact-scroll-wrap">
+                <div id="cc_list-list"></div>
+                <form class="add-row-form" id="cc_list-add-form"></form>
+              </div>
             </div>
 
             <div class="wizard-subcard">
@@ -1780,6 +1801,24 @@
     ],
     render: (r) => ({ title: r.name, sub: [r.title, r.email, r.phone].filter(Boolean).join(" · ") }),
   };
+  // Greg (8/31/26): "I need to be able to add a few people to cc list on
+  // an engagement. need a cc list field with one line per cc person with
+  // fields, name title email." A separate list from Company Contacts --
+  // these are people to keep in the loop on engagement emails (updates,
+  // Close-Out Evaluation, etc.) who may not be an actual point of contact
+  // at the company. Not yet wired into any outgoing email's CC line (the
+  // Close-Out Evaluation email today only has a To field) -- this adds the
+  // list itself first.
+  const CC_LIST_CONFIG = {
+    key: "cc_list", table: "client_cc_list", title: "CC List",
+    rowLayout: "cc3",
+    fields: [
+      { name: "name", label: "Name", type: "text", required: true },
+      { name: "title", label: "Title", type: "text" },
+      { name: "email", label: "Email", type: "email" },
+    ],
+    render: (r) => ({ title: r.name, sub: [r.title, r.email].filter(Boolean).join(" · ") }),
+  };
   const COMPETITORS_CONFIG = {
     key: "competitors", table: "client_competitors", title: "Competitors",
     hint: "Import or export the list as a CSV with columns: Company, URL, Location, Notes.",
@@ -1860,7 +1899,7 @@
       ].filter(Boolean).join(" · "),
     }),
   };
-  const LIST_CONFIGS = [CONTACTS_CONFIG, TEAM_CONFIG, COMPETITORS_CONFIG, TOP_CUSTOMERS_CONFIG];
+  const LIST_CONFIGS = [CONTACTS_CONFIG, CC_LIST_CONFIG, TEAM_CONFIG, COMPETITORS_CONFIG, TOP_CUSTOMERS_CONFIG];
   const listData = {}; // key -> rows
 
   // Builds the "+ Add" form for one config into its wizard step (the list
@@ -1882,6 +1921,7 @@
         form.innerHTML = "";
       } else {
         form.classList.toggle("fields-contact4", cfg.rowLayout === "contact4");
+        form.classList.toggle("fields-cc3", cfg.rowLayout === "cc3");
         form.innerHTML = `
           ${cfg.fields.map((f) => `
             <div class="field">
@@ -2158,7 +2198,7 @@
     list.innerHTML = (cfg.rowLayout === "company3" ? companyTableHeadHtml(cfg) : "") + rows.map((r) => `
       <div class="list-row-edit">
         ${cfg.isChecklist ? `<input type="checkbox" class="list-checkbox" data-toggle-id="${r.id}" ${r.completed ? "checked" : ""} ${r.auto_source ? "disabled" : ""} title="${r.auto_source ? "Completes automatically -- no need to check this by hand" : ""}" />` : ""}
-        <div class="lre-fields ${cfg.rowLayout === "company3" ? "fields-3col" : ""} ${cfg.rowLayout === "contact4" ? "fields-contact4" : ""}">
+        <div class="lre-fields ${cfg.rowLayout === "company3" ? "fields-3col" : ""} ${cfg.rowLayout === "contact4" ? "fields-contact4" : ""} ${cfg.rowLayout === "cc3" ? "fields-cc3" : ""}">
           ${cfg.fields.map((f, fIdx) => `
             <div class="field">
               <label>${escapeHtml(f.label)}${cfg.isChecklist && fIdx === 0 && r.auto_source ? ` <span class="auto-step-badge" title="This step checks itself off automatically -- see the Task's own note for how.">Auto</span>` : ""}</label>
