@@ -191,9 +191,17 @@
      column widths without needing to crush anything. */
   body.embed-mode .page-shell { max-width: none; margin: 0; padding: 0 0 40px; }
   .rv-table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* min-width dropped 620px -> 440px (Greg, 8/31/26): with the file column
+     down to just an icon (see fileHtml above) the row no longer needs
+     620px of breathing room to read cleanly, and that lower floor was
+     itself part of why this table kept forcing a horizontal scrollbar --
+     and a shaky one, since crossing that threshold at the edge of the
+     iframe pane's actual width fed back into the CCC shell's own auto-
+     height resize loop. Letting the fr columns compress further before
+     ever needing to scroll removes that trigger too. */
   .rv-table-wrap .list-row-edit, .rv-table-head {
-    display: grid; grid-template-columns: 1.2fr 1.3fr 1.3fr 130px; gap: 18px; align-items: center;
-    min-width: 620px; padding: 14px 18px; margin: 0; border-bottom: 1px solid #f0f2f4;
+    display: grid; grid-template-columns: 1.2fr 1.3fr 1.3fr 130px; gap: 14px; align-items: center;
+    min-width: 440px; padding: 14px 18px; margin: 0; border-bottom: 1px solid #f0f2f4;
   }
   .rv-table-wrap .list-row-edit:last-child { border-bottom: none; }
   .rv-table-head { background: #f8fafb; border-bottom: 1px solid var(--border); }
@@ -1144,8 +1152,12 @@
       // link still wins over an uploaded file when both are set -- that
       // resolution is unchanged, this is just how the two fields display
       // to whoever's editing them here.
+      // Icon only, not the full filename (Greg, 8/31/26: "this page is too
+      // crowded... just show the file icon to reduce clutter") -- the real
+      // filename is still there as a hover tooltip and the icon is still
+      // the click target that opens the file.
       const fileHtml = r.storagePath
-        ? `<span class="rv-file-link" data-path="${escapeHtml(r.storagePath)}">${fileIconFor(r.storagePath)} ${escapeHtml(fileNameFromPath(r.storagePath))}</span>`
+        ? `<span class="rv-file-link" data-path="${escapeHtml(r.storagePath)}" title="${escapeHtml(fileNameFromPath(r.storagePath))}">${fileIconFor(r.storagePath)}</span>`
         : `<span class="field-hint">—</span>`;
       const urlHtml = r.url
         ? `<a class="rv-file-link" href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.url)}</a>`
