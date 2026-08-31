@@ -561,24 +561,35 @@
      top right") is also dead weight in embed mode -- that button lives in
      the masthead header, which is hidden here -- so it's dropped too,
      handing its 220px back to the actual form/table content. */
-  body.embed-mode .profile-shell { max-width: none; margin: 0; padding: 0 0 40px; }
+  body.embed-mode .profile-shell { max-width: none; margin: 0; padding: 0; }
   body.embed-mode .wizard-sidebar { display: none !important; }
   body.embed-mode .wizard-body { grid-template-columns: 1fr; }
-  /* wizard-bottom-bar's negative margin (-20px sides, -100px bottom) is
-     calibrated to exactly cancel .profile-shell's own padding (20px sides,
-     100px bottom) so the sticky bar sits flush, edge-to-edge, with no gap
-     underneath -- standard for the standalone page. But .profile-shell's
-     padding is different in embed mode (0 sides, 40px bottom, above), so
-     that same -20px/-100px overshot by 20px each side and 60px on the
-     bottom, leaving real (if invisible) extra width and height in the
-     embedded document. Client Control Center's iframe measures this
-     page's actual scrollHeight/scrollWidth to size itself, so that
-     overshoot showed up there as a blank gray box with its own horizontal
-     scrollbar below the Back/Continue row, on every step (Greg, 8/31/26:
-     "step 3 ... has an unneeded section at the bottom", confirmed on
-     Contacts too, so this is structural, not per-step). Fixed by matching
-     the bar's negative margin to embed mode's actual padding instead. */
-  body.embed-mode .wizard-bottom-bar { margin: 22px 0 -40px; }
+  /* wizard-bottom-bar is a negative-margin "bleed to the edge" trick
+     (margin: 22px -20px -100px) tuned for the STANDALONE page, where it
+     cancels .profile-shell's own 20px/100px padding so the sticky Back/
+     Continue bar sits flush against the browser's own bottom edge with no
+     visible gap. That trick relies on the standalone page's real
+     scrollbar hiding the arithmetic -- it does not actually make
+     .profile-shell shorter (a negative bottom margin reduces how much the
+     bar contributes to the parent's auto height, but the parent's own
+     padding-bottom is *always* rendered on top of that regardless, so any
+     leftover padding shows up as genuine extra height). Three attempts to
+     re-tune that cancellation for embed mode's different padding all
+     failed to remove the blank gray box Greg kept seeing below Continue
+     on every step (8/31/26). Rather than re-calibrate the trick a fourth
+     time, embed mode now removes the two things that trick depends on
+     entirely: .profile-shell gets zero bottom padding above (nothing left
+     to leave a gap), and the bar below is unstuck, unbled, and given a
+     plain positive top margin -- so there is structurally nothing after
+     it and nothing reserving space beneath it, independent of any margin
+     arithmetic. (Sticky positioning was also serving no purpose here --
+     the iframe auto-sizes to fit its content exactly, so there is never
+     an independent scroll for the bar to stick within.) */
+  body.embed-mode .wizard-bottom-bar {
+    position: static;
+    margin: 22px 0 0;
+    left: auto; right: auto; bottom: auto;
+  }
 </style>
 </head>
 <body>
