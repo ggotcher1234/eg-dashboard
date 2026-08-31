@@ -117,23 +117,54 @@
 
       <div class="card">
         <h2>Company &amp; Engagement Details</h2>
-        <dl class="info-grid" id="info-grid"></dl>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-company-name">Company</label>
+            <input type="text" id="f-company-name" />
+          </div>
+          <div class="field">
+            <label for="f-team-lead">Team Lead</label>
+            <input type="text" id="f-team-lead" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-program-name">Program</label>
+            <input type="text" id="f-program-name" />
+          </div>
+          <div class="field">
+            <label for="f-cc-list">CC List</label>
+            <input type="text" id="f-cc-list" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="f-company-address">Address</label>
+          <textarea id="f-company-address" rows="2"></textarea>
+        </div>
+        <div class="field">
+          <label for="f-company-contacts">Company Contacts</label>
+          <textarea id="f-company-contacts" rows="3"></textarea>
+        </div>
+        <div class="field">
+          <label for="f-digital-presence">Digital Presence</label>
+          <textarea id="f-digital-presence" rows="3"></textarea>
+        </div>
       </div>
 
       <div class="card">
         <h2>Company Description</h2>
-        <dl class="info-grid">
-          <dt>Description</dt>
-          <dd id="info-description"></dd>
-        </dl>
+        <div class="field">
+          <label for="f-company-description">Description</label>
+          <textarea id="f-company-description" rows="4"></textarea>
+        </div>
       </div>
 
       <div class="card">
         <h2>Top Business Issues</h2>
-        <dl class="info-grid">
-          <dt>Business Issues</dt>
-          <dd id="info-issues"></dd>
-        </dl>
+        <div class="field">
+          <label for="f-business-issues">Business Issues</label>
+          <textarea id="f-business-issues" rows="4"></textarea>
+        </div>
       </div>
 
       <div class="card">
@@ -197,9 +228,14 @@
   let currentClient = null;
   let contentRow = null;
 
-  function infoRow(label, value) {
-    const empty = !value;
-    return `<dt>${escapeHtml(label)}</dt><dd class="${empty ? "empty" : ""}">${empty ? "Not on file" : escapeHtml(value)}</dd>`;
+  // Every field on this form is editable (Greg, 8/31/26: "all fields in
+  // this form need to be editable"). The first time the form is opened
+  // for a client, each field defaults to the live value pulled from the
+  // client/Application; once the Team Lead saves, their edited value is
+  // what loads next time (it won't get silently overwritten by later
+  // changes elsewhere) -- same as any other fillable form.
+  function fieldValue(saved, liveDefault) {
+    return (saved !== null && saved !== undefined && saved !== "") ? saved : (liveDefault || "");
   }
 
   async function loadClient(clientId) {
@@ -232,22 +268,19 @@
     $("lh-company-name").textContent = client.name || "";
     document.title = `Discovery Call Notes — ${client.name || ""}`;
 
-    $("info-grid").innerHTML = [
-      infoRow("Company", client.name),
-      infoRow("Address", client.address),
-      infoRow("Team Lead", teamLead),
-      infoRow("Program", (partnerRes && partnerRes.data && partnerRes.data.name) || ""),
-      infoRow("Company Contacts", contactLines),
-      infoRow("CC List", ccList),
-      infoRow("Digital Presence", digitalPresence),
-    ].join("");
-
+    const programName = (partnerRes && partnerRes.data && partnerRes.data.name) || "";
     const desc = htmlToPlainText(client.description);
-    $("info-description").textContent = desc || "Not on file";
-    $("info-description").classList.toggle("empty", !desc);
     const issues = htmlToPlainText(client.top_business_issues);
-    $("info-issues").textContent = issues || "Not on file";
-    $("info-issues").classList.toggle("empty", !issues);
+
+    $("f-company-name").value = fieldValue(contentRow.discovery_company_name, client.name);
+    $("f-team-lead").value = fieldValue(contentRow.discovery_team_lead, teamLead);
+    $("f-program-name").value = fieldValue(contentRow.discovery_program_name, programName);
+    $("f-cc-list").value = fieldValue(contentRow.discovery_cc_list, ccList);
+    $("f-company-address").value = fieldValue(contentRow.discovery_company_address, client.address);
+    $("f-company-contacts").value = fieldValue(contentRow.discovery_company_contacts, contactLines);
+    $("f-digital-presence").value = fieldValue(contentRow.discovery_digital_presence, digitalPresence);
+    $("f-company-description").value = fieldValue(contentRow.discovery_company_description, desc);
+    $("f-business-issues").value = fieldValue(contentRow.discovery_business_issues, issues);
 
     $("f-call-date").value = contentRow.discovery_call_date || "";
     $("f-call-link").value = contentRow.discovery_call_link || "";
@@ -272,6 +305,15 @@
         discovery_call_link: $("f-call-link").value.trim() || null,
         discovery_call_participants: $("f-participants").value,
         discovery_call_notes: $("f-notes").value,
+        discovery_team_lead: $("f-team-lead").value,
+        discovery_program_name: $("f-program-name").value,
+        discovery_company_name: $("f-company-name").value,
+        discovery_company_address: $("f-company-address").value,
+        discovery_company_contacts: $("f-company-contacts").value,
+        discovery_cc_list: $("f-cc-list").value,
+        discovery_company_description: $("f-company-description").value,
+        discovery_business_issues: $("f-business-issues").value,
+        discovery_digital_presence: $("f-digital-presence").value,
       };
       const { error } = await sb.from("client_content").update(payload).eq("client_id", currentClient.id);
       if (error) { showBanner("Couldn't save: " + error.message, "error"); return; }
