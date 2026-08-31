@@ -247,7 +247,7 @@
           <div id="notes-attachment"></div>
         </div>
         <div class="save-row">
-          <button type="button" id="save-btn">Save Notes</button>
+          <button type="button" id="save-btn">Submit Discovery Call Notes</button>
           <span class="save-hint" id="save-hint"></span>
         </div>
       </div>
@@ -540,7 +540,7 @@
   $("save-btn").addEventListener("click", async () => {
     const btn = $("save-btn");
     btn.disabled = true;
-    btn.textContent = "Saving…";
+    btn.textContent = "Submitting…";
     try {
       const payload = {
         discovery_call_date: $("f-call-date").value || null,
@@ -563,14 +563,30 @@
         discovery_instagram_url: $("f-instagram-url").value.trim() || null,
         discovery_other_social_url: $("f-other-social-url").value.trim() || null,
       };
+
+      // Greg (8/31/26): "when i go back and look at the Workflow Documents
+      // page it is not showing up... perhaps we should hit a submit
+      // button instead of save." Submitting is what makes this show up
+      // in Project Files as Discovery Notes -- if nothing's been
+      // manually attached yet via "Attach a File or Link" above, submit
+      // links Discovery Notes back to this filled-out form itself (a
+      // real attachment there always takes precedence and is left
+      // alone).
+      if (!contentRow.discovery_notes_storage_path && !contentRow.discovery_notes_url) {
+        const selfLink = new URL(location.pathname, location.origin);
+        selfLink.search = `?client=${currentClient.id}`;
+        payload.discovery_notes_url = selfLink.toString();
+      }
+
       const { error } = await sb.from("client_content").update(payload).eq("client_id", currentClient.id);
-      if (error) { showBanner("Couldn't save: " + error.message, "error"); return; }
+      if (error) { showBanner("Couldn't submit: " + error.message, "error"); return; }
       Object.assign(contentRow, payload);
-      showBanner("Discovery Call Notes saved.", "success");
-      $("save-hint").textContent = "Saved.";
+      renderNotesAttachment();
+      showBanner("Discovery Call Notes submitted -- it now shows up in Project Files.", "success");
+      $("save-hint").textContent = "Submitted.";
     } finally {
       btn.disabled = false;
-      btn.textContent = "Save Notes";
+      btn.textContent = "Submit Discovery Call Notes";
     }
   });
 
