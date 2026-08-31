@@ -1055,24 +1055,46 @@
   // Since these are same-origin embeds (?embed=1, not a different site),
   // we can read the embedded document's real height and grow the iframe
   // to match, so there's only ever the one, familiar browser scrollbar.
+  // Greg (8/30/26, round 4): a table wider than its container can trigger
+  // a horizontal scrollbar that appears/disappears by a pixel or two as
+  // the browser reflows -- each toggle nudges scrollHeight, which fired
+  // this same ResizeObserver again, which measured again, which could
+  // toggle it back -- a visible "shaking" loop on the outer page's own
+  // scrollbar. Two guards against that: only ever apply a height change
+  // bigger than 2px (so sub-pixel reflow noise doesn't round-trip), and
+  // debounce every observer tick through one animation frame so a burst
+  // of rapid-fire mutations collapses into a single measurement instead
+  // of chasing each other.
   let ccIframeResizeObserver = null;
+  let ccIframeResizeRaf = null;
+  let ccIframeLastHeight = 0;
   function fitIframeToContent() {
-    const iframe = $("cc-iframe");
-    try {
-      const doc = iframe.contentDocument;
-      if (!doc || !doc.documentElement) return;
-      const h = Math.max(doc.documentElement.scrollHeight, doc.body ? doc.body.scrollHeight : 0, 520);
-      iframe.style.height = `${h}px`;
-      if (ccIframeResizeObserver) ccIframeResizeObserver.disconnect();
-      if (window.ResizeObserver && doc.body) {
-        ccIframeResizeObserver = new ResizeObserver(() => fitIframeToContent());
-        ccIframeResizeObserver.observe(doc.body);
+    if (ccIframeResizeRaf) cancelAnimationFrame(ccIframeResizeRaf);
+    ccIframeResizeRaf = requestAnimationFrame(() => {
+      ccIframeResizeRaf = null;
+      const iframe = $("cc-iframe");
+      try {
+        const doc = iframe.contentDocument;
+        if (!doc || !doc.documentElement) return;
+        const h = Math.max(doc.documentElement.scrollHeight, doc.body ? doc.body.scrollHeight : 0, 520);
+        if (Math.abs(h - ccIframeLastHeight) > 2) {
+          ccIframeLastHeight = h;
+          iframe.style.height = `${h}px`;
+        }
+        if (!ccIframeResizeObserver && window.ResizeObserver && doc.body) {
+          ccIframeResizeObserver = new ResizeObserver(() => fitIframeToContent());
+          ccIframeResizeObserver.observe(doc.body);
+        }
+      } catch (e) {
+        // Cross-origin or not-yet-loaded -- fall back to the CSS min-height.
       }
-    } catch (e) {
-      // Cross-origin or not-yet-loaded -- fall back to the CSS min-height.
-    }
+    });
   }
-  $("cc-iframe").addEventListener("load", fitIframeToContent);
+  $("cc-iframe").addEventListener("load", () => {
+    if (ccIframeResizeObserver) { ccIframeResizeObserver.disconnect(); ccIframeResizeObserver = null; }
+    ccIframeLastHeight = 0;
+    fitIframeToContent();
+  });
 
   // ---------- Status control (Admin / Team Lead can change it here) ----------
   function renderStatusToggle(client) {
