@@ -145,9 +145,39 @@
           <label for="f-company-contacts">Company Contacts</label>
           <textarea id="f-company-contacts" rows="3"></textarea>
         </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-website-url">Website</label>
+            <input type="url" id="f-website-url" placeholder="https://…" />
+          </div>
+          <div class="field">
+            <label for="f-facebook-url">Facebook</label>
+            <input type="url" id="f-facebook-url" placeholder="https://…" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-linkedin-url">LinkedIn</label>
+            <input type="url" id="f-linkedin-url" placeholder="https://…" />
+          </div>
+          <div class="field">
+            <label for="f-twitter-url">X / Twitter</label>
+            <input type="url" id="f-twitter-url" placeholder="https://…" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-youtube-url">YouTube</label>
+            <input type="url" id="f-youtube-url" placeholder="https://…" />
+          </div>
+          <div class="field">
+            <label for="f-instagram-url">Instagram</label>
+            <input type="url" id="f-instagram-url" placeholder="https://…" />
+          </div>
+        </div>
         <div class="field">
-          <label for="f-digital-presence">Digital Presence</label>
-          <textarea id="f-digital-presence" rows="3"></textarea>
+          <label for="f-other-social-url">Other</label>
+          <input type="url" id="f-other-social-url" placeholder="https://…" />
         </div>
       </div>
 
@@ -262,7 +292,6 @@
     const teamLead = leadRow ? [leadRow.users.full_name, leadRow.users.email].filter(Boolean).join(", ") : "";
     const contactLines = (contacts || []).map((c) => [c.name, c.title, c.email, c.phone].filter(Boolean).join(", ")).join("\n");
     const ccList = (application && application.cc_emails && application.cc_emails.length) ? application.cc_emails.join(", ") : "";
-    const digitalPresence = [client.website_url, client.linkedin_url, client.facebook_url, client.instagram_url, client.twitter_url, client.other_social_url].filter(Boolean).join("\n");
 
     $("back-link").href = `client_workflow_files.html?client=${client.id}`;
     $("lh-company-name").textContent = client.name || "";
@@ -278,7 +307,13 @@
     $("f-cc-list").value = fieldValue(contentRow.discovery_cc_list, ccList);
     $("f-company-address").value = fieldValue(contentRow.discovery_company_address, client.address);
     $("f-company-contacts").value = fieldValue(contentRow.discovery_company_contacts, contactLines);
-    $("f-digital-presence").value = fieldValue(contentRow.discovery_digital_presence, digitalPresence);
+    $("f-website-url").value = fieldValue(contentRow.discovery_website_url, client.website_url);
+    $("f-facebook-url").value = fieldValue(contentRow.discovery_facebook_url, client.facebook_url);
+    $("f-linkedin-url").value = fieldValue(contentRow.discovery_linkedin_url, client.linkedin_url);
+    $("f-twitter-url").value = fieldValue(contentRow.discovery_twitter_url, client.twitter_url);
+    $("f-youtube-url").value = fieldValue(contentRow.discovery_youtube_url, client.youtube_url);
+    $("f-instagram-url").value = fieldValue(contentRow.discovery_instagram_url, client.instagram_url);
+    $("f-other-social-url").value = fieldValue(contentRow.discovery_other_social_url, client.other_social_url);
     $("f-company-description").value = fieldValue(contentRow.discovery_company_description, desc);
     $("f-business-issues").value = fieldValue(contentRow.discovery_business_issues, issues);
 
@@ -313,7 +348,13 @@
         discovery_cc_list: $("f-cc-list").value,
         discovery_company_description: $("f-company-description").value,
         discovery_business_issues: $("f-business-issues").value,
-        discovery_digital_presence: $("f-digital-presence").value,
+        discovery_website_url: $("f-website-url").value.trim() || null,
+        discovery_facebook_url: $("f-facebook-url").value.trim() || null,
+        discovery_linkedin_url: $("f-linkedin-url").value.trim() || null,
+        discovery_twitter_url: $("f-twitter-url").value.trim() || null,
+        discovery_youtube_url: $("f-youtube-url").value.trim() || null,
+        discovery_instagram_url: $("f-instagram-url").value.trim() || null,
+        discovery_other_social_url: $("f-other-social-url").value.trim() || null,
       };
       const { error } = await sb.from("client_content").update(payload).eq("client_id", currentClient.id);
       if (error) { showBanner("Couldn't save: " + error.message, "error"); return; }
