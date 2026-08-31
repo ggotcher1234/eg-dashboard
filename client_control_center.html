@@ -465,6 +465,7 @@
     <div id="banner"></div>
 
     <div class="std-toolbar-row no-print">
+      <a class="toolbar-pill-btn hidden" id="cc-open-browser-btn" href="#" target="_blank" rel="noopener" title="Open the client-facing dashboard in its own browser tab">&#8599; View Live Page</a>
       <button type="button" class="toolbar-pill-btn" id="std-print-btn" title="Print this engagement overview">&#128424; Print</button>
       <div class="cc-more-wrap">
         <button type="button" class="toolbar-pill-btn" id="cc-more-btn">&#8943; More &#9662;</button>
@@ -1031,6 +1032,19 @@
     $("cc-pane-team").classList.toggle("hidden", key !== "team");
     document.querySelector(".cc-shell").classList.toggle("wide-workspace", WIDE_WORKSPACE_PANE_KEYS.includes(key));
     refreshDelayNoteVisibility();
+
+    // Client Dashboard is the one nav item that's a real, client-facing
+    // page (the same URL a client would be sent) rather than an internal
+    // tool -- so on that tab only, offer a link to open it in its own
+    // browser tab instead of the embedded iframe here (Greg, 8/31/26).
+    const openBrowserBtn = $("cc-open-browser-btn");
+    const dashboardItem = navItems.find((n) => n.key === "dashboard");
+    if (key === "dashboard" && dashboardItem && dashboardItem.src) {
+      openBrowserBtn.href = dashboardItem.src;
+      openBrowserBtn.classList.remove("hidden");
+    } else {
+      openBrowserBtn.classList.add("hidden");
+    }
 
     const isIframePane = IFRAME_PANE_KEYS.includes(key);
     $("cc-pane-iframe").classList.toggle("hidden", !isIframePane);
