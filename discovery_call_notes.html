@@ -167,6 +167,10 @@
           <textarea id="f-company-address" rows="2"></textarea>
         </div>
         <div class="field">
+          <label for="f-cc-list">CC List</label>
+          <textarea id="f-cc-list" rows="3" placeholder="One person per line: Name, Title, Email"></textarea>
+        </div>
+        <div class="field">
           <label for="f-company-contacts">Company Contacts</label>
           <textarea id="f-company-contacts" rows="3"></textarea>
         </div>
@@ -483,9 +487,10 @@
     }
     currentClient = client;
 
-    const [{ data: content }, { data: contacts }, { data: team }, { data: partnerSelections }, partnerRes] = await Promise.all([
+    const [{ data: content }, { data: contacts }, { data: ccList }, { data: team }, { data: partnerSelections }, partnerRes] = await Promise.all([
       sb.from("client_content").select("*").eq("client_id", clientId).maybeSingle(),
       sb.from("client_contacts").select("*").eq("client_id", clientId),
+      sb.from("client_cc_list").select("*").eq("client_id", clientId).order("sort_order").order("created_at"),
       sb.from("client_assignments").select("id, is_team_lead, users(full_name, email)").eq("client_id", clientId).not("user_id", "is", null).order("is_team_lead", { ascending: false }),
       sb.from("client_team_partner_contacts").select("partner_contact_id").eq("client_id", clientId),
       client.econ_dev_company_id
@@ -497,6 +502,14 @@
     const leadRow = (team || []).find((r) => r.is_team_lead && r.users && r.users.full_name);
     const teamLead = leadRow ? [leadRow.users.full_name, leadRow.users.email].filter(Boolean).join(", ") : "";
     const contactLines = (contacts || []).map((c) => [c.name, c.title, c.email, c.phone].filter(Boolean).join(", ")).join("\n");
+    // Greg (8/31/26): "i need to be able to add a few people to cc list on
+    // an engagement... one line per cc person with fields name title
+    // email." Same live-default pattern as Company Contacts above --
+    // pre-fills from the CC List maintained on the Company page
+    // (client_cc_list, Dashboard Wizard > Contacts step) the first time
+    // this form is opened; a saved snapshot here takes precedence after
+    // that, same as every other field on this form.
+    const ccListLines = (ccList || []).map((c) => [c.name, c.title, c.email].filter(Boolean).join(", ")).join("\n");
 
     // Greg (8/31/26): "make sure the Program Manager and Address flow
     // through from the application." Program Manager is the Program
@@ -530,6 +543,7 @@
     $("f-program-name").value = fieldValue(contentRow.discovery_program_name, programName);
     $("f-program-manager").value = fieldValue(contentRow.discovery_program_manager, programManager);
     $("f-company-address").value = fieldValue(contentRow.discovery_company_address, client.address);
+    $("f-cc-list").value = fieldValue(contentRow.discovery_cc_list, ccListLines);
     $("f-company-contacts").value = fieldValue(contentRow.discovery_company_contacts, contactLines);
     $("f-website-url").value = fieldValue(contentRow.discovery_website_url, client.website_url);
     $("f-facebook-url").value = fieldValue(contentRow.discovery_facebook_url, client.facebook_url);
@@ -569,6 +583,7 @@
         discovery_program_name: $("f-program-name").value,
         discovery_company_name: $("f-company-name").value,
         discovery_company_address: $("f-company-address").value,
+        discovery_cc_list: $("f-cc-list").value,
         discovery_company_contacts: $("f-company-contacts").value,
         discovery_program_manager: $("f-program-manager").value,
         discovery_company_description: $("f-company-description").value,

@@ -1,0 +1,23 @@
+-- 099_discovery_cc_list.sql
+--
+-- Greg (8/31/26): after adding the structured "CC List" section to the
+-- Dashboard Wizard's Contacts step (098_client_cc_list.sql), Greg
+-- expected to actually see/edit a CC List right on the Discovery Call
+-- Notes fillable form itself, under Address and Program Manager --
+-- "i expected to see the cc list under the address and program manager
+-- row but i don't see it anywhere."
+--
+-- This adds one more field to the same discovery_* snapshot family as
+-- every other field on that form (discovery_company_address,
+-- discovery_program_manager, etc.): a fillable "CC List" textarea, one
+-- line per person ("Name, Title, Email"), that pre-fills the first time
+-- the form is opened from whatever's already in client_cc_list (098) --
+-- same live-default-then-saved-snapshot pattern as Company Contacts
+-- pre-filling from client_contacts. Editing it here only updates this
+-- snapshot, same as every other field on the form; it doesn't write back
+-- to client_cc_list (that stays the Dashboard Wizard's job, same
+-- one-way relationship Company Contacts already has with client_contacts).
+--
+-- Safe to re-run.
+
+alter table client_content add column if not exists discovery_cc_list text;
