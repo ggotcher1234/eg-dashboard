@@ -974,7 +974,17 @@
   // each other) -- this avoids re-implementing three large, already-working
   // pages just to get the "never leaves this screen" feel.
   const IFRAME_PANE_KEYS = ["research", "setup", "vault", "dashboard"];
-  let iframeSrcLoaded = {}; // pane key -> true once its iframe src has been set (lazy-load, only on first visit)
+  // Tracks which pane key's page is currently sitting in the one shared
+  // iframe -- NOT "has this pane ever been loaded". Bug (Greg, 8/31/26):
+  // this used to be a per-key "loaded once" flag, so after visiting e.g.
+  // Client Dashboard and then clicking back to Add Research, the code saw
+  // "research" was already marked loaded (from earlier in the session) and
+  // skipped setting a new src -- leaving the Client Dashboard's markup
+  // sitting in the shared iframe under the Add Research tab. Since all
+  // four panes reuse the same <iframe>, every switch between two different
+  // iframe panes has to re-point src; only re-visiting the SAME pane twice
+  // in a row (without leaving it) can skip the reload.
+  let ccIframeCurrentKey = null;
 
   function navIconSvg(key) {
     const icons = {
@@ -1003,7 +1013,7 @@
     $("cc-nav").querySelectorAll("[data-pane]").forEach((btn) => {
       btn.addEventListener("click", () => setActivePane(btn.dataset.pane));
     });
-    iframeSrcLoaded = {};
+    ccIframeCurrentKey = null;
     setActivePane(activePane);
   }
 
@@ -1026,11 +1036,14 @@
     $("cc-pane-iframe").classList.toggle("hidden", !isIframePane);
     if (isIframePane) {
       const item = navItems.find((n) => n.key === key);
-      if (item && item.src && !iframeSrcLoaded[key]) {
-        $("cc-iframe").src = item.src;
-        iframeSrcLoaded[key] = true;
+      if (item && item.src) {
+        if (ccIframeCurrentKey !== key) {
+          $("cc-iframe").src = item.src;
+          ccIframeCurrentKey = key;
+        }
       } else if (item && !item.src) {
         $("cc-iframe").removeAttribute("src");
+        ccIframeCurrentKey = null;
       }
     }
   }
