@@ -945,6 +945,17 @@
     window.open(`discovery_call_notes.html?client=${currentClient.id}`, "_blank");
   }
 
+  // ---------- Controlling Document: fillable Controlling Document form ----------
+  // Greg (8/31/26): "now do the same thing for the Controlling Document
+  // that you did for the Discovery Document. Add a Create Controlling
+  // Document selection which will bring up an interactive form... The
+  // Catagory and the questions will flow through to the Questions on EG
+  // Research Reports Page." Same pattern as Discovery Call Notes above --
+  // a dedicated fillable-form page, opened from this same Change menu.
+  function openControllingDocumentForm() {
+    window.open(`controlling_document.html?client=${currentClient.id}`, "_blank");
+  }
+
   async function loadWorkflowLinks(clientId) {
     const { data, error } = await sb.from("client_content").select("*").eq("client_id", clientId).maybeSingle();
     if (error) { showBanner("Couldn't load workflow documents: " + error.message, "error"); return; }
@@ -971,6 +982,7 @@
             <button type="button" class="wf-btn" data-wf-change>Change &#9662;</button>
             <div class="wf-menu hidden">
               ${f.key === "discovery" ? `<button type="button" data-wf-create>Discovery Call Notes (form)</button>` : ""}
+              ${f.key === "controlling" ? `<button type="button" data-wf-create>Create Controlling Document</button>` : ""}
               <button type="button" data-wf-replace>Replace file</button>
               <button type="button" class="wf-menu-danger" data-wf-remove>Remove file</button>
             </div>
@@ -984,6 +996,7 @@
       });
       wireWfChangeMenu(container, [
         ...(f.key === "discovery" ? [{ sel: "[data-wf-create]", fn: () => openDiscoveryCallNotesForm() }] : []),
+        ...(f.key === "controlling" ? [{ sel: "[data-wf-create]", fn: () => openControllingDocumentForm() }] : []),
         { sel: "[data-wf-replace]", fn: () => pickWorkflowFile(f) },
         { sel: "[data-wf-remove]", fn: () => removeWorkflowItem(f) },
       ]);
@@ -998,6 +1011,7 @@
             <button type="button" class="wf-btn" data-wf-change>Change &#9662;</button>
             <div class="wf-menu hidden">
               ${f.key === "discovery" ? `<button type="button" data-wf-create>Discovery Call Notes (form)</button>` : ""}
+              ${f.key === "controlling" ? `<button type="button" data-wf-create>Create Controlling Document</button>` : ""}
               <button type="button" data-wf-edit-link>Edit link</button>
               <button type="button" class="wf-menu-danger" data-wf-remove>Remove link</button>
             </div>
@@ -1006,6 +1020,7 @@
       `;
       wireWfChangeMenu(container, [
         ...(f.key === "discovery" ? [{ sel: "[data-wf-create]", fn: () => openDiscoveryCallNotesForm() }] : []),
+        ...(f.key === "controlling" ? [{ sel: "[data-wf-create]", fn: () => openControllingDocumentForm() }] : []),
         { sel: "[data-wf-edit-link]", fn: () => renderWorkflowLinkForm(f, url) },
         { sel: "[data-wf-remove]", fn: () => removeWorkflowItem(f) },
       ]);
@@ -1019,6 +1034,7 @@
           <button type="button" data-wf-upload>Upload file</button>
           <button type="button" data-wf-add-link>Add a link</button>
           ${f.key === "discovery" ? `<button type="button" data-wf-create>Discovery Call Notes (form)</button>` : ""}
+          ${f.key === "controlling" ? `<button type="button" data-wf-create>Create Controlling Document</button>` : ""}
         </div>
       </div>
       <input type="file" class="wf-upload-input hidden" />
@@ -1030,6 +1046,7 @@
       { sel: "[data-wf-upload]", fn: () => container.querySelector(".wf-upload-input").click() },
       { sel: "[data-wf-add-link]", fn: () => renderWorkflowLinkForm(f, "") },
       ...(f.key === "discovery" ? [{ sel: "[data-wf-create]", fn: () => openDiscoveryCallNotesForm() }] : []),
+      ...(f.key === "controlling" ? [{ sel: "[data-wf-create]", fn: () => openControllingDocumentForm() }] : []),
     ]);
   }
 

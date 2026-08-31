@@ -1,0 +1,24 @@
+-- 100_controlling_doc_date.sql
+--
+-- Greg (8/31/26): "now do the same thing for the Controlling Document
+-- that you did for the Discovery Document. Add a Create Controlling
+-- Document selection which will bring up an interactive form that will
+-- allow the TL to create a CD with one or two questions for each
+-- research catagory. The Catagory and the questions will flow through to
+-- the Questions on EG Research Reports Page."
+--
+-- The new controlling_document.html fillable form (analogous to
+-- discovery_call_notes.html) writes its per-category questions straight
+-- into the existing client_research_questions table -- research_area
+-- already covers all 4 categories (market_dynamics/outbound/inbound/
+-- watering_holes, see 019_client_profile_content.sql's research_area_type
+-- enum), so no new table or column is needed there.
+--
+-- The one new field the form itself needs is a Date (the template's
+-- letterhead shows "Date" under the client name/CONTROLLING DOCUMENT
+-- title) -- same snapshot-column pattern as every discovery_* field on
+-- the Discovery Call Notes form.
+--
+-- Safe to re-run.
+
+alter table client_content add column if not exists controlling_doc_date date;
