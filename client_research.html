@@ -1684,9 +1684,13 @@
       // storage involved). The two never both render for the same row in
       // this app's UI, but if a row somehow has both, the link wins, same
       // priority Resource Vault already uses.
+      // Greg (9/1/26): display_name is an optional human label ("Competitor
+      // KW Files") shown instead of the raw upload filename; the real
+      // file_name and its download are untouched.
+      const shownName = d.display_name || d.file_name || d.url;
       const linkHtml = d.url
-        ? `<a class="rq-doc-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">&#128279; ${escapeHtml(d.file_name || d.url)}</a>`
-        : `<span class="rq-doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(d.file_name)}</span>`;
+        ? `<a class="rq-doc-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">&#128279; ${escapeHtml(shownName || d.url)}</a>`
+        : `<span class="rq-doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(shownName)}</span>`;
       return `
       <div class="rq-doc-row">
         <div class="rq-doc-order-btns">
@@ -1694,6 +1698,7 @@
           <button type="button" class="btn-secondary icon-btn rq-move-btn" data-move-doc="${d.id}" data-move-dir="down" data-move-scope="${scope}" ${i === docs.length - 1 ? "disabled" : ""} title="Move down">&#9660;</button>
         </div>
         ${linkHtml}
+        <button type="button" class="btn-secondary icon-btn" data-rename-doc="${d.id}" title="Rename -- sets the label the client sees, not the file itself">&#9998;</button>
         <button type="button" class="btn-secondary icon-btn rq-visibility-toggle" data-id="${d.id}" data-visibility="${d.visibility}">
           ${d.visibility === "client_facing" ? "Client-facing" : "Internal"}
         </button>
@@ -1715,6 +1720,21 @@
         const next = btn.dataset.visibility === "client_facing" ? "internal" : "client_facing";
         const { error } = await sb.from("documents").update({ visibility: next }).eq("id", btn.dataset.id);
         if (error) { showBanner("Couldn't update visibility: " + error.message, "error"); return; }
+        await loadDocuments();
+        RESEARCH_AREAS.forEach(([key]) => renderAreaDocs(key));
+      });
+    });
+    scopeEl.querySelectorAll("[data-rename-doc]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const doc = allDocuments.find((x) => x.id === btn.dataset.renameDoc);
+        if (!doc) return;
+        const entered = prompt("Name shown to the client for this file (leave blank to use the filename):", doc.display_name || doc.file_name || "");
+        if (entered === null) return;
+        const trimmed = entered.trim();
+        // Blank, or back to the real filename, clears the label.
+        const value = (!trimmed || trimmed === doc.file_name) ? null : trimmed;
+        const { error } = await sb.from("documents").update({ display_name: value }).eq("id", doc.id);
+        if (error) { showBanner("Couldn't rename: " + error.message, "error"); return; }
         await loadDocuments();
         RESEARCH_AREAS.forEach(([key]) => renderAreaDocs(key));
       });
@@ -1787,10 +1807,15 @@
       const path = `clients/${currentClient.id}/research/${area}/${Date.now()}-${sanitizeFilename(file.name)}`;
       const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file, { contentType: contentTypeFor(file) });
       if (uploadErr) { errors.push(`${file.name}: ${uploadErr.message}`); continue; }
+      // Optional label the client sees instead of the raw filename -- can
+      // also be set/changed later with the rename (pencil) button.
+      const entered = prompt(`Name shown to the client for "${file.name}" (leave blank to use the filename):`, "");
+      const displayName = entered && entered.trim() ? entered.trim() : null;
       const { error: rowErr } = await sb.from("documents").insert({
         client_id: currentClient.id,
         research_area: area,
         file_name: file.name,
+        display_name: displayName,
         storage_path: path,
         visibility: "internal",
         uploaded_by: currentUser.id,

@@ -526,9 +526,12 @@
     // 8/19/26; this exact case -- Clippard's "Clippard Listening Post" link
     // -- is what was crashing the page).
     return clean.map((d) => {
-      if (d.url) return `<a class="doc-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">&#128279; ${escapeHtml(d.file_name || d.url)}</a>`;
-      if (d.storage_path) return `<a class="doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(d.file_name)}</a>`;
-      return `<div class="doc-link" style="opacity:0.6; cursor:default;">&#128279; ${escapeHtml(d.file_name || "Untitled link")}</div>`;
+      // display_name is an optional staff-set label; the file-type icon and
+      // the actual download are unchanged.
+      const shownName = d.display_name || d.file_name;
+      if (d.url) return `<a class="doc-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">&#128279; ${escapeHtml(shownName || d.url)}</a>`;
+      if (d.storage_path) return `<a class="doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(shownName)}</a>`;
+      return `<div class="doc-link" style="opacity:0.6; cursor:default;">&#128279; ${escapeHtml(shownName || "Untitled link")}</div>`;
     }).join("");
   }
 
