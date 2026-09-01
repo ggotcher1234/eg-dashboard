@@ -104,19 +104,46 @@
   .cd-questions { margin-bottom: 8px; }
   .cd-q-row { margin-bottom: 14px; }
   .cd-q-row > label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
-  .cd-q-line { display: flex; align-items: center; gap: 10px; }
-  .cd-q-line input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; }
-  .cd-q-line input:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
+  .cd-q-line { display: flex; align-items: flex-start; gap: 10px; }
+  .cd-q-line input, .cd-q-line textarea { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; }
+  .cd-q-line textarea { resize: vertical; min-height: 38px; line-height: 1.4; }
+  .cd-q-line input:focus, .cd-q-line textarea:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
   .cd-q-del { flex-shrink: 0; width: 30px; height: 30px; border: 1.5px solid var(--border); background: #fff; color: var(--danger); border-radius: 6px; font-size: 17px; line-height: 1; cursor: pointer; font-family: inherit; }
   .cd-q-del:hover { background: #fdecea; }
   .cd-add-q { display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--navy-light); border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 700; font-family: inherit; cursor: pointer; }
   .cd-add-q:hover { background: #eef4fb; }
+
+  /* ===== Client review view =====================================
+     The data-entry form stays as-is; toggling "Client review view"
+     (and every print / Save as PDF) shows this instead: the same
+     content laid out like the Word "Controlling Document Template" --
+     black section scaffolding, each question's FIRST line in red, any
+     following lines as black notes under it, grey footer. */
+  #review-view { display: none; }
+  body.review-mode #form-view { display: none; }
+  body.review-mode #review-view { display: block; }
+
+  .rv-doc { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 44px 52px; }
+  .rv-title { text-align: center; font-size: 19px; font-weight: 700; letter-spacing: 0.6px; color: #000; }
+  .rv-company { text-align: center; font-size: 13px; color: var(--muted); margin-top: 4px; margin-bottom: 22px; }
+  .rv-date { font-size: 13.5px; color: #000; margin-bottom: 20px; }
+  .rv-section { font-size: 14px; font-weight: 700; color: #000; text-transform: uppercase; letter-spacing: 0.3px; margin: 24px 0 8px; }
+  .rv-subsection { font-size: 13.5px; font-weight: 700; color: #000; margin: 16px 0 4px; }
+  .rv-qlabel { font-size: 13.5px; font-weight: 700; color: #FF0000; margin: 6px 0 2px; }
+  .rv-q { font-size: 13.5px; font-weight: 700; color: #FF0000; line-height: 1.5; margin: 2px 0; }
+  .rv-qnote { font-size: 13px; color: #000; line-height: 1.55; margin: 0 0 10px 20px; white-space: pre-wrap; }
+  .rv-empty { font-size: 13px; font-style: italic; color: var(--muted); margin: 4px 0 10px; }
+  .rv-footer { margin-top: 44px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; justify-content: center; gap: 28px; font-size: 11px; letter-spacing: 0.4px; color: #7f7f7f; text-transform: uppercase; }
 
   @media print {
     .no-print { display: none !important; }
     body { background: #fff; }
     .page-shell { max-width: none; margin: 0; padding: 0; }
     .letterhead, .card { border-color: #ccc; }
+    /* Print / Save as PDF always outputs the client review layout. */
+    #form-view { display: none !important; }
+    #review-view { display: block !important; }
+    .rv-doc { border: none; border-radius: 0; padding: 0; }
   }
 </style>
 </head>
@@ -127,7 +154,10 @@
 <div id="app-view" class="hidden">
   <div class="util-bar no-print">
     <a class="back-link" id="back-link" href="#">← Back to Workflow Files</a>
-    <button type="button" id="print-btn">Print / Save as PDF</button>
+    <div style="display:flex; gap:10px;">
+      <button type="button" id="review-toggle-btn">Client review view</button>
+      <button type="button" id="print-btn">Print / Save as PDF</button>
+    </div>
   </div>
 
   <div class="page-shell">
@@ -168,6 +198,7 @@
            page's "Research Questions" list under the matching category
            (Greg, 8/31/26: "The Catagory and the questions will flow
            through to the Questions on EG Research Reports Page"). ===== -->
+      <div class="field-hint" style="margin-bottom:14px;">In each question box, the <strong>first line</strong> becomes the red question on the client's review view; put any elaboration on the lines below and it shows as black notes.</div>
       <div class="card">
         <h2>Market Dynamics Research</h2>
         <div class="field-hint">One or more questions regarding research we can do about the client's current or desired markets.</div>
@@ -206,6 +237,8 @@
         </div>
       </div>
     </div>
+
+    <div id="review-view"></div>
   </div>
 </div>
 
@@ -304,7 +337,7 @@
           <div class="cd-q-row" data-area="${area}" data-idx="${idx}">
             <label>Question ${n}</label>
             <div class="cd-q-line">
-              <input type="text" class="cd-q-input" value="${escapeHtml(row.question || "")}" placeholder="${escapeHtml(ph)}" />
+              <textarea class="cd-q-input" rows="2" placeholder="${escapeHtml(ph)}">${escapeHtml(row.question || "")}</textarea>
               <button type="button" class="cd-q-del no-print" title="Remove question">&times;</button>
             </div>
           </div>`;
@@ -365,6 +398,7 @@
         .map((q) => ({ id: q.id, question: q.question || "", sort_order: q.sort_order }));
     });
     renderQuestions();
+    renderReviewView();
   }
 
   async function submitResearchQuestions() {
@@ -400,6 +434,84 @@
       }
     }
   }
+
+  // ---------- Client review view ----------
+  // Greg (8/31/26): keep the data-entry form as-is, but "Client review
+  // view" (and every print / Save as PDF) renders the same content laid
+  // out like the Word "Controlling Document Template" -- black section
+  // scaffolding (I. MARKET RESEARCH / II. MARKETING CHANNELS + Outbound /
+  // Inbound / Watering Holes), each question's FIRST line in red, any
+  // following lines as black notes beneath it, grey footer.
+  const REVIEW_SECTIONS = [
+    { key: "market_dynamics", numeral: "I.",  title: "MARKET RESEARCH",    sub: null },
+    { key: "outbound",        numeral: "II.", title: "MARKETING CHANNELS", sub: "Outbound" },
+    { key: "inbound",         numeral: null,  title: null,                 sub: "Inbound" },
+    { key: "watering_holes",  numeral: null,  title: null,                 sub: "Watering Holes" },
+  ];
+
+  function formatDateMDY(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+    return m ? `${m[2]}/${m[3]}/${m[1]}` : (iso || "");
+  }
+
+  function renderQuestionForReview(text) {
+    const lines = String(text || "").split(/\r?\n/);
+    const first = (lines.shift() || "").trim();
+    if (!first) return "";
+    const notes = lines.map((l) => l.trim()).filter(Boolean);
+    return `<div class="rv-q">${escapeHtml(first)}</div>` +
+      (notes.length ? `<div class="rv-qnote">${notes.map(escapeHtml).join("\n")}</div>` : "");
+  }
+
+  function renderReviewView() {
+    const host = $("review-view");
+    if (!host) return;
+    const company = (currentClient && currentClient.name) || "";
+    const date = formatDateMDY($("f-doc-date") ? $("f-doc-date").value : "");
+
+    let body = "";
+    REVIEW_SECTIONS.forEach((sec) => {
+      if (sec.numeral) {
+        body += `<div class="rv-section">${sec.numeral}&nbsp; ${escapeHtml(sec.title)}</div>`;
+      }
+      if (sec.sub) {
+        body += `<div class="rv-subsection">${escapeHtml(sec.sub)}</div>`;
+      }
+      const rows = (questionsByArea[sec.key] || []).filter((r) => (r.question || "").trim());
+      if (rows.length) {
+        body += `<div class="rv-qlabel">QUESTIONS:</div>`;
+        body += rows.map((r) => renderQuestionForReview(r.question)).join("");
+      } else {
+        body += `<div class="rv-empty">No questions entered.</div>`;
+      }
+    });
+
+    host.innerHTML = `
+      <div class="rv-doc">
+        <div class="rv-title">CONTROLLING DOCUMENT</div>
+        <div class="rv-company">National Center for Economic Gardening${company ? " &nbsp;&middot;&nbsp; " + escapeHtml(company) : ""}</div>
+        <div class="rv-date"><strong>Date:</strong> ${escapeHtml(date || "—")}</div>
+        ${body}
+        <div class="rv-footer">
+          <span>${escapeHtml(company || "Client")}</span><span>Confidential</span><span>Economic Gardening</span>
+        </div>
+      </div>`;
+  }
+
+  function setReviewMode(on) {
+    if (on) { syncQuestionModelFromDom(); renderReviewView(); }
+    document.body.classList.toggle("review-mode", on);
+    const btn = $("review-toggle-btn");
+    if (btn) btn.textContent = on ? "← Back to form" : "Client review view";
+  }
+
+  $("review-toggle-btn").addEventListener("click", () => {
+    setReviewMode(!document.body.classList.contains("review-mode"));
+  });
+
+  $("f-doc-date").addEventListener("change", renderReviewView);
+
+  window.addEventListener("beforeprint", () => { syncQuestionModelFromDom(); renderReviewView(); });
 
   // ---------- Attach a File or Link (Controlling Document) ----------
   // Same upload-or-link + Change-menu pattern as Discovery Call Notes'
@@ -591,7 +703,11 @@
     $("form-view").classList.remove("hidden");
   }
 
-  $("print-btn").addEventListener("click", () => window.print());
+  $("print-btn").addEventListener("click", () => {
+    syncQuestionModelFromDom();
+    renderReviewView();
+    window.print();
+  });
 
   $("save-btn").addEventListener("click", async () => {
     const btn = $("save-btn");
