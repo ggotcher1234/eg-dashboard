@@ -133,8 +133,6 @@
      document not all of them." When the CCC left-nav Documents group
      links here with ?doc=, only the matching row shows and the numbered
      badge (meaningless for a single item) is hidden. */
-  .wf-view-all-link { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--muted); text-decoration: none; margin-bottom: 10px; }
-  .wf-view-all-link:hover { color: var(--navy); text-decoration: underline; }
   .wf-items.doc-filtered .wf-item-num { display: none; }
   .wf-item-num {
     width: 30px; height: 30px; border-radius: 50%; background: var(--navy); color: #fff;
@@ -397,7 +395,7 @@
     </div>
 
     <div id="no-client-view" class="no-client-note hidden">
-      Open a client from <a href="client_workspace.html">the Workspace</a> first, then use the "Workflow Files" link on its Engagement Workspace page to get here.
+      Open a client from <a href="client_workspace.html">the Workspace</a> first, then use the Documents menu on its Engagement Workspace to get here.
     </div>
 
     <div id="workflow-view" class="hidden">
@@ -409,7 +407,6 @@
       </div>
 
       <div class="card">
-        <a href="#" id="wf-view-all-link" class="wf-view-all-link hidden">&larr; All Project Files</a>
         <h2 id="wf-card-title">Project Files</h2>
         <div class="card-hint" id="wf-card-hint">Upload a file or add a link for each item. Item 4 drafts an email.</div>
         <div class="wf-items" id="wf-items">
@@ -451,8 +448,10 @@
            shown-then-hidden by JS after the page loads), and this tiny
            script -- which runs the instant the browser parses this point,
            before any of the slower client/data loading further down --
-           reveals only the one row that matches ?doc=, or all 4 if there's
-           no ?doc= at all. Nothing ever flashes visible and then
+           reveals only the one row that matches ?doc=. Greg (9/1/26): "I
+           never want to see the page with all 4 documents at once" -- a hit
+           with no ?doc= now redirects to the workspace instead of showing
+           the combined list. Nothing ever flashes visible and then
            disappears. -->
       <script>
         (function () {
@@ -463,7 +462,8 @@
           // when filtered to a single doc, instead of being relabeled to
           // repeat the same name a second time.
           var ROW_IDS = { discovery: "wf-row-discovery", controlling: "wf-row-controlling", review: "wf-row-review", eval: "wf-row-eval" };
-          var doc = new URLSearchParams(location.search).get("doc");
+          var params = new URLSearchParams(location.search);
+          var doc = params.get("doc");
           var rowId = ROW_IDS[doc];
           if (rowId) {
             var row = document.getElementById(rowId);
@@ -471,11 +471,22 @@
             document.getElementById("wf-items").classList.add("doc-filtered");
             document.getElementById("wf-card-title").classList.add("hidden");
             document.getElementById("wf-card-hint").classList.add("hidden");
+          } else if (params.get("embed") === "1") {
+            // Greg (9/1/26): "I never want to see the page with all 4
+            // documents at once -- just the individual pages accessible from
+            // the Documents dropdown." Embedded with no ?doc= shouldn't
+            // happen (the dropdown always sets one), but if it does, fall
+            // back to the first document rather than revealing all 4.
+            document.getElementById("wf-row-discovery").classList.remove("hidden");
+            document.getElementById("wf-items").classList.add("doc-filtered");
+            document.getElementById("wf-card-title").classList.add("hidden");
+            document.getElementById("wf-card-hint").classList.add("hidden");
           } else {
-            Object.keys(ROW_IDS).forEach(function (k) {
-              var el = document.getElementById(ROW_IDS[k]);
-              if (el) el.classList.remove("hidden");
-            });
+            // Standalone hit with no ?doc= -- there's no combined view any
+            // more. Bounce back to the engagement workspace, where the
+            // per-document links live.
+            var cid = params.get("client");
+            location.replace("client_control_center.html" + (cid ? "?client=" + encodeURIComponent(cid) : ""));
           }
         })();
       </script>
@@ -907,8 +918,6 @@
     $("p-lifecycle-badge").className = `badge badge-${client.project_status}`;
     $("p-lifecycle-badge").textContent = client.project_status;
 
-    updateViewAllLink(client.id);
-
     await loadWorkflowLinks(client.id);
     await loadEvalResponse(client.id);
     await loadEvalEmailContext(client.id);
@@ -917,19 +926,12 @@
   // Greg (8/31/26): "customize the page for each one to only show that
   // document not all of them," then "I don't like the hiding part -- it
   // shows for a second before it hides. Create separate entities for
-  // each." Which single row is visible (or all 4) is now decided by the
-  // tiny inline script sitting right after the Project Files markup --
-  // that runs before any of this slower client/data-loading code, so
-  // there's no show-then-hide flash. All this does is point the "All
-  // Project Files" link back at the unfiltered page once currentClient.id
-  // is known -- it doesn't touch row visibility.
-  function updateViewAllLink(clientId) {
-    if (!new URLSearchParams(location.search).get("doc")) return;
-    const embed = new URLSearchParams(location.search).get("embed") === "1";
-    const viewAllLink = $("wf-view-all-link");
-    viewAllLink.href = `client_workflow_files.html?client=${clientId}${embed ? "&embed=1" : ""}`;
-    viewAllLink.classList.remove("hidden");
-  }
+  // each." Which single row is visible is decided by the tiny inline
+  // script sitting right after the Project Files markup -- it runs before
+  // any of this slower client/data-loading code, so there's no
+  // show-then-hide flash. Greg (9/1/26): "I never want to see the page
+  // with all 4 documents at once" -- there's no combined view any more, so
+  // a hit with no ?doc= just redirects to the workspace (see that script).
 
   // ---------- Project Files (Discovery/Controlling/Research Review) ----------
   // "Close-Out Survey" (closeout_survey_storage_path/_url) used to be a 4th
