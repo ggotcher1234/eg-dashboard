@@ -116,8 +116,22 @@
   .cd-q-row textarea { width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; line-height: 1.5; resize: vertical; overflow-y: auto; }
   .cd-q-row textarea:focus, .cd-q-row select:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
   .cd-q-question   { min-height: 96px;  color: #d81f1f; font-weight: 600; }
-  .cd-q-background { min-height: 128px; color: #000; }
   .cd-q-notes      { min-height: 48px;  color: #000; }
+
+  /* Background is a real contenteditable editor (bold / italic / bullet /
+     numbered), stored as markdown-lite text -- same pattern as
+     client_profile.html's Description editor. */
+  .cd-q-bg-toolbar { display: flex; gap: 3px; margin-bottom: 6px; flex-wrap: wrap; }
+  .cd-q-bg-toolbar button { min-width: 30px; height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: #eef1f4; color: var(--text); font-size: 12.5px; font-weight: 600; font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+  .cd-q-bg-toolbar button:hover { background: #e2e6ea; }
+  .cd-q-bg-toolbar button.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .cd-q-bg-editor { width: 100%; min-height: 128px; max-height: 420px; overflow-y: auto; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; line-height: 1.55; color: #000; background: #fff; }
+  .cd-q-bg-editor:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
+  .cd-q-bg-editor p { margin: 0 0 8px; }
+  .cd-q-bg-editor p:last-child { margin-bottom: 0; }
+  .cd-q-bg-editor ul, .cd-q-bg-editor ol { margin: 0 0 8px; padding-left: 22px; }
+  .cd-q-bg-editor ul:last-child, .cd-q-bg-editor ol:last-child { margin-bottom: 0; }
+  .cd-q-bg-editor:empty:before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
   .cd-q-flabel-q    { color: #d81f1f; }
   .cd-q-flabel-rank { color: #1a56db; }
   /* Ranking + Customer Notes share one row: fixed-width A/B/C picker, notes fills the rest. */
@@ -137,6 +151,7 @@
     /* Let every field print in full rather than clipping to its
        on-screen scroll height. */
     .cd-q-row textarea { min-height: 0; height: auto !important; overflow: visible !important; }
+    .cd-q-bg-editor { min-height: 0; max-height: none; overflow: visible !important; border-color: #ccc; }
   }
 </style>
 </head>
@@ -337,11 +352,95 @@
         const row = rows[idx];
         if (!row) return;
         row.question = el.querySelector(".cd-q-question").value;
-        row.background = el.querySelector(".cd-q-background").value;
+        row.background = bgHtmlToText(el.querySelector(".cd-q-bg-editor"));
         row.ranking = el.querySelector(".cd-q-rank").value;
         row.customer_notes = el.querySelector(".cd-q-notes").value;
       });
     });
+  }
+
+  // ----- Background rich text <-> markdown-lite storage -----
+  // Background is stored as plain text with a tiny syntax ("- " bullets,
+  // "1." numbered, **bold**, *italic*) so the column stays human-readable
+  // and greppable. These bridge that format and the contenteditable box.
+  // Mirrors client_profile.html's Description editor, plus ordered lists.
+  function bgTextToHtml(text) {
+    if (!text) return "";
+    const inline = (s) => escapeHtml(s)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>");
+    const lines = String(text).split(/\r?\n/);
+    let html = "", listType = null; // null | "ul" | "ol"
+    const closeList = () => { if (listType) { html += `</${listType}>`; listType = null; } };
+    for (const raw of lines) {
+      const line = raw.trim();
+      const ul = /^[-*•]\s+(.*)$/.exec(line);
+      const ol = /^\d+[.)]\s+(.*)$/.exec(line);
+      if (ul) {
+        if (listType !== "ul") { closeList(); html += "<ul>"; listType = "ul"; }
+        html += `<li>${inline(ul[1])}</li>`;
+      } else if (ol) {
+        if (listType !== "ol") { closeList(); html += "<ol>"; listType = "ol"; }
+        html += `<li>${inline(ol[1])}</li>`;
+      } else {
+        closeList();
+        if (line) html += `<p>${inline(line)}</p>`;
+      }
+    }
+    closeList();
+    return html;
+  }
+
+  function bgInlineToText(node) {
+    let out = "";
+    node.childNodes.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) { out += child.textContent; return; }
+      if (child.nodeType !== Node.ELEMENT_NODE) return;
+      const tag = child.tagName.toLowerCase();
+      const inner = bgInlineToText(child);
+      if (tag === "b" || tag === "strong") out += `**${inner}**`;
+      else if (tag === "i" || tag === "em") out += `*${inner}*`;
+      else if (tag === "br") out += "\n";
+      else out += inner;
+    });
+    return out;
+  }
+
+  function bgCollectLines(node, lines) {
+    node.childNodes.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        const t = child.textContent.trim();
+        if (t) lines.push(t);
+        return;
+      }
+      if (child.nodeType !== Node.ELEMENT_NODE) return;
+      const tag = child.tagName.toLowerCase();
+      if (tag === "ul" || tag === "ol") {
+        let i = 1;
+        child.querySelectorAll(":scope > li").forEach((li) => {
+          const prefix = tag === "ol" ? `${i++}. ` : "- ";
+          lines.push(prefix + bgInlineToText(li).trim());
+        });
+      } else if (tag === "li") {
+        lines.push("- " + bgInlineToText(child).trim());
+      } else if (tag === "p" || tag === "div") {
+        if (child.querySelector("ul, ol, li")) {
+          bgCollectLines(child, lines);
+        } else {
+          const t = bgInlineToText(child).trim();
+          if (t) lines.push(t);
+        }
+      } else if (tag !== "br") {
+        bgCollectLines(child, lines);
+      }
+    });
+  }
+
+  function bgHtmlToText(el) {
+    if (!el) return "";
+    const lines = [];
+    bgCollectLines(el, lines);
+    return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
   }
 
   function renderQuestions() {
@@ -366,7 +465,13 @@
             </div>
             <div class="cd-q-field">
               <span class="cd-q-flabel">Background</span>
-              <textarea class="cd-q-background" rows="4" placeholder="Context and elaboration for this question.">${escapeHtml(row.background || "")}</textarea>
+              <div class="cd-q-bg-toolbar no-print">
+                <button type="button" data-bg="bold" title="Bold"><strong>B</strong></button>
+                <button type="button" data-bg="italic" title="Italic"><em>I</em></button>
+                <button type="button" data-bg="bullet" title="Bulleted list">&#8226;&nbsp;List</button>
+                <button type="button" data-bg="number" title="Numbered list">1.&nbsp;List</button>
+              </div>
+              <div class="cd-q-bg-editor" contenteditable="true" data-placeholder="Context and elaboration -- use the list buttons for bullet or numbered points.">${bgTextToHtml(row.background || "")}</div>
             </div>
             <div class="cd-q-rank-row">
               <div class="cd-q-field cd-q-rank-col">
@@ -426,6 +531,49 @@
       const rowEl = delBtn.closest(".cd-q-row");
       if (rowEl) deleteQuestionRow(rowEl.dataset.area, parseInt(rowEl.dataset.idx, 10));
     }
+  });
+
+  // ----- Background editor toolbar (bold / italic / bullet / numbered) -----
+  // Question rows are re-rendered wholesale on every add/delete, so the
+  // per-row toolbar buttons are wired by delegation rather than per node.
+  const BG_COMMANDS = { bold: "bold", italic: "italic", bullet: "insertUnorderedList", number: "insertOrderedList" };
+  try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch (e) {}
+
+  function bgToolbarFor(editor) {
+    const field = editor && editor.closest(".cd-q-field");
+    return field ? field.querySelector(".cd-q-bg-toolbar") : null;
+  }
+  function updateBgToolbarState(editor) {
+    const toolbar = bgToolbarFor(editor);
+    if (!toolbar) return;
+    toolbar.querySelectorAll("button[data-bg]").forEach((b) => {
+      let on = false;
+      try { on = document.queryCommandState(BG_COMMANDS[b.dataset.bg]); } catch (e) {}
+      b.classList.toggle("active", on);
+    });
+  }
+
+  // mousedown+preventDefault keeps the editor's selection when a button is
+  // pressed (a plain click would blur the editor first).
+  document.addEventListener("mousedown", (e) => {
+    if (e.target.closest(".cd-q-bg-toolbar button[data-bg]")) e.preventDefault();
+  });
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".cd-q-bg-toolbar button[data-bg]");
+    if (!btn) return;
+    const field = btn.closest(".cd-q-field");
+    const editor = field && field.querySelector(".cd-q-bg-editor");
+    if (!editor) return;
+    editor.focus();
+    document.execCommand(BG_COMMANDS[btn.dataset.bg]);
+    updateBgToolbarState(editor);
+  });
+  document.addEventListener("selectionchange", () => {
+    const sel = document.getSelection();
+    if (!sel || !sel.anchorNode) return;
+    const host = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
+    const editor = host && host.closest && host.closest(".cd-q-bg-editor");
+    if (editor) updateBgToolbarState(editor);
   });
 
   async function loadResearchQuestionsForPrefill() {
