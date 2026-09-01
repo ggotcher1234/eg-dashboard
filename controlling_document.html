@@ -100,50 +100,37 @@
   }
 
   /* Research questions -- dynamic list per area, numbered continuously
-     1..N across all four cards (see renderQuestions()). */
+     1..N across all four cards (see renderQuestions()). Greg (9/1/26):
+     each question is now three stacked, independently-scrollable fields
+     -- Question (red), Background (black), Customer ranking & notes
+     (blue) -- instead of one textarea whose first line was the question. */
   .cd-questions { margin-bottom: 8px; }
-  .cd-q-row { margin-bottom: 14px; }
-  .cd-q-row > label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
-  .cd-q-line { display: flex; align-items: flex-start; gap: 10px; }
-  .cd-q-line input, .cd-q-line textarea { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; }
-  .cd-q-line textarea { resize: vertical; min-height: 38px; line-height: 1.4; }
-  .cd-q-line input:focus, .cd-q-line textarea:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
+  .cd-q-row { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; background: #fcfdfe; }
+  .cd-q-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .cd-q-head > label { font-size: 13px; font-weight: 700; color: var(--navy); }
   .cd-q-del { flex-shrink: 0; width: 30px; height: 30px; border: 1.5px solid var(--border); background: #fff; color: var(--danger); border-radius: 6px; font-size: 17px; line-height: 1; cursor: pointer; font-family: inherit; }
   .cd-q-del:hover { background: #fdecea; }
+  .cd-q-field { margin-bottom: 12px; }
+  .cd-q-field:last-child { margin-bottom: 0; }
+  .cd-q-flabel { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; color: var(--muted); }
+  .cd-q-row textarea { width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; line-height: 1.5; resize: vertical; overflow-y: auto; }
+  .cd-q-row textarea:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
+  .cd-q-question   { min-height: 96px;  color: #d81f1f; font-weight: 600; }
+  .cd-q-background { min-height: 128px; color: #000; }
+  .cd-q-ranking    { min-height: 48px;  color: #1a56db; }
+  .cd-q-flabel-q    { color: #d81f1f; }
+  .cd-q-flabel-rank { color: #1a56db; }
   .cd-add-q { display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--navy-light); border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 700; font-family: inherit; cursor: pointer; }
   .cd-add-q:hover { background: #eef4fb; }
-
-  /* ===== Client review view =====================================
-     The data-entry form stays as-is; toggling "Client review view"
-     (and every print / Save as PDF) shows this instead: the same
-     content laid out like the Word "Controlling Document Template" --
-     black section scaffolding, each question's FIRST line in red, any
-     following lines as black notes under it, grey footer. */
-  #review-view { display: none; }
-  body.review-mode #form-view { display: none; }
-  body.review-mode #review-view { display: block; }
-
-  .rv-doc { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 44px 52px; }
-  .rv-title { text-align: center; font-size: 19px; font-weight: 700; letter-spacing: 0.6px; color: #000; }
-  .rv-company { text-align: center; font-size: 13px; color: var(--muted); margin-top: 4px; margin-bottom: 22px; }
-  .rv-date { font-size: 13.5px; color: #000; margin-bottom: 20px; }
-  .rv-section { font-size: 14px; font-weight: 700; color: #000; text-transform: uppercase; letter-spacing: 0.3px; margin: 24px 0 8px; }
-  .rv-subsection { font-size: 13.5px; font-weight: 700; color: #000; margin: 16px 0 4px; }
-  .rv-qlabel { font-size: 13.5px; font-weight: 700; color: #FF0000; margin: 6px 0 2px; }
-  .rv-q { font-size: 13.5px; font-weight: 700; color: #FF0000; line-height: 1.5; margin: 2px 0; }
-  .rv-qnote { font-size: 13px; color: #000; line-height: 1.55; margin: 0 0 10px 20px; white-space: pre-wrap; }
-  .rv-empty { font-size: 13px; font-style: italic; color: var(--muted); margin: 4px 0 10px; }
-  .rv-footer { margin-top: 44px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; justify-content: center; gap: 28px; font-size: 11px; letter-spacing: 0.4px; color: #7f7f7f; text-transform: uppercase; }
 
   @media print {
     .no-print { display: none !important; }
     body { background: #fff; }
     .page-shell { max-width: none; margin: 0; padding: 0; }
     .letterhead, .card { border-color: #ccc; }
-    /* Print / Save as PDF always outputs the client review layout. */
-    #form-view { display: none !important; }
-    #review-view { display: block !important; }
-    .rv-doc { border: none; border-radius: 0; padding: 0; }
+    /* Let every field print in full rather than clipping to its
+       on-screen scroll height. */
+    .cd-q-row textarea { min-height: 0; height: auto !important; overflow: visible !important; }
   }
 </style>
 </head>
@@ -155,7 +142,6 @@
   <div class="util-bar no-print">
     <a class="back-link" id="back-link" href="#">← Back to Controlling Document</a>
     <div style="display:flex; gap:10px;">
-      <button type="button" id="review-toggle-btn">Client review view</button>
       <button type="button" id="print-btn">Print / Save as PDF</button>
     </div>
   </div>
@@ -198,7 +184,7 @@
            page's "Research Questions" list under the matching category
            (Greg, 8/31/26: "The Catagory and the questions will flow
            through to the Questions on EG Research Reports Page"). ===== -->
-      <div class="field-hint" style="margin-bottom:14px;">In each question box, the <strong>first line</strong> becomes the red question on the client's review view; put any elaboration on the lines below and it shows as black notes.</div>
+      <div class="field-hint" style="margin-bottom:14px;">Each question has three parts: the <strong style="color:#d81f1f;">Question</strong> itself, its <strong>Background</strong> context, and <strong style="color:#1a56db;">Customer ranking &amp; notes</strong>. All three save to this engagement; the Question also appears on the EG Research Reports page.</div>
       <div class="card">
         <h2>Market Dynamics Research</h2>
         <div class="field-hint">One or more questions regarding research we can do about the client's current or desired markets.</div>
@@ -238,7 +224,6 @@
       </div>
     </div>
 
-    <div id="review-view"></div>
   </div>
 </div>
 
@@ -316,9 +301,10 @@
   // Greg (8/31/26): each area used to be a fixed "Question 1" + "Question 2
   // (optional)" pair. Now it's an unlimited list with a "+ Add question"
   // button, numbered CONTINUOUSLY 1..N straight through all four cards (so
-  // Outbound's first question might be "Question 3"). These questions are
-  // primarily for the EG Research page; a client-facing way to score them
-  // 1-5 by priority is planned but not built yet.
+  // Outbound's first question might be "Question 3"). Greg (9/1/26): each
+  // row holds three fields -- question (also shown on the EG Research
+  // page), background, and customer_ranking_notes -- the last two internal
+  // to this form (new columns in 101_controlling_doc_question_fields.sql).
   const RESEARCH_AREAS = ["market_dynamics", "outbound", "inbound", "watering_holes"];
   const AREA_PLACEHOLDER = {
     market_dynamics: "e.g. Who are the client's fastest-growing target markets?",
@@ -331,14 +317,21 @@
   let pendingQuestionDeletes = [];
 
   // Pull the live DOM values back into questionsByArea before any
-  // re-render (add/delete) so typed-but-unsaved text isn't lost.
+  // re-render (add/delete) so typed-but-unsaved text isn't lost. Each
+  // row now has three textareas (question / background / ranking).
   function syncQuestionModelFromDom() {
     RESEARCH_AREAS.forEach((area) => {
       const container = document.querySelector(`.cd-questions[data-cd-area="${area}"]`);
       if (!container) return;
-      const inputs = [...container.querySelectorAll(".cd-q-input")];
+      const rowEls = [...container.querySelectorAll(".cd-q-row")];
       const rows = questionsByArea[area] || [];
-      inputs.forEach((inp, idx) => { if (rows[idx]) rows[idx].question = inp.value; });
+      rowEls.forEach((el, idx) => {
+        const row = rows[idx];
+        if (!row) return;
+        row.question = el.querySelector(".cd-q-question").value;
+        row.background = el.querySelector(".cd-q-background").value;
+        row.customer_ranking_notes = el.querySelector(".cd-q-ranking").value;
+      });
     });
   }
 
@@ -348,29 +341,44 @@
       const container = document.querySelector(`.cd-questions[data-cd-area="${area}"]`);
       if (!container) return;
       let rows = questionsByArea[area] || [];
-      if (rows.length === 0) { rows = [{ question: "" }]; questionsByArea[area] = rows; }
+      if (rows.length === 0) { rows = [blankQuestion()]; questionsByArea[area] = rows; }
       container.innerHTML = rows.map((row, idx) => {
         n += 1;
         const ph = idx === 0 ? (AREA_PLACEHOLDER[area] || "") : "";
         return `
           <div class="cd-q-row" data-area="${area}" data-idx="${idx}">
-            <label>Question ${n}</label>
-            <div class="cd-q-line">
-              <textarea class="cd-q-input" rows="2" placeholder="${escapeHtml(ph)}">${escapeHtml(row.question || "")}</textarea>
+            <div class="cd-q-head">
+              <label>Question ${n}</label>
               <button type="button" class="cd-q-del no-print" title="Remove question">&times;</button>
+            </div>
+            <div class="cd-q-field">
+              <span class="cd-q-flabel cd-q-flabel-q">Question</span>
+              <textarea class="cd-q-question" rows="3" placeholder="${escapeHtml(ph)}">${escapeHtml(row.question || "")}</textarea>
+            </div>
+            <div class="cd-q-field">
+              <span class="cd-q-flabel">Background</span>
+              <textarea class="cd-q-background" rows="4" placeholder="Context and elaboration for this question.">${escapeHtml(row.background || "")}</textarea>
+            </div>
+            <div class="cd-q-field">
+              <span class="cd-q-flabel cd-q-flabel-rank">Customer ranking &amp; notes</span>
+              <textarea class="cd-q-ranking" rows="2" placeholder="How the customer ranked this, plus any notes.">${escapeHtml(row.customer_ranking_notes || "")}</textarea>
             </div>
           </div>`;
       }).join("");
     });
   }
 
+  function blankQuestion() {
+    return { question: "", background: "", customer_ranking_notes: "" };
+  }
+
   function addQuestionRow(area) {
     if (!RESEARCH_AREAS.includes(area)) return;
     syncQuestionModelFromDom();
-    (questionsByArea[area] = questionsByArea[area] || []).push({ question: "" });
+    (questionsByArea[area] = questionsByArea[area] || []).push(blankQuestion());
     renderQuestions();
     const container = document.querySelector(`.cd-questions[data-cd-area="${area}"]`);
-    const last = container && container.querySelector(".cd-q-row:last-child .cd-q-input");
+    const last = container && container.querySelector(".cd-q-row:last-child .cd-q-question");
     if (last) last.focus();
   }
 
@@ -379,13 +387,14 @@
     const rows = questionsByArea[area] || [];
     const row = rows[idx];
     if (!row) return;
-    if (((row.question || "").trim() || row.id) &&
+    const hasContent = (row.question || "").trim() || (row.background || "").trim() || (row.customer_ranking_notes || "").trim();
+    if ((hasContent || row.id) &&
         !confirm("Remove this question? Any research files attached to it on the Research page will be unlinked.")) {
       return;
     }
     if (row.id) pendingQuestionDeletes.push(row.id);
     rows.splice(idx, 1);
-    if (rows.length === 0) rows.push({ question: "" });
+    if (rows.length === 0) rows.push(blankQuestion());
     renderQuestions();
   }
 
@@ -414,10 +423,15 @@
       questionsByArea[area] = allQuestions
         .filter((q) => q.research_area === area)
         .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-        .map((q) => ({ id: q.id, question: q.question || "", sort_order: q.sort_order }));
+        .map((q) => ({
+          id: q.id,
+          question: q.question || "",
+          background: q.background || "",
+          customer_ranking_notes: q.customer_ranking_notes || "",
+          sort_order: q.sort_order,
+        }));
     });
     renderQuestions();
-    renderReviewView();
   }
 
   async function submitResearchQuestions() {
@@ -435,10 +449,18 @@
       let nextSort = areaAll.length ? Math.max(...areaAll.map((q) => q.sort_order || 0)) + 1 : 1;
       for (const row of rows) {
         const value = (row.question || "").trim();
+        const bg = (row.background || "").trim();
+        const rank = (row.customer_ranking_notes || "").trim();
         if (row.id) {
           const original = areaAll.find((q) => q.id === row.id);
-          if (value !== (original ? (original.question || "") : "")) {
-            const { error } = await sb.from("client_research_questions").update({ question: value || null }).eq("id", row.id);
+          const changed = !original
+            || value !== (original.question || "")
+            || bg !== (original.background || "")
+            || rank !== (original.customer_ranking_notes || "");
+          if (changed) {
+            const { error } = await sb.from("client_research_questions")
+              .update({ question: value || null, background: bg || null, customer_ranking_notes: rank || null })
+              .eq("id", row.id);
             if (error) throw new Error(error.message);
           }
         } else if (value) {
@@ -446,6 +468,8 @@
             client_id: currentClient.id,
             research_area: area,
             question: value,
+            background: bg || null,
+            customer_ranking_notes: rank || null,
             sort_order: nextSort++,
           });
           if (error) throw new Error(error.message);
@@ -454,83 +478,11 @@
     }
   }
 
-  // ---------- Client review view ----------
-  // Greg (8/31/26): keep the data-entry form as-is, but "Client review
-  // view" (and every print / Save as PDF) renders the same content laid
-  // out like the Word "Controlling Document Template" -- black section
-  // scaffolding (I. MARKET RESEARCH / II. MARKETING CHANNELS + Outbound /
-  // Inbound / Watering Holes), each question's FIRST line in red, any
-  // following lines as black notes beneath it, grey footer.
-  const REVIEW_SECTIONS = [
-    { key: "market_dynamics", numeral: "I.",  title: "MARKET RESEARCH",    sub: null },
-    { key: "outbound",        numeral: "II.", title: "MARKETING CHANNELS", sub: "Outbound" },
-    { key: "inbound",         numeral: null,  title: null,                 sub: "Inbound" },
-    { key: "watering_holes",  numeral: null,  title: null,                 sub: "Watering Holes" },
-  ];
-
-  function formatDateMDY(iso) {
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
-    return m ? `${m[2]}/${m[3]}/${m[1]}` : (iso || "");
-  }
-
-  function renderQuestionForReview(text) {
-    const lines = String(text || "").split(/\r?\n/);
-    const first = (lines.shift() || "").trim();
-    if (!first) return "";
-    const notes = lines.map((l) => l.trim()).filter(Boolean);
-    return `<div class="rv-q">${escapeHtml(first)}</div>` +
-      (notes.length ? `<div class="rv-qnote">${notes.map(escapeHtml).join("\n")}</div>` : "");
-  }
-
-  function renderReviewView() {
-    const host = $("review-view");
-    if (!host) return;
-    const company = (currentClient && currentClient.name) || "";
-    const date = formatDateMDY($("f-doc-date") ? $("f-doc-date").value : "");
-
-    let body = "";
-    REVIEW_SECTIONS.forEach((sec) => {
-      if (sec.numeral) {
-        body += `<div class="rv-section">${sec.numeral}&nbsp; ${escapeHtml(sec.title)}</div>`;
-      }
-      if (sec.sub) {
-        body += `<div class="rv-subsection">${escapeHtml(sec.sub)}</div>`;
-      }
-      const rows = (questionsByArea[sec.key] || []).filter((r) => (r.question || "").trim());
-      if (rows.length) {
-        body += `<div class="rv-qlabel">QUESTIONS:</div>`;
-        body += rows.map((r) => renderQuestionForReview(r.question)).join("");
-      } else {
-        body += `<div class="rv-empty">No questions entered.</div>`;
-      }
-    });
-
-    host.innerHTML = `
-      <div class="rv-doc">
-        <div class="rv-title">CONTROLLING DOCUMENT</div>
-        <div class="rv-company">National Center for Economic Gardening${company ? " &nbsp;&middot;&nbsp; " + escapeHtml(company) : ""}</div>
-        <div class="rv-date"><strong>Date:</strong> ${escapeHtml(date || "—")}</div>
-        ${body}
-        <div class="rv-footer">
-          <span>${escapeHtml(company || "Client")}</span><span>Confidential</span><span>Economic Gardening</span>
-        </div>
-      </div>`;
-  }
-
-  function setReviewMode(on) {
-    if (on) { syncQuestionModelFromDom(); renderReviewView(); }
-    document.body.classList.toggle("review-mode", on);
-    const btn = $("review-toggle-btn");
-    if (btn) btn.textContent = on ? "← Back to form" : "Client review view";
-  }
-
-  $("review-toggle-btn").addEventListener("click", () => {
-    setReviewMode(!document.body.classList.contains("review-mode"));
-  });
-
-  $("f-doc-date").addEventListener("change", renderReviewView);
-
-  window.addEventListener("beforeprint", () => { syncQuestionModelFromDom(); renderReviewView(); });
+  // ---------- Printing ----------
+  // Greg (9/1/26): the separate client-facing "review view" is gone -- one
+  // internal form, printed as-is. syncQuestionModelFromDom() runs on
+  // beforeprint so the latest typed (unsaved) text is what prints.
+  window.addEventListener("beforeprint", syncQuestionModelFromDom);
 
   // ---------- Attach a File or Link (Controlling Document) ----------
   // Same upload-or-link + Change-menu pattern as Discovery Call Notes'
@@ -720,7 +672,6 @@
 
   $("print-btn").addEventListener("click", () => {
     syncQuestionModelFromDom();
-    renderReviewView();
     window.print();
   });
 
