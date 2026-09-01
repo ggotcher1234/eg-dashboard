@@ -114,12 +114,18 @@
   .cd-q-field:last-child { margin-bottom: 0; }
   .cd-q-flabel { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; color: var(--muted); }
   .cd-q-row textarea { width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; line-height: 1.5; resize: vertical; overflow-y: auto; }
-  .cd-q-row textarea:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
+  .cd-q-row textarea:focus, .cd-q-row select:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
   .cd-q-question   { min-height: 96px;  color: #d81f1f; font-weight: 600; }
   .cd-q-background { min-height: 128px; color: #000; }
-  .cd-q-ranking    { min-height: 48px;  color: #1a56db; }
+  .cd-q-notes      { min-height: 48px;  color: #000; }
   .cd-q-flabel-q    { color: #d81f1f; }
   .cd-q-flabel-rank { color: #1a56db; }
+  /* Ranking + Customer Notes share one row: fixed-width A/B/C picker, notes fills the rest. */
+  .cd-q-rank-row { display: flex; gap: 12px; align-items: flex-start; }
+  .cd-q-rank-row .cd-q-field { margin-bottom: 0; }
+  .cd-q-rank-col { flex: 0 0 120px; }
+  .cd-q-notes-col { flex: 1 1 auto; min-width: 0; }
+  .cd-q-rank { width: 100%; height: 38px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; background: #fff; color: #1a56db; font-weight: 600; }
   .cd-add-q { display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--navy-light); border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 700; font-family: inherit; cursor: pointer; }
   .cd-add-q:hover { background: #eef4fb; }
 
@@ -184,7 +190,7 @@
            page's "Research Questions" list under the matching category
            (Greg, 8/31/26: "The Catagory and the questions will flow
            through to the Questions on EG Research Reports Page"). ===== -->
-      <div class="field-hint" style="margin-bottom:14px;">Each question has three parts: the <strong style="color:#d81f1f;">Question</strong> itself, its <strong>Background</strong> context, and <strong style="color:#1a56db;">Customer ranking &amp; notes</strong>. All three save to this engagement; the Question also appears on the EG Research Reports page.</div>
+      <div class="field-hint" style="margin-bottom:14px;">Each question has a <strong style="color:#d81f1f;">Question</strong>, its <strong>Background</strong> context, a customer <strong style="color:#1a56db;">Ranking</strong> (A/B/C) and <strong style="color:#1a56db;">Customer Notes</strong>. All of it saves to this engagement; the Question also appears on the EG Research Reports page.</div>
       <div class="card">
         <h2>Market Dynamics Research</h2>
         <div class="field-hint">One or more questions regarding research we can do about the client's current or desired markets.</div>
@@ -302,9 +308,9 @@
   // (optional)" pair. Now it's an unlimited list with a "+ Add question"
   // button, numbered CONTINUOUSLY 1..N straight through all four cards (so
   // Outbound's first question might be "Question 3"). Greg (9/1/26): each
-  // row holds three fields -- question (also shown on the EG Research
-  // page), background, and customer_ranking_notes -- the last two internal
-  // to this form (new columns in 101_controlling_doc_question_fields.sql).
+  // row holds question (also shown on the EG Research page), background,
+  // ranking (A/B/C) and customer_notes -- the last three internal to this
+  // form (new columns in 101_controlling_doc_question_fields.sql).
   const RESEARCH_AREAS = ["market_dynamics", "outbound", "inbound", "watering_holes"];
   const AREA_PLACEHOLDER = {
     market_dynamics: "e.g. Who are the client's fastest-growing target markets?",
@@ -330,7 +336,8 @@
         if (!row) return;
         row.question = el.querySelector(".cd-q-question").value;
         row.background = el.querySelector(".cd-q-background").value;
-        row.customer_ranking_notes = el.querySelector(".cd-q-ranking").value;
+        row.ranking = el.querySelector(".cd-q-rank").value;
+        row.customer_notes = el.querySelector(".cd-q-notes").value;
       });
     });
   }
@@ -359,9 +366,20 @@
               <span class="cd-q-flabel">Background</span>
               <textarea class="cd-q-background" rows="4" placeholder="Context and elaboration for this question.">${escapeHtml(row.background || "")}</textarea>
             </div>
-            <div class="cd-q-field">
-              <span class="cd-q-flabel cd-q-flabel-rank">Customer ranking &amp; notes</span>
-              <textarea class="cd-q-ranking" rows="2" placeholder="How the customer ranked this, plus any notes.">${escapeHtml(row.customer_ranking_notes || "")}</textarea>
+            <div class="cd-q-rank-row">
+              <div class="cd-q-field cd-q-rank-col">
+                <span class="cd-q-flabel cd-q-flabel-rank">Ranking</span>
+                <select class="cd-q-rank">
+                  <option value="">—</option>
+                  <option value="A"${row.ranking === "A" ? " selected" : ""}>Rank A</option>
+                  <option value="B"${row.ranking === "B" ? " selected" : ""}>Rank B</option>
+                  <option value="C"${row.ranking === "C" ? " selected" : ""}>Rank C</option>
+                </select>
+              </div>
+              <div class="cd-q-field cd-q-notes-col">
+                <span class="cd-q-flabel cd-q-flabel-rank">Customer Notes</span>
+                <textarea class="cd-q-notes" rows="2" placeholder="Notes from or about the customer.">${escapeHtml(row.customer_notes || "")}</textarea>
+              </div>
             </div>
           </div>`;
       }).join("");
@@ -369,7 +387,7 @@
   }
 
   function blankQuestion() {
-    return { question: "", background: "", customer_ranking_notes: "" };
+    return { question: "", background: "", ranking: "", customer_notes: "" };
   }
 
   function addQuestionRow(area) {
@@ -387,7 +405,7 @@
     const rows = questionsByArea[area] || [];
     const row = rows[idx];
     if (!row) return;
-    const hasContent = (row.question || "").trim() || (row.background || "").trim() || (row.customer_ranking_notes || "").trim();
+    const hasContent = (row.question || "").trim() || (row.background || "").trim() || (row.ranking || "").trim() || (row.customer_notes || "").trim();
     if ((hasContent || row.id) &&
         !confirm("Remove this question? Any research files attached to it on the Research page will be unlinked.")) {
       return;
@@ -427,7 +445,8 @@
           id: q.id,
           question: q.question || "",
           background: q.background || "",
-          customer_ranking_notes: q.customer_ranking_notes || "",
+          ranking: q.ranking || "",
+          customer_notes: q.customer_notes || "",
           sort_order: q.sort_order,
         }));
     });
@@ -450,16 +469,18 @@
       for (const row of rows) {
         const value = (row.question || "").trim();
         const bg = (row.background || "").trim();
-        const rank = (row.customer_ranking_notes || "").trim();
+        const rank = (row.ranking || "").trim();
+        const notes = (row.customer_notes || "").trim();
         if (row.id) {
           const original = areaAll.find((q) => q.id === row.id);
           const changed = !original
             || value !== (original.question || "")
             || bg !== (original.background || "")
-            || rank !== (original.customer_ranking_notes || "");
+            || rank !== (original.ranking || "")
+            || notes !== (original.customer_notes || "");
           if (changed) {
             const { error } = await sb.from("client_research_questions")
-              .update({ question: value || null, background: bg || null, customer_ranking_notes: rank || null })
+              .update({ question: value || null, background: bg || null, ranking: rank || null, customer_notes: notes || null })
               .eq("id", row.id);
             if (error) throw new Error(error.message);
           }
@@ -469,7 +490,8 @@
             research_area: area,
             question: value,
             background: bg || null,
-            customer_ranking_notes: rank || null,
+            ranking: rank || null,
+            customer_notes: notes || null,
             sort_order: nextSort++,
           });
           if (error) throw new Error(error.message);
