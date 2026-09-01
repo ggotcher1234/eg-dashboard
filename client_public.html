@@ -748,7 +748,7 @@
 
   const WORKFLOW_STEPS = [
     { urlKey: "discovery_doc_url", pathKey: "discovery_doc_storage_path", label: "Discovery Call Notes" },
-    { urlKey: "controlling_doc_url", pathKey: "controlling_doc_storage_path", label: "Controlling Document" },
+    { urlKey: "controlling_doc_url", pathKey: "controlling_doc_storage_path", label: "Controlling Document", clientLinkKey: "controlling_doc_link_url" },
     { urlKey: "research_review_url", pathKey: "research_review_storage_path", label: "Research Review" },
     { urlKey: "closeout_survey_url", pathKey: "closeout_survey_storage_path", label: "Close-Out Evaluation", extraFilledKey: "evaluation_submitted_at" },
   ];
@@ -758,11 +758,19 @@
     $("workflow-tracker").innerHTML = WORKFLOW_STEPS.map((step, i) => {
       const path = step.pathKey ? w[step.pathKey] : null;
       const url = w[step.urlKey];
+      const clientLink = step.clientLinkKey ? w[step.clientLinkKey] : null;
       const extraFilled = step.extraFilledKey ? w[step.extraFilledKey] : null;
       const colorClass = `wf-step-${i}`;
       // A checkmark marks "done" explicitly -- the color shift alone (esp.
       // step 3's slate-on-slate) was too subtle for Greg to tell filled
       // from unfilled at a glance (8/25/26).
+      // A client-facing review link (the polished Controlling Document page
+      // we email out) is the nicest thing for the client to open, so it
+      // wins over an uploaded file or the internal editor self-link (Greg,
+      // 9/1/26: "make the client dashboard showcase the link we send").
+      if (clientLink) {
+        return `<a class="wf-step ${colorClass} filled" href="${escapeHtml(clientLink)}" target="_blank" rel="noopener">&#10003; ${escapeHtml(step.label)}</a>`;
+      }
       if (path) {
         return `<a class="wf-step ${colorClass} filled wf-doc-link" data-path="${escapeHtml(path)}" href="#">&#10003; ${escapeHtml(step.label)}</a>`;
       }
