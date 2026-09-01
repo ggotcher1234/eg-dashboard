@@ -560,6 +560,28 @@
     return FILE_TYPE_ICONS[ext] || "\u{1F4C4}";
   }
 
+  // Word/Excel/PowerPoint files can't render in a browser tab -- clicking
+  // one just downloads it to the Mac. Route those through Microsoft's
+  // read-only Office web viewer so they OPEN instead (same approach the
+  // client-facing dashboard already uses). Everything else (PDF, images,
+  // text) opens directly. Note: the Office viewer fetches the file from
+  // Microsoft's servers to render it.
+  const OFFICE_VIEWER_EXTENSIONS = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
+  async function openStoredDocument(path) {
+    const name = (path.split("/").pop() || "").toLowerCase();
+    const dot = name.lastIndexOf(".");
+    const ext = dot === -1 ? "" : name.slice(dot + 1);
+    const useViewer = OFFICE_VIEWER_EXTENSIONS.includes(ext);
+    // 3600s for the viewer (it needs time to fetch the file itself before
+    // the link expires); 300s is plenty for a direct open.
+    const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, useViewer ? 3600 : 300);
+    if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+    const target = useViewer
+      ? "https://view.officeapps.live.com/op/view.aspx?src=" + encodeURIComponent(data.signedUrl)
+      : data.signedUrl;
+    window.open(target, "_blank", "noopener");
+  }
+
   /* ---------- Ask AI ---------- */
   let AI_CONTEXT_LABEL = "Workflow Files";
   const AI_PAGE_KEY = "workflow_files";
@@ -989,11 +1011,7 @@
           </div>
         </div>
       `;
-      container.querySelector(".wf-file-link").addEventListener("click", async () => {
-        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, 60);
-        if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
-        window.open(data.signedUrl, "_blank");
-      });
+      container.querySelector(".wf-file-link").addEventListener("click", () => openStoredDocument(path));
       wireWfChangeMenu(container, [
         ...(f.key === "discovery" ? [{ sel: "[data-wf-create]", fn: () => openDiscoveryCallNotesForm() }] : []),
         ...(f.key === "controlling" ? [{ sel: "[data-wf-create]", fn: () => openControllingDocumentForm() }] : []),
