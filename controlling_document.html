@@ -106,8 +106,19 @@
      (blue) -- instead of one textarea whose first line was the question. */
   .cd-questions { margin-bottom: 8px; }
   .cd-q-row { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; background: #fcfdfe; }
-  .cd-q-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .cd-q-head > label { font-size: 13px; font-weight: 700; color: var(--navy); }
+  .cd-q-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .cd-q-row.collapsed .cd-q-head { margin-bottom: 0; }
+  /* Head doubles as the accordion toggle -- click "Question N" to roll the
+     row up when it's empty / not needed. All rows start expanded. */
+  .cd-q-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; background: none; border: none; padding: 0; font-family: inherit; cursor: pointer; text-align: left; }
+  .cd-q-chevron { flex-shrink: 0; color: var(--navy-light); font-size: 11px; transform: rotate(90deg); transition: transform 0.15s ease; }
+  .cd-q-row.collapsed .cd-q-chevron { transform: rotate(0deg); }
+  .cd-q-headlabel { flex-shrink: 0; font-size: 13px; font-weight: 700; color: var(--navy); }
+  .cd-q-preview { min-width: 0; font-size: 12.5px; font-weight: 400; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cd-q-preview-empty { font-style: italic; }
+  .cd-q-row:not(.collapsed) .cd-q-preview { display: none; }
+  .cd-q-row.collapsed .cd-q-field,
+  .cd-q-row.collapsed .cd-q-rank-row { display: none; }
   .cd-q-del { flex-shrink: 0; width: 30px; height: 30px; border: 1.5px solid var(--border); background: #fff; color: var(--danger); border-radius: 6px; font-size: 17px; line-height: 1; cursor: pointer; font-family: inherit; }
   .cd-q-del:hover { background: #fdecea; }
   .cd-q-field { margin-bottom: 12px; }
@@ -355,6 +366,7 @@
         row.background = bgHtmlToText(el.querySelector(".cd-q-bg-editor"));
         row.ranking = el.querySelector(".cd-q-rank").value;
         row.customer_notes = el.querySelector(".cd-q-notes").value;
+        row.collapsed = el.classList.contains("collapsed");
       });
     });
   }
@@ -453,10 +465,16 @@
       container.innerHTML = rows.map((row, idx) => {
         n += 1;
         const ph = idx === 0 ? (AREA_PLACEHOLDER[area] || "") : "";
+        const qprev = (row.question || "").trim().replace(/\s+/g, " ");
+        const qprevText = qprev ? (qprev.length > 80 ? qprev.slice(0, 80) + "…" : qprev) : "empty";
         return `
-          <div class="cd-q-row" data-area="${area}" data-idx="${idx}">
+          <div class="cd-q-row${row.collapsed ? " collapsed" : ""}" data-area="${area}" data-idx="${idx}">
             <div class="cd-q-head">
-              <label>Question ${n}</label>
+              <button type="button" class="cd-q-toggle" aria-expanded="${row.collapsed ? "false" : "true"}">
+                <span class="cd-q-chevron">&#9656;</span>
+                <span class="cd-q-headlabel">Question ${n}</span>
+                <span class="cd-q-preview${qprev ? "" : " cd-q-preview-empty"}">${escapeHtml(qprevText)}</span>
+              </button>
               <button type="button" class="cd-q-del no-print" title="Remove question">&times;</button>
             </div>
             <div class="cd-q-field">
@@ -494,7 +512,7 @@
   }
 
   function blankQuestion() {
-    return { question: "", background: "", ranking: "", customer_notes: "" };
+    return { question: "", background: "", ranking: "", customer_notes: "", collapsed: false };
   }
 
   function addQuestionRow(area) {
@@ -531,6 +549,28 @@
       const rowEl = delBtn.closest(".cd-q-row");
       if (rowEl) deleteQuestionRow(rowEl.dataset.area, parseInt(rowEl.dataset.idx, 10));
     }
+  });
+
+  // ----- Per-question accordion roll-up -----
+  // The head ("Question N" + a preview of the question text) toggles the
+  // row collapsed. All rows render expanded; collapsing is a per-session
+  // convenience for tidying away rows with no question, not persisted.
+  function updateQPreview(row) {
+    const el = row.querySelector(".cd-q-preview");
+    if (!el) return;
+    const q = row.querySelector(".cd-q-question");
+    const t = ((q && q.value) || "").trim().replace(/\s+/g, " ");
+    el.textContent = t ? (t.length > 80 ? t.slice(0, 80) + "…" : t) : "empty";
+    el.classList.toggle("cd-q-preview-empty", !t);
+  }
+  document.addEventListener("click", (e) => {
+    const toggle = e.target.closest(".cd-q-toggle");
+    if (!toggle) return;
+    const row = toggle.closest(".cd-q-row");
+    if (!row) return;
+    const collapsed = row.classList.toggle("collapsed");
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    updateQPreview(row);
   });
 
   // ----- Background editor toolbar (bold / italic / bullet / numbered) -----
@@ -598,6 +638,7 @@
           ranking: q.ranking || "",
           customer_notes: q.customer_notes || "",
           sort_order: q.sort_order,
+          collapsed: false, // every row starts expanded on load
         }));
     });
     renderQuestions();
