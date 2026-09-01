@@ -1906,7 +1906,15 @@
     });
     if (wizStep === WIZARD_STEPS.length) wizRenderReview();
     wizRenderChrome();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Every step change lands at the very top of the page. Jump instantly
+    // (not "smooth") -- a smooth animation gets aborted midway when the
+    // freshly shown panel changes the document height (a tall panel to a
+    // short one clamps the scroll somewhere arbitrary; the Review step
+    // rerender shifts layout again a moment later). Re-assert on the next
+    // frame so that late layout shift can't leave us parked partway down.
+    const toTop = () => window.scrollTo(0, 0);
+    toTop();
+    requestAnimationFrame(toTop);
   }
   $("wiz-back").addEventListener("click", () => wizGoToStep(wizStep - 1));
   $("wiz-continue").addEventListener("click", () => wizGoToStep(wizStep + 1));
