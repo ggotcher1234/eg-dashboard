@@ -423,6 +423,8 @@
             <div class="wf-item-body">
               <div class="wf-item-title">Controlling Document</div>
               <div id="wf-controlling-file"></div>
+              <div class="wf-item-hint" style="margin-top:12px;">Email the client a link to review the Controlling Document -- they rank each research question and add notes or changes, and it posts back here (and the bell tells the team the CD is finalized).</div>
+              <div id="wf-controlling-client"></div>
             </div>
           </div>
           <div class="wf-item-row hidden" id="wf-row-review">
@@ -522,6 +524,39 @@
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
         <button type="button" class="btn-secondary btn-sm" id="eem-copy-btn">Copy Email Text</button>
         <a class="btn-primary btn-sm" id="eem-mailto-btn" href="#">Send Email &rarr;</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="eem-overlay" id="cd-email-overlay">
+  <div class="eem-modal">
+    <div class="eem-modal-header">
+      <div>
+        <h3>Controlling Document Review Email</h3>
+        <div class="eem-modal-meta">Review and edit, then send it from here or copy it into Outlook.</div>
+      </div>
+      <button class="eem-modal-close" id="cdem-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="cdem-body">
+      <div class="field">
+        <label>To</label>
+        <input type="text" id="cdem-to" />
+      </div>
+      <div id="cdem-no-contact" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
+        No contact email found on file for this client — add the CEO's email in Company Contacts, or type it in above.
+      </div>
+      <div class="field">
+        <label>Subject</label>
+        <input type="text" id="cdem-subject" />
+      </div>
+      <div class="field">
+        <label>Body</label>
+        <textarea id="cdem-body-text" rows="14"></textarea>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button type="button" class="btn-secondary btn-sm" id="cdem-copy-btn">Copy Email Text</button>
+        <a class="btn-primary btn-sm" id="cdem-mailto-btn" href="#">Send Email &rarr;</a>
       </div>
     </div>
   </div>
@@ -920,6 +955,7 @@
 
     await loadWorkflowLinks(client.id);
     await loadEvalResponse(client.id);
+    await loadControllingDocResponse(client.id);
     await loadEvalEmailContext(client.id);
   }
 
@@ -986,6 +1022,7 @@
     workflowData = data || {};
     WORKFLOW_FIELDS.forEach(renderWorkflowFileField);
     renderEvalLinkField();
+    renderControllingClientField();
   }
 
   // Greg (8/31/26): "Replace and Remove are secondary actions on the same
@@ -1368,6 +1405,180 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
   $("eem-body-text").addEventListener("input", updateEvalEmailMailto);
   $("eem-copy-btn").addEventListener("click", async () => {
     const text = `To: ${$("eem-to").value}\nSubject: ${$("eem-subject").value}\n\n${$("eem-body-text").value}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      showBanner("Email text copied — paste it into your email client.", "success");
+    } catch (e) {
+      showBanner("Couldn't copy automatically — select the text below and copy manually.", "error");
+    }
+  });
+
+  // ---------- Controlling Document client-review link + email ----------
+  // Twin of the Close-Out Evaluation flow above (Greg, 9/1/26). A
+  // per-client public link (controlling_document_public.html) the client
+  // opens with no login to rank each research question and leave
+  // notes/changes. Submitting posts back via the public-submit-controlling-
+  // doc Edge Function (103), which fires the bell ("Controlling Document
+  // was finalized by the client") and writes the client's ranking/notes
+  // onto client_research_questions (ranking / customer_notes).
+  let controllingResponse = null;
+
+  async function loadControllingDocResponse(clientId) {
+    const { data, error } = await sb
+      .from("client_controlling_doc_responses")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("submitted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) { console.error("Couldn't load Controlling Document response:", error.message); return; }
+    controllingResponse = data || null;
+    renderControllingClientField();
+  }
+
+  function renderControllingClientField() {
+    const container = $("wf-controlling-client");
+    if (!container) return;
+
+    let responseHtml = "";
+    if (controllingResponse) {
+      const r = controllingResponse;
+      const submittedDate = new Date(r.submitted_at).toLocaleDateString();
+      responseHtml = `
+        <div style="margin-top:12px; padding:14px 16px; background:#f3f6f1; border:1px solid var(--border); border-radius:8px;">
+          <div style="font-weight:700; color:var(--navy); margin-bottom:6px;">
+            &#9989; Finalized by client ${escapeHtml(submittedDate)}${r.respondent_name ? " by " + escapeHtml(r.respondent_name) : ""}
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn-secondary btn-sm" id="cd-response-toggle-btn">View Full Response</button>
+            ${isSuperAdmin ? `<button type="button" class="btn-danger btn-sm" id="cd-response-delete-btn">Delete Response</button>` : ""}
+          </div>
+          <div id="cd-response-detail" class="hidden" style="margin-top:10px;"></div>
+        </div>
+      `;
+    }
+
+    container.innerHTML = `<button type="button" class="wf-btn wf-btn-icon-email" id="cd-email-create-btn">Create Email</button>` + responseHtml;
+
+    container.querySelector("#cd-email-create-btn").addEventListener("click", openControllingEmailModal);
+
+    if (controllingResponse) {
+      const toggleBtn = container.querySelector("#cd-response-toggle-btn");
+      const detail = container.querySelector("#cd-response-detail");
+      toggleBtn.addEventListener("click", () => {
+        const isHidden = detail.classList.contains("hidden");
+        if (isHidden) {
+          detail.innerHTML = renderControllingResponseDetail(controllingResponse);
+          detail.classList.remove("hidden");
+          toggleBtn.textContent = "Hide Full Response";
+        } else {
+          detail.classList.add("hidden");
+          toggleBtn.textContent = "View Full Response";
+        }
+      });
+      const deleteBtn = container.querySelector("#cd-response-delete-btn");
+      if (deleteBtn) deleteBtn.addEventListener("click", deleteControllingResponse);
+    }
+  }
+
+  async function deleteControllingResponse() {
+    if (!controllingResponse) return;
+    if (!confirm("Delete this Controlling Document response? This cannot be undone.")) return;
+    const { error } = await sb.from("client_controlling_doc_responses").delete().eq("id", controllingResponse.id);
+    if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
+    controllingResponse = null;
+    renderControllingClientField();
+    showBanner("Controlling Document response deleted.", "success");
+  }
+
+  function renderControllingResponseDetail(r) {
+    const rows = Array.isArray(r.question_responses) ? r.question_responses : [];
+    const rankLabel = (v) => (["A", "B", "C"].includes(v) ? "Rank " + v : "—");
+    return `
+      <div style="font-size:13px; line-height:1.6; color:var(--text);">
+        <div style="font-weight:600; margin-bottom:4px;">Per-question ranking &amp; notes</div>
+        <ul style="margin:0 0 10px 18px; padding:0;">
+          ${rows.map((q) => `<li style="margin-bottom:6px;">${escapeHtml(q.question || "(no question text)")}<br><strong>${escapeHtml(rankLabel(q.ranking))}</strong>${q.notes ? " &mdash; " + escapeHtml(q.notes) : ""}</li>`).join("") || "<li><em>No questions.</em></li>"}
+        </ul>
+        <div><strong>Overall notes:</strong> ${r.overall_notes ? escapeHtml(r.overall_notes) : "<em>None provided.</em>"}</div>
+        ${r.respondent_email ? `<div style="margin-top:6px; color:var(--muted);">${escapeHtml(r.respondent_email)}</div>` : ""}
+      </div>
+    `;
+  }
+
+  // Deterministic public link saved to client_content.controlling_doc_link_url
+  // (controlling_document_public.html / 103's RPC fetch everything live from
+  // ?client=<id>, so the URL itself never needs to change).
+  async function ensureControllingDocLinkUrl() {
+    const { count, error: qErr } = await sb
+      .from("client_research_questions")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", currentClient.id)
+      .not("question", "is", null);
+    if (qErr) { showBanner("Couldn't check Controlling Document questions: " + qErr.message, "error"); return null; }
+    if (!count) {
+      showBanner("Add at least one Controlling Document question (Create Controlling Document) before emailing the link.", "error");
+      return null;
+    }
+
+    const url = `${PUBLIC_SITE_BASE}controlling_document_public.html?client=${currentClient.id}`;
+    if (workflowData && workflowData.controlling_doc_link_url !== url) {
+      const { error: saveErr } = await sb.from("client_content").update({ controlling_doc_link_url: url }).eq("client_id", currentClient.id);
+      if (saveErr) { showBanner("Couldn't save the Controlling Document link: " + saveErr.message, "error"); return null; }
+      if (workflowData) workflowData.controlling_doc_link_url = url;
+    }
+    return url;
+  }
+
+  async function openControllingEmailModal() {
+    const createBtn = document.querySelector("#cd-email-create-btn");
+    if (createBtn) { createBtn.disabled = true; createBtn.textContent = "Preparing…"; }
+    const url = await ensureControllingDocLinkUrl();
+    if (createBtn) { createBtn.disabled = false; createBtn.textContent = "Create Email"; }
+    if (!url) return;
+
+    const contacts = listData.contacts || [];
+    const ceoContact = contacts.find((c) => (c.title || "").toLowerCase().includes("ceo")) || contacts[0] || null;
+    const teamRows = listData.team || [];
+    const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
+    const teamLeadFirstName = leadRow && leadRow.users.full_name ? leadRow.users.full_name.split(" ")[0] : "";
+
+    $("cdem-to").value = (ceoContact && ceoContact.email) || "";
+    $("cdem-no-contact").classList.toggle("hidden", !!(ceoContact && ceoContact.email));
+
+    const ceoFirstName = ceoContact && ceoContact.name ? ceoContact.name.split(" ")[0] : "there";
+    $("cdem-subject").value = `Your Controlling Document — ${currentClient.name}`;
+    $("cdem-body-text").value = `Hi ${ceoFirstName},
+
+We've put together the Controlling Document for ${currentClient.name} — the set of research questions that will guide your Economic Gardening engagement.
+
+Before we start the research, we'd value your input. The link below walks through each question. For every one, please give it a priority ranking (A, B, or C) and add any notes or changes you'd like us to make. If a question is already right as written, just leave it and hit Submit.
+
+${url}
+
+It only takes a few minutes, and it makes sure we dig into what matters most to you.
+
+Thanks,
+${teamLeadFirstName || "Your EG Team Lead"}`;
+
+    updateControllingEmailMailto();
+    $("cd-email-overlay").classList.add("open");
+  }
+
+  function updateControllingEmailMailto() {
+    const toParam = $("cdem-to").value.split(",").map((s) => s.trim()).filter(Boolean).map(encodeURIComponent).join(",");
+    $("cdem-mailto-btn").href = `mailto:${toParam}?subject=${encodeURIComponent($("cdem-subject").value)}&body=${encodeURIComponent($("cdem-body-text").value)}`;
+  }
+
+  $("cdem-close").addEventListener("click", () => $("cd-email-overlay").classList.remove("open"));
+  $("cd-email-overlay").addEventListener("click", (e) => {
+    if (e.target === $("cd-email-overlay")) $("cd-email-overlay").classList.remove("open");
+  });
+  $("cdem-to").addEventListener("input", updateControllingEmailMailto);
+  $("cdem-subject").addEventListener("input", updateControllingEmailMailto);
+  $("cdem-body-text").addEventListener("input", updateControllingEmailMailto);
+  $("cdem-copy-btn").addEventListener("click", async () => {
+    const text = `To: ${$("cdem-to").value}\nSubject: ${$("cdem-subject").value}\n\n${$("cdem-body-text").value}`;
     try {
       await navigator.clipboard.writeText(text);
       showBanner("Email text copied — paste it into your email client.", "success");
