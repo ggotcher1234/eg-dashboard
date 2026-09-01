@@ -99,6 +99,19 @@
     .field-row { flex-direction: column; }
   }
 
+  /* Research questions -- dynamic list per area, numbered continuously
+     1..N across all four cards (see renderQuestions()). */
+  .cd-questions { margin-bottom: 8px; }
+  .cd-q-row { margin-bottom: 14px; }
+  .cd-q-row > label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
+  .cd-q-line { display: flex; align-items: center; gap: 10px; }
+  .cd-q-line input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; }
+  .cd-q-line input:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
+  .cd-q-del { flex-shrink: 0; width: 30px; height: 30px; border: 1.5px solid var(--border); background: #fff; color: var(--danger); border-radius: 6px; font-size: 17px; line-height: 1; cursor: pointer; font-family: inherit; }
+  .cd-q-del:hover { background: #fdecea; }
+  .cd-add-q { display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--navy-light); border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 700; font-family: inherit; cursor: pointer; }
+  .cd-add-q:hover { background: #eef4fb; }
+
   @media print {
     .no-print { display: none !important; }
     body { background: #fff; }
@@ -157,54 +170,30 @@
            through to the Questions on EG Research Reports Page"). ===== -->
       <div class="card">
         <h2>Market Dynamics Research</h2>
-        <div class="field-hint">One or two questions regarding research we can do about the client's current or desired markets.</div>
-        <div class="field">
-          <label>Question 1</label>
-          <input type="text" data-cd-question data-cd-area="market_dynamics" data-cd-slot="0" placeholder="e.g. Who are the client's fastest-growing target markets?" />
-        </div>
-        <div class="field">
-          <label>Question 2 (optional)</label>
-          <input type="text" data-cd-question data-cd-area="market_dynamics" data-cd-slot="1" />
-        </div>
+        <div class="field-hint">One or more questions regarding research we can do about the client's current or desired markets.</div>
+        <div class="cd-questions" data-cd-area="market_dynamics"></div>
+        <button type="button" class="cd-add-q no-print" data-cd-add="market_dynamics">&#43; Add question</button>
       </div>
 
       <div class="card">
         <h2>Outbound Marketing</h2>
-        <div class="field-hint">One or two questions where tools like ZoomInfo or web scrapers can identify potential prospects, and/or Listening Posts or LinkedIn can identify signals of change associated with those prospects.</div>
-        <div class="field">
-          <label>Question 1</label>
-          <input type="text" data-cd-question data-cd-area="outbound" data-cd-slot="0" placeholder="e.g. Which target accounts show recent signals of change?" />
-        </div>
-        <div class="field">
-          <label>Question 2 (optional)</label>
-          <input type="text" data-cd-question data-cd-area="outbound" data-cd-slot="1" />
-        </div>
+        <div class="field-hint">One or more questions where tools like ZoomInfo or web scrapers can identify potential prospects, and/or Listening Posts or LinkedIn can identify signals of change associated with those prospects.</div>
+        <div class="cd-questions" data-cd-area="outbound"></div>
+        <button type="button" class="cd-add-q no-print" data-cd-add="outbound">&#43; Add question</button>
       </div>
 
       <div class="card">
         <h2>Inbound Marketing</h2>
-        <div class="field-hint">One or two questions regarding online visibility, SEO, keywords, digital marketing, and competitive comparisons.</div>
-        <div class="field">
-          <label>Question 1</label>
-          <input type="text" data-cd-question data-cd-area="inbound" data-cd-slot="0" placeholder="e.g. How does the client rank against competitors for core keywords?" />
-        </div>
-        <div class="field">
-          <label>Question 2 (optional)</label>
-          <input type="text" data-cd-question data-cd-area="inbound" data-cd-slot="1" />
-        </div>
+        <div class="field-hint">One or more questions regarding online visibility, SEO, keywords, digital marketing, and competitive comparisons.</div>
+        <div class="cd-questions" data-cd-area="inbound"></div>
+        <button type="button" class="cd-add-q no-print" data-cd-add="inbound">&#43; Add question</button>
       </div>
 
       <div class="card">
         <h2>Watering Holes</h2>
         <div class="field-hint">What channels and events can the client leverage to meet new prospects -- trade shows, industry conferences, user groups, LinkedIn groups, forums, or regional alliances.</div>
-        <div class="field">
-          <label>Question 1</label>
-          <input type="text" data-cd-question data-cd-area="watering_holes" data-cd-slot="0" placeholder="e.g. Which trade shows or conferences should they attend?" />
-        </div>
-        <div class="field">
-          <label>Question 2 (optional)</label>
-          <input type="text" data-cd-question data-cd-area="watering_holes" data-cd-slot="1" />
-        </div>
+        <div class="cd-questions" data-cd-area="watering_holes"></div>
+        <button type="button" class="cd-add-q no-print" data-cd-add="watering_holes">&#43; Add question</button>
       </div>
 
       <div class="card">
@@ -271,9 +260,92 @@
   // section already uses -- inserting/updating rows here in
   // client_research_questions is exactly what makes them show up there
   // too, immediately, no separate sync step.
+  //
+  // Greg (8/31/26): each area used to be a fixed "Question 1" + "Question 2
+  // (optional)" pair. Now it's an unlimited list with a "+ Add question"
+  // button, numbered CONTINUOUSLY 1..N straight through all four cards (so
+  // Outbound's first question might be "Question 3"). These questions are
+  // primarily for the EG Research page; a client-facing way to score them
+  // 1-5 by priority is planned but not built yet.
   const RESEARCH_AREAS = ["market_dynamics", "outbound", "inbound", "watering_holes"];
+  const AREA_PLACEHOLDER = {
+    market_dynamics: "e.g. Who are the client's fastest-growing target markets?",
+    outbound: "e.g. Which target accounts show recent signals of change?",
+    inbound: "e.g. How does the client rank against competitors for core keywords?",
+    watering_holes: "e.g. Which trade shows or conferences should they attend?",
+  };
   let allQuestions = [];
   let questionsByArea = {};
+  let pendingQuestionDeletes = [];
+
+  // Pull the live DOM values back into questionsByArea before any
+  // re-render (add/delete) so typed-but-unsaved text isn't lost.
+  function syncQuestionModelFromDom() {
+    RESEARCH_AREAS.forEach((area) => {
+      const container = document.querySelector(`.cd-questions[data-cd-area="${area}"]`);
+      if (!container) return;
+      const inputs = [...container.querySelectorAll(".cd-q-input")];
+      const rows = questionsByArea[area] || [];
+      inputs.forEach((inp, idx) => { if (rows[idx]) rows[idx].question = inp.value; });
+    });
+  }
+
+  function renderQuestions() {
+    let n = 0;
+    RESEARCH_AREAS.forEach((area) => {
+      const container = document.querySelector(`.cd-questions[data-cd-area="${area}"]`);
+      if (!container) return;
+      let rows = questionsByArea[area] || [];
+      if (rows.length === 0) { rows = [{ question: "" }]; questionsByArea[area] = rows; }
+      container.innerHTML = rows.map((row, idx) => {
+        n += 1;
+        const ph = idx === 0 ? (AREA_PLACEHOLDER[area] || "") : "";
+        return `
+          <div class="cd-q-row" data-area="${area}" data-idx="${idx}">
+            <label>Question ${n}</label>
+            <div class="cd-q-line">
+              <input type="text" class="cd-q-input" value="${escapeHtml(row.question || "")}" placeholder="${escapeHtml(ph)}" />
+              <button type="button" class="cd-q-del no-print" title="Remove question">&times;</button>
+            </div>
+          </div>`;
+      }).join("");
+    });
+  }
+
+  function addQuestionRow(area) {
+    if (!RESEARCH_AREAS.includes(area)) return;
+    syncQuestionModelFromDom();
+    (questionsByArea[area] = questionsByArea[area] || []).push({ question: "" });
+    renderQuestions();
+    const container = document.querySelector(`.cd-questions[data-cd-area="${area}"]`);
+    const last = container && container.querySelector(".cd-q-row:last-child .cd-q-input");
+    if (last) last.focus();
+  }
+
+  function deleteQuestionRow(area, idx) {
+    syncQuestionModelFromDom();
+    const rows = questionsByArea[area] || [];
+    const row = rows[idx];
+    if (!row) return;
+    if (((row.question || "").trim() || row.id) &&
+        !confirm("Remove this question? Any research files attached to it on the Research page will be unlinked.")) {
+      return;
+    }
+    if (row.id) pendingQuestionDeletes.push(row.id);
+    rows.splice(idx, 1);
+    if (rows.length === 0) rows.push({ question: "" });
+    renderQuestions();
+  }
+
+  document.addEventListener("click", (e) => {
+    const addBtn = e.target.closest("[data-cd-add]");
+    if (addBtn) { addQuestionRow(addBtn.getAttribute("data-cd-add")); return; }
+    const delBtn = e.target.closest(".cd-q-del");
+    if (delBtn) {
+      const rowEl = delBtn.closest(".cd-q-row");
+      if (rowEl) deleteQuestionRow(rowEl.dataset.area, parseInt(rowEl.dataset.idx, 10));
+    }
+  });
 
   async function loadResearchQuestionsForPrefill() {
     const { data, error } = await sb
@@ -284,37 +356,44 @@
       .order("sort_order", { ascending: true });
     if (error) { showBanner("Couldn't load existing research questions: " + error.message, "error"); return; }
     allQuestions = data || [];
+    pendingQuestionDeletes = [];
+    questionsByArea = {};
     RESEARCH_AREAS.forEach((area) => {
-      const qs = allQuestions.filter((q) => q.research_area === area).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-      questionsByArea[area] = qs;
-      for (let slot = 0; slot < 2; slot++) {
-        const input = document.querySelector(`[data-cd-area="${area}"][data-cd-slot="${slot}"]`);
-        if (input) input.value = qs[slot] ? (qs[slot].question || "") : "";
-      }
+      questionsByArea[area] = allQuestions
+        .filter((q) => q.research_area === area)
+        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+        .map((q) => ({ id: q.id, question: q.question || "", sort_order: q.sort_order }));
     });
+    renderQuestions();
   }
 
   async function submitResearchQuestions() {
+    syncQuestionModelFromDom();
+
+    for (const id of pendingQuestionDeletes) {
+      const { error } = await sb.from("client_research_questions").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    }
+    pendingQuestionDeletes = [];
+
     for (const area of RESEARCH_AREAS) {
-      const existing = questionsByArea[area] || [];
-      for (let slot = 0; slot < 2; slot++) {
-        const input = document.querySelector(`[data-cd-area="${area}"][data-cd-slot="${slot}"]`);
-        if (!input) continue;
-        const value = input.value.trim();
-        const existingQ = existing[slot];
-        if (existingQ) {
-          if (value !== (existingQ.question || "")) {
-            const { error } = await sb.from("client_research_questions").update({ question: value || null }).eq("id", existingQ.id);
+      const rows = questionsByArea[area] || [];
+      const areaAll = allQuestions.filter((q) => q.research_area === area);
+      let nextSort = areaAll.length ? Math.max(...areaAll.map((q) => q.sort_order || 0)) + 1 : 1;
+      for (const row of rows) {
+        const value = (row.question || "").trim();
+        if (row.id) {
+          const original = areaAll.find((q) => q.id === row.id);
+          if (value !== (original ? (original.question || "") : "")) {
+            const { error } = await sb.from("client_research_questions").update({ question: value || null }).eq("id", row.id);
             if (error) throw new Error(error.message);
           }
         } else if (value) {
-          const areaAll = allQuestions.filter((q) => q.research_area === area);
-          const nextSort = areaAll.length ? Math.max(...areaAll.map((q) => q.sort_order || 0)) + 1 : 1;
           const { error } = await sb.from("client_research_questions").insert({
             client_id: currentClient.id,
             research_area: area,
             question: value,
-            sort_order: nextSort,
+            sort_order: nextSort++,
           });
           if (error) throw new Error(error.message);
         }
