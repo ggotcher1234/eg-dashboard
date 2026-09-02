@@ -194,6 +194,8 @@
   }
   .eng-meta-field input.meta-input:hover, .eng-meta-field input.meta-input:focus { border-color: var(--border); background: #fff; }
   .eng-meta-field input.meta-input:focus { outline: none; border-color: var(--navy-light); }
+  .eng-meta-field input.meta-input:disabled { color: var(--muted); opacity: 1; -webkit-text-fill-color: var(--muted); }
+  .eng-meta-field input.meta-input:disabled:hover { border-color: transparent; background: transparent; }
   #eng-save-status { font-size: 12px; color: var(--muted); }
   #eng-save-status.saving { color: var(--navy-light); }
 
@@ -386,10 +388,10 @@
           </div>
         </div>
         <div class="eng-meta-field">
-          <label>Setup Fee</label>
+          <label>Setup Fee <span style="font-weight:400; color:var(--muted);">(set by the program)</span></label>
           <div class="meta-editable-wrap">
             <span class="prefix">$</span>
-            <input type="number" class="meta-input" id="eng-setup-fee-input" min="0" step="0.01" />
+            <input type="number" class="meta-input" id="eng-setup-fee-input" min="0" step="0.01" readonly disabled title="One fee per program, the same for every engagement it funds. Change it on the Program Invoicing page." />
           </div>
         </div>
       </div>
@@ -594,20 +596,14 @@
       renderDollarsTable();
     });
 
-    $("eng-setup-fee-input").value = currentClient.setup_fee || 0;
-    $("eng-setup-fee-input").addEventListener("change", async () => {
-      const newFee = Number($("eng-setup-fee-input").value);
-      if (!(newFee >= 0)) { $("eng-setup-fee-input").value = currentClient.setup_fee || 0; return; }
-      $("eng-save-status").textContent = "Saving…";
-      $("eng-save-status").className = "saving";
-      const { error } = await sb.from("clients").update({ setup_fee: newFee }).eq("id", currentClient.id);
-      if (error) { showBanner("Couldn't save setup fee: " + error.message, "error"); $("eng-save-status").textContent = ""; return; }
-      currentClient.setup_fee = newFee;
-      $("eng-save-status").textContent = "Saved";
-      $("eng-save-status").className = "";
-      setTimeout(() => { $("eng-save-status").textContent = ""; }, 2500);
-      renderDollarsTable();
-    });
+    // Read-only: the Setup Fee is the program's, not this engagement's
+    // (rules 3 + 4). Set it on program_invoicing.html.
+    $("eng-setup-fee-input").value = programSetupFee();
+  }
+
+  function programSetupFee() {
+    const p = currentClient && currentClient.econ_dev_companies;
+    return Number(p && p.setup_fee) || 0;
   }
 
   // ---------- Standardized Search/Print/Export/Import toolbar ----------
@@ -711,7 +707,7 @@
 
   async function loadData(clientId) {
     const [clientRes, assignmentsRes, usersRes] = await Promise.all([
-      sb.from("clients").select("id, name, address, created_at, date_closed, setup_fee, econ_dev_companies(bill_admin_qc_upfront)").eq("id", clientId).single(),
+      sb.from("clients").select("id, name, address, created_at, date_closed, econ_dev_companies(bill_admin_qc_upfront, setup_fee)").eq("id", clientId).single(),
       sb.from("client_assignments")
         .select("id, user_id, specialty_type, slot_number, hours_allotted")
         .eq("client_id", clientId)
@@ -888,7 +884,7 @@
       </tr>
     `).join("");
 
-    const setupFee = Number(currentClient.setup_fee) || 0;
+    const setupFee = programSetupFee();
     tbody.innerHTML += `
       <tr class="setup-fee-row">
         <td><div class="specialty-name">Setup Fee</div></td>
@@ -926,7 +922,7 @@
       "Which specialist is closest to their hours budget?",
       "How much has this engagement billed so far?",
       "Is anyone over budget on this engagement?",
-      "What's the Setup Fee for this engagement?",
+      "What's this program's Setup Fee?",
     ];
   }
 

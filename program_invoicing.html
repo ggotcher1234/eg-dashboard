@@ -407,6 +407,13 @@
       <div class="card">
         <h2>Create a Program Invoice</h2>
         <div class="card-hint">Pick a Program and a month to see that month's billable activity across every client engagement it funds.</div>
+        <div class="card-hint" style="background:#f4f6f8; border-radius:8px; padding:10px 12px; margin-bottom:16px;">
+          <strong>How the Setup Fee works:</strong> it's a one-time charge per engagement, the
+          <strong>same amount for every engagement in the program</strong>, and set by the program itself
+          (the Setup Fee field below saves straight back to the program, just like the Hourly Rate).
+          A monthly invoice can cover several engagements; each one's Setup Fee is added the first
+          time it appears on any invoice, then never again.
+        </div>
         <div class="toolbar-row">
           <div class="field-group">
             <label for="pi-program">Program</label>
@@ -433,14 +440,14 @@
               <input type="number" id="pi-rate" min="0" step="0.01" disabled />
             </div>
           </div>
-          <!-- One field for this whole invoice (Greg, 8/22/26), not editable
-               per client row below -- a setup fee only ever applies to
-               whichever engagement(s) are getting their first invoice this
-               month, and it varies invoice to invoice, so it isn't saved
-               anywhere until Generate Invoice actually bills it. Disabled
-               when no engagement in this preview still needs one. -->
+          <!-- Greg (9/2/26): the Setup Fee is a property of the PROGRAM --
+               one amount, the same for every engagement it funds (rules 3
+               and 4). Loads from econ_dev_companies.setup_fee and autosaves
+               back there when changed here, exactly like Hourly Rate above.
+               Applied uniformly to whichever engagement(s) on this invoice
+               haven't had their one-time fee billed yet. -->
           <div class="field-group">
-            <label for="pi-setup-fee">Setup Fee</label>
+            <label for="pi-setup-fee">Setup Fee <span style="font-weight:400; color:var(--muted);">(program-wide)</span></label>
             <div class="rate-input-wrap">
               <span class="rate-prefix">$</span>
               <input type="number" id="pi-setup-fee" min="0" step="0.01" disabled />
@@ -702,7 +709,7 @@
   async function loadPrograms() {
     const { data, error } = await sb
       .from("econ_dev_companies")
-      .select("id, name, address, billing_hourly_rate, bill_admin_qc_upfront")
+      .select("id, name, address, billing_hourly_rate, bill_admin_qc_upfront, setup_fee")
       .order("name", { ascending: true });
     if (error) { showBanner("Couldn't load Programs: " + error.message, "error"); return; }
     programs = data || [];
@@ -732,6 +739,29 @@
     if (error) { showBanner("Couldn't save the rate: " + error.message, "error"); return; }
     const program = programs.find((p) => p.id === programId);
     if (program) program.billing_hourly_rate = newRate;
+    await refreshPreview();
+  }
+
+  // Setup Fee works exactly like Hourly Rate: it's a property of the
+  // Program (rules 3 + 4 -- one fee, same for every engagement in the
+  // program), loaded from econ_dev_companies.setup_fee and autosaved back
+  // there when changed here. It is NOT a per-engagement number.
+  function loadSetupFeeForSelectedProgram() {
+    const programId = $("pi-program").value;
+    const program = programs.find((p) => p.id === programId);
+    $("pi-setup-fee").disabled = !program;
+    $("pi-setup-fee").value = program ? (Number(program.setup_fee) || 0) : "";
+  }
+
+  async function saveSetupFeeForSelectedProgram() {
+    const programId = $("pi-program").value;
+    if (!programId) return;
+    const newFee = Number($("pi-setup-fee").value);
+    if (!(newFee >= 0)) return;
+    const { error } = await sb.from("econ_dev_companies").update({ setup_fee: newFee }).eq("id", programId);
+    if (error) { showBanner("Couldn't save the setup fee: " + error.message, "error"); return; }
+    const program = programs.find((p) => p.id === programId);
+    if (program) program.setup_fee = newFee;
     await refreshPreview();
   }
 
@@ -834,10 +864,11 @@
   function wireBuilderControls() {
     $("pi-program").addEventListener("change", () => {
       loadRateForSelectedProgram();
+      loadSetupFeeForSelectedProgram();
       refreshPreview();
     });
     $("pi-rate").addEventListener("change", saveRateForSelectedProgram);
-    $("pi-setup-fee").addEventListener("input", applySetupFeeToPreview);
+    $("pi-setup-fee").addEventListener("change", saveSetupFeeForSelectedProgram);
     $("pi-month").addEventListener("change", refreshPreview);
     $("pi-month-prev").addEventListener("click", () => shiftMonth(-1));
     $("pi-month-next").addEventListener("click", () => shiftMonth(1));
@@ -876,6 +907,7 @@
     // the field with no real "change" event ever firing to correct it
     // (Greg, 8/22/26 bug report).
     loadRateForSelectedProgram();
+    loadSetupFeeForSelectedProgram();
 
     if (!programId || !monthValue) {
       renderPreviewTable();
@@ -890,7 +922,7 @@
 
     const { data: clients, error: clientsErr } = await sb
       .from("clients")
-      .select("id, name, setup_fee, setup_fee_billed")
+      .select("id, name, setup_fee_billed")
       .eq("econ_dev_company_id", programId);
     if (clientsErr) { showBanner("Couldn't load clients for this Program: " + clientsErr.message, "error"); return; }
 
@@ -972,10 +1004,8 @@
       // Shown whenever this client hasn't had a setup fee billed yet, even
       // with zero hours logged this month -- a brand-new engagement with no
       // activity yet still needs its one-time fee applied on its first
-      // invoice (Greg, 8/22/26). The actual dollar amount now comes from
-      // the single #pi-setup-fee header field (recomputeSetupFeeAmounts,
-      // below), not from this stored value directly -- setup_fee_raw is
-      // only kept around to pre-fill that header field sensibly.
+      // invoice (Greg, 8/22/26). The dollar amount is the Program's
+      // setup_fee (rules 3 + 4), applied uniformly in recomputeSetupFeeAmounts().
       if (!lines.length && client.setup_fee_billed) continue; // nothing left to bill for this client
 
       const subtotal = round2(lines.reduce((s, l) => s + l.amount, 0));
@@ -984,37 +1014,22 @@
         client_id: client.id,
         client_name: client.name,
         lines,
-        setup_fee: null,                     // set by recomputeSetupFeeAmounts() below, from the header field
-        setup_fee_raw: Number(client.setup_fee) || 0, // raw stored value, used only to pre-fill the header field
+        setup_fee: null,                     // set by recomputeSetupFeeAmounts() below, from the Program's setup_fee
         setup_fee_billed: !!client.setup_fee_billed,
         subtotal,
       });
     }
 
-    syncSetupFeeField();
     recomputeSetupFeeAmounts();
     renderPreviewTable();
     $("pi-generate-btn").disabled = !previewClients.length;
   }
 
-  // ---------- Setup Fee (single header field, applies to whichever
-  // engagement(s) in this preview haven't had a setup fee billed yet) ----------
-  function syncSetupFeeField() {
-    const feeInput = $("pi-setup-fee");
-    const eligible = previewClients.filter((c) => !c.setup_fee_billed);
-    if (!eligible.length) {
-      feeInput.disabled = true;
-      feeInput.value = "";
-      return;
-    }
-    feeInput.disabled = false;
-    // Pre-fill from whichever eligible engagement already has a stored,
-    // nonzero fee -- there's normally at most one engagement getting its
-    // first invoice in a given month. Defaults to blank otherwise.
-    const existing = eligible.find((c) => c.setup_fee_raw > 0);
-    feeInput.value = existing ? existing.setup_fee_raw : "";
-  }
-
+  // ---------- Setup Fee ----------
+  // The amount is the Program's own setup_fee (loaded/saved by
+  // loadSetupFeeForSelectedProgram / saveSetupFeeForSelectedProgram). Here
+  // it's just spread across every engagement on this invoice that hasn't
+  // had its one-time fee billed yet -- same fee for all of them (rule 3).
   function recomputeSetupFeeAmounts() {
     const amount = Number($("pi-setup-fee").value) || 0;
     const eligible = previewClients.filter((c) => !c.setup_fee_billed);
@@ -1023,11 +1038,6 @@
       c.subtotal = round2(c.lines.reduce((s, l) => s + l.amount, 0) + (c.setup_fee || 0));
     }
     previewTotalDue = round2(previewClients.reduce((s, c) => s + c.subtotal, 0));
-  }
-
-  function applySetupFeeToPreview() {
-    recomputeSetupFeeAmounts();
-    renderPreviewTable();
   }
 
   function renderPreviewTable() {
@@ -1078,15 +1088,11 @@
     const setupFeeClientIds = previewClients.filter((c) => c.setup_fee !== null).map((c) => c.client_id);
     const sunkCostAssignmentIds = previewClients.flatMap((c) => c.lines.filter((l) => l.is_sunk_cost).map((l) => l.assignment_id));
 
-    // The header Setup Fee field is transient (not saved anywhere until an
-    // invoice is actually generated) -- so THIS is the moment it gets
-    // written to clients.setup_fee for whatever engagement(s) it applied
-    // to, so the historical record matches what was actually billed.
-    for (const c of previewClients) {
-      if (c.setup_fee === null) continue;
-      const { error: feeErr } = await sb.from("clients").update({ setup_fee: c.setup_fee }).eq("id", c.client_id);
-      if (feeErr) { showBanner("Couldn't save the setup fee: " + feeErr.message, "error"); $("confirm-generate-btn").disabled = false; return; }
-    }
+    // The setup-fee amount lives on the Program (econ_dev_companies.setup_fee),
+    // saved the moment it's edited above -- nothing per-engagement to write
+    // here. The amount actually billed is captured in the line_items
+    // snapshot below; generate_program_invoice() just flips
+    // setup_fee_billed for the engagements in p_setup_fee_client_ids.
 
     const { data, error } = await sb.rpc("generate_program_invoice", {
       p_organization_id: currentUser.organization_id,
