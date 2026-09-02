@@ -200,8 +200,8 @@
      height resize loop. Letting the fr columns compress further before
      ever needing to scroll removes that trigger too. */
   .rv-table-wrap .list-row-edit, .rv-table-head {
-    display: grid; grid-template-columns: 1.2fr 1.3fr 1.3fr 70px; gap: 14px; align-items: center;
-    min-width: 400px; padding: 14px 18px; margin: 0; border-bottom: 1px solid #f0f2f4;
+    display: grid; grid-template-columns: 1.3fr 1.6fr 70px; gap: 14px; align-items: center;
+    min-width: 300px; padding: 14px 18px; margin: 0; border-bottom: 1px solid #f0f2f4;
   }
   .rv-table-wrap .list-row-edit:last-child { border-bottom: none; }
   .rv-table-head { background: #f8fafb; border-bottom: 1px solid var(--border); }
@@ -1131,14 +1131,15 @@
     window.open(data.signedUrl, "_blank");
   }
 
-  // Column-header row for the Resource Vault table -- Title | Description |
-  // Link/URL | Replace. Rendered once above the rows, sharing the same
-  // 4-column grid template as every data row (see .rv-table-wrap CSS) so
-  // everything lines up like a real spreadsheet (Greg, 8/30/26; columns
-  // simplified 8/31/26 -- File folded into Link/URL; Replace All (delete
-  // globally) removed entirely to test/fix the CCC iframe scrollbar blink).
+  // Column-header row for the Resource Vault table -- Description | Link/URL
+  // | Delete. Rendered once above the rows, sharing the same 3-column grid
+  // template as every data row (see .rv-table-wrap CSS) so everything lines
+  // up like a real spreadsheet (Greg, 8/30/26; simplified 8/31/26 -- File
+  // folded into Link/URL; Greg 9/2/26 -- Title column removed, the "Shared"
+  // badge now sits in the Description cell. Titles are still stored and
+  // still name the resource on the client dashboard / resource_templates).
   const RV_TABLE_HEAD_HTML = `
-    <div class="rv-table-head"><span>Title</span><span>Description</span><span>Link/URL</span><span style="text-align:center;">Delete</span></div>
+    <div class="rv-table-head"><span>Description</span><span>Link/URL</span><span style="text-align:center;">Delete</span></div>
   `;
 
   function renderResourceVaultRows(rows) {
@@ -1169,10 +1170,7 @@
         return `
           <div class="list-row-edit">
             <div class="field rv-title-cell">
-              <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="title" value="${escapeHtml(r.title)}" required />
               <span class="rv-shared-badge">Shared</span>
-            </div>
-            <div class="field">
               <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="description" value="${escapeHtml(r.description || "")}" placeholder="Add description" />
             </div>
             <div class="field rv-link-cell">
@@ -1194,10 +1192,9 @@
         return `
           <div class="list-row-edit">
             <div class="field rv-title-cell">
-              <div class="rv-readonly">${escapeHtml(r.title)}</div>
               <span class="rv-shared-badge">Shared</span>
+              <div class="rv-readonly">${escapeHtml(r.description || "—")}</div>
             </div>
-            <div class="field"><div class="rv-readonly">${escapeHtml(r.description || "—")}</div></div>
             <div class="field rv-link-cell">
               ${urlHtml}
               ${r.storagePath ? `<div class="rv-file-row">${fileHtml}</div>` : ``}
@@ -1211,9 +1208,6 @@
 
       return `
         <div class="list-row-edit">
-          <div class="field">
-            <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="title" value="${escapeHtml(r.title)}" required />
-          </div>
           <div class="field">
             <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="description" value="${escapeHtml(r.description || "")}" placeholder="Add description" />
           </div>
