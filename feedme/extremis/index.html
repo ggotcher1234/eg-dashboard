@@ -7110,22 +7110,24 @@ function closeHandbook() {
       <div style="font-size:13px;opacity:.9;margin-top:5px;line-height:1.5;">No card required. We'll set up your workspace and email you access within one business day.</div>
     </div>
     <div style="padding:22px 24px;">
-      <div id="trialForm">
+      <form id="trialForm" name="feedme-pro-trial" method="POST" data-netlify="true" data-netlify-honeypot="bot-field" onsubmit="window.submitTrialForm(event);return false;">
+        <input type="hidden" name="form-name" value="feedme-pro-trial">
+        <p style="position:absolute;left:-9999px;" aria-hidden="true"><label>Leave blank: <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
         <label style="display:block;font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">Name</label>
-        <input id="trialName" type="text" autocomplete="name" style="width:100%;padding:9px 11px;border:1.5px solid #ddd;border-radius:7px;font-size:14px;margin-bottom:12px;box-sizing:border-box;font-family:inherit;">
+        <input id="trialName" name="name" type="text" autocomplete="name" required style="width:100%;padding:9px 11px;border:1.5px solid #ddd;border-radius:7px;font-size:14px;margin-bottom:12px;box-sizing:border-box;font-family:inherit;">
         <label style="display:block;font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">Company</label>
-        <input id="trialCompany" type="text" autocomplete="organization" style="width:100%;padding:9px 11px;border:1.5px solid #ddd;border-radius:7px;font-size:14px;margin-bottom:12px;box-sizing:border-box;font-family:inherit;">
+        <input id="trialCompany" name="company" type="text" autocomplete="organization" required style="width:100%;padding:9px 11px;border:1.5px solid #ddd;border-radius:7px;font-size:14px;margin-bottom:12px;box-sizing:border-box;font-family:inherit;">
         <label style="display:block;font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">Email</label>
-        <input id="trialEmail" type="email" autocomplete="email" style="width:100%;padding:9px 11px;border:1.5px solid #ddd;border-radius:7px;font-size:14px;margin-bottom:12px;box-sizing:border-box;font-family:inherit;">
+        <input id="trialEmail" name="email" type="email" autocomplete="email" required style="width:100%;padding:9px 11px;border:1.5px solid #ddd;border-radius:7px;font-size:14px;margin-bottom:12px;box-sizing:border-box;font-family:inherit;">
         <label style="display:block;font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">Phone</label>
-        <input id="trialPhone" type="tel" autocomplete="tel" style="width:100%;padding:9px 11px;border:1.5px solid #ddd;border-radius:7px;font-size:14px;margin-bottom:12px;box-sizing:border-box;font-family:inherit;">
+        <input id="trialPhone" name="phone" type="tel" autocomplete="tel" required style="width:100%;padding:9px 11px;border:1.5px solid #ddd;border-radius:7px;font-size:14px;margin-bottom:12px;box-sizing:border-box;font-family:inherit;">
         <div id="trialError" style="display:none;color:#c0392b;font-size:12.5px;margin-bottom:10px;"></div>
-        <button type="button" onclick="window.submitTrialForm()" style="width:100%;background:linear-gradient(135deg,#d35400,#e67e22);color:#fff;border:none;border-radius:24px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">Request My Free Trial</button>
-      </div>
+        <button type="submit" style="width:100%;background:linear-gradient(135deg,#d35400,#e67e22);color:#fff;border:none;border-radius:24px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">Request My Free Trial</button>
+      </form>
       <div id="trialThanks" style="display:none;text-align:center;padding:10px 0;">
         <div style="font-size:34px;">&#9989;</div>
-        <div style="font-weight:700;color:#222;margin:6px 0;">Request sent</div>
-        <div style="font-size:13px;color:#555;line-height:1.55;">If your email app didn't open, send your name, company, email, and phone to <a href="mailto:greg@leadforcesolutions.com" style="color:#d35400;font-weight:600;">greg@leadforcesolutions.com</a> and we'll set you up within one business day.</div>
+        <div style="font-weight:700;color:#222;margin:6px 0;">Request received</div>
+        <div style="font-size:13px;color:#555;line-height:1.55;">Thanks &mdash; we've got your details and will email you trial access within one business day. Questions? <a href="mailto:greg@leadforcesolutions.com" style="color:#d35400;font-weight:600;">greg@leadforcesolutions.com</a></div>
       </div>
     </div>
   </div>
@@ -7141,19 +7143,32 @@ window.closeTrialModal=function(){
   document.getElementById('trialForm').style.display='';
   document.getElementById('trialThanks').style.display='none';
   document.getElementById('trialError').style.display='none';
+  var btn=document.querySelector('#trialForm button[type="submit"]');
+  if(btn){ btn.disabled=false; btn.textContent='Request My Free Trial'; }
 };
-window.submitTrialForm=function(){
+window.submitTrialForm=function(event){
+  if(event&&event.preventDefault) event.preventDefault();
   var g=function(id){return (document.getElementById(id).value||'').trim();};
   var n=g('trialName'), c=g('trialCompany'), e=g('trialEmail'), p=g('trialPhone');
   var err=document.getElementById('trialError');
-  if(!n||!c||!e||!p){ err.textContent='Please fill in all four fields.'; err.style.display='block'; return; }
-  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){ err.textContent='Please enter a valid email address.'; err.style.display='block'; return; }
+  if(!n||!c||!e||!p){ err.textContent='Please fill in all four fields.'; err.style.display='block'; return false; }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){ err.textContent='Please enter a valid email address.'; err.style.display='block'; return false; }
   err.style.display='none';
-  var subject=encodeURIComponent('FeedMe Pro - 30-day free trial request: '+c);
-  var body=encodeURIComponent('Name: '+n+'\nCompany: '+c+'\nEmail: '+e+'\nPhone: '+p+'\n\nRequesting the FeedMe Pro 30-day free trial.');
-  window.location.href='mailto:greg@leadforcesolutions.com?subject='+subject+'&body='+body;
-  document.getElementById('trialForm').style.display='none';
-  document.getElementById('trialThanks').style.display='block';
+  var btn=document.querySelector('#trialForm button[type="submit"]');
+  if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
+  var body=new URLSearchParams({ 'form-name':'feedme-pro-trial', name:n, company:c, email:e, phone:p, 'bot-field':'' }).toString();
+  fetch('/', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:body })
+    .then(function(r){
+      if(!r.ok) throw new Error('status '+r.status);
+      document.getElementById('trialForm').style.display='none';
+      document.getElementById('trialThanks').style.display='block';
+    })
+    .catch(function(){
+      err.innerHTML='Couldn\'t submit right now. Please email <a href="mailto:greg@leadforcesolutions.com" style="color:#d35400;font-weight:600;">greg@leadforcesolutions.com</a> with your name, company, email, and phone.';
+      err.style.display='block';
+      if(btn){ btn.disabled=false; btn.textContent='Request My Free Trial'; }
+    });
+  return false;
 };
 </script>
 
