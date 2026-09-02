@@ -4550,53 +4550,49 @@ Deprioritize/exclude: pure trucking or parcel/LTL companies with no bulk-rail re
                         max_tokens: 500,
                         messages: [{
                             role: "user",
-                            content: `Analyze this news article for Economic Gardening "signals of change" — trigger events that indicate a COMMERCIAL BUSINESS may be entering a sales window for B2B products or services.
+                            content: `Analyze this news article for "signals of change" — developments at any organization that could open a window for the client described below to win business, take competitive share, get ahead of a competitor, or shape a purchase or specification.
 
 Article Title: ${article.title}
 Article Content: ${cleanContent}
-${appState.clientContext ? `Client Industry Context: ${appState.clientContext}` : ''}
+${appState.clientContext ? `Client Context: ${appState.clientContext}` : ''}
 
-GEOGRAPHIC RESTRICTION (CRITICAL): If the Client Industry Context above contains any geographic restriction (such as "Arizona only", "Texas only", "Phoenix area", or any specific state/region), treat it as a HARD FILTER — classify as "none" with relevance 0 for any article that is not about a company, project, or opportunity located in that geography. Do not reward partial geographic relevance.
+The Client Context above is the authority on what matters — it names the client's buyers, its competitors, its market, and the signals it cares about. Follow it. It overrides any default assumption below.
 
-${appState.usOnlyMode ? `GEOGRAPHIC FILTER (CRITICAL): This client only wants US-based opportunities. Classify as "none" with relevance 0 if the article is primarily about a company, facility, event, or opportunity located OUTSIDE the United States. Ignore articles about foreign companies expanding abroad, international market reports without a US angle, or non-US regulatory changes.\n\n` : ''}DEFAULT EXCLUSIONS — classify as "none" with relevance 0 UNLESS the Client Industry Context explicitly identifies these as target prospects:
-- Sports teams, leagues, coaches, athletic directors, or sports media (NFL, NBA, MLB, NHL, MLS, NCAA — any sports organization)
-- Government agencies, military branches, or political organizations
-- Non-profits, charities, schools, or universities — EXCLUDE ONLY if the client context does NOT list them as targets
+GEOGRAPHIC RESTRICTION: If the Client Context states a geographic limit (e.g. "Arizona only", "Phoenix area"), treat it as a hard filter — classify anything outside that geography as "none", relevance 0.
+
+${appState.usOnlyMode ? `US-ONLY FILTER: The client wants US opportunities only. Classify as "none", relevance 0 if the article is primarily about an organization, facility, or event located outside the United States, UNLESS the Client Context explicitly says allied or international activity is in scope.\n\n` : ''}ALWAYS EXCLUDE (classify "none", relevance 0), unless the Client Context explicitly names them as targets:
+- Sports teams, leagues, coaches, athletic directors, or sports media
 - Media companies or entertainment studios (unless the trigger is a facility or technology expansion)
-
-IMPORTANT: The Client Industry Context above takes priority. If it identifies non-profits, municipalities, universities, or other specific org types as targets, DO score and classify articles about those org types — they ARE valid prospects for this client.
+Do NOT auto-exclude government agencies, law enforcement, fire departments, military units, municipalities, schools, utilities, or nonprofits — many clients sell to exactly those. When the Client Context targets them, score them like any other organization.
 
 Signal categories:
-- expansion: Facility expansions, new construction, renovations, relocations, capacity increases, capital campaigns with construction component
-- acquisition: Acquisitions, mergers, divestitures
-- leadership: C-suite, VP, Director, or Facilities-level leadership change (exclude sports coaches/GMs/athletic directors)
-- funding: Funding rounds, grants awarded, capital campaigns, major donations, investment, IPO
-- products: New product launches, new services, R&D breakthroughs
-- certifications: Certifications, awards, ISO, industry recognition, general announcements
-- partnerships: Strategic partnerships, joint ventures, alliances
-- contracts: Major contracts won, large orders
-- hiring: Hiring initiatives, workforce expansion
-- regulatory: Regulatory changes, compliance requirements affecting businesses
-- none: No trigger event present, OR organization type explicitly excluded above
+- expansion: Facility expansion, new construction, renovation, relocation, new station/HQ/training center/range/academy, capacity increase, fleet growth
+- acquisition: Acquisitions, mergers, consolidations
+- leadership: New chief, sheriff, commissioner, C-suite, VP, director, program lead, or facilities leadership
+- funding: Grants awarded, budget appropriations or increases, bond measures, capital campaigns, funding rounds, major donations
+- products: New product, service, capability, material, or R&D breakthrough (including a competitor's)
+- certifications: Certification, standard, award, accreditation, industry recognition, or notable announcement
+- partnerships: Partnerships, joint ventures, alliances, new distributors or channel deals
+- contracts: Contract awards, large orders, RFPs, solicitations, IDIQ or framework awards
+- hiring: Hiring initiatives, workforce or unit expansion, new academy classes
+- regulatory: Regulatory, policy, mandate, or standard changes affecting the client's market
+- none: No real trigger event, or the article is outside the client's world entirely
 
-ICP MATCH CHECK (CRITICAL — apply before scoring):
-1. Identify the organization in the article — its type (for-profit company, nonprofit, government agency, university, etc.) and geography.
-2. Compare against the Client Industry Context above — does this org type match the client's stated target customers?
-3. If the org type clearly does NOT match the ICP (e.g. client targets nonprofits but article is about a for-profit manufacturer; client targets Cincinnati/Louisville but article is about California): classify as "none" with relevance 0-15 regardless of signal strength. A strong signal at the WRONG prospect is not an opportunity.
-4. Only proceed to relevance scoring if the org type and geography match the ICP.
+RELEVANCE CHECK: Does the article connect to the client's world as described in the Client Context — its target buyers/org types, its named competitors, its market, or its regulators? If there is no plausible connection at all, classify "none", relevance 0-15. Otherwise score it below on the strength and specificity of the signal — do NOT require that the organization is about to place an order.
 
-RELEVANCE SCORING — only for articles that pass the ICP match check above:
-- 85-100: Direct, specific trigger strongly matching the client's ideal prospect profile AND the org type clearly matches the ICP
-- 65-84: Clear trigger event at a relevant org type, but smaller scale or indirect fit
-- 40-64: Weak signal, tangential relevance, or org is in a secondary target category
-- 10-39: Minimal relevance — article is real news but a poor fit for this client's sales goals
-- 0-15: Wrong org type or wrong geography for this client's ICP — signal strength is irrelevant
+RELEVANCE SCORING:
+- 80-100: A specific, dated, material development matching the Client Context's priority signals — at a target buyer/org type, a named competitor, or a standards/funding/program body.
+- 55-79: A real, credible signal at an in-scope organization, competitor, or program body — even if early, smaller-scale, or with no immediate purchase. Routine-but-real developments belong here.
+- 35-54: On-topic and credible but vague, dated, or only loosely connected.
+- 10-34: Real news but a poor fit for the client's goals.
+- 0-9: Outside the client's world, or wrong subject entirely.
+When the Client Context gives its own scoring guidance or target percentages, follow that. When torn between two bands, choose the higher.
 
 {
-  "company": "extracted company name or 'Unknown'",
+  "company": "the organization the article is about (agency, department, company, unit) or 'Unknown'",
   "signal": "one of: expansion, acquisition, leadership, funding, products, certifications, partnerships, contracts, hiring, regulatory, none",
-  "relevance": integer 0-100 per scoring guide above,
-  "summary": "1-2 sentence summary of the trigger event and why it opens a sales window"
+  "relevance": integer 0-100 per the scoring guide above,
+  "summary": "1-2 sentences: what happened, and why it is a window of opportunity for the client"
 }
 
 Respond ONLY with valid JSON, no other text.`
