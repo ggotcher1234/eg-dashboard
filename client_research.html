@@ -247,8 +247,19 @@
   .rv-file-upload-label:hover { color: var(--navy); }
   /* Replace: a plain red × icon, not a filled button -- removes this
      resource from this client only. */
+  /* Greg (9/2/26): the Resource Vault now renders as a plain client-style
+     list -- bold green title + muted description, one divider per row, plus
+     a red x to remove. No inline editing here. */
+  .rv-simple-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 12px 6px; border-bottom: 1px solid #f0f2f4; }
+  .rv-simple-row:last-child { border-bottom: none; }
+  .rv-simple-main { min-width: 0; }
+  .rv-simple-title { font-size: 14px; font-weight: 700; color: var(--accent-dark); line-height: 1.35; word-break: break-word; }
+  .rv-simple-title a, .rv-simple-title .rv-file-link { color: inherit; text-decoration: none; cursor: pointer; }
+  .rv-simple-title a:hover, .rv-simple-title .rv-file-link:hover { text-decoration: underline; }
+  .rv-simple-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; word-break: break-word; }
   .rv-action-cell { display: flex; align-items: center; justify-content: center; }
   .rv-x-btn {
+    flex-shrink: 0;
     background: none; border: none; color: var(--danger); font-size: 19px; font-weight: 700; line-height: 1;
     cursor: pointer; padding: 4px 10px; border-radius: 6px;
   }
@@ -1131,97 +1142,35 @@
     window.open(data.signedUrl, "_blank");
   }
 
-  // Column-header row for the Resource Vault table -- Description | Link/URL
-  // | Delete. Rendered once above the rows, sharing the same 3-column grid
-  // template as every data row (see .rv-table-wrap CSS) so everything lines
-  // up like a real spreadsheet (Greg, 8/30/26; simplified 8/31/26 -- File
-  // folded into Link/URL; Greg 9/2/26 -- Title column removed, the "Shared"
-  // badge now sits in the Description cell. Titles are still stored and
-  // still name the resource on the client dashboard / resource_templates).
-  const RV_TABLE_HEAD_HTML = `
-    <div class="rv-table-head"><span>Description</span><span>Link/URL</span><span style="text-align:center;">Delete</span></div>
-  `;
-
   function renderResourceVaultRows(rows) {
     const list = $("resource_vault-list");
     if (!rows.length) {
-      list.innerHTML = RV_TABLE_HEAD_HTML + `<div class="list-empty" style="padding:16px;">Nothing added yet.</div>`;
+      list.innerHTML = `<div class="list-empty" style="padding:16px;">Nothing added yet.</div>`;
       return;
     }
-    list.innerHTML = RV_TABLE_HEAD_HTML + rows.map((r) => {
-      // Title, Description, Link URL and File are always their own columns
-      // now (Greg, 8/30/26 -- matching the reference table layout) rather
-      // than Link/File merged into one cell. On the live client dashboard a
-      // link still wins over an uploaded file when both are set -- that
-      // resolution is unchanged, this is just how the two fields display
-      // to whoever's editing them here.
-      // Icon only, not the full filename (Greg, 8/31/26: "this page is too
-      // crowded... just show the file icon to reduce clutter") -- the real
-      // filename is still there as a hover tooltip and the icon is still
-      // the click target that opens the file.
-      const fileHtml = r.storagePath
-        ? `<span class="rv-file-link" data-path="${escapeHtml(r.storagePath)}" title="${escapeHtml(fileNameFromPath(r.storagePath))}">${fileIconFor(r.storagePath)}</span>`
-        : `<span class="field-hint">—</span>`;
-      const urlHtml = r.url
-        ? `<a class="rv-file-link" href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.url)}</a>`
-        : `<span class="field-hint">—</span>`;
-
-      if (r.isTemplate && isSuperAdmin) {
-        return `
-          <div class="list-row-edit">
-            <div class="field rv-title-cell">
-              <span class="rv-shared-badge">Shared</span>
-              <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="description" value="${escapeHtml(r.description || "")}" placeholder="Add description" />
-            </div>
-            <div class="field rv-link-cell">
-              <input type="text" class="row-input-edit" data-rv-tpl-id="${r.templateId}" data-rv-tpl-field="url" value="${escapeHtml(r.url || "")}" placeholder="https://…" />
-              <div class="rv-file-row">
-                ${r.storagePath
-                  ? `${fileHtml}<button type="button" class="rv-file-inline-btn" data-rv-tpl-replace="${r.templateId}">Change file</button>`
-                  : `<label class="rv-file-upload-label">+ Upload file<input type="file" class="rv-tpl-upload-input" data-tpl-id="${r.templateId}" style="display:none;" /></label>`}
-              </div>
-            </div>
-            <div class="rv-action-cell">
-              <button type="button" class="rv-x-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
-            </div>
-          </div>
-        `;
-      }
-
-      if (r.isTemplate) {
-        return `
-          <div class="list-row-edit">
-            <div class="field rv-title-cell">
-              <span class="rv-shared-badge">Shared</span>
-              <div class="rv-readonly">${escapeHtml(r.description || "—")}</div>
-            </div>
-            <div class="field rv-link-cell">
-              ${urlHtml}
-              ${r.storagePath ? `<div class="rv-file-row">${fileHtml}</div>` : ``}
-            </div>
-            <div class="rv-action-cell">
-              <button type="button" class="rv-x-btn" data-unlink-id="${r.id}" title="Remove from this client only">&times;</button>
-            </div>
-          </div>
-        `;
-      }
-
+    // Greg (9/2/26): render exactly like the client dashboard's Resource
+    // Vault -- a plain list of title + description, the title linking out to
+    // its URL or opening its uploaded file. No inline editing here. The one
+    // action kept is the red x: shared rows unlink from this client, a
+    // client-specific row deletes outright. Adding / editing resources
+    // moves to resource_templates.html and future discussion.
+    list.innerHTML = rows.map((r) => {
+      const title = escapeHtml(r.title || "Untitled");
+      const titleHtml = r.url
+        ? `<a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${title}</a>`
+        : r.storagePath
+        ? `<span class="rv-file-link" data-path="${escapeHtml(r.storagePath)}" title="${escapeHtml(fileNameFromPath(r.storagePath))}">${title}</span>`
+        : title;
+      const removeAttr = r.isTemplate
+        ? `data-unlink-id="${r.id}" title="Remove from this client's Resource Vault"`
+        : `data-delete-id="${r.id}" title="Delete this resource"`;
       return `
-        <div class="list-row-edit">
-          <div class="field">
-            <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="description" value="${escapeHtml(r.description || "")}" placeholder="Add description" />
+        <div class="rv-simple-row">
+          <div class="rv-simple-main">
+            <div class="rv-simple-title">${titleHtml}</div>
+            ${r.description ? `<div class="rv-simple-sub">${escapeHtml(r.description)}</div>` : ""}
           </div>
-          <div class="field rv-link-cell">
-            <input type="text" class="row-input-edit" data-rv-row-id="${r.id}" data-rv-field="url" value="${escapeHtml(r.url || "")}" placeholder="https://…" />
-            <div class="rv-file-row">
-              ${r.storagePath
-                ? `${fileHtml}<button type="button" class="rv-file-inline-btn" data-remove-file="${r.id}">Remove file</button>`
-                : `<label class="rv-file-upload-label">+ Upload file<input type="file" class="rv-upload-input" data-row-id="${r.id}" style="display:none;" /></label>`}
-            </div>
-          </div>
-          <div class="rv-action-cell">
-            <button type="button" class="rv-x-btn" data-delete-id="${r.id}" title="Delete">&times;</button>
-          </div>
+          <button type="button" class="rv-x-btn" ${removeAttr}>&times;</button>
         </div>
       `;
     }).join("");
