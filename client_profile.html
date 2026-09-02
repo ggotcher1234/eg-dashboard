@@ -725,35 +725,21 @@
                  Status subcard removed; heading renamed to just "Company
                  Information" to match, same h3 + hint pattern every other
                  step in this wizard uses. -->
-            <h3>Company Information</h3>
-            <div class="wizard-panel-hint">The company's basic details, and where clients/partners can find it online.</div>
+            <!-- Greg (9/2/26, annotated screenshot): the "Company Details"
+                 subcard (Engagement Name / Address / NAICS) was redundant --
+                 it flows through from the application and the Client Control
+                 Center header. Removed. Step 1 is now just the company's
+                 online links, with the dashboard logo at the top. -->
+            <h3>Website &amp; Social Media Links</h3>
+            <div class="wizard-panel-hint">Where clients and partners can find this company online. The logo appears in the client dashboard header.</div>
 
             <div class="wizard-subcard">
-              <div class="subcard-title">Company Details</div>
-              <form id="company-form-1">
-                <div class="field">
-                  <label for="co-engagement-name">Engagement Name</label>
-                  <input type="text" id="co-engagement-name" />
-                </div>
-                <div class="field">
-                  <label for="co-address">Address</label>
-                  <input type="text" id="co-address" />
-                </div>
-                <div class="field">
-                  <label for="co-naics">NAICS codes</label>
-                  <input type="text" id="co-naics" placeholder="339113, 336992" />
-                </div>
+              <form id="company-form-2">
                 <div class="field">
                   <label>Logo</label>
                   <div id="co-logo-file"></div>
                   <div class="field-hint">Displayed in the client dashboard header.</div>
                 </div>
-              </form>
-            </div>
-
-            <div class="wizard-subcard">
-              <div class="subcard-title">Website &amp; Social Media Links</div>
-              <form id="company-form-2">
                 <div class="field">
                   <label for="co-website">Website</label>
                   <div class="url-field-row">
@@ -1536,10 +1522,7 @@
   }
 
   function fillCompanyForm(c) {
-    setFieldValue("co-engagement-name", c.name || "");
     setFieldValue("co-website", c.website_url || "");
-    setFieldValue("co-address", c.address || "");
-    setFieldValue("co-naics", c.naics_codes || "");
     setFieldValue("co-linkedin", c.linkedin_url || "");
     setFieldValue("co-facebook", c.facebook_url || "");
     setFieldValue("co-instagram", c.instagram_url || "");
@@ -1559,15 +1542,12 @@
   // remember to click. Each step's fields sit in their own small <form>
   // purely so pressing Enter in a text field doesn't reload the page --
   // there's no submit button on any of them.
-  ["company-form-1", "company-form-2"].forEach((id) => {
+  ["company-form-2"].forEach((id) => {
     $(id).addEventListener("submit", (e) => e.preventDefault());
   });
 
   const COMPANY_FIELD_COLUMNS = {
-    "co-engagement-name": "name",
-    "co-address": "address",
     "co-website": "website_url",
-    "co-naics": "naics_codes",
     "co-linkedin": "linkedin_url",
     "co-facebook": "facebook_url",
     "co-instagram": "instagram_url",
@@ -1602,6 +1582,7 @@
   function wireCompanyAutosave() {
     Object.entries(COMPANY_FIELD_COLUMNS).forEach(([id, column]) => {
       const el = $(id);
+      if (!el) return;
       let original = getFieldValue(id);
       el.addEventListener("focus", () => { original = getFieldValue(id); });
       el.addEventListener("blur", async () => {
