@@ -484,9 +484,6 @@
   .eng-tl-block .eng-tl-name { font-size: 13px; color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .avatar-sm { width: 28px; height: 28px; border-radius: 50%; background: var(--navy-light); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; overflow: hidden; }
   .avatar-sm img { width: 100%; height: 100%; object-fit: cover; }
-  .eng-view-all-wrap { text-align: center; padding: 14px; border-top: 1px solid var(--border); }
-  .eng-view-all-wrap a { font-size: 13px; font-weight: 700; color: var(--navy-light); text-decoration: none; }
-  .eng-view-all-wrap a:hover { text-decoration: underline; }
 
   .two-col-row { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; margin: 30px 0; }
   @media (max-width: 720px) { .two-col-row { grid-template-columns: 1fr; } }
@@ -712,9 +709,6 @@
         </div>
         <div id="engagements-list"></div>
         <div id="engagements-empty" class="empty-note hidden" style="border:none; box-shadow:none; margin:0;">You're not assigned to any engagements yet.</div>
-        <div class="eng-view-all-wrap hidden" id="eng-view-all-wrap">
-          <a href="#" id="eng-view-all-link">View all engagements &rarr;</a>
-        </div>
       </div>
     </div>
 
@@ -827,14 +821,12 @@
   let engagementScope = "mine";         // "mine" | "all" -- whose engagements the list/Needs Attention show
   let engagementTab = "all";            // "all" | "attention" | "recent"
   let engagementSort = "name_asc";      // "name_asc" | "name_desc" | "lead_asc" | "lead_desc"
-  let engagementsExpanded = false;      // My Engagements list is capped until "View all" is clicked
   // "in_progress" is the only real value this ever takes now -- the
   // eng-status-tabs "Other" pill (Greg, 8/29/26, final pass) doesn't filter
   // this list in place, it navigates to the Applications page instead. Kept
   // as a variable (rather than inlined) so the pool-filter line below reads
   // the same as it always has.
   let engagementStatusFilter = "in_progress";
-  const ENGAGEMENTS_ROW_LIMIT = 6;
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -1754,18 +1746,10 @@
       : `Nothing In Progress right now.`;
     $("engagements-empty").classList.toggle("hidden", pool.length > 0);
 
-    const showAll = engagementsExpanded || pool.length <= ENGAGEMENTS_ROW_LIMIT;
-    const visible = showAll ? pool : pool.slice(0, ENGAGEMENTS_ROW_LIMIT);
-    list.innerHTML = pool.length ? visible.map(clientRowHtml).join("") : "";
+    // Greg (9/2/26): always show the full In Progress list on open -- no
+    // row cap, no "View all engagements" expander.
+    list.innerHTML = pool.length ? pool.map(clientRowHtml).join("") : "";
     wireClientRows(list);
-
-    const viewAllWrap = $("eng-view-all-wrap");
-    if (pool.length > ENGAGEMENTS_ROW_LIMIT) {
-      viewAllWrap.classList.remove("hidden");
-      $("eng-view-all-link").textContent = engagementsExpanded ? "Show fewer engagements" : "View all engagements →";
-    } else {
-      viewAllWrap.classList.add("hidden");
-    }
   }
 
   // "Other" isn't a filter on this list -- it jumps straight to the
@@ -1787,13 +1771,7 @@
   $("eng-tabs").addEventListener("click", (e) => {
     const btn = e.target.closest("[data-tab]");
     if (!btn) return;
-    engagementsExpanded = false;
     setEngagementTab(engagementTab === btn.dataset.tab ? "all" : btn.dataset.tab);
-  });
-  $("eng-view-all-link").addEventListener("click", (e) => {
-    e.preventDefault();
-    engagementsExpanded = !engagementsExpanded;
-    renderEngagementsList();
   });
 
   // ---------- Global search (engagements / specialists / programs / Ask AI) ----------
