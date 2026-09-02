@@ -593,7 +593,7 @@
           <span class="tab" data-status="in_progress">In Progress<span class="tab-count">0</span></span>
           <span class="tab" data-status="on_hold">On Hold<span class="tab-count">0</span></span>
           <span class="tab" data-status="closed">Closed<span class="tab-count">0</span></span>
-          <span class="tab" data-status="rejected">Rejected<span class="tab-count">0</span></span>
+          <span class="tab" data-status="archived">Archived<span class="tab-count">0</span></span>
           <span class="tab active" data-status="all">All<span class="tab-count">0</span></span>
         </div>
         <div class="drafts-wrap" id="drafts-wrap">
@@ -1084,14 +1084,14 @@
   </div>
 </div>
 
-<!-- Reject confirm modal -->
+<!-- Archive confirm modal -->
 <div class="overlay" id="reject-overlay">
   <div class="modal">
-    <h3>Reject this application?</h3>
-    <p>The submitter will be able to see it was marked rejected. This can't be undone from here.</p>
+    <h3>Archive this engagement?</h3>
+    <p>It moves to the Archived tab. Nothing is deleted — you can bring it back by changing its status again.</p>
     <div class="modal-actions">
       <button type="button" class="btn-secondary" id="reject-cancel">Cancel</button>
-      <button type="button" class="btn-danger" id="reject-confirm">Reject application</button>
+      <button type="button" class="btn-danger" id="reject-confirm">Archive</button>
     </div>
   </div>
 </div>
@@ -1365,7 +1365,7 @@
     // (?status=pending) — lets that card take you straight to the filtered
     // list instead of just the page in general.
     const statusParam = new URLSearchParams(location.search).get("status");
-    const validTabs = ["pending", "accepted", "in_progress", "on_hold", "closed", "rejected", "all"];
+    const validTabs = ["pending", "accepted", "in_progress", "on_hold", "closed", "archived", "all"];
     if (statusParam && validTabs.includes(statusParam)) {
       activeTab = statusParam;
       document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.status === statusParam));
@@ -1632,7 +1632,7 @@
         <td>${fmtDate(a.submitted_at)}</td>
         <td><span class="badge badge-${a.status}">${a.status}</span></td>
         ${showProjectCol ? `<td>${projectStatus ? `<span class="badge badge-${projectStatus}">${projectStatus.replace("_", " ")}</span>` : "—"}</td>` : ""}
-        <td onclick="event.stopPropagation()">${isSuperAdmin && a.client_id ? `<a href="invoicing_report.html?engagement=${a.client_id}" class="btn-secondary btn-sm" style="text-decoration:none; white-space:nowrap;" title="View this engagement's Cumulative Hours/Value summary">Summary</a>` : ""}</td>
+        <td onclick="event.stopPropagation()">${isSuperAdmin ? `<button class="btn-secondary btn-sm" data-archive-app="${a.id}" style="white-space:nowrap;" title="Move this engagement to the Archived tab" ${a.status === "archived" ? "disabled" : ""}>Archive</button>` : ""}</td>
         ${isSuperAdmin ? `<td onclick="event.stopPropagation()"><button class="btn-danger icon-btn" data-delete-app="${a.id}" title="Delete this client">&times;</button></td>` : ""}
       `;
       tr.addEventListener("click", () => { reviewBackClientId = null; showReviewView(a.id); });
@@ -1641,6 +1641,9 @@
 
     document.querySelectorAll("[data-delete-app]").forEach((btn) => {
       btn.addEventListener("click", () => openDeleteApp(btn.dataset.deleteApp));
+    });
+    document.querySelectorAll("[data-archive-app]").forEach((btn) => {
+      btn.addEventListener("click", () => { pendingRejectId = btn.dataset.archiveApp; $("reject-overlay").classList.add("open"); });
     });
   }
 
@@ -2438,7 +2441,7 @@
                 ${
                   teamLead
                     ? escapeHtml(teamLead.full_name)
-                    : a.status === "pending" ? "Not yet assigned" : a.status === "rejected" ? "—" : "Unassigned"
+                    : a.status === "pending" ? "Not yet assigned" : a.status === "archived" ? "—" : "Unassigned"
                 }
               </div>
               <div class="app-subline">Submitted ${fmtDate(a.submitted_at)} by ${submitter ? escapeHtml(submitter.full_name) : "—"}</div>
@@ -2765,7 +2768,7 @@
             <div class="field-error" id="slug-error">That address is already taken — try another.</div>
           </div>
           <div class="form-actions">
-            <button type="button" class="btn-danger" id="reject-btn">Reject</button>
+            <button type="button" class="btn-secondary" id="reject-btn">Archive</button>
             <button type="button" class="btn-primary" id="accept-btn">Accept &amp; create client</button>
           </div>
         </div>
@@ -3098,15 +3101,15 @@
   $("reject-confirm").addEventListener("click", async () => {
     if (!pendingRejectId) return;
     const { error } = await sb.from("client_applications")
-      .update({ status: "rejected", reviewed_by: currentUser.id, reviewed_at: new Date().toISOString() })
+      .update({ status: "archived", reviewed_by: currentUser.id, reviewed_at: new Date().toISOString() })
       .eq("id", pendingRejectId);
     $("reject-overlay").classList.remove("open");
     pendingRejectId = null;
     if (error) {
-      showBanner("Couldn't reject: " + error.message, "error");
+      showBanner("Couldn't archive: " + error.message, "error");
       return;
     }
-    showBanner("Application rejected.", "success");
+    showBanner("Engagement archived.", "success");
     await loadApplications();
     showListView();
   });
