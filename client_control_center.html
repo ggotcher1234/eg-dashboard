@@ -260,6 +260,11 @@
   .cc-nav-btn svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--muted); }
   .cc-nav-btn.active svg { color: var(--navy-light); }
   .cc-nav-btn:disabled { cursor: default; }
+  /* Greg (9/2/26): group the left menu into "Daily Work" and
+     "Setup & Sharing" -- header labels only, no descriptive sub-caption. */
+  .cc-nav-section { width: 100%; padding: 12px 14px 5px; font-size: 12.5px; font-weight: 700; color: var(--navy); letter-spacing: 0.01em; }
+  .cc-nav-section:first-child { padding-top: 4px; }
+  .cc-nav-section:not(:first-child) { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
   /* Greg (8/31/26): "EG people aren't used to the term Workflow Files...
      it might be better to have a menu item for each of those instead --
      but I'm worried about the left menu getting too large." So the 4
@@ -1067,22 +1072,28 @@
   function renderNav(client) {
     const dashboardHref = client.slug ? new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href : null;
     navItems = [
-      { key: "team", label: "Team & Hours" },
-      { key: "research", label: "Add Research", src: `client_research.html?client=${client.id}&view=research&embed=1` },
+      { key: "team", label: "Team & Hours", section: "Daily Work" },
+      { key: "research", label: "Add Research", section: "Daily Work", src: `client_research.html?client=${client.id}&view=research&embed=1` },
       {
-        key: "workflow", label: "Documents", group: true,
+        key: "workflow", label: "Documents", group: true, section: "Daily Work",
         docs: DOC_GROUP_ITEMS.map((d) => ({ ...d, src: `client_workflow_files.html?client=${client.id}&embed=1&doc=${d.key}` })),
       },
-      { key: "setup", label: "Dashboard (TL)", src: `client_profile.html?client=${client.id}&embed=1` },
-      { key: "vault", label: "Resource Vault (TL)", src: `client_research.html?client=${client.id}&view=vault&embed=1` },
-      { key: "dashboard", label: "Client Dashboard", src: dashboardHref, disabled: !dashboardHref },
+      { key: "setup", label: "Dashboard (TL)", section: "Setup & Sharing", src: `client_profile.html?client=${client.id}&embed=1` },
+      { key: "vault", label: "Resource Vault (TL)", section: "Setup & Sharing", src: `client_research.html?client=${client.id}&view=vault&embed=1` },
+      { key: "dashboard", label: "Client Dashboard", section: "Setup & Sharing", src: dashboardHref, disabled: !dashboardHref },
     ];
+    let _navSection = null;
     $("cc-nav").innerHTML = navItems.map((item) => {
+      let secHtml = "";
+      if (item.section && item.section !== _navSection) {
+        _navSection = item.section;
+        secHtml = `<div class="cc-nav-section">${item.section}</div>`;
+      }
       if (item.group) {
         const subHtml = item.docs.map((d) => `
           <button type="button" class="cc-nav-subbtn" data-pane="${item.key}" data-doc="${d.key}">${d.label}</button>
         `).join("");
-        return `
+        return secHtml + `
           <div class="cc-nav-group">
             <button type="button" class="cc-nav-btn cc-nav-group-header" data-pane="${item.key}" data-group-toggle="1">
               ${navIconSvg(item.key)}<span>${item.label}</span>
@@ -1092,7 +1103,7 @@
           </div>
         `;
       }
-      return `<button type="button" class="cc-nav-btn" data-pane="${item.key}" ${item.disabled ? 'style="opacity:0.5;" disabled' : ""}>${navIconSvg(item.key)}<span>${item.label}</span></button>`;
+      return secHtml + `<button type="button" class="cc-nav-btn" data-pane="${item.key}" ${item.disabled ? 'style="opacity:0.5;" disabled' : ""}>${navIconSvg(item.key)}<span>${item.label}</span></button>`;
     }).join("");
     $("cc-nav").querySelectorAll(".cc-nav-btn[data-group-toggle]").forEach((btn) => {
       btn.addEventListener("click", () => toggleDocsGroup());
