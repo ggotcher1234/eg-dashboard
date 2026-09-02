@@ -557,34 +557,6 @@
               <div id="resource_vault-list"></div>
             </div>
 
-            <div id="rv-template-add-wrap" class="hidden" style="margin-top:14px; padding:12px; background:#f8fafb; border:1px dashed var(--border); border-radius:8px;">
-              <div class="field-hint" style="margin-bottom:8px;"><strong>Shared resource</strong> — appears in every client's Resource Vault right away.</div>
-              <form class="add-row-form" id="rv-template-add-form">
-                <div class="add-row-line">
-                  <div class="field">
-                    <label for="rv-tpl-new-title">Title</label>
-                    <input type="text" id="rv-tpl-new-title" required />
-                  </div>
-                  <div class="field">
-                    <label for="rv-tpl-new-description">Description (shows below icon)</label>
-                    <input type="text" id="rv-tpl-new-description" />
-                  </div>
-                  <div class="field">
-                    <label for="rv-tpl-new-url">Link URL (optional)</label>
-                    <input type="text" id="rv-tpl-new-url" placeholder="https://…" />
-                  </div>
-                </div>
-                <div class="add-row-line">
-                  <div class="field" style="flex: 0 0 auto; min-width:180px;">
-                    <label for="rv-tpl-new-file">File (optional)</label>
-                    <input type="file" id="rv-tpl-new-file" />
-                  </div>
-                  <div class="field-hint" style="flex:1; min-width:200px; margin-bottom:10px;">Use one or the other — a link URL opens in a new tab, a file downloads. If both are set, the link wins.</div>
-                  <button type="submit" class="btn-secondary btn-sm">+ Add Shared Resource</button>
-                </div>
-              </form>
-            </div>
-
             <form class="add-row-form" id="resource-vault-add-form">
               <div class="add-row-line">
                 <div class="field">
@@ -949,8 +921,6 @@
     $("p-lifecycle-badge").className = `badge badge-${client.project_status}`;
     $("p-lifecycle-badge").textContent = client.project_status;
 
-    $("rv-template-add-wrap").classList.toggle("hidden", !isSuperAdmin);
-
     // Which of the two entry points on the Engagement Workspace page got
     // clicked -- "Add Research" (?view=research, the default) or "Modify
     // EG Resources" (?view=vault) -- decides which panel shows. Set this
@@ -963,9 +933,6 @@
     wireAccordionHeaders();
     await loadListSection(RESOURCE_VAULT_CONFIG);
     $("resource-vault-add-form").addEventListener("submit", (e) => { e.preventDefault(); addCustomResourceVaultItem(); });
-    if (isSuperAdmin) {
-      $("rv-template-add-form").addEventListener("submit", (e) => { e.preventDefault(); addSharedTemplate(); });
-    }
 
     await Promise.all([loadDocuments(), loadResearchQuestions()]);
     renderResearchAreaSections();
@@ -1341,37 +1308,6 @@
     if (error) { showBanner("Couldn't add resource: " + error.message, "error"); return; }
     $("resource-vault-add-form").reset();
     showBanner("Resource added.", "success");
-    await loadListSection(RESOURCE_VAULT_CONFIG);
-  }
-
-  // A "Shared resource" — one row in resource_vault_templates, org-wide.
-  // An existing DB trigger auto-links it into every client's Resource
-  // Vault as soon as it's inserted, so nothing else needs to happen here.
-  async function addSharedTemplate() {
-    const title = $("rv-tpl-new-title").value.trim();
-    const description = $("rv-tpl-new-description").value.trim();
-    const url = $("rv-tpl-new-url").value.trim();
-    const fileInput = $("rv-tpl-new-file");
-    if (!title) { showBanner("Title is required.", "error"); return; }
-
-    let storagePath = null;
-    if (fileInput.files.length) {
-      const file = fileInput.files[0];
-      storagePath = `resource-templates/${currentClient.organization_id}/${Date.now()}-${sanitizeFilename(file.name)}`;
-      const { error: uploadErr } = await sb.storage.from("client-documents").upload(storagePath, file, { contentType: contentTypeFor(file) });
-      if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
-    }
-
-    const { error } = await sb.from("resource_vault_templates").insert({
-      organization_id: currentClient.organization_id,
-      title,
-      description: description || null,
-      url: url || null,
-      storage_path: storagePath,
-    });
-    if (error) { showBanner("Couldn't add shared resource: " + error.message, "error"); return; }
-    $("rv-template-add-form").reset();
-    showBanner("Shared resource added — now shows for every client.", "success");
     await loadListSection(RESOURCE_VAULT_CONFIG);
   }
 
