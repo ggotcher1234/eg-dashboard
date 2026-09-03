@@ -67,11 +67,6 @@
   .officer-block { border: 1px dashed var(--border); border-radius: 10px; padding: 16px 16px 4px; margin-bottom: 16px; }
   .officer-block .officer-label { font-size: 12.5px; font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 10px; }
 
-  .attach-drop { border: 1px dashed var(--border); border-radius: 8px; padding: 16px; text-align: center; font-size: 13px; color: var(--muted); }
-  .attach-list { margin-top: 10px; }
-  .attach-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; padding: 6px 0; border-bottom: 1px solid #eef1f4; }
-  .attach-row:last-child { border-bottom: none; }
-  .attach-remove { background: transparent; border: none; color: var(--muted); font-size: 15px; cursor: pointer; padding: 2px 6px; }
   .attach-remove:hover { color: var(--danger); }
 
   #banner { display: none; padding: 12px 16px; border-radius: 8px; font-size: 13.5px; margin-bottom: 18px; }
@@ -252,15 +247,6 @@
           </div>
         </div>
 
-        <div class="field-row">
-          <div class="field full">
-            <label>Attachments <span style="font-weight:400; text-transform:none;">(optional)</span></label>
-            <div class="attach-drop">
-              <input type="file" id="f-attachments" multiple style="width:100%;" />
-            </div>
-            <div class="attach-list" id="attach-list"></div>
-          </div>
-        </div>
       </div>
 
       <div class="card">
@@ -295,7 +281,6 @@
 
   const $ = (id) => document.getElementById(id);
   let program = null;
-  let attachedFiles = []; // { file, name }
 
   function escapeHtml(str) {
     const div = document.createElement("div");
@@ -338,48 +323,10 @@
     $("app-view").classList.remove("hidden");
   }
 
-  // ---------- Attachments (read as base64 client-side, sent inline) ----------
-  const MAX_ATTACH_BYTES = 8 * 1024 * 1024;
-  $("f-attachments").addEventListener("change", () => {
-    for (const file of $("f-attachments").files) {
-      attachedFiles.push({ file, name: file.name });
-    }
-    $("f-attachments").value = "";
-    renderAttachList();
-  });
-  function renderAttachList() {
-    $("attach-list").innerHTML = attachedFiles.map((a, i) => `
-      <div class="attach-row">
-        <span>${escapeHtml(a.name)} <span style="color:var(--muted);">(${Math.round(a.file.size / 1024)} KB)</span></span>
-        <button type="button" class="attach-remove" data-remove-attach="${i}" title="Remove">&times;</button>
-      </div>
-    `).join("");
-    document.querySelectorAll("[data-remove-attach]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        attachedFiles.splice(Number(btn.dataset.removeAttach), 1);
-        renderAttachList();
-      });
-    });
-  }
-  function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
   // ---------- Submit ----------
   $("app-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     clearBanner();
-
-    const totalBytes = attachedFiles.reduce((sum, a) => sum + a.file.size, 0);
-    if (totalBytes > MAX_ATTACH_BYTES) {
-      showBanner("Attachments are too large in total (8MB max). Please remove or shrink a file and try again.");
-      return;
-    }
 
     const yesNo = (id) => {
       const v = $(id).value;
@@ -449,10 +396,9 @@
     submitBtn.textContent = "Submitting…";
 
     try {
+      // Attachments removed from the form (Greg, 9/2/26) -- still sent as an
+      // empty array so the Edge Function payload shape is unchanged.
       const attachments = [];
-      for (const a of attachedFiles) {
-        attachments.push({ filename: a.name, contentType: a.file.type || "application/octet-stream", dataBase64: await fileToBase64(a.file) });
-      }
 
       const res = await fetch(SUBMIT_FUNCTION_URL, {
         method: "POST",
