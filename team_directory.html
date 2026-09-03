@@ -1942,9 +1942,13 @@
       if (p.time_zone && p.time_zone !== (existing.time_zone || "")) updates.time_zone = p.time_zone;
       if (title && title !== (existing.title || "")) updates.title = title;
       if (primary && primary !== (existing.default_specialty || "")) updates.default_specialty = primary;
-      // Never touch an existing Super Admin's role, and never demote an
-      // existing Team Lead back to Consultant via import — only ever
-      // upgrade a plain Consultant up to Team Lead when the roster says so.
+      // Role is only ever *upgraded* by an import, and only Consultant ->
+      // Team Lead. An existing Super Admin (or Team Lead) is never touched
+      // here -- the spreadsheet has no Super Admin concept, so a stale
+      // "Consultant"/"Team Leader" position line must not be allowed to
+      // demote a hidden admin. (A downgrade like that is what knocked Greg
+      // off the admin dashboard on 9/3/26.) The execute step re-checks this
+      // against the live row as a backstop.
       if (primary === "team_lead" && existing.role === "consultant") updates.role = "team_lead";
       // Additive only — never remove a specialty someone already has just
       // because this particular file doesn't mention it.
@@ -2006,6 +2010,15 @@
           created++;
         } else {
           statusEl.textContent = "Updating…";
+          // Backstop: whatever the plan says, an import must never write
+          // `role` or `hidden_from_roster` onto a live Super Admin. Re-check
+          // the current row here (not the snapshot the plan was built from)
+          // and strip those keys before the write.
+          const liveUser = allUsers.find((x) => x.id === plan.userId);
+          if (liveUser && liveUser.role === "super_admin") {
+            delete plan.updates.role;
+            delete plan.updates.hidden_from_roster;
+          }
           if (Object.keys(plan.updates).length) {
             const { error } = await sb.from("users").update(plan.updates).eq("id", plan.userId);
             if (error) throw new Error(error.message);
