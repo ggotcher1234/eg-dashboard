@@ -163,7 +163,7 @@
   table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
   @media (max-width: 640px) {
-    .table-scroll table { min-width: 760px; }
+    .table-scroll table { min-width: 900px; }
     .toolbar input[type="text"] { width: 100%; max-width: 260px; }
   }
   thead th {
@@ -192,6 +192,9 @@
   }
   .program-name-link:hover { text-decoration: underline; color: var(--navy-light); }
   .program-code-label { font-size: 11.5px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; margin-top: 2px; }
+  /* Chris/Greg (9/3/26): the abbreviation under the program name is gone --
+     the program's street address sits there instead. */
+  .program-address-label { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
   .cell-muted { color: var(--muted); }
   /* Primary contact column (Greg, 8/28/26, per the platform review meeting):
      Rita's problem was having to open every Program just to find a phone
@@ -519,8 +522,9 @@
       <thead>
         <tr>
           <th class="sortable" data-sort="name">Program <span class="sort-arrow">&#8645;</span></th>
-          <th>Primary Contact</th>
-          <th>Address</th>
+          <th>Contract Signer</th>
+          <th>Program Administrator</th>
+          <th>Billing</th>
           <th id="actions-header" class="hidden" style="width:90px;"></th>
         </tr>
       </thead>
@@ -926,11 +930,12 @@
       tr.innerHTML = `
         <td class="program-cell">
           <button type="button" class="program-name-link" data-open-program="${p.id}">${escapeHtml(p.name)}</button>
-          <div class="program-code-label">${escapeHtml(p.code)}</div>
+          <div class="program-address-label">${p.physical_address ? escapeHtml(p.physical_address) : '<span class="cell-muted">No address on file</span>'}</div>
           ${p.archived ? '<span class="archived-badge">Archived</span>' : ""}
         </td>
-        <td class="contact-cell">${renderPrimaryContactCell(p)}</td>
-        <td class="address-cell">${renderProgramAddressCell(p)}</td>
+        <td class="contact-cell">${renderRoleContactCell(p, "contract_signer")}</td>
+        <td class="contact-cell">${renderRoleContactCell(p, "program_administrator")}</td>
+        <td class="contact-cell">${renderRoleContactCell(p, "program_finance")}</td>
         ${actionsCell}
       `;
       tbody.appendChild(tr);
@@ -941,29 +946,21 @@
     wireProgramDetailLinks();
   }
 
-  // Primary contact column (Greg, 8/28/26, per the platform review
-  // meeting): Rita's problem was having to open every Program's detail
-  // popup just to find a phone number. Now that contacts are split into
-  // categories (089_program_contact_structured_fields.sql), prefer the
-  // first Program Administrator contact (the day-to-day contact), falling
-  // back to the first CC List contact if there's no Program Administrator
-  // on file yet. Still a judgment call, not an explicit "primary" flag --
-  // worth confirming with Rita once real people replace the migration's
-  // "Imported from ..." placeholder rows.
-  function primaryContactForPartner(partnerId) {
-    const admins = contactsForCategory(partnerId, "program_administrator");
-    if (admins.length) return admins[0];
-    const ccList = contactsForCategory(partnerId, "cc_list");
-    return ccList.length ? ccList[0] : null;
-  }
-
-  function renderPrimaryContactCell(p) {
-    const c = primaryContactForPartner(p.id);
+  // Contract Signer / Program Administrator / Billing columns (Chris/Greg,
+  // 9/3/26, from Chris's marked-up Programs sheet): one row now shows the
+  // key person for each role straight from the structured contact
+  // categories (089_program_contact_structured_fields.sql) -- name with the
+  // phone number underneath -- so Rita never has to open a Program just to
+  // find a number. "Billing" is the Program Finance contact (who receives
+  // EG's invoices). First contact listed in each category wins.
+  function renderRoleContactCell(p, category) {
+    const list = contactsForCategory(p.id, category);
+    const c = list[0];
     if (!c) return '<span class="cell-muted">No contact on file</span>';
     const phoneHtml = c.phone
       ? `<a href="tel:${escapeHtml(c.phone.replace(/[^0-9+]/g, ""))}" class="contact-phone-link">${escapeHtml(c.phone)}</a>`
       : '<span class="cell-muted">No phone</span>';
-    return `<div class="contact-cell-name">${escapeHtml(c.name)}</div><div class="contact-cell-phone">${phoneHtml}</div>`;
+    return `<div class="contact-cell-name">${escapeHtml(c.name || "—")}</div><div class="contact-cell-phone">${phoneHtml}</div>`;
   }
 
   // ---------- Archive / Unarchive (soft, keeps everything) ----------
@@ -990,16 +987,6 @@
     });
   }
 
-  // Programs list's Address column (Greg, 8/27/26) -- a plain physical
-  // address, same "Not provided" placeholder style Roster's Address column
-  // already uses. Deliberately reads physical_address, NOT the existing
-  // `address` column -- that one already means "Program Finance" (see
-  // 083_program_contact_signer_administrator.sql and 085's comment).
-  function renderProgramAddressCell(p) {
-    return p.physical_address
-      ? escapeHtml(p.physical_address)
-      : '<span class="cell-muted">Not provided</span>';
-  }
 
   // ---------- Inline edit (Program name / code / address, inside the
   // Program Detail popup) ----------
