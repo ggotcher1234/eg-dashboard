@@ -514,23 +514,21 @@
       <div class="global-search-wrap">
         <div class="search-box">
           <span class="search-icon">&#128269;</span>
-          <input type="text" id="global-search-input" placeholder="Search…" autocomplete="off" />
+          <!-- Greg (9/3/26): one search box on this page -- it filters the
+               roster table directly. (The sitewide Engagements/Programs
+               dropdown that sat here duplicated the roster's own search and
+               was dropped; site nav still covers cross-page jumps.) -->
+          <input type="text" id="global-search-input" placeholder="Search the roster by name or specialty…" autocomplete="off" />
         </div>
-        <div class="global-search-results hidden" id="global-search-results"></div>
       </div>
       <div class="std-toolbar-actions">
+        <button type="button" class="btn-secondary" id="roster-print-btn">Print / Save as PDF</button>
         <button type="button" class="btn-secondary btn-sm" id="std-export-btn" title="Download the roster as CSV">&#8595; Download CSV</button>
       </div>
     </div>
 
     <div class="toolbar-row">
       <div class="toolbar-left">
-        <div class="search-wrap">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-            <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input type="text" id="search-box" placeholder="Search the roster by name or specialty…" />
-        </div>
         <!-- Filters, row count, and Import moved out of view (Greg, 8/19/26) --
              only Search and Add Roster Member stay in the toolbar. The elements
              are kept in the DOM (display:none) rather than removed so the
@@ -565,7 +563,6 @@
         <label id="show-hidden-wrap" class="hidden" style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); cursor:pointer; white-space:nowrap;">
           <input type="checkbox" id="show-hidden-toggle" style="width:auto;" /> Show hidden
         </label>
-        <button type="button" class="btn-secondary" id="roster-print-btn">Print / Save as PDF</button>
         <button class="btn-primary hidden" id="add-btn">+ Add Roster Member</button>
       </div>
     </div>
@@ -1241,7 +1238,6 @@
 
     await loadUsers();
     if (isSuperAdmin) await loadTeamLeadWorkload();
-    loadGlobalSearchIndex();
   }
 
   // Closed-by-default accordion for the Team Lead Workload panel — click
@@ -1370,68 +1366,12 @@
   });
 
   // ---------- Load & render ----------
-  // ---------- Standardized Search/Print/Export/Import toolbar ----------
-  // Same four controls, same order, on every internal page (Greg, 8/27/26).
-  // This page already has its own local roster search + Import (CSV) + Print
-  // buttons in the toolbar below -- this just adds the sitewide search and
-  // the missing Export (CSV) control. Specialists match directly against
-  // allUsers (this page IS the specialist directory), so clicking one opens
-  // its profile modal instead of navigating away.
-  let gsClients = [], gsPrograms = [];
-  async function loadGlobalSearchIndex() {
-    const [{ data: clients }, { data: programs }] = await Promise.all([
-      sb.from("clients").select("id, name, project_status"),
-      sb.from("econ_dev_companies").select("id, name, code"),
-    ]);
-    gsClients = clients || []; gsPrograms = programs || [];
-  }
-  const GS_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
-  function renderGlobalSearchResults(query) {
-    const box = $("global-search-results");
-    const q = query.trim().toLowerCase();
-    if (!q) { box.classList.add("hidden"); box.innerHTML = ""; return; }
-    const engMatches = gsClients.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 5);
-    const specMatches = allUsers.filter((u) => u.full_name && u.full_name.toLowerCase().includes(q)).slice(0, 5);
-    const progMatches = gsPrograms.filter((p) => (p.name || "").toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q)).slice(0, 5);
-    let html = "";
-    if (engMatches.length) {
-      html += `<div class="gsr-group-label">Engagements</div>` + engMatches.map((c) => `
-        <div class="gsr-item" data-gsr-nav="client_control_center.html?client=${c.id}">
-          <span class="gsr-name">${escapeHtml(c.name)}</span>
-          <span class="gsr-meta">${escapeHtml(GS_STATUS_LABELS[c.project_status] || c.project_status)}</span>
-        </div>
-      `).join("");
-    }
-    if (specMatches.length) {
-      html += `<div class="gsr-group-label">Specialists</div>` + specMatches.map((u) => `
-        <div class="gsr-item" data-gsr-open="${u.id}"><span class="gsr-name">${escapeHtml(u.full_name)}</span></div>
-      `).join("");
-    }
-    if (progMatches.length) {
-      html += `<div class="gsr-group-label">Programs</div>` + progMatches.map((p) => `
-        <div class="gsr-item" data-gsr-nav="econ_dev_partners_admin.html?program=${p.id}">
-          <span class="gsr-name">${escapeHtml(p.name)}</span>
-          <span class="gsr-meta">${escapeHtml(p.code || "")}</span>
-        </div>
-      `).join("");
-    }
-    if (!html) html = `<div class="gsr-item" style="cursor:default;"><span class="gsr-name" style="color:var(--muted); font-weight:400;">No matches.</span></div>`;
-    box.innerHTML = html;
-    box.classList.remove("hidden");
-    box.querySelectorAll("[data-gsr-nav]").forEach((el) => {
-      el.addEventListener("click", () => { window.location.href = el.dataset.gsrNav; });
-    });
-    box.querySelectorAll("[data-gsr-open]").forEach((el) => {
-      el.addEventListener("click", () => { box.classList.add("hidden"); $("global-search-input").value = ""; openProfile(el.dataset.gsrOpen); });
-    });
-  }
-  $("global-search-input").addEventListener("input", () => renderGlobalSearchResults($("global-search-input").value));
-  $("global-search-input").addEventListener("focus", () => {
-    if ($("global-search-input").value.trim()) renderGlobalSearchResults($("global-search-input").value);
-  });
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest(".global-search-wrap")) $("global-search-results").classList.add("hidden");
-  });
+  // ---------- Standardized Search/Print/Download toolbar ----------
+  // Same controls, same order, on every internal page (Greg, 8/27/26).
+  // On the Roster the single search box just filters the table directly
+  // (wired in renderList / the #global-search-input input listener further
+  // down) -- there's no second sitewide dropdown here, it only duplicated
+  // this page's own search.
   function csvField(value) {
     const v = value == null ? "" : String(value);
     return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
@@ -1625,7 +1565,7 @@
   }
 
   function renderList() {
-    const q = $("search-box").value.trim().toLowerCase();
+    const q = $("global-search-input").value.trim().toLowerCase();
     let rows = allUsers.filter((u) => {
       if (roleFilter !== "all" && u.role !== roleFilter) return false;
       if (specialtyFilter !== "all" && !(u.specialties || []).includes(specialtyFilter)) return false;
@@ -1682,7 +1622,7 @@
     }
   }
 
-  $("search-box").addEventListener("input", renderList);
+  $("global-search-input").addEventListener("input", renderList);
 
   $("show-hidden-toggle").addEventListener("change", async () => {
     showHiddenMembers = $("show-hidden-toggle").checked;
