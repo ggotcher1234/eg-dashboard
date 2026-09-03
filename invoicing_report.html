@@ -1325,7 +1325,7 @@
   async function loadGlobalSearchIndex() {
     const [{ data: clients }, { data: users }, { data: programs }] = await Promise.all([
       sb.from("clients").select("id, name, project_status"),
-      sb.from("users").select("id, full_name"),
+      sb.from("users").select("id, full_name").eq("hidden_from_roster", false),
       sb.from("econ_dev_companies").select("id, name, code"),
     ]);
     gsClients = clients || []; gsUsers = users || []; gsPrograms = programs || [];
@@ -1382,7 +1382,7 @@
         .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name, bill_admin_qc_upfront))")
         .not("user_id", "is", null),
       sb.from("time_entries").select("assignment_id, hours, entry_date, note"),
-      sb.from("users").select("id, full_name, role"),
+      sb.from("users").select("id, full_name, role").eq("hidden_from_roster", false),
       // Address/Opened/Closed/Setup Fee for the merged per-engagement detail
       // view -- not needed by the flat Time Sheets table, but cheap enough
       // to just load alongside everything else (Greg's org is small).

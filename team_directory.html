@@ -553,6 +553,9 @@
         <button class="btn-secondary hidden" id="import-btn" style="display:none;">Import EG Roster List</button>
         <button class="btn-secondary hidden" id="roster-import-btn">Import Roster (CSV)</button>
         <input type="file" accept=".csv" id="roster-csv-file" style="display:none;" />
+        <label id="show-hidden-wrap" class="hidden" style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); cursor:pointer; white-space:nowrap;">
+          <input type="checkbox" id="show-hidden-toggle" style="width:auto;" /> Show hidden
+        </label>
         <button type="button" class="btn-secondary" id="roster-print-btn">Print / Save as PDF</button>
         <button class="btn-primary hidden" id="add-btn">+ Add Roster Member</button>
       </div>
@@ -752,6 +755,11 @@
         <option value="team_lead">Team Lead</option>
         <option value="super_admin">Admin</option>
       </select>
+
+      <label id="pf-hidden-wrap" class="hidden" style="display:flex; align-items:flex-start; gap:8px; font-weight:400; text-transform:none; margin-top:10px;">
+        <input type="checkbox" id="pf-hidden-from-roster" style="width:auto; margin-top:3px;" />
+        <span>Hide from Roster <span style="color:var(--muted);">— keeps full Admin access, but removes this person from the Roster, every specialist / team-lead pick list, and global search.</span></span>
+      </label>
 
       <label for="pf-about">About</label>
       <textarea id="pf-about" placeholder="A short bio…"></textarea>
@@ -1220,6 +1228,7 @@
     $("import-menu-btn").classList.toggle("hidden", !isSuperAdmin);
     $("roster-import-btn").classList.toggle("hidden", !isSuperAdmin);
     $("workload-section").classList.toggle("hidden", !isSuperAdmin);
+    $("show-hidden-wrap").classList.toggle("hidden", !isSuperAdmin);
 
     await loadUsers();
     if (isSuperAdmin) await loadTeamLeadWorkload();
@@ -1435,11 +1444,17 @@
     downloadCsv(`roster-${new Date().toISOString().slice(0, 10)}.csv`, rows);
   });
 
+  // "Hidden admins" (Chris/Rita/Greg -- users.hidden_from_roster, 108) are
+  // left out of the Roster and every pick list. A Super Admin can flip
+  // "Show hidden" in the toolbar to see and un-hide them.
+  let showHiddenMembers = false;
   async function loadUsers() {
+    let usersQuery = sb.from("users")
+      .select("id, full_name, title, company_name, role, email, secondary_email, phone, address, time_zone, about, default_specialty, avatar_url, hidden_from_roster")
+      .order("full_name", { ascending: true });
+    if (!showHiddenMembers) usersQuery = usersQuery.eq("hidden_from_roster", false);
     const [{ data, error }, { data: specialtyRows, error: specErr }] = await Promise.all([
-      sb.from("users")
-        .select("id, full_name, title, company_name, role, email, secondary_email, phone, address, time_zone, about, default_specialty, avatar_url")
-        .order("full_name", { ascending: true }),
+      usersQuery,
       sb.from("user_specialties").select("user_id, specialty"),
     ]);
 
@@ -1547,7 +1562,7 @@
   async function loadTeamLeadWorkload() {
     const { data, error } = await sb
       .from("client_assignments")
-      .select("user_id, users(full_name), clients(project_status)")
+      .select("user_id, users(full_name, hidden_from_roster), clients(project_status)")
       .eq("is_team_lead", true)
       .not("user_id", "is", null);
     if (error) {
@@ -1557,7 +1572,7 @@
     const countsByUser = {};
     const namesByUser = {};
     (data || []).forEach((r) => {
-      if (!r.user_id || !r.users) return;
+      if (!r.user_id || !r.users || r.users.hidden_from_roster) return;
       namesByUser[r.user_id] = r.users.full_name;
       if (r.clients && r.clients.project_status === "closed") return;
       countsByUser[r.user_id] = (countsByUser[r.user_id] || 0) + 1;
@@ -1638,7 +1653,7 @@
           <div class="member-name-cell" style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="openProfile('${u.id}')" title="${canEditThis ? "Edit" : "View"} ${escapeHtml(u.full_name)}">
             <div class="avatar-sm">${u.avatar_url ? `<img src="${escapeHtml(u.avatar_url)}" alt="" />` : escapeHtml(initials(u.full_name))}</div>
             <div>
-              <div class="member-name">${escapeHtml(u.full_name)}</div>
+              <div class="member-name">${escapeHtml(u.full_name)}${u.hidden_from_roster ? ` <span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:var(--muted); background:#eef1f4; border-radius:999px; padding:1px 7px; vertical-align:middle;">Hidden</span>` : ""}</div>
               <div class="member-role-sub">${escapeHtml(primaryCategoryLabel(u))}</div>
               ${u.company_name ? `<div class="member-company-sub">${escapeHtml(u.company_name)}</div>` : ""}
             </div>
@@ -1656,6 +1671,11 @@
   }
 
   $("search-box").addEventListener("input", renderList);
+
+  $("show-hidden-toggle").addEventListener("change", async () => {
+    showHiddenMembers = $("show-hidden-toggle").checked;
+    await loadUsers();
+  });
 
   // ---------- Add Roster Member modal ----------
   $("add-btn").addEventListener("click", () => {
@@ -2176,6 +2196,9 @@
     $("pf-role").disabled = !canEditRole;
     $("pf-role-lock-note").textContent = canEditRole ? "" : "(Admin only)";
 
+    $("pf-hidden-wrap").classList.toggle("hidden", !isSuperAdmin);
+    $("pf-hidden-from-roster").checked = !!u.hidden_from_roster;
+
     $("profile-save").classList.toggle("hidden", !canEdit);
 
     $("relink-section").classList.toggle("hidden", !isSuperAdmin);
@@ -2306,6 +2329,7 @@
     };
     if (isSuperAdmin) {
       payload.role = $("pf-role").value;
+      payload.hidden_from_roster = $("pf-hidden-from-roster").checked;
     }
 
     const saveBtn = $("profile-save");

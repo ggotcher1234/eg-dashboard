@@ -616,7 +616,7 @@
   async function loadGlobalSearchIndex() {
     const [{ data: clients }, { data: users }, { data: programs }] = await Promise.all([
       sb.from("clients").select("id, name, project_status"),
-      sb.from("users").select("id, full_name"),
+      sb.from("users").select("id, full_name").eq("hidden_from_roster", false),
       sb.from("econ_dev_companies").select("id, name, code"),
     ]);
     gsClients = clients || [];
@@ -713,7 +713,7 @@
         .eq("client_id", clientId)
         .order("specialty_type", { ascending: true })
         .order("slot_number", { ascending: true }),
-      sb.from("users").select("id, full_name"),
+      sb.from("users").select("id, full_name").eq("hidden_from_roster", false),
     ]);
 
     if (clientRes.error || !clientRes.data) { showBanner("Couldn't load this engagement.", "error"); return; }
