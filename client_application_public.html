@@ -135,7 +135,7 @@
         </div>
         <div class="field-row">
           <div class="field"><label>City <span class="req">*</span></label><input type="text" id="f-city" required /></div>
-          <div class="field"><label>State <span class="req">*</span></label><input type="text" id="f-state" maxlength="2" placeholder="e.g. NC" required /></div>
+          <div class="field"><label>State <span class="req">*</span></label><input type="text" id="f-state" maxlength="2" required /></div>
           <div class="field"><label>Postal Code</label><input type="text" id="f-postal" /></div>
         </div>
         <div class="field-row">
@@ -145,45 +145,10 @@
         </div>
 
         <div class="field-row">
-          <div class="field">
-            <label>Ownership <span class="req">*</span></label>
-            <select id="f-is-private" required>
-              <option value="">Select ownership type…</option>
-              <option value="true">Private</option>
-              <option value="false">Public</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Program Contact <span style="font-weight:400; text-transform:none;">(optional)</span></label>
-            <select id="f-program-contact">
-              <option value="">Not sure / none</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="field-row">
           <div class="field full">
             <label>Primary Business &amp; NAICS Code <span style="font-weight:400; text-transform:none;">(if known)</span></label>
             <input type="text" id="f-naics" />
           </div>
-        </div>
-        <div class="field-row">
-          <div class="field full">
-            <label>Link to Recent News Stories <span style="font-weight:400; text-transform:none;">(optional)</span></label>
-            <input type="text" id="f-news-links" placeholder="https://…" />
-          </div>
-        </div>
-        <div class="field-row">
-          <div class="field"><label>Facebook <span style="font-weight:400; text-transform:none;">(optional)</span></label><input type="text" id="f-social-facebook" placeholder="https://facebook.com/…" /></div>
-          <div class="field"><label>LinkedIn <span style="font-weight:400; text-transform:none;">(optional)</span></label><input type="text" id="f-social-linkedin" placeholder="https://linkedin.com/…" /></div>
-        </div>
-        <div class="field-row">
-          <div class="field"><label>X / Twitter <span style="font-weight:400; text-transform:none;">(optional)</span></label><input type="text" id="f-social-twitter" placeholder="https://x.com/…" /></div>
-          <div class="field"><label>Instagram <span style="font-weight:400; text-transform:none;">(optional)</span></label><input type="text" id="f-social-instagram" placeholder="https://instagram.com/…" /></div>
-        </div>
-        <div class="field-row">
-          <div class="field"><label>YouTube <span style="font-weight:400; text-transform:none;">(optional)</span></label><input type="text" id="f-social-youtube" placeholder="https://youtube.com/…" /></div>
-          <div class="field"><label>Other <span style="font-weight:400; text-transform:none;">(optional)</span></label><input type="text" id="f-social-other" placeholder="https://…" /></div>
         </div>
       </div>
 
@@ -209,6 +174,22 @@
           <div class="field-row">
             <div class="field"><label>Email</label><input type="email" id="f-s-email" /></div>
             <div class="field"><label>Phone</label><input type="text" id="f-s-phone" /></div>
+          </div>
+        </div>
+
+        <div class="officer-block">
+          <div class="officer-label">Social Media <span style="font-weight:400; text-transform:none; color:var(--muted);">(optional)</span></div>
+          <div class="field-row">
+            <div class="field"><label>Facebook</label><input type="text" id="f-social-facebook" placeholder="https://facebook.com/…" /></div>
+            <div class="field"><label>LinkedIn</label><input type="text" id="f-social-linkedin" placeholder="https://linkedin.com/…" /></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>X / Twitter</label><input type="text" id="f-social-twitter" placeholder="https://x.com/…" /></div>
+            <div class="field"><label>Instagram</label><input type="text" id="f-social-instagram" placeholder="https://instagram.com/…" /></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>YouTube</label><input type="text" id="f-social-youtube" placeholder="https://youtube.com/…" /></div>
+            <div class="field"><label>Other</label><input type="text" id="f-social-other" placeholder="https://…" /></div>
           </div>
         </div>
       </div>
@@ -282,6 +263,15 @@
         </div>
       </div>
 
+      <div class="card">
+        <div class="field-row">
+          <div class="field full">
+            <label>Link to Recent News Stories <span style="font-weight:400; text-transform:none;">(optional)</span></label>
+            <input type="text" id="f-news-links" placeholder="https://…" />
+          </div>
+        </div>
+      </div>
+
       <div class="submit-row">
         <button type="submit" class="btn-primary" id="submit-btn">Submit Application</button>
       </div>
@@ -344,19 +334,8 @@
       $("program-logo").alt = program.name;
       $("program-logo").classList.remove("hidden");
     }
-    await loadProgramContacts();
     $("loading-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
-  }
-
-  // Program Contact dropdown -- only this Program's own contacts, name +
-  // title only (matches what the internal wizard's own dropdown shows).
-  async function loadProgramContacts() {
-    const { data, error } = await sb.rpc("get_public_program_contacts", { p_program_id: program.id });
-    if (error || !data || !data.length) return;
-    const sel = $("f-program-contact");
-    sel.innerHTML = `<option value="">Not sure / none</option>` +
-      data.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}${c.title ? " — " + escapeHtml(c.title) : ""}</option>`).join("");
   }
 
   // ---------- Attachments (read as base64 client-side, sent inline) ----------
@@ -411,8 +390,11 @@
       "f-company-name": $("f-company-name").value.trim(),
       "f-website": $("f-website").value.trim(),
       "f-year-founded": $("f-year-founded").value,
-      "f-is-private": $("f-is-private").value,
-      "f-program-contact": $("f-program-contact").value,
+      // Ownership + Program Contact fields removed from the form (Greg,
+      // 9/2/26); kept in the payload as empty so the backend contract is
+      // unchanged.
+      "f-is-private": "",
+      "f-program-contact": "",
       "f-street": $("f-street").value.trim(),
       "f-city": $("f-city").value.trim(),
       "f-state": $("f-state").value.trim(),
