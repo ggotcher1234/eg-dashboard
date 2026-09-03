@@ -89,9 +89,13 @@
   .program-code { font-size: 11.5px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; }
   .link-cell { display: flex; align-items: center; gap: 8px; }
   .link-url { font-size: 12.5px; color: var(--navy-light); font-family: "SF Mono", Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-  .link-actions { display: flex; gap: 6px; justify-content: flex-end; }
-  .link-actions .btn-secondary { flex-shrink: 0; white-space: nowrap; }
-  .copy-btn.copied { background: #e9f5ee; color: #24614a; }
+  .link-menu-btn { white-space: nowrap; }
+  /* Fixed-position so it can't be clipped by the table's overflow:hidden /
+     .table-scroll -- placed by JS at the trigger button's rect. */
+  #link-menu-panel { position: fixed; width: 150px; padding: 6px; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 80; }
+  #link-menu-panel button { width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; font-size: 13px; background: transparent; color: var(--text); font-weight: 600; }
+  #link-menu-panel button:hover { background: #eef1f4; }
+  #link-menu-panel button.copied { background: #e9f5ee; color: #24614a; }
   .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; }
 </style>
 </head>
@@ -147,11 +151,16 @@
           <tr>
             <th>Program</th>
             <th>Application Link</th>
-            <th style="width:150px;"></th>
+            <th style="width:90px;"></th>
           </tr>
         </thead>
         <tbody id="links-tbody"></tbody>
       </table>
+    </div>
+
+    <div id="link-menu-panel" class="hidden">
+      <button type="button" id="lm-view">View Link</button>
+      <button type="button" id="lm-copy">Copy Link</button>
     </div>
     <div id="empty-note" class="empty-note hidden">No programs match your search.</div>
   </main>
@@ -225,36 +234,60 @@
               <span class="link-url" title="${escapeHtml(url)}">${escapeHtml(url)}</span>
             </div>
           </td>
-          <td>
-            <div class="link-actions">
-              <button type="button" class="btn-secondary" data-view-url="${escapeHtml(url)}">View Link</button>
-              <button type="button" class="btn-secondary copy-btn" data-copy-url="${escapeHtml(url)}">Copy Link</button>
-            </div>
+          <td style="text-align:right;">
+            <button type="button" class="btn-secondary link-menu-btn" data-link-url="${escapeHtml(url)}">Link &#9662;</button>
           </td>
         </tr>
       `;
     }).join("");
 
-    document.querySelectorAll("[data-view-url]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        window.open(btn.dataset.viewUrl, "_blank", "noopener");
-      });
-    });
-
-    document.querySelectorAll("[data-copy-url]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        try {
-          await navigator.clipboard.writeText(btn.dataset.copyUrl);
-          const original = btn.textContent;
-          btn.textContent = "Copied!";
-          btn.classList.add("copied");
-          setTimeout(() => { btn.textContent = original; btn.classList.remove("copied"); }, 1800);
-        } catch (e) {
-          showBanner("Couldn't copy automatically — select and copy the link text instead.");
-        }
-      });
+    document.querySelectorAll(".link-menu-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => { e.stopPropagation(); toggleLinkMenu(btn); });
     });
   }
+
+  // Per-row "Link ▾" menu. One shared, fixed-position panel repositioned to
+  // whichever button was clicked -- fixed so the table's overflow:hidden /
+  // .table-scroll can't clip it, and one panel so there's nothing to leak
+  // across re-renders.
+  let linkMenuUrl = "";
+  function toggleLinkMenu(btn) {
+    const panel = $("link-menu-panel");
+    const sameBtn = linkMenuUrl === btn.dataset.linkUrl;
+    if (sameBtn && !panel.classList.contains("hidden")) { closeLinkMenu(); return; }
+    linkMenuUrl = btn.dataset.linkUrl;
+    $("lm-copy").textContent = "Copy Link";
+    $("lm-copy").classList.remove("copied");
+    panel.classList.remove("hidden");
+    const r = btn.getBoundingClientRect();
+    let top = r.bottom + 4;
+    if (top + panel.offsetHeight > window.innerHeight - 8) top = r.top - panel.offsetHeight - 4;
+    panel.style.top = top + "px";
+    panel.style.left = Math.max(8, r.right - panel.offsetWidth) + "px";
+  }
+  function closeLinkMenu() { $("link-menu-panel").classList.add("hidden"); }
+
+  $("lm-view").addEventListener("click", () => {
+    if (linkMenuUrl) window.open(linkMenuUrl, "_blank", "noopener");
+    closeLinkMenu();
+  });
+  $("lm-copy").addEventListener("click", async () => {
+    const b = $("lm-copy");
+    try {
+      await navigator.clipboard.writeText(linkMenuUrl);
+      b.textContent = "Copied!";
+      b.classList.add("copied");
+      setTimeout(closeLinkMenu, 1000);
+    } catch (e) {
+      closeLinkMenu();
+      showBanner("Couldn't copy automatically — select and copy the link text instead.");
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#link-menu-panel") && !e.target.closest(".link-menu-btn")) closeLinkMenu();
+  });
+  window.addEventListener("resize", closeLinkMenu);
+  window.addEventListener("scroll", closeLinkMenu, true);
 
   function showBanner(message) {
     const el = $("banner");
