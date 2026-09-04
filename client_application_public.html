@@ -63,6 +63,11 @@
   .field textarea { resize: vertical; min-height: 90px; }
   .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--navy-light); }
   .field-hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+  /* Missing/invalid field highlight (Greg, 9/4/26) -- set by the submit
+     handler on every field that fails validation at once, not just the
+     one the browser's native tooltip would have pointed at. */
+  .field-invalid { border-color: var(--danger) !important; background: #fef4f4; }
+  .field-invalid:focus { border-color: var(--danger) !important; }
 
   .officer-block { border: 1px dashed var(--border); border-radius: 10px; padding: 16px 16px 4px; margin-bottom: 16px; }
   .officer-block .officer-label { font-size: 12.5px; font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 10px; }
@@ -73,6 +78,10 @@
   #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
 
   .submit-row { text-align: center; margin-top: 8px; }
+  #submit-error {
+    display: block; margin: 14px auto 0; max-width: 460px; padding: 12px 16px; border-radius: 8px;
+    font-size: 13.5px; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0;
+  }
   button {
     font-family: inherit; cursor: pointer; border: none; border-radius: 8px; font-size: 15px; padding: 13px 34px; font-weight: 700;
   }
@@ -113,7 +122,14 @@
     <div id="banner"></div>
     <div class="required-legend"><span class="req">*</span> Required field</div>
 
-    <form id="app-form">
+    <!-- novalidate (Greg, 9/4/26): the browser's native one-at-a-time
+         "Please fill out this field" tooltip only ever points at a single
+         missing field and blocks the submit handler from running at all,
+         so nothing else on the page reflects that submission failed. This
+         hands validation to the submit handler below, which highlights
+         every missing/invalid field at once and shows one message right
+         under the Submit button. -->
+    <form id="app-form" novalidate>
       <div class="card">
         <div class="field-row">
           <div class="field full">
@@ -260,6 +276,7 @@
 
       <div class="submit-row">
         <button type="submit" class="btn-primary" id="submit-btn">Submit Application</button>
+        <div id="submit-error" class="hidden"></div>
       </div>
     </form>
   </main>
@@ -324,9 +341,36 @@
   }
 
   // ---------- Submit ----------
+  // Missing/invalid-field highlighting (Greg, 9/4/26) -- clears whatever
+  // the previous submit attempt flagged, so a fixed field's highlight
+  // doesn't linger once it's valid again.
+  const form = $("app-form");
+  function clearFieldErrors() {
+    form.querySelectorAll(".field-invalid").forEach((el) => el.classList.remove("field-invalid"));
+    $("submit-error").classList.add("hidden");
+  }
+  // Un-highlight a field the moment it's fixed, rather than making someone
+  // hit Submit again just to see the red border go away.
+  form.addEventListener("input", (e) => {
+    if (e.target.classList.contains("field-invalid") && e.target.checkValidity()) {
+      e.target.classList.remove("field-invalid");
+    }
+  });
+
   $("app-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     clearBanner();
+    clearFieldErrors();
+
+    if (!form.checkValidity()) {
+      const invalidFields = [...form.querySelectorAll(":invalid")];
+      invalidFields.forEach((el) => el.classList.add("field-invalid"));
+      if (invalidFields[0]) invalidFields[0].scrollIntoView({ behavior: "smooth", block: "center" });
+      const submitError = $("submit-error");
+      submitError.textContent = "Your application wasn't submitted — please fill in the highlighted field(s) below.";
+      submitError.classList.remove("hidden");
+      return;
+    }
 
     const yesNo = (id) => {
       const v = $(id).value;
