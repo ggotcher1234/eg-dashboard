@@ -641,11 +641,13 @@
                tab. So: Applications (awaiting a decision) -> In Progress
                (Team Lead assigned) -> Archived (rejected, OR closed).
                "Pending" is retired as a label -- the underlying
-               data-status="pending" filter key is unchanged. -->
-          <span class="tab" data-status="pending">Applications<span class="tab-count">0</span></span>
+               data-status="pending" filter key is unchanged. Greg
+               (9/4/26): dropped the "All" tab too -- it re-mixed the 3
+               buckets back together, which is exactly what the tab split
+               was for. Applications is the default view now. -->
+          <span class="tab active" data-status="pending">Applications<span class="tab-count">0</span></span>
           <span class="tab" data-status="in_progress">In Progress<span class="tab-count">0</span></span>
           <span class="tab" data-status="archived">Archived<span class="tab-count">0</span></span>
-          <span class="tab active" data-status="all">All<span class="tab-count">0</span></span>
         </div>
         <div class="drafts-wrap" id="drafts-wrap">
           <button type="button" class="btn-secondary" id="drafts-btn">
@@ -1170,7 +1172,7 @@
   let allUsers = [];
   let allPartnerContacts = [];
   let clientsByApp = {};   // application id -> { id, status, project_status } for accepted applications
-  let activeTab = "all"; // default filter when this page opens — may change later
+  let activeTab = "pending"; // default filter when this page opens — Applications, since "All" is gone (Greg, 9/4/26)
   let reviewingAppId = null;
   let reviewBackClientId = null; // set when reached via Engagement Workspace's "Application Info" deep link
   let pendingRejectId = null;
@@ -1420,7 +1422,7 @@
     // one of those falls through to the default tab instead of landing on
     // a status with no matching tab highlighted.
     const statusParam = new URLSearchParams(location.search).get("status");
-    const validTabs = ["pending", "in_progress", "archived", "all"];
+    const validTabs = ["pending", "in_progress", "archived"];
     if (statusParam && validTabs.includes(statusParam)) {
       activeTab = statusParam;
       document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.status === statusParam));
@@ -1672,7 +1674,7 @@
   }
 
   function renderList() {
-    const showProjectCol = activeTab === "all" || PROJECT_STATUSES.includes(activeTab);
+    const showProjectCol = activeTab === "archived" || PROJECT_STATUSES.includes(activeTab);
     $("project-status-header").classList.toggle("hidden", !showProjectCol);
     $("delete-header").classList.toggle("hidden", !isSuperAdmin);
 
