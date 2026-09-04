@@ -172,7 +172,22 @@
   }
   .wf-item-body { flex: 1; min-width: 0; }
   .wf-item-title { font-size: 14.5px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+  /* Greg (9/4/26): "The change button moves to the header where you can add
+     a new one." The title and its Change/+ Add trigger now share one row;
+     the document itself (link, upload, or empty state) renders below,
+     wired up separately in renderWorkflowFileField(). */
+  .wf-item-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .wf-item-header .wf-item-title { margin-bottom: 0; }
   .wf-item-hint { font-size: 12.5px; color: var(--muted); margin: 2px 0 10px; line-height: 1.5; }
+  /* Greg (9/4/26): "the actual document should open in this window" --
+     an attached file or link now renders inline via iframe instead of a
+     filename link that pops a new tab. The fallback link below it is just
+     an escape hatch for anything a browser refuses to display inline. */
+  .wf-doc-frame { display: block; width: 100%; height: 65vh; min-height: 380px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+  .wf-doc-fallback { margin-top: 8px; font-size: 12.5px; }
+  .wf-doc-fallback a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
+  .wf-doc-fallback a:hover { text-decoration: underline; }
+  .wf-doc-loading, .wf-doc-empty { font-size: 13px; color: var(--muted); padding: 6px 0; }
   .wf-btn {
     display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--navy-light);
     border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 7px 16px;
@@ -503,7 +518,10 @@
           <div class="wf-item-row hidden" id="wf-row-discovery">
             <span class="wf-item-num">1</span>
             <div class="wf-item-body">
-              <div class="wf-item-title">Discovery Document</div>
+              <div class="wf-item-header">
+                <div class="wf-item-title">Discovery Document</div>
+                <div id="wf-discovery-actions"></div>
+              </div>
               <div class="wf-item-hint">A file or link attached from the Discovery Call Notes fillable form shows up here automatically too -- same slot, either way in.</div>
               <div id="wf-discovery-file"></div>
             </div>
@@ -511,7 +529,10 @@
           <div class="wf-item-row hidden" id="wf-row-controlling">
             <span class="wf-item-num">2</span>
             <div class="wf-item-body">
-              <div class="wf-item-title">Controlling Document</div>
+              <div class="wf-item-header">
+                <div class="wf-item-title">Controlling Document</div>
+                <div id="wf-controlling-actions"></div>
+              </div>
               <div id="wf-controlling-file"></div>
               <div class="wf-item-hint" style="margin-top:12px;">Email the client a link to review the Controlling Document -- they rank each research question and add notes or changes, and it posts back here (and the bell tells the team the CD is finalized).</div>
               <div id="wf-controlling-client"></div>
@@ -520,7 +541,10 @@
           <div class="wf-item-row hidden" id="wf-row-review">
             <span class="wf-item-num">3</span>
             <div class="wf-item-body">
-              <div class="wf-item-title">Research Review</div>
+              <div class="wf-item-header">
+                <div class="wf-item-title">Research Review</div>
+                <div id="wf-review-actions"></div>
+              </div>
               <div id="wf-review-file"></div>
             </div>
           </div>
@@ -696,26 +720,43 @@
     return FILE_TYPE_ICONS[ext] || "\u{1F4C4}";
   }
 
-  // Word/Excel/PowerPoint files can't render in a browser tab -- clicking
-  // one just downloads it to the Mac. Route those through Microsoft's
-  // read-only Office web viewer so they OPEN instead (same approach the
+  // Word/Excel/PowerPoint files can't render in a browser tab -- opening one
+  // directly just downloads it to the Mac. Route those through Microsoft's
+  // read-only Office web viewer so they render instead (same approach the
   // client-facing dashboard already uses). Everything else (PDF, images,
   // text) opens directly. Note: the Office viewer fetches the file from
   // Microsoft's servers to render it.
   const OFFICE_VIEWER_EXTENSIONS = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
-  async function openStoredDocument(path) {
+  async function resolveStoredDocumentUrl(path) {
     const name = (path.split("/").pop() || "").toLowerCase();
     const dot = name.lastIndexOf(".");
     const ext = dot === -1 ? "" : name.slice(dot + 1);
     const useViewer = OFFICE_VIEWER_EXTENSIONS.includes(ext);
     // 3600s for the viewer (it needs time to fetch the file itself before
-    // the link expires); 300s is plenty for a direct open.
+    // the link expires); 300s is plenty for a direct embed.
     const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, useViewer ? 3600 : 300);
-    if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
-    const target = useViewer
+    if (error) return { error };
+    const viewUrl = useViewer
       ? "https://view.officeapps.live.com/op/view.aspx?src=" + encodeURIComponent(data.signedUrl)
       : data.signedUrl;
-    window.open(target, "_blank", "noopener");
+    return { signedUrl: data.signedUrl, viewUrl };
+  }
+
+  // Greg (9/4/26): "when you click on the Discovery Document (if one
+  // exists) the actual document should open in this window." Renders the
+  // document directly in an iframe right inside the card instead of a
+  // filename link that pops a new tab; the "Open in a new tab" link below
+  // it is just an escape hatch for anything a browser won't display inline.
+  async function embedStoredDocument(container, path) {
+    const { viewUrl, signedUrl, error } = await resolveStoredDocumentUrl(path);
+    if (error) {
+      container.innerHTML = `<div class="wf-doc-empty">Couldn't open ${fileIconFor(path)} ${escapeHtml(fileNameFromPath(path))}: ${escapeHtml(error.message)}</div>`;
+      return;
+    }
+    container.innerHTML = `
+      <iframe src="${escapeHtml(viewUrl)}" class="wf-doc-frame" title="${escapeHtml(fileNameFromPath(path))}"></iframe>
+      <div class="wf-doc-fallback"><a href="${escapeHtml(signedUrl)}" target="_blank" rel="noopener">Open ${fileIconFor(path)} ${escapeHtml(fileNameFromPath(path))} in a new tab &#8599;</a></div>
+    `;
   }
 
   /* ---------- Ask AI ---------- */
@@ -1128,79 +1169,78 @@
   // {Upload file, Add a link} instead of two buttons sitting side by side.
   function renderWorkflowFileField(f) {
     const container = $(`wf-${f.key}-file`);
+    const actions = $(`wf-${f.key}-actions`);
     const path = workflowData && workflowData[f.pathColumn];
     const url = workflowData && workflowData[f.urlColumn];
+    const createBtnHtml = f.key === "discovery" ? `<button type="button" data-wf-create>Discovery Call Notes (form)</button>`
+      : f.key === "controlling" ? `<button type="button" data-wf-create>Create Controlling Document</button>` : "";
+    const createAction = f.key === "discovery" ? [{ sel: "[data-wf-create]", fn: () => openDiscoveryCallNotesForm() }]
+      : f.key === "controlling" ? [{ sel: "[data-wf-create]", fn: () => openControllingDocumentForm() }] : [];
 
     if (path) {
-      container.innerHTML = `
-        <div class="wf-file-cell">
-          <span class="wf-file-link">${fileIconFor(path)} ${escapeHtml(fileNameFromPath(path))}</span>
-          <div class="wf-change-wrap">
-            <button type="button" class="wf-btn" data-wf-change>Change &#9662;</button>
-            <div class="wf-menu hidden">
-              ${f.key === "discovery" ? `<button type="button" data-wf-create>Discovery Call Notes (form)</button>` : ""}
-              ${f.key === "controlling" ? `<button type="button" data-wf-create>Create Controlling Document</button>` : ""}
-              <button type="button" data-wf-replace>Replace file</button>
-              <button type="button" class="wf-menu-danger" data-wf-remove>Remove file</button>
-            </div>
+      actions.innerHTML = `
+        <div class="wf-change-wrap">
+          <button type="button" class="wf-btn" data-wf-change>Change &#9662;</button>
+          <div class="wf-menu hidden">
+            ${createBtnHtml}
+            <button type="button" data-wf-replace>Replace file</button>
+            <button type="button" class="wf-menu-danger" data-wf-remove>Remove file</button>
           </div>
         </div>
       `;
-      container.querySelector(".wf-file-link").addEventListener("click", () => openStoredDocument(path));
-      wireWfChangeMenu(container, [
-        ...(f.key === "discovery" ? [{ sel: "[data-wf-create]", fn: () => openDiscoveryCallNotesForm() }] : []),
-        ...(f.key === "controlling" ? [{ sel: "[data-wf-create]", fn: () => openControllingDocumentForm() }] : []),
+      wireWfChangeMenu(actions, [
+        ...createAction,
         { sel: "[data-wf-replace]", fn: () => pickWorkflowFile(f) },
         { sel: "[data-wf-remove]", fn: () => removeWorkflowItem(f) },
       ]);
+      container.innerHTML = `<div class="wf-doc-loading">Opening ${fileIconFor(path)} ${escapeHtml(fileNameFromPath(path))}&hellip;</div>`;
+      embedStoredDocument(container, path);
       return;
     }
 
     if (url) {
-      container.innerHTML = `
-        <div class="wf-file-cell">
-          <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="wf-file-link" style="text-decoration:none; word-break:break-all;">&#128279; ${escapeHtml(url)}</a>
-          <div class="wf-change-wrap">
-            <button type="button" class="wf-btn" data-wf-change>Change &#9662;</button>
-            <div class="wf-menu hidden">
-              ${f.key === "discovery" ? `<button type="button" data-wf-create>Discovery Call Notes (form)</button>` : ""}
-              ${f.key === "controlling" ? `<button type="button" data-wf-create>Create Controlling Document</button>` : ""}
-              <button type="button" data-wf-edit-link>Edit link</button>
-              <button type="button" class="wf-menu-danger" data-wf-remove>Remove link</button>
-            </div>
+      actions.innerHTML = `
+        <div class="wf-change-wrap">
+          <button type="button" class="wf-btn" data-wf-change>Change &#9662;</button>
+          <div class="wf-menu hidden">
+            ${createBtnHtml}
+            <button type="button" data-wf-edit-link>Edit link</button>
+            <button type="button" class="wf-menu-danger" data-wf-remove>Remove link</button>
           </div>
         </div>
       `;
-      wireWfChangeMenu(container, [
-        ...(f.key === "discovery" ? [{ sel: "[data-wf-create]", fn: () => openDiscoveryCallNotesForm() }] : []),
-        ...(f.key === "controlling" ? [{ sel: "[data-wf-create]", fn: () => openControllingDocumentForm() }] : []),
+      wireWfChangeMenu(actions, [
+        ...createAction,
         { sel: "[data-wf-edit-link]", fn: () => renderWorkflowLinkForm(f, url) },
         { sel: "[data-wf-remove]", fn: () => removeWorkflowItem(f) },
       ]);
+      container.innerHTML = `
+        <iframe src="${escapeHtml(url)}" class="wf-doc-frame" title="${escapeHtml(f.label)}"></iframe>
+        <div class="wf-doc-fallback"><a href="${escapeHtml(url)}" target="_blank" rel="noopener">Open in a new tab &#8599;</a></div>
+      `;
       return;
     }
 
-    container.innerHTML = `
+    actions.innerHTML = `
       <div class="wf-change-wrap">
         <button type="button" class="wf-btn" data-wf-change>+ Add file &#9662;</button>
         <div class="wf-menu hidden">
           <button type="button" data-wf-upload>Upload file</button>
           <button type="button" data-wf-add-link>Add a link</button>
-          ${f.key === "discovery" ? `<button type="button" data-wf-create>Discovery Call Notes (form)</button>` : ""}
-          ${f.key === "controlling" ? `<button type="button" data-wf-create>Create Controlling Document</button>` : ""}
+          ${createBtnHtml}
         </div>
       </div>
       <input type="file" class="wf-upload-input hidden" />
     `;
-    container.querySelector(".wf-upload-input").addEventListener("change", (e) => {
+    actions.querySelector(".wf-upload-input").addEventListener("change", (e) => {
       if (e.target.files.length) uploadWorkflowFile(f, e.target.files[0]);
     });
-    wireWfChangeMenu(container, [
-      { sel: "[data-wf-upload]", fn: () => container.querySelector(".wf-upload-input").click() },
+    wireWfChangeMenu(actions, [
+      { sel: "[data-wf-upload]", fn: () => actions.querySelector(".wf-upload-input").click() },
       { sel: "[data-wf-add-link]", fn: () => renderWorkflowLinkForm(f, "") },
-      ...(f.key === "discovery" ? [{ sel: "[data-wf-create]", fn: () => openDiscoveryCallNotesForm() }] : []),
-      ...(f.key === "controlling" ? [{ sel: "[data-wf-create]", fn: () => openControllingDocumentForm() }] : []),
+      ...createAction,
     ]);
+    container.innerHTML = `<div class="wf-doc-empty">No document yet &mdash; use Change above to add one.</div>`;
   }
 
   // Shared trigger/menu wiring for the Change / + Add file dropdowns above --
