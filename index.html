@@ -510,6 +510,7 @@
 
   .engagements-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
   .eng-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px 18px 12px; }
+  .eng-panel-desc { font-size: 13px; color: var(--muted); line-height: 1.4; }
   .eng-title-row { display: flex; align-items: center; gap: 8px; }
   .eng-title { margin: 0; font-size: 16px; font-weight: 800; color: var(--navy); }
   .eng-header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -739,19 +740,11 @@
     <div id="engagements-section" style="margin-top:8px;">
       <div class="engagements-panel">
         <div class="eng-panel-header">
-          <!-- Greg (9/4/26): dropped the "Other" pill -- the new
-               Applications nav dropdown covers "see everything", and this
-               list is always just In Progress now (closed engagements
-               auto-archive instead of needing a way to go look at them
-               here). -->
-          <div class="eng-tabs" id="eng-status-tabs">
-            <button type="button" class="eng-tab active" data-status="in_progress">In Progress</button>
-          </div>
-          <div class="eng-header-right">
-            <div class="eng-tabs" id="eng-tabs">
-              <button type="button" class="eng-tab" data-tab="recent">Recent</button>
-            </div>
-          </div>
+          <!-- Greg (9/4/26): dropped both pills -- "In Progress" was down
+               to a single non-toggling label since "Other" was already
+               removed, and "Recent" went with it. A plain description of
+               the panel replaces them. -->
+          <div class="eng-panel-desc">Engagements currently In Progress, grouped by Program. Click one to open its Control Center.</div>
         </div>
         <div class="eng-list-header">
           <div></div>
@@ -1150,17 +1143,7 @@
     // (Specialist: my work first. Team Lead: team workload. Admin: everything.).
     engagementScope = isSuperAdminUser ? "all" : "mine";
 
-    // "Other" pill is Admin-only (Greg, 8/29/26): Team Leads/Specialists
-    // just get the static In Progress view -- only Admins can jump to the
-    // Applications page's All view from here.
-    $("eng-status-tabs").classList.toggle("admin-only-pills", !isSuperAdminUser);
-
     renderEngagementsList();
-
-    // An engagement-tab link lands here with ?tab=recent (etc.) so it's a
-    // real, bookmarkable URL instead of silent in-page state.
-    const tabParam = new URLSearchParams(location.search).get("tab");
-    if (tabParam && ["all", "recent"].includes(tabParam)) setEngagementTab(tabParam);
   }
 
   // ---------- Notifications (Super Admin only) ----------
@@ -1774,7 +1757,6 @@
   }
   function setEngagementTab(tab) {
     engagementTab = tab;
-    $("eng-tabs").querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
     renderEngagementsList();
   }
   function sortEngagementPool(pool) {
@@ -1833,15 +1815,6 @@
       .join("");
     wireClientRows(list);
   }
-
-  // No "All" pill here -- it was redundant with the unfiltered default
-  // state. Clicking a tab that's already active toggles it back off to
-  // that default instead of leaving no way back to the full list.
-  $("eng-tabs").addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-tab]");
-    if (!btn) return;
-    setEngagementTab(engagementTab === btn.dataset.tab ? "all" : btn.dataset.tab);
-  });
 
   // ---------- Global search (engagements / specialists / programs / Ask AI) ----------
   function renderGlobalSearchResults(query) {
