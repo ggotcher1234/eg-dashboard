@@ -4,23 +4,35 @@
 // page has NO login behind it at all -- a CEO gets a link from their
 // Program (e.g. Alloy Development), fills it out, hits Submit. There's no
 // Supabase session to attach the write to, so this function is the entire
-// write path: it validates what came in, uploads any attachments, inserts
-// the application as a DRAFT (client_application_drafts, source =
-// 'public_application'), and emails Chris, Rita, and Greg that a new one
-// showed up (Greg, 8/21/26).
+// write path: it validates what came in and inserts the submission
+// straight into client_applications (status defaults to 'pending' --
+// same row Rita opens on the Applications tab), then emails Chris, Rita,
+// and Greg that a new one showed up.
+//
+// Greg (9/4/26): rewritten. This used to insert into
+// client_application_drafts (source = 'public_application') -- a
+// workaround from back when a public submission had nowhere else to land
+// under client_applications' RLS. That's no longer the model: "everything
+// submitted is just an Application" (no more Draft/Pending as a separate
+// concept), and RLS was never actually the obstacle for THIS function
+// specifically -- it already writes everything through the service-role
+// client below, which bypasses RLS regardless of table. See
+// 111_public_application_submitted_by_nullable.sql for the one schema
+// change this needed (client_applications.submitted_by has to allow null
+// for a submission with no logged-in submitter).
 //
 // Auth model: the public page still sends the project's anon key as the
 // Authorization/apikey headers (same as every other page in this app) --
 // that's enough to satisfy Supabase's platform-level "is this a validly
 // signed request" check, since the anon key IS a signed JWT for this
 // project. This function does NOT require Super Admin, or any signed-in
-// user at all -- anyone with the link can submit. From here on, all actual
-// database/storage writes use the service-role client (never the anon
-// key), the same pattern as admin-create-team-member.
+// user at all -- anyone with the link can submit. All actual
+// database writes use the service-role client (never the anon key), the
+// same pattern as admin-create-team-member.
 //
 // HOW TO DEPLOY (no CLI, no Terminal)
-//   1. Supabase Dashboard -> Edge Functions -> New Function -> name it
-//      "public-submit-application"
+//   1. Supabase Dashboard -> Edge Functions -> public-submit-application
+//      (or New Function, name it exactly that, if it doesn't exist yet)
 //   2. Paste this whole file in, Deploy
 //   3. Add a secret (Edge Functions -> Manage secrets): RESEND_API_KEY,
 //      set to your Resend API key.
@@ -29,10 +41,13 @@
 //
 // FIELD PAYLOAD SHAPE
 //   The public form sends `data` keyed by the SAME field ids the internal
-//   "+ New Application" wizard already uses (f-company-name, f-street,
-//   f-p-name, etc. -- see client_applications.html's wizSerialize()). That
-//   means a draft submitted here opens up in that same wizard, already
-//   filled in, with zero changes needed to the wizard's restore logic.
+//   "+ New Application" wizard uses (f-company-name, f-street, f-p-name,
+//   etc. -- see client_applications.html's own client_applications.insert()
+//   payload, which this mirrors column-for-column). The public form
+//   doesn't collect everything the internal wizard can (no Program
+//   Contact, no 3rd officer, no CC list, no tags, no ownership
+//   demographics, no contact temperament) -- those columns are just left
+//   null, same as when a staff member leaves them blank.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -49,32 +64,26 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-// Only these keys are ever written into the draft's `data` JSONB -- an
-// allowlist, not a blind pass-through of whatever the request body
-// contains, since this endpoint has no authenticated caller to trust.
-const ALLOWED_FIELD_KEYS = [
-  "f-company-name", "f-website", "f-year-founded", "f-is-private", "f-program-contact",
-  "f-street", "f-city", "f-state", "f-postal", "f-county",
-  "f-p-name", "f-p-title", "f-p-email", "f-p-phone",
-  "f-s-name", "f-s-title", "f-s-email", "f-s-phone",
-  "f-naics", "f-fte-range", "f-fte-2025", "f-fte-2024", "f-fte-2023", "f-fte-2022",
-  "f-sales-range", "f-rev-2025", "f-rev-2024", "f-rev-2023", "f-rev-2022",
-  "f-sales-external", "f-pct-instate", "f-top-issues", "f-news-links",
-  "f-social-facebook", "f-social-linkedin", "f-social-twitter", "f-social-instagram", "f-social-youtube", "f-social-other",
-  "_secondaryOpen",
-];
-
 // f-pct-instate is intentionally NOT required (Greg, 8/21/26) -- a CEO may
 // not have that figure handy, and it shouldn't block submitting otherwise.
+// f-is-private (Ownership) and f-program-contact were removed from the
+// public form itself (Greg, 9/2/26) -- dropped from here too; requiring
+// either would fail every single submission since the form never sends
+// them anymore.
 const REQUIRED_KEYS = [
-  "f-company-name", "f-street", "f-city", "f-state", "f-county", "f-year-founded", "f-is-private",
+  "f-company-name", "f-street", "f-city", "f-state", "f-county", "f-year-founded",
   "f-p-name", "f-p-title", "f-p-email", "f-p-phone", "f-top-issues",
 ];
 
-// Combined attachment size cap -- keeps one submission from blowing past
-// the Edge Function's request-size limit. 8MB is generous for a handful of
-// PDFs/photos; the page tells the CEO this up front too.
-const MAX_ATTACHMENTS_BYTES = 8 * 1024 * 1024;
+function strOrNull(v: unknown): string | null {
+  const s = v == null ? "" : String(v).trim();
+  return s === "" ? null : s;
+}
+function numOrNull(v: unknown): number | null {
+  if (v == null || String(v).trim() === "") return null;
+  const n = Number(String(v).replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -88,7 +97,6 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const programCode = (body.programCode || "").trim();
     const incomingData = body.data || {};
-    const attachments = Array.isArray(body.attachments) ? body.attachments : [];
 
     if (!programCode) {
       return jsonResponse({ error: "Missing program." }, 400);
@@ -102,15 +110,6 @@ Deno.serve(async (req: Request) => {
     }
     if (typeof incomingData["f-fte-range"] !== "boolean" || typeof incomingData["f-sales-range"] !== "boolean" || typeof incomingData["f-sales-external"] !== "boolean") {
       return jsonResponse({ error: "Please answer all of the Yes/No questions." }, 400);
-    }
-
-    let totalBytes = 0;
-    for (const a of attachments) {
-      if (!a || !a.filename || !a.dataBase64) continue;
-      totalBytes += Math.ceil((a.dataBase64.length * 3) / 4);
-    }
-    if (totalBytes > MAX_ATTACHMENTS_BYTES) {
-      return jsonResponse({ error: "Attachments are too large in total (8MB max). Please remove or shrink a file and resubmit." }, 400);
     }
 
     const adminClient = createClient(
@@ -128,53 +127,84 @@ Deno.serve(async (req: Request) => {
     if (programErr) return jsonResponse({ error: programErr.message }, 400);
     if (!program) return jsonResponse({ error: "Unknown program link. Please double-check the URL you were given." }, 400);
 
-    // ---------- Upload attachments (service role -- bypasses storage RLS) ----------
-    const submissionId = crypto.randomUUID();
-    const uploadedAttachments: { name: string; url: string }[] = [];
-    for (const a of attachments) {
-      if (!a || !a.filename || !a.dataBase64) continue;
-      const safeName = String(a.filename).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
-      const path = `applications/${submissionId}/${Date.now()}-${safeName}`;
-      const bytes = Uint8Array.from(atob(a.dataBase64), (c) => c.charCodeAt(0));
-      const { error: uploadErr } = await adminClient.storage
-        .from("program-application-attachments")
-        .upload(path, bytes, { contentType: a.contentType || "application/octet-stream", upsert: false });
-      if (uploadErr) {
-        console.error("Attachment upload failed:", uploadErr.message);
-        continue; // don't let one bad attachment sink the whole application
-      }
-      const { data: pub } = adminClient.storage.from("program-application-attachments").getPublicUrl(path);
-      uploadedAttachments.push({ name: a.filename, url: pub.publicUrl });
-    }
-
-    // ---------- Build the draft's data payload ----------
-    const data: Record<string, unknown> = {};
-    for (const key of ALLOWED_FIELD_KEYS) {
-      if (incomingData[key] !== undefined) data[key] = incomingData[key];
-    }
-    data["f-econ-dev"] = program.id;
-    if (uploadedAttachments.length) data._publicAttachments = uploadedAttachments;
-    data._publicSubmission = { programCode: program.code, submittedAt: new Date().toISOString() };
-
     const companyName = String(incomingData["f-company-name"]).trim();
 
+    const address = {
+      street: strOrNull(incomingData["f-street"]),
+      city: strOrNull(incomingData["f-city"]),
+      state: strOrNull(incomingData["f-state"]),
+      postal: strOrNull(incomingData["f-postal"]),
+      county: strOrNull(incomingData["f-county"]),
+    };
+
+    // f-news-links is a single URL on the public form (unlike the internal
+    // wizard's one-per-line textarea) -- wrapped in an array to match the
+    // column's text[] shape.
+    const newsLink = strOrNull(incomingData["f-news-links"]);
+
+    const payload = {
+      organization_id: program.organization_id,
+      econ_dev_company_id: program.id,
+      program_contact_id: null,
+      company_name: companyName,
+      address,
+      phone: null,
+      year_founded: numOrNull(incomingData["f-year-founded"]),
+      website: strOrNull(incomingData["f-website"]),
+      country: "United States",
+      is_private: null,
+      primary_officer_name: strOrNull(incomingData["f-p-name"]),
+      primary_officer_title: strOrNull(incomingData["f-p-title"]),
+      primary_officer_email: strOrNull(incomingData["f-p-email"]),
+      primary_officer_phone: strOrNull(incomingData["f-p-phone"]),
+      primary_officer_temperament: null,
+      secondary_officer_name: strOrNull(incomingData["f-s-name"]),
+      secondary_officer_title: strOrNull(incomingData["f-s-title"]),
+      secondary_officer_email: strOrNull(incomingData["f-s-email"]),
+      secondary_officer_phone: strOrNull(incomingData["f-s-phone"]),
+      secondary_officer_temperament: null,
+      tertiary_officer_name: null,
+      tertiary_officer_title: null,
+      tertiary_officer_email: null,
+      tertiary_officer_phone: null,
+      cc_emails: null,
+      naics_code: strOrNull(incomingData["f-naics"]),
+      fte_range_10_to_100: incomingData["f-fte-range"],
+      fte_2023: numOrNull(incomingData["f-fte-2023"]),
+      fte_2024: numOrNull(incomingData["f-fte-2024"]),
+      fte_2025: numOrNull(incomingData["f-fte-2025"]),
+      revenue_2023: numOrNull(incomingData["f-rev-2023"]),
+      revenue_2024: numOrNull(incomingData["f-rev-2024"]),
+      revenue_2025: numOrNull(incomingData["f-rev-2025"]),
+      sales_1_to_50m: incomingData["f-sales-range"],
+      sales_primarily_external: incomingData["f-sales-external"],
+      woman_owned: false,
+      minority_owned: false,
+      veteran_owned: false,
+      disabled_owned: false,
+      pct_employees_in_state: numOrNull(incomingData["f-pct-instate"]),
+      social_facebook_url: strOrNull(incomingData["f-social-facebook"]),
+      social_linkedin_url: strOrNull(incomingData["f-social-linkedin"]),
+      social_twitter_url: strOrNull(incomingData["f-social-twitter"]),
+      social_instagram_url: strOrNull(incomingData["f-social-instagram"]),
+      social_youtube_url: strOrNull(incomingData["f-social-youtube"]),
+      social_other_url: strOrNull(incomingData["f-social-other"]),
+      news_links: newsLink ? [newsLink] : null,
+      tags: null,
+      top_business_issues: strOrNull(incomingData["f-top-issues"]),
+      submitted_by: null,
+    };
+
     const { data: inserted, error: insertErr } = await adminClient
-      .from("client_application_drafts")
-      .insert({
-        organization_id: program.organization_id,
-        created_by: null,
-        engagement_name: companyName,
-        econ_dev_company_id: program.id,
-        source: "public_application",
-        data,
-      })
+      .from("client_applications")
+      .insert(payload)
       .select("id")
       .single();
 
     if (insertErr) return jsonResponse({ error: insertErr.message }, 400);
 
     // ---------- Notify Chris, Rita, and Greg ----------
-    // Never let an email hiccup lose the application itself -- the draft
+    // Never let an email hiccup lose the application itself -- the row
     // above is already saved by this point regardless of what happens here.
     let emailWarning: string | null = null;
     try {
@@ -204,7 +234,7 @@ Deno.serve(async (req: Request) => {
               <strong>Program:</strong> ${escapeHtml(program.name)} (${escapeHtml(program.code)})<br/>
               <strong>Primary Contact:</strong> ${escapeHtml(officerName)}
             </p>
-            <p>It's waiting as a Draft on the Engagement Applications page (Drafts tab) for review.</p>
+            <p>It's waiting on the Applications tab for review -- assign a Team Lead and hours to accept it, or reject it.</p>
           `,
         }),
       });
@@ -217,7 +247,7 @@ Deno.serve(async (req: Request) => {
       emailWarning = "Application saved, but the notification email failed to send.";
     }
 
-    return jsonResponse({ ok: true, draftId: inserted.id, warning: emailWarning });
+    return jsonResponse({ ok: true, applicationId: inserted.id, warning: emailWarning });
   } catch (e) {
     return jsonResponse({ error: e instanceof Error ? e.message : "Unexpected error." }, 500);
   }
