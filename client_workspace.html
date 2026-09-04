@@ -1684,15 +1684,16 @@
     });
   })();
 
-  // Applications nav dropdown (Chris, 9/4/26; narrowed same day to New
-  // Applications only) -- admin-only, left of Engagements, listing
-  // applications submitted but not yet assigned a Team Lead (still
-  // status = 'pending' -- assigning a TL is the accept action that moves
-  // one to In Progress, see 110_accept_straight_to_in_progress.sql).
-  // Self-contained on purpose: does its own session/role check rather
-  // than depending on each page's differently-named/timed admin-check
-  // variable, so it works identically everywhere. No per-item deep link
-  // yet -- every row opens the Applications tab.
+  // Applications nav dropdown (Chris, 9/4/26; refined same day) -- admin-
+  // only, left of Engagements, listing applications submitted but not yet
+  // assigned a Team Lead (still status = 'pending' -- assigning a TL is
+  // the accept action that moves one to In Progress, see
+  // 110_accept_straight_to_in_progress.sql). Self-contained on purpose:
+  // does its own session/role check rather than depending on each page's
+  // differently-named/timed admin-check variable, so it works identically
+  // everywhere. Each row deep-links straight to that one application's
+  // review pane (?application=ID on client_applications.html) -- nothing
+  // in this dropdown links anywhere else, including the empty state.
   (async function () {
     const dd = document.querySelectorAll("#nav-applications-dropdown");
     if (!dd.length) return;
@@ -1704,21 +1705,23 @@
 
       const { data: apps } = await sb
         .from("client_applications")
-        .select("id, company_name, submitted_at")
+        .select("id, company_name, submitted_at, econ_dev_companies(name, code)")
         .eq("status", "pending")
         .order("submitted_at", { ascending: false })
         .limit(8);
 
       const fmt = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
       const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
-      const viewAllHtml = '<a href="client_applications.html?status=pending" class="nav-submenu-viewall">View All Applications &rarr;</a>';
-      const rowsHtml = (apps || []).map((a) => `
-        <a href="client_applications.html?status=pending">
+      const rowsHtml = (apps || []).map((a) => {
+        const program = a.econ_dev_companies ? (a.econ_dev_companies.name || a.econ_dev_companies.code) : "";
+        return `
+        <a href="client_applications.html?application=${a.id}">
           ${esc(a.company_name || "Untitled")}
-          <span class="nav-submenu-meta">Submitted ${fmt(a.submitted_at)}</span>
+          <span class="nav-submenu-meta">${[esc(program), "Submitted " + fmt(a.submitted_at)].filter(Boolean).join(" &middot; ")}</span>
         </a>
-      `).join("");
-      const bodyHtml = (apps && apps.length ? rowsHtml : '<div class="nav-submenu-empty">No new applications.</div>') + viewAllHtml;
+      `;
+      }).join("");
+      const bodyHtml = apps && apps.length ? rowsHtml : '<div class="nav-submenu-empty">No new applications.</div>';
 
       dd.forEach((el) => {
         el.classList.remove("hidden");
