@@ -37,12 +37,10 @@
   .breadcrumb-extra { text-align: center; margin-top: 4px; font-size: 12px; }
   .breadcrumb-extra a { color: var(--navy-light); text-decoration: none; }
   .breadcrumb-extra a:hover { text-decoration: underline; }
-  .breadcrumb-extra a.disabled-link { opacity: 0.5; pointer-events: none; }
   .breadcrumb { font-size: 13px; color: var(--muted); margin: 0; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; justify-content: center; line-height: 1.4; }
   .breadcrumb a { color: var(--navy-light); text-decoration: none; }
   .breadcrumb a:hover { text-decoration: underline; }
   .breadcrumb .sep { opacity: 0.5; }
-  .breadcrumb .current { color: var(--navy); font-weight: 700; }
 
   header { background: var(--navy); color: #fff; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
   header h1 { font-size: 16.5px; margin: 0; font-weight: 600; }
@@ -430,8 +428,8 @@
   </header>
 
   <nav class="breadcrumb-bar no-print">
-    <div class="breadcrumb"><span id="bc-program"></span><span class="sep hidden" id="bc-program-sep">›</span><a href="index.html">Engagements</a><span class="sep">›</span><a id="bc-client" href="#">Engagement</a><span class="sep">›</span><span class="current">Workflow Files</span></div>
-    <div class="breadcrumb-extra"><a id="header-dashboard-link" href="#" target="_blank" rel="noopener">Engagement Dashboard (Client View) &#8599;</a></div>
+    <div class="breadcrumb"><span id="bc-program"></span><span class="sep hidden" id="bc-program-sep">›</span><a href="index.html">Engagements</a><span class="sep">›</span><a id="bc-client" href="#">Engagement</a></div>
+    <div class="breadcrumb-extra"><a id="header-workspace-link" href="#">&larr; Engagement Workspace</a></div>
   </nav>
 
   <div class="ai-drawer-overlay no-print" id="ai-drawer-overlay"></div>
@@ -1071,14 +1069,12 @@
       document.getElementById("bc-program-sep")?.classList.remove("hidden");
     }
     AI_CONTEXT_LABEL = `${client.name} — Workflow Files`;
-    const dashboardLink = $("header-dashboard-link");
-    if (client.slug) {
-      dashboardLink.href = new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href;
-      dashboardLink.classList.remove("disabled-link");
-    } else {
-      dashboardLink.href = "#";
-      dashboardLink.classList.add("disabled-link");
-    }
+    // Greg (9/4/26): "make sure all documents in this section... link back
+    // to the Engagement Workspace" -- this line used to point out to the
+    // public, client-facing dashboard (a different, external page); every
+    // document type here shares this same header, so it now goes back to
+    // the internal Engagement Workspace instead.
+    $("header-workspace-link").href = "client_control_center.html?client=" + client.id;
     $("p-lifecycle-badge").className = `badge badge-${client.project_status}`;
     $("p-lifecycle-badge").textContent = client.project_status;
 
