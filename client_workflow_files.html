@@ -1402,7 +1402,15 @@
     `;
     container.querySelector("#eval-open-btn").addEventListener("click", async (e) => {
       const btn = e.currentTarget;
-      const win = window.open("about:blank", "_blank", "noopener");
+      // Greg (9/4/26): "open close out document goes to a blank webpage" --
+      // window.open(..., "noopener") returns null (that's the browser
+      // severing the reference, per spec), so `win.location = url` below
+      // was never running and the tab just sat on about:blank forever.
+      // Open without noopener to keep the handle, then null out its
+      // .opener manually (same tabnabbing protection, while the new
+      // window is still same-origin about:blank and scriptable from here).
+      const win = window.open("about:blank", "_blank");
+      if (win) win.opener = null;
       btn.disabled = true;
       const url = await ensureEvalLinkUrl();
       btn.disabled = false;
