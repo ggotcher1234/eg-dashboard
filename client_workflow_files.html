@@ -194,8 +194,12 @@
   .wf-btn-icon-email::before { content: "\2709\00A0"; }
   .wf-btn-icon-email:disabled::before { content: ""; }
   .wf-file-cell { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .wf-file-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; }
-  .wf-file-link:hover { text-decoration: underline; }
+  /* Greg (9/4/26): a small text link required two clicks to actually see
+     the document (nav item, then this link) with no visual weight of its
+     own. A primary button makes "open it" the obvious one-click action on
+     this page; Change/Replace stays a separate control up in the header. */
+  .wf-open-btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; border-radius: 6px; padding: 9px 16px; font-size: 13.5px; font-weight: 600; }
+  .wf-file-name { font-size: 12.5px; color: var(--muted); word-break: break-all; }
   .wf-change-wrap { position: relative; flex-shrink: 0; }
   .wf-menu {
     position: absolute; top: calc(100% + 6px); left: 0; min-width: 150px; background: #fff;
@@ -1181,10 +1185,11 @@
       ]);
       container.innerHTML = `
         <div class="wf-file-cell">
-          <span class="wf-file-link">${fileIconFor(path)} ${escapeHtml(fileNameFromPath(path))}</span>
+          <button type="button" class="btn-primary wf-open-btn" data-wf-open>${fileIconFor(path)} Open Document &#8599;</button>
+          <span class="wf-file-name">${escapeHtml(fileNameFromPath(path))}</span>
         </div>
       `;
-      container.querySelector(".wf-file-link").addEventListener("click", () => openStoredDocument(path));
+      container.querySelector("[data-wf-open]").addEventListener("click", () => openStoredDocument(path));
       return;
     }
 
@@ -1206,7 +1211,8 @@
       ]);
       container.innerHTML = `
         <div class="wf-file-cell">
-          <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="wf-file-link" style="text-decoration:none; word-break:break-all;">&#128279; ${escapeHtml(url)}</a>
+          <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="btn-primary wf-open-btn">&#128279; Open Document &#8599;</a>
+          <span class="wf-file-name">${escapeHtml(url)}</span>
         </div>
       `;
       return;
