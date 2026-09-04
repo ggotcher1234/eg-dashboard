@@ -316,6 +316,26 @@
     background: rgba(255,255,255,0.1); border: none; border-radius: 6px; color: #fff; cursor: pointer; flex-shrink: 0;
   }
   .nav-toggle:hover { background: rgba(255,255,255,0.18); }
+  /* Chris (9/4/26): dropdown top-nav submenu, piloted on Invoicing --
+     Time Sheets / Program Invoices / Pay Statements. Click-to-toggle
+     (not hover-only) so it matches the account-menu pattern already used
+     elsewhere and stays usable on touch. Active state (parent + child) is
+     set by JS below based on the current page, not hardcoded per file. */
+  .nav-item-dropdown { position: relative; }
+  .nav-link-dropdown-btn { display: inline-flex; align-items: center; gap: 4px; font: inherit; background: none; border: none; cursor: pointer; }
+  .nav-link-dropdown-btn .nav-caret { font-size: 9px; opacity: 0.7; }
+  .nav-submenu {
+    position: absolute; top: 100%; left: 0; margin-top: 8px; min-width: 190px; background: var(--navy);
+    border-radius: 10px; padding: 6px; box-shadow: 0 10px 24px rgba(0,0,0,0.28); display: none; z-index: 97;
+  }
+  .nav-item-dropdown.open .nav-submenu { display: block; }
+  .nav-submenu a { display: block; padding: 9px 12px; border-radius: 6px; color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .nav-submenu a:hover, .nav-submenu a.active { background: rgba(255,255,255,0.14); color: #fff; }
+  @media (max-width: 980px) {
+    .nav-item-dropdown { position: static; }
+    .nav-submenu { position: static; display: block !important; box-shadow: none; background: transparent; padding: 0 0 4px 26px; margin-top: 0; }
+    .nav-link-dropdown-btn .nav-caret { display: none; }
+  }
   .nav-toggle svg { width: 20px; height: 20px; display: block; }
   @media (max-width: 980px) {
     .nav-toggle { display: inline-flex; }
@@ -404,7 +424,14 @@
       <a href="index.html" class="nav-link">Engagements</a>
       <a href="econ_dev_partners_admin.html" class="nav-link active">Programs</a>
       <a href="team_directory.html" class="nav-link">Roster</a>
-      <a href="invoicing_report.html" class="nav-link">Invoicing</a>
+      <div class="nav-item-dropdown">
+        <button type="button" class="nav-link nav-link-dropdown-btn">Invoicing <span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu">
+          <a href="invoicing_report.html">Time Sheets</a>
+          <a href="program_invoicing.html">Program Invoices</a>
+          <a href="specialist_invoices.html">Pay Statements</a>
+        </div>
+      </div>
     </nav>
     <button type="button" class="nav-toggle" aria-label="Menu" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
@@ -1735,6 +1762,40 @@
       }
     });
   });
+
+  // Nav dropdown (Chris, 9/4/26) -- click-to-toggle submenu under a
+  // top-nav item, piloted on Invoicing. Generic/class-based like the
+  // mobile nav toggle above: highlights the parent button and the
+  // matching child link based on the current page, wires open/close, and
+  // works for however many .nav-item-dropdown elements exist on a page
+  // (some pages render a skeleton header + a real one).
+  (function () {
+    const here = location.pathname.split("/").pop();
+    document.querySelectorAll(".nav-item-dropdown").forEach((dd) => {
+      const btn = dd.querySelector(".nav-link-dropdown-btn");
+      const menu = dd.querySelector(".nav-submenu");
+      if (!btn || !menu) return;
+      let matched = false;
+      menu.querySelectorAll("a").forEach((a) => {
+        const isHere = (a.getAttribute("href") || "").split("?")[0] === here;
+        a.classList.toggle("active", isHere);
+        if (isHere) matched = true;
+      });
+      btn.classList.toggle("active", matched);
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        document.querySelectorAll(".nav-item-dropdown.open").forEach((open) => {
+          if (open !== dd) open.classList.remove("open");
+        });
+        dd.classList.toggle("open");
+      });
+    });
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".nav-item-dropdown")) {
+        document.querySelectorAll(".nav-item-dropdown.open").forEach((open) => open.classList.remove("open"));
+      }
+    });
+  })();
 </script>
 </body>
 </html>
