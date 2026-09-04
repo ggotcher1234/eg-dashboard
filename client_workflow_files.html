@@ -1373,26 +1373,45 @@
     `;
     actions.querySelector("#eval-email-create-btn").addEventListener("click", openEvalEmailModal);
 
-    if (!evalResponse) {
-      container.innerHTML = `<div class="wf-doc-empty">No response yet &mdash; use Create Email above to send the CEO a link.</div>`;
-      return;
-    }
-
-    const r = evalResponse;
-    const submittedDate = new Date(r.submitted_at).toLocaleDateString();
-    container.innerHTML = `
-      <div class="wf-file-cell">
-        <button type="button" class="btn-primary wf-open-btn" id="eval-response-toggle-btn">&#9989; View Full Response</button>
-        <span class="wf-file-name">Submitted ${escapeHtml(submittedDate)}${r.respondent_name ? " by " + escapeHtml(r.respondent_name) : ""}</span>
-      </div>
+    // Greg (9/4/26): "we have the link in the email. can't we just have an
+    // open Close-Out Document button that goes to this link" -- same
+    // wf-open-btn treatment as the other three rows, opening the client's
+    // close-out survey directly instead of only surfacing the link inside
+    // the drafted email. ensureEvalLinkUrl() generates/saves it on demand
+    // (same as Create Email does), so this works even before an email has
+    // ever been sent.
+    const responseHtml = evalResponse ? `
       <div style="margin-top:14px; padding:14px 16px; background:#f3f6f1; border:1px solid var(--border); border-radius:8px;">
-        <div style="font-size:13px; color:var(--muted); margin-bottom:${isSuperAdmin ? "8px" : "0"};">
-          ${r.very_useful_count} Very Useful, ${r.partially_useful_count} Partially Useful, ${r.not_useful_count} Not Useful &mdash; Weighted Score ${r.weighted_score}/${r.weighted_max}
+        <div style="font-weight:700; color:var(--navy); margin-bottom:6px;">
+          &#9989; Submitted ${escapeHtml(new Date(evalResponse.submitted_at).toLocaleDateString())}${evalResponse.respondent_name ? " by " + escapeHtml(evalResponse.respondent_name) : ""}
         </div>
-        ${isSuperAdmin ? `<button type="button" class="btn-danger btn-sm" id="eval-response-delete-btn">Delete Response</button>` : ""}
+        <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">
+          ${evalResponse.very_useful_count} Very Useful, ${evalResponse.partially_useful_count} Partially Useful, ${evalResponse.not_useful_count} Not Useful &mdash; Weighted Score ${evalResponse.weighted_score}/${evalResponse.weighted_max}
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" class="btn-secondary btn-sm" id="eval-response-toggle-btn">View Full Response</button>
+          ${isSuperAdmin ? `<button type="button" class="btn-danger btn-sm" id="eval-response-delete-btn">Delete Response</button>` : ""}
+        </div>
         <div id="eval-response-detail" class="hidden" style="margin-top:10px;"></div>
       </div>
+    ` : "";
+    container.innerHTML = `
+      <div class="wf-file-cell">
+        <button type="button" class="btn-primary wf-open-btn" id="eval-open-btn">&#128279; Open Close-Out Document &#8599;</button>
+      </div>
+      ${responseHtml}
     `;
+    container.querySelector("#eval-open-btn").addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const win = window.open("about:blank", "_blank", "noopener");
+      btn.disabled = true;
+      const url = await ensureEvalLinkUrl();
+      btn.disabled = false;
+      if (!url) { if (win) win.close(); return; }
+      if (win) win.location = url;
+    });
+
+    if (!evalResponse) return;
 
     const toggleBtn = container.querySelector("#eval-response-toggle-btn");
     const detail = container.querySelector("#eval-response-detail");
