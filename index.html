@@ -283,22 +283,28 @@
     transition: background 0.15s ease;
   }
   /* Column header row above the engagements list (Greg, 8/29/26) -- same
-     grid as .client-row so "Next Step" lines up over that column exactly;
-     the other 3 cells stay blank rather than labeled, since Engagement/Team
-     Lead/Status are already self-evident from the row content itself. */
+     grid as .client-row so "Start Date"/"Days in Progress" line up over
+     their columns exactly; the other 2 cells stay blank rather than
+     labeled, since Engagement/Team Lead are already self-evident from the
+     row content itself. */
   .eng-list-header {
     display: grid; grid-template-columns: 2fr 1.4fr 130px 1.6fr; gap: 10px;
     padding: 0 14px 6px;
   }
   .eng-col-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); }
   @media (max-width: 720px) { .eng-list-header { display: none; } }
-  /* Next Step column (Greg, 8/29/26) -- first incomplete Project Next Step
-     per engagement, same data that already powers the Tasks Due dropdown
-     (nextStepByClient, built in loadNextSteps()). Blank for a closed
-     engagement or one with nothing left open. */
-  .client-row .cr-next-step { font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .client-row .cr-next-step.cr-next-step-empty { color: var(--muted); }
+  /* Start Date / Days in Progress columns (Chris, 9/4/26) -- replaced the
+     Status badge + Next Step columns. */
+  .client-row .cr-start-date, .client-row .cr-days-in-progress { font-size: 12.5px; color: var(--text); }
   .client-row:last-child { border-bottom: none; }
+  /* Program section headers (Chris, 9/4/26) -- the engagements list groups
+     by Program, alphabetically by Program name, with a header row breaking
+     up each group. Not part of the 4-col grid -- spans the full row. */
+  .eng-program-header {
+    padding: 12px 14px 6px; font-size: 11.5px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.4px; color: var(--navy-light); background: #f4f6f8; border-bottom: 1px solid var(--border);
+  }
+  .eng-program-header:first-child { padding-top: 10px; }
   .client-row:hover { background: #f8fafb; }
   .client-row .cr-name { font-weight: 700; font-size: 13.5px; color: var(--navy); text-decoration: underline; }
   .client-row .cr-meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
@@ -742,8 +748,8 @@
         <div class="eng-list-header">
           <div></div>
           <div></div>
-          <div></div>
-          <div class="eng-col-title">Next Step</div>
+          <div class="eng-col-title">Start Date</div>
+          <div class="eng-col-title">Days in Progress</div>
         </div>
         <div id="engagements-list"></div>
         <div id="engagements-empty" class="empty-note hidden" style="border:none; box-shadow:none; margin:0;">You're not assigned to any engagements yet.</div>
@@ -1126,7 +1132,7 @@
     // one job, showing every active engagement's current next step, is now
     // covered directly by the Next Step column on the list above.)
 
-    await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex()]);
+    await Promise.all([loadClients(), loadApplicationSubmittedDates(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex()]);
     await loadMyBillableTasks(); // needs allClients + myAssignmentRows, both settled above
     buildTasksDueItems();
     // "Mine" is the default for Team Leads and Specialists -- their own
@@ -1271,6 +1277,19 @@
     const { data, error } = await sb.from("clients").select("*, econ_dev_companies(code, name, bill_admin_qc_upfront)").order("name");
     if (error) { showBanner("Couldn't load clients: " + error.message, "error"); return; }
     allClients = data;
+  }
+
+  // Start Date column (Chris, 9/4/26) -- the date the intake application
+  // was *submitted*, not the date the engagement went In Progress (that's
+  // still the "Started: ..." line in the meta text below the name, a
+  // different milestone). One row per accepted application, keyed by the
+  // client it became.
+  let submittedAtByClient = {};
+  async function loadApplicationSubmittedDates() {
+    const { data, error } = await sb.from("client_applications").select("client_id, submitted_at").not("client_id", "is", null);
+    if (error) { console.error("Couldn't load application submitted dates:", error.message); return; }
+    submittedAtByClient = {};
+    (data || []).forEach((a) => { if (a.client_id) submittedAtByClient[a.client_id] = a.submitted_at; });
   }
 
   // Lightweight index for the global search bar's "specialists" and
@@ -1719,6 +1738,15 @@
     const metaText = c.project_status === "closed"
       ? `Closed ${formatLastActivity(c.closed_at)}`
       : `Started: ${formatLastActivity(c.first_in_progress_at || c.status_since || c.created_at)}`;
+    // Start Date / Days in Progress columns (Chris, 9/4/26) -- replaced the
+    // Status badge + Next Step columns. This list only ever shows In
+    // Progress engagements (see renderEngagementsList), so "days in
+    // progress" is always meaningful here; it reuses the same
+    // first_in_progress_at/status_since clock -- and the same green/
+    // yellow/red aging dot -- the old status badge's dot already used.
+    const startDateText = submittedAtByClient[c.id] ? formatLastActivity(submittedAtByClient[c.id]) : "—";
+    const daysInProgress = daysSince(c.first_in_progress_at || c.status_since);
+    const daysInProgressText = Number.isFinite(daysInProgress) ? `${daysInProgress} day${daysInProgress === 1 ? "" : "s"}` : "—";
     return `
       <div class="client-row" data-client-id="${c.id}">
         <div>
@@ -1728,8 +1756,8 @@
         <div class="eng-tl-block">
           ${teamLead ? `<div><div class="eng-tl-caption">Team Lead</div><div class="eng-tl-name-row"><div class="avatar-sm">${teamLeadAvatar ? `<img src="${escapeHtml(teamLeadAvatar)}" alt="" />` : escapeHtml(initials(teamLead))}</div><span class="eng-tl-name">${escapeHtml(teamLead)}</span></div></div>` : `<span class="cr-meta">No Team Lead</span>`}
         </div>
-        <div><span class="status-pill">${statusAgeDotHtml(c)}<span class="badge badge-${c.project_status}">${PROJECT_STATUS_LABELS[c.project_status] || c.project_status}</span></span></div>
-        <div class="cr-next-step${nextStepByClient[c.id] ? "" : " cr-next-step-empty"}" title="${escapeHtml(nextStepByClient[c.id] || "")}">${nextStepByClient[c.id] ? escapeHtml(nextStepByClient[c.id]) : "—"}</div>
+        <div class="cr-start-date">${startDateText}</div>
+        <div class="cr-days-in-progress"><span class="status-pill">${statusAgeDotHtml(c)}${daysInProgressText}</span></div>
       </div>
     `;
   }
@@ -1753,6 +1781,21 @@
   }
   function sortEngagementPool(pool) {
     return [...pool].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // Program grouping (Chris, 9/4/26) -- "Engagements listed under which
+  // Program they belong to": a Program header, alphabetically by Program
+  // name, followed by that Program's engagements, then the next Program
+  // header. A client with no Program on file (shouldn't normally happen)
+  // falls into a single "No Program" bucket rather than being dropped.
+  function groupPoolByProgram(pool) {
+    const groups = new Map();
+    for (const c of pool) {
+      const name = (c.econ_dev_companies && c.econ_dev_companies.name) || "No Program";
+      if (!groups.has(name)) groups.set(name, []);
+      groups.get(name).push(c);
+    }
+    return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }
 
   function renderEngagementsList() {
@@ -1785,8 +1828,11 @@
     $("engagements-empty").classList.toggle("hidden", pool.length > 0);
 
     // Greg (9/2/26): always show the full In Progress list on open -- no
-    // row cap, no "View all engagements" expander.
-    list.innerHTML = pool.length ? pool.map(clientRowHtml).join("") : "";
+    // row cap, no "View all engagements" expander. Grouped by Program,
+    // alphabetically, per Chris (9/4/26).
+    list.innerHTML = groupPoolByProgram(pool)
+      .map(([programName, rows]) => `<div class="eng-program-header">${escapeHtml(programName)}</div>${rows.map(clientRowHtml).join("")}`)
+      .join("");
     wireClientRows(list);
   }
 
