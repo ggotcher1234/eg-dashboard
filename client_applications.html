@@ -617,358 +617,21 @@
     <div id="banner"></div>
     <div class="autosave-toast" id="autosave-toast">Autosaved</div>
 
-    <!-- ===== LIST VIEW ===== -->
-    <div id="view-list">
-      <div class="std-toolbar-row no-print">
-        <div class="global-search-wrap">
-          <div class="search-box">
-            <span class="search-icon">&#128269;</span>
-            <input type="text" id="global-search-input" placeholder="Search…" autocomplete="off" />
-          </div>
-          <div class="global-search-results hidden" id="global-search-results"></div>
-        </div>
-        <div class="std-toolbar-actions">
-          <button type="button" class="btn-secondary btn-sm" id="std-print-btn" title="Print">Print</button>
-          <button type="button" class="btn-secondary btn-sm" id="std-export-btn" title="Download the applications list as CSV">&#8595; Download CSV</button>
-          <button type="button" class="btn-secondary btn-sm" id="std-import-btn" title="New applications go through the intake wizard, not bulk import" disabled>&#8593; Import</button>
-        </div>
-      </div>
-      <div class="toolbar">
-        <div class="tabs">
-          <!-- Greg (9/4/26), per Chris: applications have "only one flavor"
-               now -- no Pending/Accepted split, no On Hold, and Closed
-               engagements auto-archive instead of sitting in their own
-               tab. So: Applications (awaiting a decision) -> In Progress
-               (Team Lead assigned) -> Archived (rejected, OR closed).
-               "Pending" is retired as a label -- the underlying
-               data-status="pending" filter key is unchanged. Greg
-               (9/4/26): dropped the "All" tab too -- it re-mixed the 3
-               buckets back together, which is exactly what the tab split
-               was for. Applications is the default view now. -->
-          <span class="tab active" data-status="pending">Applications<span class="tab-count">0</span></span>
-          <span class="tab" data-status="in_progress">In Progress<span class="tab-count">0</span></span>
-          <span class="tab" data-status="archived">Archived<span class="tab-count">0</span></span>
-        </div>
-        <div class="drafts-wrap" id="drafts-wrap">
-          <button type="button" class="btn-secondary" id="drafts-btn">
-            Drafts <span class="drafts-count hidden" id="drafts-count">0</span>
-          </button>
-          <div class="drafts-dropdown hidden" id="drafts-dropdown">
-            <div class="drafts-dropdown-header">Saved Drafts</div>
-            <div id="drafts-list"></div>
-            <div class="drafts-empty hidden" id="drafts-empty">No saved drafts.</div>
-          </div>
-        </div>
-        <button class="btn-primary" id="new-app-btn">+ New Application</button>
-      </div>
-
-      <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Engagement</th>
-            <th>Programs</th>
-            <th>Submitted By</th>
-            <th>Submitted</th>
-            <th style="width:100px;">Status</th>
-            <th id="project-status-header" class="hidden" style="width:120px;">Project Status</th>
-            <th style="width:100px;"></th>
-            <th id="delete-header" class="hidden" style="width:40px;"></th>
-          </tr>
-        </thead>
-        <tbody id="applications-tbody"></tbody>
-      </table>
-      </div>
-      <div id="empty-note" class="empty-note hidden">No applications here yet.</div>
-    </div>
-
-    <!-- ===== NEW APPLICATION VIEW (5-step wizard) ===== -->
-    <div id="view-new" class="hidden">
-      <div class="wizard-topbar">
-        <div>
-          <h2>Engagement Application</h2>
-          <div class="wizard-progress-text">Step <span id="wiz-step-num">1</span> of 5 &middot; <span id="wiz-pct">20%</span> complete</div>
-        </div>
-      </div>
-
-      <div class="wizard-progress-bar"><div class="wizard-progress-fill" id="wiz-progress-fill" style="width:20%;"></div></div>
-
-      <div class="wizard-steps-track" id="wiz-steps-track"></div>
-
-      <div class="wizard-body">
-        <aside class="wizard-sidebar">
-          <div class="wizard-progress-card">
-            <div class="wizard-progress-card-title">Application Progress</div>
-            <div class="wizard-progress-card-sub">Step <span id="wiz-side-step-num">1</span> of 5</div>
-            <div class="wizard-side-steps" id="wiz-side-steps"></div>
-          </div>
-          <div class="wizard-ai-note" id="wizard-ai-note">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z"/><path d="M19 14l.9 2.6L22 17.5l-2.1.9L19 21l-.9-2.6L16 17.5l2.1-.9L19 14z"/></svg>
-            <div>
-              <div class="wizard-ai-note-title">Have a question?</div>
-              <div class="wizard-ai-note-text">Use <strong>Ask AI</strong> in the top right for help filling this out.</div>
-            </div>
-          </div>
-        </aside>
-
-        <div class="wizard-main">
-          <form id="new-app-form">
-
-            <!-- Step 1: Engagement -->
-            <div class="wizard-panel-card wizard-panel" data-step="1">
-              <h3>Engagement Details</h3>
-              <div class="wizard-panel-hint">Enter the basic information for this engagement.</div>
-              <div class="grid-2">
-                <div class="field">
-                  <label>Engagement Name <span class="required-star">*</span></label>
-                  <input type="text" id="f-company-name" placeholder="Enter engagement name" required />
-                </div>
-                <div class="field">
-                  <label>EG Program <span class="required-star">*</span></label>
-                  <select id="f-econ-dev" required></select>
-                  <div class="field-hint" style="margin-top:5px;">Choose the program this engagement is part of.</div>
-                </div>
-                <div class="field">
-                  <label>Program Contact</label>
-                  <select id="f-program-contact"><option value="">Select a program first…</option></select>
-                  <div class="field-hint" style="margin-top:5px;">Who at this program should EG coordinate with on this engagement?</div>
-                </div>
-                <div class="field">
-                  <label>Website</label>
-                  <input type="url" id="f-website" placeholder="https://www.example.com" />
-                </div>
-                <div class="field">
-                  <label>Phone</label>
-                  <input type="text" id="f-phone" placeholder="(555) 123-4567" />
-                </div>
-                <div class="field">
-                  <label>Ownership <span class="required-star">*</span></label>
-                  <select id="f-is-private" required>
-                    <option value="">Select ownership type…</option>
-                    <option value="true">Private</option>
-                    <option value="false">Public</option>
-                  </select>
-                  <div class="field-hint" style="margin-top:5px;">Select the ownership structure that best describes the organization.</div>
-                </div>
-                <div class="field">
-                  <label>Year Founded</label>
-                  <input type="number" id="f-year-founded" min="1800" max="2100" placeholder="e.g., 2015" />
-                </div>
-              </div>
-
-              <!-- Greg (8/29/26): "i want the client to give them to us on
-                   the application... we don't have to guess what they are
-                   and waste time finding them." Placed right here next to
-                   Website (not buried in a later step's collapsed
-                   accordion, where it went unnoticed) so it's the first
-                   thing anyone filling this out sees. On Accept, these
-                   copy straight onto the Company page (client_profile.html)
-                   automatically -- see 095_application_structured_social_
-                   links.sql. -->
-              <div class="wizard-panel-hint" style="margin-top:18px;">Social media (optional)</div>
-              <div class="grid-2">
-                <div class="field"><label>Facebook</label><input type="text" id="f-social-facebook" placeholder="https://facebook.com/…" /></div>
-                <div class="field"><label>LinkedIn</label><input type="text" id="f-social-linkedin" placeholder="https://linkedin.com/…" /></div>
-                <div class="field"><label>X / Twitter</label><input type="text" id="f-social-twitter" placeholder="https://x.com/…" /></div>
-                <div class="field"><label>Instagram</label><input type="text" id="f-social-instagram" placeholder="https://instagram.com/…" /></div>
-                <div class="field"><label>YouTube</label><input type="text" id="f-social-youtube" placeholder="https://youtube.com/…" /></div>
-                <div class="field"><label>Other</label><input type="text" id="f-social-other" placeholder="https://…" /></div>
-              </div>
-
-              <div class="wizard-required-note">Fields marked <span class="required-star">*</span> are required.</div>
-            </div>
-
-            <!-- Step 2: Company & Address -->
-            <div class="wizard-panel-card wizard-panel hidden" data-step="2">
-              <h3>Company &amp; Address</h3>
-              <div class="wizard-panel-hint">Where is this company located?</div>
-              <div class="field">
-                <label>Street Address</label>
-                <input type="text" id="f-street" />
-              </div>
-              <div class="grid-3">
-                <div class="field"><label>City</label><input type="text" id="f-city" /></div>
-                <div class="field"><label>State</label><input type="text" id="f-state" maxlength="2" /></div>
-                <div class="field"><label>ZIP / Postal Code</label><input type="text" id="f-postal" /></div>
-              </div>
-              <div class="grid-2">
-                <div class="field"><label>Country</label><input type="text" id="f-country" value="United States" /></div>
-                <div class="field"><label>County</label><input type="text" id="f-county" /></div>
-              </div>
-            </div>
-
-            <!-- Step 3: Contacts -->
-            <div class="wizard-panel-card wizard-panel hidden" data-step="3">
-              <h3>Contacts</h3>
-              <div class="wizard-panel-hint">Who should EG staff coordinate with at this company?</div>
-
-              <div class="contact-form-card">
-                <div class="contact-form-title">Primary Contact</div>
-                <div class="grid-2">
-                  <div class="field"><label>Name</label><input type="text" id="f-p-name" /></div>
-                  <div class="field"><label>Title</label><input type="text" id="f-p-title" /></div>
-                  <div class="field"><label>Email</label><input type="email" id="f-p-email" /></div>
-                  <div class="field"><label>Phone</label><input type="text" id="f-p-phone" /></div>
-                  <div class="field" style="grid-column: 1 / -1;">
-                    <label>Contact Style / Temperament <span class="field-hint" style="text-transform:none; font-weight:400;">(how EG staff should approach conversations with this person)</span></label>
-                    <select id="f-p-temperament">
-                      <option value="">Unspecified</option>
-                      <option>Guardian</option>
-                      <option>Artisan</option>
-                      <option>Rational</option>
-                      <option>Idealist</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div class="contact-form-card hidden" id="secondary-contact-card">
-                <button type="button" class="contact-remove-btn" data-remove-contact="secondary">Remove</button>
-                <div class="contact-form-title">Secondary Contact</div>
-                <div class="grid-2">
-                  <div class="field"><label>Name</label><input type="text" id="f-s-name" /></div>
-                  <div class="field"><label>Title</label><input type="text" id="f-s-title" /></div>
-                  <div class="field"><label>Email</label><input type="email" id="f-s-email" /></div>
-                  <div class="field"><label>Phone</label><input type="text" id="f-s-phone" /></div>
-                  <div class="field" style="grid-column: 1 / -1;">
-                    <label>Contact Style / Temperament</label>
-                    <select id="f-s-temperament">
-                      <option value="">Unspecified</option>
-                      <option>Guardian</option>
-                      <option>Artisan</option>
-                      <option>Rational</option>
-                      <option>Idealist</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <button type="button" class="add-contact-btn" id="add-secondary-contact-btn">+ Add Secondary Contact</button>
-
-              <div class="field" style="margin-top:14px;">
-                <label>Others to Include on Email CC List <span class="field-hint" style="text-transform:none; font-weight:400;">(one email per line)</span></label>
-                <textarea id="f-cc-emails" placeholder="e.g. bookkeeper@company.com"></textarea>
-              </div>
-
-              <div class="contact-form-card hidden" id="tertiary-contact-card" style="margin-top:14px;">
-                <button type="button" class="contact-remove-btn" data-remove-contact="tertiary">Remove</button>
-                <div class="contact-form-title">3rd Contact</div>
-                <div class="grid-2">
-                  <div class="field"><label>Name</label><input type="text" id="f-t-name" /></div>
-                  <div class="field"><label>Title</label><input type="text" id="f-t-title" /></div>
-                  <div class="field"><label>Email</label><input type="email" id="f-t-email" /></div>
-                  <div class="field"><label>Phone</label><input type="text" id="f-t-phone" /></div>
-                </div>
-              </div>
-              <button type="button" class="add-contact-btn hidden" id="add-tertiary-contact-btn" style="margin-top:14px;">+ Add 3rd Contact</button>
-            </div>
-
-            <!-- Step 4: Financials -->
-            <div class="wizard-panel-card wizard-panel hidden" data-step="4">
-              <h3>Financials &amp; Business Profile</h3>
-              <div class="wizard-panel-hint">Company size and qualifying details — most of this is optional.</div>
-
-              <div class="field"><label>Primary Business &amp; NAICS Code <span class="field-hint" style="text-transform:none; font-weight:400;">(if known)</span></label><input type="text" id="f-naics" /></div>
-              <div class="checkrow"><input type="checkbox" id="f-fte-range" /><label for="f-fte-range">Has 10–100 FTE employees</label></div>
-
-              <details class="accordion-card" style="margin-top:16px;">
-                <summary>
-                  <div class="section-card-icon icon-blue"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-                  Detailed Employee &amp; Revenue Figures
-                  <span class="accordion-sub">Optional</span>
-                </summary>
-                <div class="accordion-body">
-                  <!-- Paired by year (Greg, 8/29/26): Revenue and FTEs for the
-                       same year now sit on the same row, newest year first,
-                       instead of two separate blocks (all FTEs, then all
-                       Revenue) that made it easy to mismatch a figure to the
-                       wrong year. -->
-                  <div class="grid-2">
-                    <div class="field"><label>Revenue (2025)</label><input type="text" inputmode="decimal" class="money-input" id="f-rev-2025" /></div>
-                    <div class="field"><label>FTEs (2025)</label><input type="number" id="f-fte-2025" /></div>
-                  </div>
-                  <div class="grid-2">
-                    <div class="field"><label>Revenue (2024)</label><input type="text" inputmode="decimal" class="money-input" id="f-rev-2024" /></div>
-                    <div class="field"><label>FTEs (2024)</label><input type="number" id="f-fte-2024" /></div>
-                  </div>
-                  <div class="grid-2">
-                    <div class="field"><label>Revenue (2023)</label><input type="text" inputmode="decimal" class="money-input" id="f-rev-2023" /></div>
-                    <div class="field"><label>FTEs (2023)</label><input type="number" id="f-fte-2023" /></div>
-                  </div>
-                </div>
-              </details>
-
-              <details class="accordion-card">
-                <summary>
-                  <div class="section-card-icon icon-amber"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
-                  Business Profile
-                  <span class="accordion-sub">Optional</span>
-                </summary>
-                <div class="accordion-body">
-                  <div class="checkrow"><input type="checkbox" id="f-sales-range" /><label for="f-sales-range">Sales $1M–$50M</label></div>
-                  <div class="checkrow"><input type="checkbox" id="f-sales-external" /><label for="f-sales-external">Sales primarily external to region</label></div>
-                  <div class="checkrow"><input type="checkbox" id="f-woman" /><label for="f-woman">Woman-owned</label></div>
-                  <div class="checkrow"><input type="checkbox" id="f-minority" /><label for="f-minority">Minority-owned</label></div>
-                  <div class="checkrow"><input type="checkbox" id="f-veteran" /><label for="f-veteran">Veteran-owned</label></div>
-                  <div class="checkrow"><input type="checkbox" id="f-disabled" /><label for="f-disabled">Disabled-owned</label></div>
-                  <div class="field" style="width:50%;"><label>% employees in-state</label><input type="number" id="f-pct-instate" min="0" max="100" /></div>
-                </div>
-              </details>
-
-              <!-- Social fields moved to Step 1 (Greg, 8/29/26: kept
-                   getting missed buried here behind a collapsed accordion
-                   on a later step -- they now sit right next to Website on
-                   the first screen, impossible to miss). Only News links +
-                   Tags stay in this accordion. -->
-              <details class="accordion-card">
-                <summary>
-                  <div class="section-card-icon icon-green"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
-                  Links &amp; Tags
-                  <span class="accordion-sub">Optional</span>
-                </summary>
-                <div class="accordion-body">
-                  <div class="field"><label>News links <span class="hint">(one per line)</span></label><textarea id="f-news-links"></textarea></div>
-                  <div class="field"><label>Tags <span class="hint">(comma-separated)</span></label><input type="text" id="f-tags" /></div>
-                </div>
-              </details>
-
-              <div class="field" style="margin-top:16px;">
-                <label>Top Business Issues</label>
-                <textarea id="f-top-issues" placeholder="What is this company trying to solve?"></textarea>
-              </div>
-
-              <details class="accordion-card">
-                <summary>
-                  <div class="section-card-icon icon-purple"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-                  Documents
-                  <span class="accordion-sub">Optional</span>
-                </summary>
-                <div class="accordion-body">
-                  <div class="field">
-                    <label>Attach files <span class="hint">(written application, sales sheet, etc.)</span></label>
-                    <input type="file" id="f-documents" multiple />
-                  </div>
-                </div>
-              </details>
-            </div>
-
-            <!-- Step 5: Review -->
-            <div class="wizard-panel-card wizard-panel hidden" data-step="5">
-              <h3>Review Application</h3>
-              <div class="wizard-panel-hint">Check everything below before submitting.</div>
-              <div id="wiz-review-content"></div>
-            </div>
-
-          </form>
-        </div>
-      </div>
-
-      <div class="wizard-bottom-bar">
-        <button type="button" class="btn-secondary" id="new-app-cancel">&larr; Cancel Application</button>
-        <div class="wizard-bottom-right">
-          <button type="button" class="btn-ghost hidden" id="wiz-back">&larr; Back</button>
-          <button type="button" class="btn-primary" id="wiz-continue">Continue &rarr;</button>
-          <button type="submit" class="btn-primary hidden" id="new-app-submit" form="new-app-form">Submit Application</button>
-        </div>
+    <!-- ===== NOTHING SELECTED ===== -->
+    <!-- Greg (9/4/26): this page is deep-link-only now -- "the
+         applications button either opens a specific application or it
+         goes nowhere else." The browsable list and the internal "+ New
+         Application" wizard (including Drafts) are gone -- the
+         Applications nav dropdown is the only way in, and every item in
+         it links straight to one specific application (?application=ID)
+         or an accepted one's record (?client=ID, from Engagement
+         Workspace). Landing here with neither just means there's nothing
+         to show. -->
+    <div id="view-none">
+      <div class="card" style="text-align:center; padding:48px 24px;">
+        <p style="color:var(--muted); font-size:14px; margin:0 0 14px;">No application selected.</p>
+        <p style="color:var(--muted); font-size:13px; margin:0 0 18px;">Open one from the <strong>Applications</strong> menu above.</p>
+        <a class="btn-secondary" href="index.html">&larr; Back to Engagements</a>
       </div>
     </div>
 
@@ -1414,41 +1077,19 @@
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = roleLabel(profile.role);
 
-    // Deep link (?status=...) — lets a link elsewhere in the app take you
-    // straight to a filtered tab instead of just the page in general.
-    // Trimmed to the 4 tabs that actually exist now (Greg, 9/4/26) --
-    // "accepted"/"on_hold" as project-status tabs and "closed" as its own
-    // tab are gone (see rowsForTab/PROJECT_STATUSES above); an old link to
-    // one of those falls through to the default tab instead of landing on
-    // a status with no matching tab highlighted.
-    const statusParam = new URLSearchParams(location.search).get("status");
-    const validTabs = ["pending", "in_progress", "archived"];
-    if (statusParam && validTabs.includes(statusParam)) {
-      activeTab = statusParam;
-      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.status === statusParam));
-    }
-
-    await Promise.all([loadPartners(), loadUsers(), loadPartnerContacts(), loadDrafts(), loadGlobalSearchClients()]);
+    await Promise.all([loadPartners(), loadUsers(), loadPartnerContacts()]);
     await loadApplications();
 
-    // Deep link from the Home page's "Drafts in progress" pill (Greg,
-    // 8/19/26) -- opens straight to the Drafts dropdown instead of making
-    // someone hunt for the button after landing on the list.
-    if (new URLSearchParams(location.search).get("drafts") === "1") {
-      $("drafts-dropdown").classList.remove("hidden");
-    }
-
-    // Deep link from Client Workspace's "View Application Info" link —
-    // jump straight to that client's application record instead of the
-    // list. RLS already scopes what loadApplications() returned, so if
-    // this doesn't resolve (e.g. a Consultant without access), it just
-    // falls back to whatever list they're allowed to see.
+    // Greg (9/4/26): this page is deep-link-only now -- "the applications
+    // button either opens a specific application or it goes nowhere
+    // else." No more browsable list, no more internal "+ New Application"
+    // wizard/Drafts -- the Applications nav dropdown (and Client
+    // Workspace's "View Application Info" link) are the only ways in, and
+    // both always name one specific application. Landing here with
+    // neither just leaves the default "No application selected" state
+    // (#view-none) showing, exactly as it renders in the markup.
     const deepLinkClientId = new URLSearchParams(location.search).get("client");
     const deepLinkApp = deepLinkClientId ? allApplications.find((a) => a.client_id === deepLinkClientId) : null;
-    // Deep link from the Applications nav dropdown (Greg, 9/4/26) — jump
-    // straight to one specific application's review pane by its own id,
-    // same idea as ?client= above but for one that hasn't been accepted
-    // (and so has no client_id yet).
     const deepLinkAppId = new URLSearchParams(location.search).get("application");
     const deepLinkAppById = deepLinkAppId ? allApplications.find((a) => a.id === deepLinkAppId) : null;
     if (deepLinkApp) {
@@ -1456,12 +1097,6 @@
       showReviewView(deepLinkApp.id);
     } else if (deepLinkAppById) {
       showReviewView(deepLinkAppById.id);
-    } else if (new URLSearchParams(location.search).get("new") === "1") {
-      // Deep link from the home page's "+ Add Client" button — jump
-      // straight into the new-application form instead of the list.
-      wizOpenNew();
-    } else {
-      showListView();
     }
   }
 
@@ -1478,9 +1113,6 @@
     const { data, error } = await sb.from("econ_dev_companies").select("*").eq("active", true).order("name");
     if (error) { showBanner("Couldn't load Econ Dev partners: " + error.message, "error"); return; }
     allPartners = data;
-    const sel = $("f-econ-dev");
-    sel.innerHTML = '<option value="">Select an EG program…</option>' +
-      allPartners.map((p) => `<option value="${p.id}">${escapeHtml(p.code)} — ${escapeHtml(p.name)}</option>`).join("");
   }
 
   async function loadPartnerContacts() {
@@ -1489,115 +1121,6 @@
     allPartnerContacts = data;
   }
 
-  // ---------- Standardized Search/Print/Export/Import toolbar ----------
-  // Same four controls, same order, on every internal page (Greg, 8/27/26).
-  // Search is the sitewide omnisearch (engagements/specialists/programs),
-  // matching index.html -- allUsers/allPartners are already loaded for the
-  // form dropdowns above, so only the engagements list needs its own fetch.
-  let gsClients = [];
-  async function loadGlobalSearchClients() {
-    const { data } = await sb.from("clients").select("id, name, project_status");
-    gsClients = data || [];
-  }
-  const GS_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
-  function renderGlobalSearchResults(query) {
-    const box = $("global-search-results");
-    const q = query.trim().toLowerCase();
-    if (!q) { box.classList.add("hidden"); box.innerHTML = ""; return; }
-    const engMatches = gsClients.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 5);
-    const specMatches = allUsers.filter((u) => u.full_name && u.full_name.toLowerCase().includes(q)).slice(0, 5);
-    const progMatches = allPartners.filter((p) => (p.name || "").toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q)).slice(0, 5);
-    let html = "";
-    if (engMatches.length) {
-      html += `<div class="gsr-group-label">Engagements</div>` + engMatches.map((c) => `
-        <div class="gsr-item" data-gsr-nav="client_control_center.html?client=${c.id}">
-          <span class="gsr-name">${escapeHtml(c.name)}</span>
-          <span class="gsr-meta">${escapeHtml(GS_STATUS_LABELS[c.project_status] || c.project_status)}</span>
-        </div>
-      `).join("");
-    }
-    if (specMatches.length) {
-      html += `<div class="gsr-group-label">Specialists</div>` + specMatches.map((u) => `
-        <div class="gsr-item" data-gsr-nav="team_directory.html"><span class="gsr-name">${escapeHtml(u.full_name)}</span></div>
-      `).join("");
-    }
-    if (progMatches.length) {
-      html += `<div class="gsr-group-label">Programs</div>` + progMatches.map((p) => `
-        <div class="gsr-item" data-gsr-nav="econ_dev_partners_admin.html?program=${p.id}">
-          <span class="gsr-name">${escapeHtml(p.name)}</span>
-          <span class="gsr-meta">${escapeHtml(p.code || "")}</span>
-        </div>
-      `).join("");
-    }
-    html += `<div class="gsr-item gsr-ask-ai" data-gsr-ask="1"><span class="gsr-name">Ask AI: "${escapeHtml(query.trim())}"</span></div>`;
-    box.innerHTML = html;
-    box.classList.remove("hidden");
-    box.querySelectorAll("[data-gsr-nav]").forEach((el) => {
-      el.addEventListener("click", () => { window.location.href = el.dataset.gsrNav; });
-    });
-    const askRow = box.querySelector("[data-gsr-ask]");
-    if (askRow) {
-      askRow.addEventListener("click", () => {
-        const q2 = $("global-search-input").value.trim();
-        box.classList.add("hidden");
-        $("global-search-input").value = "";
-        openAiDrawer();
-        $("ai-ask-input").value = q2;
-        askAi(q2);
-      });
-    }
-  }
-  $("global-search-input").addEventListener("input", () => renderGlobalSearchResults($("global-search-input").value));
-  $("global-search-input").addEventListener("focus", () => {
-    if ($("global-search-input").value.trim()) renderGlobalSearchResults($("global-search-input").value);
-  });
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest(".global-search-wrap")) $("global-search-results").classList.add("hidden");
-  });
-  function csvField(value) {
-    const v = value == null ? "" : String(value);
-    return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
-  }
-  function downloadCsv(filename, rows) {
-    const csv = rows.map((r) => r.map(csvField).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-  $("std-print-btn").addEventListener("click", () => window.print());
-  $("std-export-btn").addEventListener("click", () => {
-    const rows = [["Company Name", "Program", "Submitted By", "Submitted", "Status"]];
-    for (const a of allApplications) {
-      const partner = allPartners.find((p) => p.id === a.econ_dev_company_id);
-      const submitter = allUsers.find((u) => u.id === a.submitted_by);
-      rows.push([a.company_name, partner ? partner.code : "", submitter ? submitter.full_name : "", a.submitted_at || "", a.status]);
-    }
-    downloadCsv(`applications-${new Date().toISOString().slice(0, 10)}.csv`, rows);
-  });
-
-  // Rebuilds the Program Contact dropdown to only show contacts for the
-  // currently selected EG Program -- keeps the current selection if it's
-  // still valid for that program, otherwise resets to blank rather than
-  // silently keeping a contact from a different program selected.
-  function refreshProgramContactOptions() {
-    const partnerId = $("f-econ-dev").value;
-    const sel = $("f-program-contact");
-    const prevValue = sel.value;
-    if (!partnerId) {
-      sel.innerHTML = `<option value="">Select a program first…</option>`;
-      return;
-    }
-    const contacts = allPartnerContacts.filter((c) => c.partner_id === partnerId);
-    sel.innerHTML = `<option value="">Unspecified</option>` +
-      (contacts.length
-        ? contacts.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}${c.title ? " — " + escapeHtml(c.title) : ""}</option>`).join("")
-        : `<option value="" disabled>(no contacts on file for this program yet — add one in Programs)</option>`);
-    if (contacts.some((c) => c.id === prevValue)) sel.value = prevValue;
-  }
-  $("f-econ-dev").addEventListener("change", refreshProgramContactOptions);
 
   async function loadUsers() {
     const { data, error } = await sb.from("users").select("id, full_name, role").order("full_name");
@@ -1610,7 +1133,6 @@
     if (error) { showBanner("Couldn't load applications: " + error.message, "error"); return; }
     allApplications = data;
     await loadClientsForAcceptedApps();
-    renderList();
   }
 
   // Bulk-loads project_status for every accepted application's client, so the
@@ -1629,13 +1151,6 @@
     }
   }
 
-  // ---------- List view ----------
-  function showListView() {
-    $("view-list").classList.remove("hidden");
-    $("view-new").classList.add("hidden");
-    $("view-review").classList.add("hidden");
-    renderList();
-  }
 
   // In Progress / Closed are the only live project_status values an
   // accepted application's engagement can be in now (Greg, 9/4/26, per
@@ -1644,686 +1159,30 @@
   // Center, Engagement Workspace, the review pane below).
   const PROJECT_STATUSES = ["in_progress", "closed"];
 
-  document.querySelectorAll(".tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-      tab.classList.add("active");
-      activeTab = tab.dataset.status;
-      renderList();
-    });
-  });
-
-  // Same filtering logic renderList uses to build the table, extracted so
-  // the tab counts can never drift from what the table actually shows.
-  // Archived (Greg, 9/4/26) now covers both a rejected application AND a
-  // closed engagement -- "when they are closed they are ... automatically
-  // converted to archive" -- so it's not a straight a.status === status
-  // match like the other non-project-status tabs.
-  function rowsForTab(status) {
-    if (status === "all") return allApplications;
-    if (status === "archived") {
-      return allApplications.filter((a) => a.status === "archived" || (a.status === "accepted" && clientsByApp[a.id]?.project_status === "closed"));
-    }
-    if (PROJECT_STATUSES.includes(status)) {
-      return allApplications.filter((a) => a.status === "accepted" && (clientsByApp[a.id]?.project_status || "in_progress") === status);
-    }
-    return allApplications.filter((a) => a.status === status);
-  }
-
-  // Counts moved here from the old Engagement Pipeline row on the home
-  // page — they belong on the filter tabs themselves, right where they're
-  // used, same pattern as the Drafts count badge (just stacked under the
-  // label instead of beside it, since every tab gets one here).
-  function updateTabCounts() {
-    document.querySelectorAll(".tab").forEach((tab) => {
-      const el = tab.querySelector(".tab-count");
-      if (el) el.textContent = rowsForTab(tab.dataset.status).length;
-    });
-  }
-
-  function renderList() {
-    const showProjectCol = activeTab === "archived" || PROJECT_STATUSES.includes(activeTab);
-    $("project-status-header").classList.toggle("hidden", !showProjectCol);
-    $("delete-header").classList.toggle("hidden", !isSuperAdmin);
-
-    const rows = rowsForTab(activeTab);
-    updateTabCounts();
-
-    const pById = partnersById();
-    const uById = usersById();
-    const tbody = $("applications-tbody");
-    tbody.innerHTML = "";
-
-    $("empty-note").classList.toggle("hidden", rows.length > 0);
-
-    for (const a of rows) {
-      const partner = pById[a.econ_dev_company_id];
-      const submitter = uById[a.submitted_by];
-      const projectStatus = clientsByApp[a.id]?.project_status;
-      const tr = document.createElement("tr");
-      tr.className = "clickable";
-      tr.innerHTML = `
-        <td>${escapeHtml(a.company_name)}</td>
-        <td>${partner ? escapeHtml(partner.code) : "—"}</td>
-        <td>${submitter ? escapeHtml(submitter.full_name) : "—"}</td>
-        <td>${fmtDate(a.submitted_at)}</td>
-        <td><span class="badge badge-${a.status}">${a.status}</span></td>
-        ${showProjectCol ? `<td>${projectStatus ? `<span class="badge badge-${projectStatus}">${projectStatus.replace("_", " ")}</span>` : "—"}</td>` : ""}
-        <td onclick="event.stopPropagation()">${isSuperAdmin ? `<button class="btn-secondary btn-sm" data-archive-app="${a.id}" style="white-space:nowrap;" title="Move this engagement to the Archived tab" ${a.status === "archived" ? "disabled" : ""}>Archive</button>` : ""}</td>
-        ${isSuperAdmin ? `<td onclick="event.stopPropagation()"><button class="btn-danger icon-btn" data-delete-app="${a.id}" title="Delete this client">&times;</button></td>` : ""}
-      `;
-      tr.addEventListener("click", () => { reviewBackClientId = null; showReviewView(a.id); });
-      tbody.appendChild(tr);
-    }
-
-    document.querySelectorAll("[data-delete-app]").forEach((btn) => {
-      btn.addEventListener("click", () => openDeleteApp(btn.dataset.deleteApp));
-    });
-    document.querySelectorAll("[data-archive-app]").forEach((btn) => {
-      btn.addEventListener("click", () => { pendingRejectId = btn.dataset.archiveApp; $("reject-overlay").classList.add("open"); });
-    });
-  }
-
-  // ---------- New application wizard ----------
-  const WIZARD_STEPS = [
-    { n: 1, key: "engagement", label: "Engagement" },
-    { n: 2, key: "company", label: "Company" },
-    { n: 3, key: "contacts", label: "Contacts" },
-    { n: 4, key: "financials", label: "Financials" },
-    { n: 5, key: "review", label: "Review" },
-  ];
-  let wizStep = 1;
-  // Which client_application_drafts row (if any) the wizard is currently
-  // attached to. null until the first successful save, at which point it's
-  // set to the new row's id so every save after that is an UPDATE instead
-  // of creating a duplicate draft.
-  let currentDraftId = null;
-  let applicationDrafts = [];
-
-  function wizFieldEls() {
-    return Array.from(document.querySelectorAll("#new-app-form input[id], #new-app-form select[id], #new-app-form textarea[id]"))
-      .filter((el) => el.type !== "file");
-  }
-
-  // ---------- Draft save/restore/delete (synced to Supabase, so a draft
-  // survives across devices/browsers and multiple can exist at once —
-  // see 048_client_application_drafts.sql) ----------
-  function wizSerialize() {
-    const data = {};
-    wizFieldEls().forEach((el) => { data[el.id] = el.type === "checkbox" ? el.checked : el.value; });
-    data._secondaryOpen = !$("secondary-contact-card").classList.contains("hidden");
-    data._tertiaryOpen = !$("tertiary-contact-card").classList.contains("hidden");
-    return data;
-  }
-  function wizRestore(data) {
-    if (!data) return;
-    wizFieldEls().forEach((el) => {
-      if (data[el.id] === undefined) return;
-      if (el.type === "checkbox") el.checked = !!data[el.id];
-      else el.value = data[el.id];
-    });
-    if (data._secondaryOpen) wizShowContactCard("secondary");
-    if (data._tertiaryOpen) wizShowContactCard("tertiary");
-  }
-  // Greg (8/29/26): "we don't need save draft if it autosaves. a short
-  // popup every now and again that says autosaved would be nice." Replaces
-  // the old always-visible "Saving…"/"Saved just now" indicator -- this
-  // fades in briefly after each successful autosave and fades back out on
-  // its own, so it doesn't need to be watched or dismissed.
-  let autosaveToastTimer = null;
-  function showAutosaveToast() {
-    const el = $("autosave-toast");
-    el.classList.add("show");
-    clearTimeout(autosaveToastTimer);
-    autosaveToastTimer = setTimeout(() => el.classList.remove("show"), 1800);
-  }
-  async function wizSaveDraft() {
-    const data = wizSerialize();
-    const engagementName = (data["f-company-name"] || "").trim() || null;
-    try {
-      if (currentDraftId) {
-        const { error } = await sb.from("client_application_drafts")
-          .update({ engagement_name: engagementName, data, updated_at: new Date().toISOString() })
-          .eq("id", currentDraftId);
-        if (error) throw error;
-      } else {
-        const { data: inserted, error } = await sb.from("client_application_drafts")
-          .insert({ organization_id: currentUser.organization_id, created_by: currentUser.id, engagement_name: engagementName, data })
-          .select("id")
-          .single();
-        if (error) throw error;
-        currentDraftId = inserted.id;
-      }
-      showAutosaveToast();
-      await loadDrafts();
-    } catch (err) {
-      showBanner("Couldn't save draft: " + err.message, "error");
-    }
-  }
-  async function wizDeleteDraftRow(draftId) {
-    if (!draftId) return;
-    const { error } = await sb.from("client_application_drafts").delete().eq("id", draftId);
-    if (error) console.error("Couldn't delete draft:", error.message);
-  }
-  async function loadDrafts() {
-    const { data, error } = await sb.from("client_application_drafts")
-      .select("id, engagement_name, data, updated_at, source, econ_dev_company_id")
-      .order("updated_at", { ascending: false });
-    if (error) { console.error("Couldn't load drafts:", error.message); return; }
-    applicationDrafts = data || [];
-    renderDraftsList();
-  }
-  function wizTimeAgo(iso) {
-    const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-    if (mins < 1) return "just now";
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.round(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    return `${Math.round(hrs / 24)}d ago`;
-  }
-  function renderDraftsList() {
-    $("drafts-count").textContent = applicationDrafts.length;
-    $("drafts-count").classList.toggle("hidden", applicationDrafts.length === 0);
-    $("drafts-empty").classList.toggle("hidden", applicationDrafts.length > 0);
-    $("drafts-list").innerHTML = applicationDrafts.map((d) => {
-      // Rita/Chris/Greg's inbox for CEO-submitted applications (Greg,
-      // 8/21/26): a draft that came in through a Program's public link has
-      // source='public_application' and no created_by -- flag it clearly
-      // so it doesn't read as just another staff member's in-progress typing.
-      const partner = d.econ_dev_company_id ? allPartners.find((p) => p.id === d.econ_dev_company_id) : null;
-      const publicBadge = d.source === "public_application"
-        ? `<span class="draft-row-badge">${partner ? escapeHtml(partner.code) + " application" : "Submitted application"}</span>`
-        : "";
-      return `
-      <div class="draft-row" data-resume-draft="${d.id}">
-        <div>
-          <div class="draft-row-name">${escapeHtml(d.engagement_name || "Untitled draft")} ${publicBadge}</div>
-          <div class="draft-row-time">Saved ${wizTimeAgo(d.updated_at)}</div>
-        </div>
-        <button type="button" class="draft-row-delete" data-delete-draft="${d.id}" title="Delete draft">&times;</button>
-      </div>
-    `;
-    }).join("");
-    document.querySelectorAll("[data-resume-draft]").forEach((el) => {
-      el.addEventListener("click", (e) => {
-        if (e.target.closest("[data-delete-draft]")) return;
-        wizResumeDraft(el.dataset.resumeDraft);
-      });
-    });
-    document.querySelectorAll("[data-delete-draft]").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const id = btn.dataset.deleteDraft;
-        const draft = applicationDrafts.find((d) => d.id === id);
-        const label = draft && draft.engagement_name ? `"${draft.engagement_name}"` : "this draft";
-        if (!confirm(`Delete ${label}? This can't be undone.`)) return;
-        await wizDeleteDraftRow(id);
-        if (currentDraftId === id) currentDraftId = null;
-        await loadDrafts();
-      });
-    });
-  }
-  function closeDraftsDropdown() { $("drafts-dropdown").classList.add("hidden"); }
-  $("drafts-btn").addEventListener("click", (e) => {
-    e.stopPropagation();
-    $("drafts-dropdown").classList.toggle("hidden");
-  });
-  document.addEventListener("click", (e) => {
-    if (!$("drafts-wrap").contains(e.target)) closeDraftsDropdown();
-  });
-
-  let wizAutosaveTimer = null;
-  $("new-app-form").addEventListener("input", () => {
-    clearTimeout(wizAutosaveTimer);
-    wizAutosaveTimer = setTimeout(() => wizSaveDraft(), 1200);
-  });
-
-  // ---------- Contacts: progressive disclosure ----------
-  function wizShowContactCard(which) {
-    if (which === "secondary") {
-      $("secondary-contact-card").classList.remove("hidden");
-      $("add-secondary-contact-btn").classList.add("hidden");
-      $("add-tertiary-contact-btn").classList.remove("hidden");
-    } else if (which === "tertiary") {
-      $("tertiary-contact-card").classList.remove("hidden");
-      $("add-tertiary-contact-btn").classList.add("hidden");
-    }
-  }
-  function wizHideContactCard(which) {
-    if (which === "secondary") {
-      ["f-s-name", "f-s-title", "f-s-email", "f-s-phone", "f-s-temperament"].forEach((id) => { $(id).value = ""; });
-      $("secondary-contact-card").classList.add("hidden");
-      $("add-secondary-contact-btn").classList.remove("hidden");
-      // Hiding Secondary also retracts 3rd, since it doesn't make sense to
-      // have a 3rd contact card visible with no Secondary above it.
-      wizHideContactCard("tertiary");
-    } else if (which === "tertiary") {
-      ["f-t-name", "f-t-title", "f-t-email", "f-t-phone"].forEach((id) => { $(id).value = ""; });
-      $("tertiary-contact-card").classList.add("hidden");
-      $("add-tertiary-contact-btn").classList.add("hidden");
-      if (!$("secondary-contact-card").classList.contains("hidden")) {
-        $("add-tertiary-contact-btn").classList.remove("hidden");
-      }
-    }
-  }
-  $("add-secondary-contact-btn").addEventListener("click", () => wizShowContactCard("secondary"));
-  $("add-tertiary-contact-btn").addEventListener("click", () => wizShowContactCard("tertiary"));
-  document.querySelectorAll("[data-remove-contact]").forEach((btn) => {
-    btn.addEventListener("click", () => wizHideContactCard(btn.dataset.removeContact));
-  });
-
-  // ---------- Step chrome (progress bar, top pills, left sidebar) ----------
-  function wizStepStatus(n) {
-    if (n < wizStep) return "complete";
-    if (n === wizStep) return "active";
-    return "upcoming";
-  }
-  function wizRenderChrome() {
-    const pct = Math.round((wizStep / WIZARD_STEPS.length) * 100);
-    $("wiz-step-num").textContent = wizStep;
-    $("wiz-side-step-num").textContent = wizStep;
-    $("wiz-pct").textContent = pct + "%";
-    $("wiz-progress-fill").style.width = pct + "%";
-
-    $("wiz-steps-track").innerHTML = WIZARD_STEPS.map((s, i) => {
-      const status = wizStepStatus(s.n);
-      const circleContent = status === "complete" ? "&#10003;" : s.n;
-      const connector = i < WIZARD_STEPS.length - 1 ? `<div class="wizard-step-connector"></div>` : "";
-      return `
-        <div class="wizard-step-pill ${status}" data-goto-step="${s.n}">
-          <span class="circle">${circleContent}</span>
-          <span class="label">${s.label}</span>
-        </div>
-        ${connector}
-      `;
-    }).join("");
-
-    $("wiz-side-steps").innerHTML = WIZARD_STEPS.map((s) => {
-      const status = wizStepStatus(s.n);
-      const circleContent = status === "complete" ? "&#10003;" : s.n;
-      const statusText = status === "complete" ? "Complete" : status === "active" ? "In progress" : "Not started";
-      return `
-        <div class="wizard-side-step ${status}" data-goto-step="${s.n}">
-          <div class="wizard-side-step-left">
-            <span class="circle">${circleContent}</span>
-            <span class="wizard-side-step-name">${s.label}</span>
-          </div>
-          <span class="wizard-side-step-status">${statusText}</span>
-        </div>
-      `;
-    }).join("");
-
-    document.querySelectorAll("[data-goto-step]").forEach((el) => {
-      el.addEventListener("click", () => wizGoToStep(Number(el.dataset.gotoStep)));
-    });
-
-    $("wiz-back").classList.toggle("hidden", wizStep === 1);
-    $("wiz-continue").classList.toggle("hidden", wizStep === WIZARD_STEPS.length);
-    // Bug (Greg, 8/29/26): a hidden type="submit" button is still an
-    // "enabled" implicit-submit target per the HTML forms spec, so pressing
-    // Enter in any text field -- e.g. while editing the Financials step's
-    // Revenue fields -- silently submitted the whole application early,
-    // deleting the in-progress draft with no way back. Disabling it whenever
-    // it's not the active step's button removes it from implicit submission
-    // entirely, not just hiding it visually.
-    const onFinalStep = wizStep === WIZARD_STEPS.length;
-    $("new-app-submit").classList.toggle("hidden", !onFinalStep);
-    $("new-app-submit").disabled = !onFinalStep;
-    const nextStep = WIZARD_STEPS[wizStep]; // wizStep is 1-indexed, so this is the *next* step's entry
-    $("wiz-continue").textContent = nextStep ? `Continue to ${nextStep.label} →` : "Continue →";
-  }
-
-  function wizGoToStep(n) {
-    if (n < 1 || n > WIZARD_STEPS.length) return;
-    // An Admin can move freely between every section in any order (Greg,
-    // 8/18/26) -- nothing here blocks forward/backward navigation. Draft
-    // saves are unrestricted too; the only gate left is on final Submit
-    // (see the "new-app-form" submit handler below), which is where it
-    // actually matters that the record is complete.
-    wizStep = n;
-    document.querySelectorAll(".wizard-panel").forEach((panel) => {
-      panel.classList.toggle("hidden", Number(panel.dataset.step) !== wizStep);
-    });
-    if (wizStep === WIZARD_STEPS.length) wizRenderReview();
-    wizRenderChrome();
-    // Every step change lands at the very top of the page. Jump instantly
-    // (not "smooth") -- a smooth animation gets aborted midway when the
-    // freshly shown panel changes the document height (a tall panel to a
-    // short one clamps the scroll somewhere arbitrary; the Review step
-    // rerender shifts layout again a moment later). Re-assert on the next
-    // frame so that late layout shift can't leave us parked partway down.
-    const toTop = () => window.scrollTo(0, 0);
-    toTop();
-    requestAnimationFrame(toTop);
-  }
-  $("wiz-back").addEventListener("click", () => wizGoToStep(wizStep - 1));
-  $("wiz-continue").addEventListener("click", () => wizGoToStep(wizStep + 1));
-
-  // ---------- Review step: live read-only summary of everything entered ----------
-  function wizRenderReview() {
-    const val = (id) => $(id).value.trim();
-    // Greg (8/27/26): "make sure the review page shows all fields even if
-    // they are empty" -- every field label always renders now, with a
-    // muted "—" placeholder standing in for anything not yet filled out,
-    // instead of the field (or the whole section) disappearing.
-    const reviewItem = (label, value) => `<div class="review-item"><div class="label">${label}</div><div class="value">${value ? escapeHtml(value) : '<span class="review-empty">—</span>'}</div></div>`;
-    const reviewGrid = (items) => `<div class="review-grid">${items.join("")}</div>`;
-
-    const partnerSel = $("f-econ-dev");
-    const partnerLabel = partnerSel.value ? partnerSel.options[partnerSel.selectedIndex].textContent : "";
-    const contactSel = $("f-program-contact");
-    const programContactLabel = contactSel.value ? contactSel.options[contactSel.selectedIndex].textContent : "";
-    const ownership = $("f-is-private").value === "" ? "" : ($("f-is-private").value === "true" ? "Private" : "Public");
-
-    const contactBlock = (label, prefix) => {
-      const name = val(`f-${prefix}-name`), title = val(`f-${prefix}-title`), email = val(`f-${prefix}-email`), phone = val(`f-${prefix}-phone`);
-      return `
-        <div class="contact-card">
-          <span class="contact-badge">${label}</span>
-          <div class="contact-name">${name ? escapeHtml(name) : '<span class="review-empty">Not entered</span>'}</div>
-          <div class="contact-title">${title ? escapeHtml(title) : '<span class="review-empty">—</span>'}</div>
-          <div class="contact-lines">
-            <div>${email ? `<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>` : '<span class="review-empty">—</span>'}</div>
-            <div>${phone ? `<a href="tel:${escapeHtml(phone.replace(/[^0-9+]/g, ""))}">${escapeHtml(phone)}</a>` : '<span class="review-empty">—</span>'}</div>
-          </div>
-        </div>
-      `;
-    };
-    const contactCards = [contactBlock("Primary", "p"), contactBlock("Secondary", "s"), contactBlock("3rd", "t")].join("");
-    const ccEmailsList = val("f-cc-emails") ? val("f-cc-emails").split("\n").map((s) => s.trim()).filter(Boolean) : [];
-    const newsLinksList = val("f-news-links") ? val("f-news-links").split("\n").map((s) => s.trim()).filter(Boolean) : [];
-    const socialList = [
-      val("f-social-facebook") && `Facebook: ${val("f-social-facebook")}`,
-      val("f-social-linkedin") && `LinkedIn: ${val("f-social-linkedin")}`,
-      val("f-social-twitter") && `X/Twitter: ${val("f-social-twitter")}`,
-      val("f-social-instagram") && `Instagram: ${val("f-social-instagram")}`,
-      val("f-social-youtube") && `YouTube: ${val("f-social-youtube")}`,
-      val("f-social-other") && `Other: ${val("f-social-other")}`,
-    ].filter(Boolean);
-
-    const ynItem = (label, checked) => `<div class="yn-item"><span>${label}</span><span class="yn-badge ${checked ? "yes" : "no"}">${checked ? "Yes" : "No"}</span></div>`;
-
-    $("wiz-review-content").innerHTML = `
-      <div class="section-card">
-        <div class="section-card-header">
-          <div class="section-card-icon icon-blue"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="1"/></svg></div>
-          <h3 class="section-card-title">Engagement</h3>
-        </div>
-        <div class="section-card-body">
-          ${reviewGrid([
-            reviewItem("Engagement Name", val("f-company-name")),
-            reviewItem("EG Program", partnerLabel),
-            reviewItem("Program Contact", programContactLabel),
-            reviewItem("Website", val("f-website")),
-            reviewItem("Phone", val("f-phone")),
-            reviewItem("Year Founded", val("f-year-founded")),
-            reviewItem("Ownership", ownership),
-            reviewItem("Social links", socialList.join(", ")),
-          ])}
-        </div>
-      </div>
-
-      <div class="section-card">
-        <div class="section-card-header">
-          <div class="section-card-icon icon-green"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
-          <h3 class="section-card-title">Company &amp; Address</h3>
-        </div>
-        <div class="section-card-body">
-          ${reviewGrid([
-            reviewItem("Street", val("f-street")),
-            reviewItem("City / State / ZIP", [val("f-city"), val("f-state"), val("f-postal")].filter(Boolean).join(" ")),
-            reviewItem("Country", val("f-country")),
-            reviewItem("County", val("f-county")),
-          ])}
-        </div>
-      </div>
-
-      <div class="section-card">
-        <div class="section-card-header">
-          <div class="section-card-icon icon-purple"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
-          <h3 class="section-card-title">Contacts</h3>
-        </div>
-        <div class="section-card-body">
-          <div class="contacts-grid">${contactCards}</div>
-          <div class="review-item" style="margin-top:10px;"><div class="label">Others on Email CC List</div><div class="value">${ccEmailsList.length ? ccEmailsList.map(escapeHtml).join(", ") : '<span class="review-empty">—</span>'}</div></div>
-        </div>
-      </div>
-
-      <div class="section-card">
-        <div class="section-card-header">
-          <div class="section-card-icon icon-blue"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-          <h3 class="section-card-title">Financials</h3>
-        </div>
-        <div class="section-card-body">
-          ${reviewGrid([
-            reviewItem("Primary business &amp; NAICS", val("f-naics")),
-            reviewItem("Has 10–100 FTE employees", $("f-fte-range").checked ? "Yes" : "No"),
-            reviewItem("FTEs 2025 / 2024", `${val("f-fte-2025") || "—"} / ${val("f-fte-2024") || "—"}`),
-            reviewItem("Revenue 2025 / 2024", `${val("f-rev-2025") ? "$" + val("f-rev-2025") : "—"} / ${val("f-rev-2024") ? "$" + val("f-rev-2024") : "—"}`),
-            reviewItem("% employees in-state", val("f-pct-instate") ? val("f-pct-instate") + "%" : ""),
-            reviewItem("News links", newsLinksList.join(", ")),
-            reviewItem("Tags", val("f-tags")),
-            reviewItem("Top Business Issues", val("f-top-issues")),
-          ])}
-        </div>
-      </div>
-
-      <div class="section-card">
-        <div class="section-card-header">
-          <div class="section-card-icon icon-amber"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/></svg></div>
-          <h3 class="section-card-title">Business Profile</h3>
-        </div>
-        <div class="section-card-body">
-          <div class="yn-grid">
-            ${ynItem("Sales $1M–$50M", $("f-sales-range").checked)}
-            ${ynItem("Sales Primarily External", $("f-sales-external").checked)}
-            ${ynItem("Woman-Owned", $("f-woman").checked)}
-            ${ynItem("Minority-Owned", $("f-minority").checked)}
-            ${ynItem("Veteran-Owned", $("f-veteran").checked)}
-            ${ynItem("Disabled-Owned", $("f-disabled").checked)}
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  // Shared opener for the New Application wizard — used both by the button
-  // click on this page and by the ?new=1 deep link from the home page's
-  // "+ Add Client" button. Both paths must run the same init (draft
-  // restore, panel reset, chrome render) or the step stepper and sidebar
-  // render empty, which is what was happening on the deep-link path before.
-  function wizStartWizard(draft) {
-    $("new-app-form").reset();
-    $("f-country").value = "United States";
-    wizHideContactCard("secondary");
-    wizStep = 1;
-    currentDraftId = draft ? draft.id : null;
-    if (draft) wizRestore(draft.data);
-    // Restored values land as plain numbers -- give them the same
-    // "$12,345" blur-formatting everything else gets, without requiring
-    // the user to click into and back out of each field first.
-    document.querySelectorAll("#new-app-form .money-input").forEach(formatMoneyDisplay);
-    // f-program-contact's options only exist for whichever program is
-    // selected, so the generic wizRestore() pass above couldn't select a
-    // saved value yet -- rebuild the list now that f-econ-dev is set, then
-    // re-apply it.
-    refreshProgramContactOptions();
-    if (draft && draft.data && draft.data["f-program-contact"]) $("f-program-contact").value = draft.data["f-program-contact"];
-
-    document.querySelectorAll(".wizard-panel").forEach((panel) => {
-      panel.classList.toggle("hidden", Number(panel.dataset.step) !== 1);
-    });
-    wizRenderChrome();
-    if (draft) showBanner("Draft resumed.", "success");
-
-    closeDraftsDropdown();
-    $("view-list").classList.add("hidden");
-    $("view-new").classList.remove("hidden");
-  }
-  function wizOpenNew() { wizStartWizard(null); }
-  function wizResumeDraft(draftId) {
-    const draft = applicationDrafts.find((d) => d.id === draftId);
-    if (!draft) return;
-    wizStartWizard(draft);
-  }
-  $("new-app-btn").addEventListener("click", wizOpenNew);
-  $("wizard-ai-note").addEventListener("click", openAiDrawer);
-  $("new-app-cancel").addEventListener("click", showListView);
-
-  $("new-app-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-
-    // Belt-and-suspenders alongside the disabled-button fix above (Greg,
-    // 8/29/26) -- if a submit event reaches here from any step but the
-    // last, it wasn't a deliberate "Submit Application" click, so bail
-    // instead of silently creating a real application out of a mid-edit
-    // draft.
-    if (wizStep !== WIZARD_STEPS.length) return;
-
-    const companyName = $("f-company-name").value.trim();
-    const econDevId = $("f-econ-dev").value;
-    const address = {
-      street: $("f-street").value.trim() || undefined,
-      city: $("f-city").value.trim() || undefined,
-      state: $("f-state").value.trim() || undefined,
-      postal: $("f-postal").value.trim() || undefined,
-      county: $("f-county").value.trim() || undefined,
-    };
-    const hasAddress = Object.values(address).some((v) => v);
-
-    // Free navigation between steps means this is the one real gate left in
-    // the whole wizard (Greg, 8/18/26): a draft can be saved with nothing
-    // filled in, but Submit needs a company name, an address, and an EG
-    // Program -- the minimum a Team Lead needs to actually work the account.
-    if (!companyName || !econDevId || !hasAddress) {
-      const missing = [!companyName && "Engagement Name", !hasAddress && "an Address", !econDevId && "EG Program"].filter(Boolean).join(", ");
-      showBanner(`${missing} required before submitting.`, "error");
-      wizGoToStep(!companyName || !econDevId ? 1 : 2);
-      return;
-    }
-
-    const toLines = (id) => {
-      const raw = $(id).value.trim();
-      return raw ? raw.split("\n").map((s) => s.trim()).filter(Boolean) : null;
-    };
-    const toTags = (id) => {
-      const raw = $(id).value.trim();
-      return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : null;
-    };
-    // Strips $ / commas / stray whitespace before parsing -- guards against
-    // a pasted "$35,030,501.00" landing here before the money-input
-    // sanitizer (below) has had a chance to clean it up (Greg, 8/29/26:
-    // pasted revenue figures were "acting wonky").
-    const numOrNull = (id) => { const v = $(id).value.replace(/[^0-9.-]/g, ""); return v === "" ? null : Number(v); };
-    const boolOrNull = (id) => { const v = $(id).value; return v === "" ? null : v === "true"; };
-    const strOrNull = (id) => { const v = $(id).value.trim(); return v === "" ? null : v; };
-
-    const payload = {
-      organization_id: currentUser.organization_id,
-      econ_dev_company_id: econDevId,
-      program_contact_id: $("f-program-contact").value || null,
-      company_name: companyName,
-      address: hasAddress ? address : null,
-      phone: $("f-phone").value.trim() || null,
-      year_founded: numOrNull("f-year-founded"),
-      website: $("f-website").value.trim() || null,
-      country: strOrNull("f-country"),
-      is_private: boolOrNull("f-is-private"),
-      primary_officer_name: $("f-p-name").value.trim() || null,
-      primary_officer_title: $("f-p-title").value.trim() || null,
-      primary_officer_email: $("f-p-email").value.trim() || null,
-      primary_officer_phone: $("f-p-phone").value.trim() || null,
-      primary_officer_temperament: strOrNull("f-p-temperament"),
-      secondary_officer_name: $("f-s-name").value.trim() || null,
-      secondary_officer_title: $("f-s-title").value.trim() || null,
-      secondary_officer_email: $("f-s-email").value.trim() || null,
-      secondary_officer_phone: $("f-s-phone").value.trim() || null,
-      secondary_officer_temperament: strOrNull("f-s-temperament"),
-      tertiary_officer_name: strOrNull("f-t-name"),
-      tertiary_officer_title: strOrNull("f-t-title"),
-      tertiary_officer_email: strOrNull("f-t-email"),
-      tertiary_officer_phone: strOrNull("f-t-phone"),
-      cc_emails: toLines("f-cc-emails"),
-      naics_code: strOrNull("f-naics"),
-      fte_range_10_to_100: $("f-fte-range").checked,
-      fte_2023: numOrNull("f-fte-2023"),
-      fte_2024: numOrNull("f-fte-2024"),
-      fte_2025: numOrNull("f-fte-2025"),
-      revenue_2023: numOrNull("f-rev-2023"),
-      revenue_2024: numOrNull("f-rev-2024"),
-      revenue_2025: numOrNull("f-rev-2025"),
-      sales_1_to_50m: $("f-sales-range").checked,
-      sales_primarily_external: $("f-sales-external").checked,
-      woman_owned: $("f-woman").checked,
-      minority_owned: $("f-minority").checked,
-      veteran_owned: $("f-veteran").checked,
-      disabled_owned: $("f-disabled").checked,
-      pct_employees_in_state: numOrNull("f-pct-instate"),
-      social_facebook_url: strOrNull("f-social-facebook"),
-      social_linkedin_url: strOrNull("f-social-linkedin"),
-      social_twitter_url: strOrNull("f-social-twitter"),
-      social_instagram_url: strOrNull("f-social-instagram"),
-      social_youtube_url: strOrNull("f-social-youtube"),
-      social_other_url: strOrNull("f-social-other"),
-      news_links: toLines("f-news-links"),
-      tags: toTags("f-tags"),
-      top_business_issues: $("f-top-issues").value.trim() || null,
-      submitted_by: currentUser.id,
-    };
-
-    const btn = $("new-app-submit");
-    btn.disabled = true;
-    btn.textContent = "Submitting…";
-    const { data: inserted, error } = await sb.from("client_applications").insert(payload).select().single();
-
-    if (error) {
-      btn.disabled = false;
-      btn.textContent = "Submit Application";
-      showBanner("Couldn't submit: " + error.message, "error");
-      return;
-    }
-
-    const files = $("f-documents").files;
-    if (files && files.length) {
-      btn.textContent = "Uploading documents…";
-      const uploadErrors = await uploadDocuments(files, { applicationId: inserted.id });
-      if (uploadErrors.length) {
-        showBanner("Application submitted, but some files didn't upload: " + uploadErrors.join("; "), "error");
-      } else {
-        showBanner("Application submitted.", "success");
-      }
-    } else {
-      showBanner("Application submitted.", "success");
-    }
-
-    btn.disabled = false;
-    btn.textContent = "Submit Application";
-    await wizDeleteDraftRow(currentDraftId);
-    currentDraftId = null;
-    await loadDrafts();
-    await loadApplications();
-    activeTab = "pending";
-    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.status === "pending"));
-    showListView();
-  });
-
   // ---------- Review view ----------
+  // Greg (9/4/26): no more applications list to go "back" to -- Engagement
+  // Workspace's deep link still returns there; otherwise back just means
+  // this page's own "No application selected" state.
   $("review-back").addEventListener("click", () => {
     if (reviewBackClientId) {
       location.href = `client_control_center.html?client=${reviewBackClientId}`;
     } else {
-      showListView();
+      showNothingSelected();
     }
   });
 
+  function showNothingSelected() {
+    $("view-review").classList.add("hidden");
+    $("view-none").classList.remove("hidden");
+  }
+
   function showReviewView(appId) {
     reviewingAppId = appId;
-    $("view-list").classList.add("hidden");
-    $("view-new").classList.add("hidden");
+    $("view-none").classList.add("hidden");
     $("view-review").classList.remove("hidden");
     // Reached via Engagement Workspace's "Application Info" link — send
     // the breadcrumb back there instead of the generic applications list.
-    $("review-back").textContent = reviewBackClientId ? "← Back to Engagement Workspace" : "← Back to applications";
+    $("review-back").textContent = reviewBackClientId ? "← Back to Engagement Workspace" : "← Back";
     renderReview();
   }
 
@@ -2445,7 +1304,7 @@
 
   async function renderReview() {
     const a = allApplications.find((x) => x.id === reviewingAppId);
-    if (!a) { showListView(); return; }
+    if (!a) { showNothingSelected(); return; }
     const partner = partnersById()[a.econ_dev_company_id];
     const submitter = usersById()[a.submitted_by];
     const reviewer = a.reviewed_by ? usersById()[a.reviewed_by] : null;
@@ -2525,7 +1384,12 @@
             </div>
           </div>
           <div class="app-status-badges">
-            <span class="badge badge-${a.status}">${a.status}</span>
+            <!-- Greg (9/4/26): "no more Pending status -- it's either an
+                 application or an engagement." A pending one gets no badge
+                 at all here (being open on this pane IS the "it's an
+                 application" state); Accepted/Rejected/Archived still show
+                 since those are real decisions worth flagging. -->
+            ${a.status !== "pending" ? `<span class="badge badge-${a.status}">${a.status}</span>` : ""}
             ${client ? `<span class="badge badge-${client.project_status}">${projectStatusLabels[client.project_status] || client.project_status}</span>` : ""}
           </div>
         </div>
@@ -3160,8 +2024,11 @@
         showBanner(`Client created, but couldn't set Team Lead hours: ${hoursErr.message}. Set it from the Client Workspace instead.`, "error");
         btn.disabled = false;
         btn.textContent = "Accept & create client";
-        await loadApplications();
-        showListView();
+        // Greg (9/4/26): "accepts the Engagement and the application is
+        // removed from the application dropdown and turned into an
+        // engagement on the engagements page" -- the client exists now
+        // either way, so go see it there.
+        location.href = "index.html";
         return;
       }
     }
@@ -3169,8 +2036,7 @@
     btn.disabled = false;
     btn.textContent = "Accept & create client";
     showBanner(`Client created at ${slug}.egdashboardbuilder.com.`, "success");
-    await loadApplications();
-    showListView();
+    location.href = "index.html";
   }
 
   $("reject-cancel").addEventListener("click", () => {
@@ -3190,8 +2056,7 @@
       return;
     }
     showBanner("Engagement archived.", "success");
-    await loadApplications();
-    showListView();
+    location.href = "index.html";
   });
 
   // ---------- Delete client (Super Admin only) ----------
@@ -3243,8 +2108,7 @@
     } else {
       showBanner("Client deleted.", "success");
     }
-    await loadApplications();
-    showListView();
+    location.href = "index.html";
   });
 
   document.querySelectorAll(".overlay").forEach((ov) => {
