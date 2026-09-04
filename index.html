@@ -320,6 +320,10 @@
     background: var(--danger); color: #fff; font-size: 10.5px; font-weight: 800;
     text-transform: uppercase; letter-spacing: 0.4px; vertical-align: middle;
   }
+  /* Overdue delay reason (Chris, 9/4/26) -- the Team Lead's own note on
+     why an Overdue engagement is stuck, same text as the box on Client
+     Control Center's Team & Hours pane (clients.delay_reason). */
+  .cr-overdue-reason { font-size: 11.5px; color: var(--danger-dark); margin-top: 3px; line-height: 1.35; }
   .empty-note { padding: 26px; text-align: center; color: var(--muted); font-size: 13.5px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
   @media (max-width: 720px) {
     .client-row { display: block; }
@@ -1723,6 +1727,12 @@
     // the exact list Chris is working from, so it needs to be impossible to
     // miss (Greg, 8/27/26).
     const overdue = c.project_status !== "closed" && daysSince(c.first_in_progress_at || c.status_since) >= 60;
+    // Overdue delay reason (Chris, 9/4/26) -- the Team Lead's answer to
+    // "why is it taking longer than expected?" (clients.delay_reason,
+    // entered in the Overdue box on client_control_center.html) shown
+    // right under the name here too, so it doesn't take opening the
+    // engagement to see why it's stuck.
+    const overdueReason = overdue && c.delay_reason ? c.delay_reason.trim() : "";
     // Start Date / Days in Progress columns (Chris, 9/4/26) -- replaced the
     // Status badge + Next Step columns. This list only ever shows In
     // Progress engagements (see renderEngagementsList), so "days in
@@ -1736,6 +1746,7 @@
       <div class="client-row" data-client-id="${c.id}">
         <div>
           <div class="cr-name">${escapeHtml(c.name)}${overdue ? '<span class="overdue-badge">Overdue</span>' : ""}</div>
+          ${overdueReason ? `<div class="cr-overdue-reason">${escapeHtml(overdueReason)}</div>` : ""}
         </div>
         <div class="eng-tl-block">
           ${teamLead ? `<div><div class="eng-tl-caption">Team Lead</div><div class="eng-tl-name-row"><div class="avatar-sm">${teamLeadAvatar ? `<img src="${escapeHtml(teamLeadAvatar)}" alt="" />` : escapeHtml(initials(teamLead))}</div><span class="eng-tl-name">${escapeHtml(teamLead)}</span></div></div>` : `<span class="cr-meta">No Team Lead</span>`}
