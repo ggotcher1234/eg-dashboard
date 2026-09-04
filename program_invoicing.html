@@ -57,12 +57,18 @@
   .nav-link-dropdown-btn { display: inline-flex; align-items: center; gap: 4px; font: inherit; background: none; border: none; cursor: pointer; }
   .nav-link-dropdown-btn .nav-caret { font-size: 9px; opacity: 0.7; }
   .nav-submenu {
-    position: absolute; top: 100%; left: 0; margin-top: 8px; min-width: 190px; background: var(--navy);
+    position: absolute; top: 100%; left: 0; margin-top: 8px; min-width: 230px; max-width: 320px; background: var(--navy);
     border-radius: 10px; padding: 6px; box-shadow: 0 10px 24px rgba(0,0,0,0.28); display: none; z-index: 97;
   }
   .nav-item-dropdown.open .nav-submenu { display: block; }
-  .nav-submenu a { display: block; padding: 9px 12px; border-radius: 6px; color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .nav-submenu a { display: block; padding: 9px 12px; border-radius: 6px; color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; white-space: normal; }
   .nav-submenu a:hover, .nav-submenu a.active { background: rgba(255,255,255,0.14); color: #fff; }
+  /* Applications nav dropdown content (Chris, 9/4/26) -- dynamic, unlike
+     Invoicing's fixed 3 links, so it needs a meta line, an empty state,
+     and a "View All" footer row the static dropdown didn't. */
+  .nav-submenu .nav-submenu-meta { display: block; font-size: 11px; font-weight: 400; color: #9fb3c8; margin-top: 1px; }
+  .nav-submenu .nav-submenu-empty { padding: 9px 12px; font-size: 12.5px; color: #9fb3c8; font-weight: 400; }
+  .nav-submenu .nav-submenu-viewall { font-weight: 700; border-top: 1px solid rgba(255,255,255,0.14); margin-top: 4px; padding-top: 10px; }
   @media (max-width: 980px) {
     .nav-item-dropdown { position: static; }
     .nav-submenu { position: static; display: block !important; box-shadow: none; background: transparent; padding: 0 0 4px 26px; margin-top: 0; }
@@ -302,6 +308,10 @@
       <div><h1>Program Invoices</h1></div>
     </div>
     <nav class="site-nav">
+      <div class="nav-item-dropdown hidden" id="nav-applications-dropdown">
+        <button type="button" class="nav-link nav-link-dropdown-btn">Applications <span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" id="nav-applications-submenu"></div>
+      </div>
       <a class="nav-link" href="index.html">Engagements</a>
       <a class="nav-link" href="econ_dev_partners_admin.html">Programs</a>
       <a class="nav-link" href="team_directory.html">Roster</a>
@@ -344,6 +354,10 @@
       </div>
     </div>
     <nav class="site-nav">
+      <div class="nav-item-dropdown hidden" id="nav-applications-dropdown">
+        <button type="button" class="nav-link nav-link-dropdown-btn">Applications <span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" id="nav-applications-submenu"></div>
+      </div>
       <a class="nav-link" href="index.html">Engagements</a>
       <a class="nav-link" href="econ_dev_partners_admin.html">Programs</a>
       <a class="nav-link" href="team_directory.html">Roster</a>
@@ -1482,6 +1496,51 @@
         document.querySelectorAll(".nav-item-dropdown.open").forEach((open) => open.classList.remove("open"));
       }
     });
+  })();
+
+  // Applications nav dropdown (Chris, 9/4/26) -- admin-only, left of
+  // Engagements, listing recently submitted applications (any status --
+  // "Pending"/"Draft" are retired as terms, everything submitted is just
+  // an Application). Self-contained on purpose: does its own session/role
+  // check rather than depending on each page's differently-named/timed
+  // admin-check variable, so it works identically everywhere. No per-item
+  // deep link yet -- every row opens the Applications list page; the
+  // dropdown itself is the "what's new" feed.
+  (async function () {
+    const dd = document.querySelectorAll("#nav-applications-dropdown");
+    if (!dd.length) return;
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+      const { data: profile } = await sb.from("users").select("role").eq("id", session.user.id).maybeSingle();
+      if (!profile || profile.role !== "super_admin") return;
+
+      const { data: apps } = await sb
+        .from("client_applications")
+        .select("id, company_name, submitted_at, status")
+        .order("submitted_at", { ascending: false })
+        .limit(8);
+
+      const STATUS_LABELS = { accepted: "Accepted", rejected: "Rejected", archived: "Archived" };
+      const fmt = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+      const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
+      const viewAllHtml = '<a href="client_applications.html?status=all" class="nav-submenu-viewall">View All Applications &rarr;</a>';
+      const rowsHtml = (apps || []).map((a) => `
+        <a href="client_applications.html?status=all">
+          ${esc(a.company_name || "Untitled")}
+          <span class="nav-submenu-meta">${[STATUS_LABELS[a.status], fmt(a.submitted_at)].filter(Boolean).join(" &middot; ")}</span>
+        </a>
+      `).join("");
+      const bodyHtml = (apps && apps.length ? rowsHtml : '<div class="nav-submenu-empty">No applications submitted yet.</div>') + viewAllHtml;
+
+      dd.forEach((el) => {
+        el.classList.remove("hidden");
+        const menu = el.querySelector("#nav-applications-submenu") || el.querySelector(".nav-submenu");
+        if (menu) menu.innerHTML = bodyHtml;
+      });
+    } catch (e) {
+      console.error("Couldn't load the Applications nav dropdown:", e);
+    }
   })();
 </script>
 </body>
