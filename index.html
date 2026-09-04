@@ -730,18 +730,13 @@
     <div id="engagements-section" style="margin-top:8px;">
       <div class="engagements-panel">
         <div class="eng-panel-header">
-          <!-- Status view toggle (Greg, 8/29/26, final pass): back to a
-               plain two-way pill -- In Progress (default) vs. Other. The
-               per-status count header was tried and rolled back same day.
-               "Other" doesn't filter this list in place; it jumps straight
-               to the Applications page's All view (client_applications.html
-               ?status=all), which already lists every engagement/
-               application with its status and project status in one table,
-               plus Drafts. Admin-only -- Team Leads/Specialists just get
-               the static In Progress view (see .admin-only-pills below). -->
+          <!-- Greg (9/4/26): dropped the "Other" pill -- the new
+               Applications nav dropdown covers "see everything", and this
+               list is always just In Progress now (closed engagements
+               auto-archive instead of needing a way to go look at them
+               here). -->
           <div class="eng-tabs" id="eng-status-tabs">
             <button type="button" class="eng-tab active" data-status="in_progress">In Progress</button>
-            <button type="button" class="eng-tab" data-status="other">Other</button>
           </div>
           <div class="eng-header-right">
             <div class="eng-tabs" id="eng-tabs">
@@ -869,11 +864,11 @@
   let engagementScope = "mine";         // "mine" | "all" -- whose engagements the list/Needs Attention show
   let engagementTab = "all";            // "all" | "attention" | "recent"
   let engagementSort = "name_asc";      // "name_asc" | "name_desc" | "lead_asc" | "lead_desc"
-  // "in_progress" is the only real value this ever takes now -- the
-  // eng-status-tabs "Other" pill (Greg, 8/29/26, final pass) doesn't filter
-  // this list in place, it navigates to the Applications page instead. Kept
-  // as a variable (rather than inlined) so the pool-filter line below reads
-  // the same as it always has.
+  // "in_progress" is the only value this ever takes now -- this list is
+  // always just In Progress engagements (Greg, 9/4/26: the "Other" pill
+  // that used to jump elsewhere is gone too). Kept as a variable (rather
+  // than inlined) so the pool-filter line below reads the same as it
+  // always has.
   let engagementStatusFilter = "in_progress";
 
   const $ = (id) => document.getElementById(id);
@@ -1830,19 +1825,6 @@
       .join("");
     wireClientRows(list);
   }
-
-  // "Other" isn't a filter on this list -- it jumps straight to the
-  // Applications page's All view (client_applications.html?status=all),
-  // which already lists every engagement/application with its status and
-  // project status in one table, plus Drafts (Greg, 8/29/26, final pass).
-  $("eng-status-tabs").addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-status]");
-    if (!btn) return;
-    if (btn.dataset.status === "other") {
-      location.href = "client_applications.html?status=all";
-      return;
-    }
-  });
 
   // No "All" pill here -- it was redundant with the unfiltered default
   // state. Clicking a tab that's already active toggles it back off to

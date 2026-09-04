@@ -625,11 +625,15 @@
       </div>
       <div class="toolbar">
         <div class="tabs">
-          <span class="tab" data-status="pending">Pending<span class="tab-count">0</span></span>
-          <span class="tab" data-status="accepted">Accepted<span class="tab-count">0</span></span>
+          <!-- Greg (9/4/26), per Chris: applications have "only one flavor"
+               now -- no Pending/Accepted split, no On Hold, and Closed
+               engagements auto-archive instead of sitting in their own
+               tab. So: Applications (awaiting a decision) -> In Progress
+               (Team Lead assigned) -> Archived (rejected, OR closed).
+               "Pending" is retired as a label -- the underlying
+               data-status="pending" filter key is unchanged. -->
+          <span class="tab" data-status="pending">Applications<span class="tab-count">0</span></span>
           <span class="tab" data-status="in_progress">In Progress<span class="tab-count">0</span></span>
-          <span class="tab" data-status="on_hold">On Hold<span class="tab-count">0</span></span>
-          <span class="tab" data-status="closed">Closed<span class="tab-count">0</span></span>
           <span class="tab" data-status="archived">Archived<span class="tab-count">0</span></span>
           <span class="tab active" data-status="all">All<span class="tab-count">0</span></span>
         </div>
@@ -1398,11 +1402,15 @@
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = roleLabel(profile.role);
 
-    // Deep link from the home page's "Pending Applications" stat card
-    // (?status=pending) — lets that card take you straight to the filtered
-    // list instead of just the page in general.
+    // Deep link (?status=...) — lets a link elsewhere in the app take you
+    // straight to a filtered tab instead of just the page in general.
+    // Trimmed to the 4 tabs that actually exist now (Greg, 9/4/26) --
+    // "accepted"/"on_hold" as project-status tabs and "closed" as its own
+    // tab are gone (see rowsForTab/PROJECT_STATUSES above); an old link to
+    // one of those falls through to the default tab instead of landing on
+    // a status with no matching tab highlighted.
     const statusParam = new URLSearchParams(location.search).get("status");
-    const validTabs = ["pending", "accepted", "in_progress", "on_hold", "closed", "archived", "all"];
+    const validTabs = ["pending", "in_progress", "archived", "all"];
     if (statusParam && validTabs.includes(statusParam)) {
       activeTab = statusParam;
       document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.status === statusParam));
@@ -1609,7 +1617,12 @@
     renderList();
   }
 
-  const PROJECT_STATUSES = ["accepted", "in_progress", "on_hold", "closed"];
+  // In Progress / Closed are the only live project_status values an
+  // accepted application's engagement can be in now (Greg, 9/4/26, per
+  // Chris) -- no more Accepted-waiting-stage or On Hold. Also doubles as
+  // the toggle control's option list wherever one exists (Client Control
+  // Center, Engagement Workspace, the review pane below).
+  const PROJECT_STATUSES = ["in_progress", "closed"];
 
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -1622,10 +1635,17 @@
 
   // Same filtering logic renderList uses to build the table, extracted so
   // the tab counts can never drift from what the table actually shows.
+  // Archived (Greg, 9/4/26) now covers both a rejected application AND a
+  // closed engagement -- "when they are closed they are ... automatically
+  // converted to archive" -- so it's not a straight a.status === status
+  // match like the other non-project-status tabs.
   function rowsForTab(status) {
     if (status === "all") return allApplications;
+    if (status === "archived") {
+      return allApplications.filter((a) => a.status === "archived" || (a.status === "accepted" && clientsByApp[a.id]?.project_status === "closed"));
+    }
     if (PROJECT_STATUSES.includes(status)) {
-      return allApplications.filter((a) => a.status === "accepted" && (clientsByApp[a.id]?.project_status || "accepted") === status);
+      return allApplications.filter((a) => a.status === "accepted" && (clientsByApp[a.id]?.project_status || "in_progress") === status);
     }
     return allApplications.filter((a) => a.status === status);
   }
@@ -2417,8 +2437,8 @@
     const documents = await fetchDocuments(a, client ? client.id : null);
     const assignments = client ? await fetchAssignmentsAndHours(client.id, partner) : [];
 
-    const projectStatuses = ["accepted", "in_progress", "on_hold", "closed"];
-    const projectStatusLabels = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+    const projectStatuses = PROJECT_STATUSES;
+    const projectStatusLabels = { in_progress: "In Progress", closed: "Closed" };
     const canEditProjectStatus = client && (isSuperAdmin || (teamLead && teamLead.id === currentUser.id));
 
     // Every visible field row can be individually empty; when "Show empty
