@@ -179,15 +179,7 @@
   .wf-item-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .wf-item-header .wf-item-title { margin-bottom: 0; }
   .wf-item-hint { font-size: 12.5px; color: var(--muted); margin: 2px 0 10px; line-height: 1.5; }
-  /* Greg (9/4/26): "the actual document should open in this window" --
-     an attached file or link now renders inline via iframe instead of a
-     filename link that pops a new tab. The fallback link below it is just
-     an escape hatch for anything a browser refuses to display inline. */
-  .wf-doc-frame { display: block; width: 100%; height: 65vh; min-height: 380px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
-  .wf-doc-fallback { margin-top: 8px; font-size: 12.5px; }
-  .wf-doc-fallback a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
-  .wf-doc-fallback a:hover { text-decoration: underline; }
-  .wf-doc-loading, .wf-doc-empty { font-size: 13px; color: var(--muted); padding: 6px 0; }
+  .wf-doc-empty { font-size: 13px; color: var(--muted); padding: 6px 0; }
   .wf-btn {
     display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--navy-light);
     border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 7px 16px;
@@ -742,21 +734,15 @@
     return { signedUrl: data.signedUrl, viewUrl };
   }
 
-  // Greg (9/4/26): "when you click on the Discovery Document (if one
-  // exists) the actual document should open in this window." Renders the
-  // document directly in an iframe right inside the card instead of a
-  // filename link that pops a new tab; the "Open in a new tab" link below
-  // it is just an escape hatch for anything a browser won't display inline.
-  async function embedStoredDocument(container, path) {
-    const { viewUrl, signedUrl, error } = await resolveStoredDocumentUrl(path);
-    if (error) {
-      container.innerHTML = `<div class="wf-doc-empty">Couldn't open ${fileIconFor(path)} ${escapeHtml(fileNameFromPath(path))}: ${escapeHtml(error.message)}</div>`;
-      return;
-    }
-    container.innerHTML = `
-      <iframe src="${escapeHtml(viewUrl)}" class="wf-doc-frame" title="${escapeHtml(fileNameFromPath(path))}"></iframe>
-      <div class="wf-doc-fallback"><a href="${escapeHtml(signedUrl)}" target="_blank" rel="noopener">Open ${fileIconFor(path)} ${escapeHtml(fileNameFromPath(path))} in a new tab &#8599;</a></div>
-    `;
+  // Greg (9/4/26): a same-pane iframe cut the document off in a scrollable
+  // box -- "have it work like the client dashboard does and open the file
+  // in a new window rather than cutoff in the small window." Matches
+  // client_public.html: open the signed URL (Office viewer for
+  // docx/xlsx/pptx) in a new tab at full size instead of embedding it.
+  async function openStoredDocument(path) {
+    const { viewUrl, error } = await resolveStoredDocumentUrl(path);
+    if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+    window.open(viewUrl, "_blank", "noopener");
   }
 
   /* ---------- Ask AI ---------- */
@@ -1193,8 +1179,12 @@
         { sel: "[data-wf-replace]", fn: () => pickWorkflowFile(f) },
         { sel: "[data-wf-remove]", fn: () => removeWorkflowItem(f) },
       ]);
-      container.innerHTML = `<div class="wf-doc-loading">Opening ${fileIconFor(path)} ${escapeHtml(fileNameFromPath(path))}&hellip;</div>`;
-      embedStoredDocument(container, path);
+      container.innerHTML = `
+        <div class="wf-file-cell">
+          <span class="wf-file-link">${fileIconFor(path)} ${escapeHtml(fileNameFromPath(path))}</span>
+        </div>
+      `;
+      container.querySelector(".wf-file-link").addEventListener("click", () => openStoredDocument(path));
       return;
     }
 
@@ -1215,8 +1205,9 @@
         { sel: "[data-wf-remove]", fn: () => removeWorkflowItem(f) },
       ]);
       container.innerHTML = `
-        <iframe src="${escapeHtml(url)}" class="wf-doc-frame" title="${escapeHtml(f.label)}"></iframe>
-        <div class="wf-doc-fallback"><a href="${escapeHtml(url)}" target="_blank" rel="noopener">Open in a new tab &#8599;</a></div>
+        <div class="wf-file-cell">
+          <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="wf-file-link" style="text-decoration:none; word-break:break-all;">&#128279; ${escapeHtml(url)}</a>
+        </div>
       `;
       return;
     }
