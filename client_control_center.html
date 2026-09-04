@@ -299,14 +299,17 @@
      it might be better to have a menu item for each of those instead --
      but I'm worried about the left menu getting too large." So the 4
      document names (Discovery/Controlling/Research Review/Close-Out) live
-     in one collapsible "Documents" group instead of 4 permanent top-level
-     rows -- collapsed it's a single row like before, expanded it shows the
-     familiar names, and clicking one jumps right to that item. */
-  .cc-nav-group-header { justify-content: space-between; }
-  .cc-nav-chevron { width: 14px !important; height: 14px !important; margin-left: auto; transition: transform 0.15s ease; }
-  .cc-nav-group-header.expanded .cc-nav-chevron { transform: rotate(180deg); }
+     under one "Documents" label instead of 4 permanent top-level rows.
+     Greg (9/4/26): "just show the documents" -- dropped the collapse/
+     expand step this group used to need before you could see them; the
+     label is now plain text, not a button. */
+  .cc-nav-label { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; font-size: 14px; font-weight: 600; color: var(--text); }
+  .cc-nav-label svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--muted); }
   .cc-nav-sub { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 4px 30px; }
-  .cc-nav-sub.hidden { display: none; }
+  /* View Application (Greg, 9/4/26): moved here from a breadcrumb link up
+     top -- "top of the documents list" is exactly what it is, the source
+     application this engagement came from. */
+  .cc-nav-sublink { color: var(--navy-light) !important; }
   .cc-nav-subbtn {
     display: block; width: 100%; text-align: left; padding: 9px 12px;
     border: none; border-left: 3px solid transparent; border-radius: 8px; background: transparent;
@@ -627,10 +630,6 @@
         <div class="cc-pane">
 
           <div class="ccc-summary">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-              <a href="index.html" class="ccc-breadcrumb">&larr; All Engagements</a>
-              <a href="#" id="cm-app-info-link" class="ccc-breadcrumb">Application Info &rarr;</a>
-            </div>
             <h2 id="cm-name"></h2>
             <div id="cm-program"></div>
             <div id="cm-team-lead"></div>
@@ -1109,7 +1108,6 @@
       if (r.is_team_lead && r.users && r.users.full_name) { teamLead = r.users.full_name; break; }
     }
     $("cm-team-lead").textContent = `Team Lead: ${teamLead || "—"}`;
-    $("cm-app-info-link").href = `client_applications.html?client=${client.id}`;
     isTeamLeadHere = (assignRows || []).some((r) => r.is_team_lead && r.user_id === currentUser.id);
     renderStatusToggle(client);
 
@@ -1141,10 +1139,10 @@
   // iframe panes has to re-point src; only re-visiting the SAME pane twice
   // in a row (without leaving it) can skip the reload.
   let ccIframeCurrentKey = null;
-  // Greg (8/31/26): which of the 4 Documents sub-items is currently loaded
-  // in the shared iframe, and whether that group's sub-list is expanded.
+  // Which of the 4 Documents sub-items is currently loaded in the shared
+  // iframe (Greg, 8/31/26). The group itself is always expanded now
+  // (Greg, 9/4/26: "just show the documents", no collapse step first).
   let activeDocKey = null;
-  let docsExpanded = false;
   const DOC_GROUP_ITEMS = [
     { key: "discovery", label: "Discovery Document" },
     { key: "controlling", label: "Controlling Document" },
@@ -1186,52 +1184,33 @@
         secHtml = `<div class="cc-nav-section">${item.section}</div>`;
       }
       if (item.group) {
-        const subHtml = item.docs.map((d) => `
-          <button type="button" class="cc-nav-subbtn" data-pane="${item.key}" data-doc="${d.key}">${d.label}</button>
-        `).join("");
+        // Greg (9/4/26): "remove the documents dropdown and just show the
+        // documents" -- the 4 names are always visible now, no
+        // expand/collapse click needed first. "View Application" (was a
+        // separate breadcrumb link up top) is the first row here, since
+        // "top of the documents list" is exactly what it is: the source
+        // application this engagement was created from.
+        const subHtml = `<a class="cc-nav-subbtn cc-nav-sublink" href="client_applications.html?client=${client.id}">View Application &rarr;</a>` +
+          item.docs.map((d) => `
+            <button type="button" class="cc-nav-subbtn" data-pane="${item.key}" data-doc="${d.key}">${d.label}</button>
+          `).join("");
         return secHtml + `
           <div class="cc-nav-group">
-            <button type="button" class="cc-nav-btn cc-nav-group-header" data-pane="${item.key}" data-group-toggle="1">
-              ${navIconSvg(item.key)}<span>${item.label}</span>
-              <svg class="cc-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </button>
-            <div class="cc-nav-sub hidden" id="cc-nav-sub-${item.key}">${subHtml}</div>
+            <div class="cc-nav-label">${navIconSvg(item.key)}<span>${item.label}</span></div>
+            <div class="cc-nav-sub" id="cc-nav-sub-${item.key}">${subHtml}</div>
           </div>
         `;
       }
       return secHtml + `<button type="button" class="cc-nav-btn" data-pane="${item.key}" ${item.disabled ? 'style="opacity:0.5;" disabled' : ""}>${navIconSvg(item.key)}<span>${item.label}</span></button>`;
     }).join("");
-    $("cc-nav").querySelectorAll(".cc-nav-btn[data-group-toggle]").forEach((btn) => {
-      btn.addEventListener("click", () => toggleDocsGroup());
-    });
-    $("cc-nav").querySelectorAll(".cc-nav-btn:not([data-group-toggle])").forEach((btn) => {
+    $("cc-nav").querySelectorAll(".cc-nav-btn").forEach((btn) => {
       btn.addEventListener("click", () => setActivePane(btn.dataset.pane));
     });
-    $("cc-nav").querySelectorAll(".cc-nav-subbtn").forEach((btn) => {
+    $("cc-nav").querySelectorAll(".cc-nav-subbtn[data-pane]").forEach((btn) => {
       btn.addEventListener("click", () => setActivePane(btn.dataset.pane, btn.dataset.doc));
     });
     ccIframeCurrentKey = null;
     setActivePane(activePane, activeDocKey);
-  }
-
-  // Clicking the "Documents" group header just expands/collapses the list
-  // of 4 familiar names -- if it's collapsed, expand it and jump to the
-  // first one (Discovery Document) same as clicking a single nav item used
-  // to; if it's already expanded, just fold the list back up.
-  function toggleDocsGroup() {
-    if (activePane === "workflow" && docsExpanded) {
-      docsExpanded = false;
-      updateDocsGroupUI();
-    } else {
-      setActivePane("workflow", activeDocKey || "discovery");
-    }
-  }
-
-  function updateDocsGroupUI() {
-    const sub = document.getElementById("cc-nav-sub-workflow");
-    const header = $("cc-nav").querySelector('.cc-nav-group-header[data-pane="workflow"]');
-    if (sub) sub.classList.toggle("hidden", !docsExpanded);
-    if (header) header.classList.toggle("expanded", docsExpanded);
   }
 
   // Data-heavy panes get a few extra pixels back from the nav column --
@@ -1243,18 +1222,12 @@
   function setActivePane(key, docKey) {
     activePane = key;
     activeDocKey = key === "workflow" ? (docKey || activeDocKey || "discovery") : activeDocKey;
-    $("cc-nav").querySelectorAll(".cc-nav-btn:not([data-group-toggle])").forEach((btn) => {
+    $("cc-nav").querySelectorAll(".cc-nav-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.pane === key);
     });
-    const groupHeader = $("cc-nav").querySelector('.cc-nav-btn[data-group-toggle][data-pane="workflow"]');
-    if (groupHeader) groupHeader.classList.toggle("active", key === "workflow");
-    $("cc-nav").querySelectorAll(".cc-nav-subbtn").forEach((btn) => {
+    $("cc-nav").querySelectorAll(".cc-nav-subbtn[data-pane]").forEach((btn) => {
       btn.classList.toggle("active", key === "workflow" && btn.dataset.doc === activeDocKey);
     });
-    if (key === "workflow") {
-      docsExpanded = true;
-      updateDocsGroupUI();
-    }
     $("cc-pane-team").classList.toggle("hidden", key !== "team");
     document.querySelector(".cc-shell").classList.toggle("wide-workspace", WIDE_WORKSPACE_PANE_KEYS.includes(key));
     refreshDelayNoteVisibility();
