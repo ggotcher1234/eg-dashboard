@@ -874,14 +874,15 @@
     });
   })();
 
-  // Applications nav dropdown (Chris, 9/4/26) -- admin-only, left of
-  // Engagements, listing recently submitted applications (any status --
-  // "Pending"/"Draft" are retired as terms, everything submitted is just
-  // an Application). Self-contained on purpose: does its own session/role
-  // check rather than depending on each page's differently-named/timed
-  // admin-check variable, so it works identically everywhere. No per-item
-  // deep link yet -- every row opens the Applications list page; the
-  // dropdown itself is the "what's new" feed.
+  // Applications nav dropdown (Chris, 9/4/26; narrowed same day to New
+  // Applications only) -- admin-only, left of Engagements, listing
+  // applications submitted but not yet assigned a Team Lead (still
+  // status = 'pending' -- assigning a TL is the accept action that moves
+  // one to In Progress, see 110_accept_straight_to_in_progress.sql).
+  // Self-contained on purpose: does its own session/role check rather
+  // than depending on each page's differently-named/timed admin-check
+  // variable, so it works identically everywhere. No per-item deep link
+  // yet -- every row opens the Applications tab.
   (async function () {
     const dd = document.querySelectorAll("#nav-applications-dropdown");
     if (!dd.length) return;
@@ -893,21 +894,21 @@
 
       const { data: apps } = await sb
         .from("client_applications")
-        .select("id, company_name, submitted_at, status")
+        .select("id, company_name, submitted_at")
+        .eq("status", "pending")
         .order("submitted_at", { ascending: false })
         .limit(8);
 
-      const STATUS_LABELS = { accepted: "Accepted", rejected: "Rejected", archived: "Archived" };
       const fmt = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
       const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
-      const viewAllHtml = '<a href="client_applications.html?status=all" class="nav-submenu-viewall">View All Applications &rarr;</a>';
+      const viewAllHtml = '<a href="client_applications.html?status=pending" class="nav-submenu-viewall">View All Applications &rarr;</a>';
       const rowsHtml = (apps || []).map((a) => `
-        <a href="client_applications.html?status=all">
+        <a href="client_applications.html?status=pending">
           ${esc(a.company_name || "Untitled")}
-          <span class="nav-submenu-meta">${[STATUS_LABELS[a.status], fmt(a.submitted_at)].filter(Boolean).join(" &middot; ")}</span>
+          <span class="nav-submenu-meta">Submitted ${fmt(a.submitted_at)}</span>
         </a>
       `).join("");
-      const bodyHtml = (apps && apps.length ? rowsHtml : '<div class="nav-submenu-empty">No applications submitted yet.</div>') + viewAllHtml;
+      const bodyHtml = (apps && apps.length ? rowsHtml : '<div class="nav-submenu-empty">No new applications.</div>') + viewAllHtml;
 
       dd.forEach((el) => {
         el.classList.remove("hidden");
