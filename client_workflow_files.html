@@ -547,7 +547,10 @@
           <div class="wf-item-row hidden" id="wf-row-eval">
             <span class="wf-item-num">4</span>
             <div class="wf-item-body">
-              <div class="wf-item-title">Close-Out Document -- Send Evaluation Email (to the CEO, from the Team Lead)</div>
+              <div class="wf-item-header">
+                <div class="wf-item-title">Close-Out Document -- Send Evaluation Email (to the CEO, from the Team Lead)</div>
+                <div id="wf-eval-actions"></div>
+              </div>
               <div class="wf-item-hint">Write a short note to the CEO with a link to the Close-Out Evaluation form. Review and send the email. You'll get their reply right here.</div>
               <div id="wf-eval-link"></div>
             </div>
@@ -1348,9 +1351,16 @@
     renderEvalLinkField();
   }
 
+  // Greg (9/4/26): "do the same thing with the Close-Out Document" -- same
+  // header/body split as Discovery/Controlling/Research Review: "Create
+  // Email" moves up into the header (it's the Change-equivalent control,
+  // always available), and once a response has come back, "View Full
+  // Response" becomes the prominent primary action in the body -- same
+  // wf-open-btn treatment as "Open Document" on the other three rows.
   function renderEvalLinkField() {
     const container = $("wf-eval-link");
-    if (!container) return;
+    const actions = $("wf-eval-actions");
+    if (!container || !actions) return;
 
     // Greg (8/25/26): "instead of putting a button on the dashboard that
     // links to the evaluation form, change number 4 to Send email with a
@@ -1358,53 +1368,48 @@
     // the old checkbox/"live on the dashboard" toggle and CEO-facing CTA
     // button entirely -- there's no dashboard button anymore (removed from
     // client_public.html), just this one button that drafts the email.
-    const linkHtml = `
+    actions.innerHTML = `
       <button type="button" class="wf-btn wf-btn-icon-email" id="eval-email-create-btn">Create Email</button>
     `;
+    actions.querySelector("#eval-email-create-btn").addEventListener("click", openEvalEmailModal);
 
-    let responseHtml = "";
-    if (evalResponse) {
-      const r = evalResponse;
-      const submittedDate = new Date(r.submitted_at).toLocaleDateString();
-      responseHtml = `
-        <div style="margin-top:14px; padding:14px 16px; background:#f3f6f1; border:1px solid var(--border); border-radius:8px;">
-          <div style="font-weight:700; color:var(--navy); margin-bottom:6px;">
-            &#9989; Submitted ${escapeHtml(submittedDate)}${r.respondent_name ? " by " + escapeHtml(r.respondent_name) : ""}
-          </div>
-          <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">
-            ${r.very_useful_count} Very Useful, ${r.partially_useful_count} Partially Useful, ${r.not_useful_count} Not Useful &mdash; Weighted Score ${r.weighted_score}/${r.weighted_max}
-          </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button type="button" class="btn-secondary btn-sm" id="eval-response-toggle-btn">View Full Response</button>
-            ${isSuperAdmin ? `<button type="button" class="btn-danger btn-sm" id="eval-response-delete-btn">Delete Response</button>` : ""}
-          </div>
-          <div id="eval-response-detail" class="hidden" style="margin-top:10px;"></div>
+    if (!evalResponse) {
+      container.innerHTML = `<div class="wf-doc-empty">No response yet &mdash; use Create Email above to send the CEO a link.</div>`;
+      return;
+    }
+
+    const r = evalResponse;
+    const submittedDate = new Date(r.submitted_at).toLocaleDateString();
+    container.innerHTML = `
+      <div class="wf-file-cell">
+        <button type="button" class="btn-primary wf-open-btn" id="eval-response-toggle-btn">&#9989; View Full Response</button>
+        <span class="wf-file-name">Submitted ${escapeHtml(submittedDate)}${r.respondent_name ? " by " + escapeHtml(r.respondent_name) : ""}</span>
+      </div>
+      <div style="margin-top:14px; padding:14px 16px; background:#f3f6f1; border:1px solid var(--border); border-radius:8px;">
+        <div style="font-size:13px; color:var(--muted); margin-bottom:${isSuperAdmin ? "8px" : "0"};">
+          ${r.very_useful_count} Very Useful, ${r.partially_useful_count} Partially Useful, ${r.not_useful_count} Not Useful &mdash; Weighted Score ${r.weighted_score}/${r.weighted_max}
         </div>
-      `;
-    }
+        ${isSuperAdmin ? `<button type="button" class="btn-danger btn-sm" id="eval-response-delete-btn">Delete Response</button>` : ""}
+        <div id="eval-response-detail" class="hidden" style="margin-top:10px;"></div>
+      </div>
+    `;
 
-    container.innerHTML = linkHtml + responseHtml;
+    const toggleBtn = container.querySelector("#eval-response-toggle-btn");
+    const detail = container.querySelector("#eval-response-detail");
+    toggleBtn.addEventListener("click", () => {
+      const isHidden = detail.classList.contains("hidden");
+      if (isHidden) {
+        detail.innerHTML = renderEvalResponseDetail(evalResponse);
+        detail.classList.remove("hidden");
+        toggleBtn.innerHTML = "&#9989; Hide Full Response";
+      } else {
+        detail.classList.add("hidden");
+        toggleBtn.innerHTML = "&#9989; View Full Response";
+      }
+    });
 
-    container.querySelector("#eval-email-create-btn").addEventListener("click", openEvalEmailModal);
-
-    if (evalResponse) {
-      const toggleBtn = container.querySelector("#eval-response-toggle-btn");
-      const detail = container.querySelector("#eval-response-detail");
-      toggleBtn.addEventListener("click", () => {
-        const isHidden = detail.classList.contains("hidden");
-        if (isHidden) {
-          detail.innerHTML = renderEvalResponseDetail(evalResponse);
-          detail.classList.remove("hidden");
-          toggleBtn.textContent = "Hide Full Response";
-        } else {
-          detail.classList.add("hidden");
-          toggleBtn.textContent = "View Full Response";
-        }
-      });
-
-      const deleteBtn = container.querySelector("#eval-response-delete-btn");
-      if (deleteBtn) deleteBtn.addEventListener("click", deleteEvalResponse);
-    }
+    const deleteBtn = container.querySelector("#eval-response-delete-btn");
+    if (deleteBtn) deleteBtn.addEventListener("click", deleteEvalResponse);
   }
 
   // Super-Admin only (081) -- clears a test/duplicate submission so the
