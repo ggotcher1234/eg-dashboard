@@ -870,7 +870,7 @@
                     <a class="url-open-btn" id="co-website-open" href="#" target="_blank" rel="noopener" title="Open">&#8599;</a>
                   </div>
                   <div class="autofill-row">
-                    <button type="button" class="btn-secondary btn-sm" id="autofill-web-btn">&#10024; Auto-fill from website</button>
+                    <button type="button" class="btn-secondary btn-sm autofill-web-btn">&#10024; Auto-fill from website</button>
                     <span class="field-hint" style="margin:0;">Reads the site for its logo, social links, and a draft description. Only fills fields that are still empty.</span>
                   </div>
                   <div id="autofill-logo-suggest" class="hidden"></div>
@@ -934,6 +934,10 @@
 
             <div class="wizard-subcard" style="margin-top:0; padding-top:0; border-top:none;">
               <div class="subcard-title">Engagement Description</div>
+              <div class="autofill-row" style="margin-bottom:8px;">
+                <button type="button" class="btn-secondary btn-sm autofill-web-btn">&#10024; Auto-fill from website</button>
+                <span class="field-hint" style="margin:0;">Drafts this from the company's website. Fills the logo and social links on the next step too, if they're still empty.</span>
+              </div>
               <div class="rt-toolbar" data-rt-target="co-description">
                 <button type="button" data-rt="bold" title="Bold"><strong>B</strong></button>
                 <button type="button" data-rt="italic" title="Italic"><em>I</em></button>
@@ -1922,13 +1926,15 @@
   }
 
   async function autofillFromWebsite() {
-    const btn = $("autofill-web-btn");
+    // There are two "Auto-fill from website" buttons -- one by the
+    // description (step 1), one by the website field (step 2) -- both run
+    // this. Disable/relabel whichever exist while it works.
+    const btns = [...document.querySelectorAll(".autofill-web-btn")];
     const website = (getFieldValue("co-website") || "").trim() || (currentClient && currentClient.website_url) || "";
-    if (!website) { showBanner("Enter the website address first, then Auto-fill.", "error"); return; }
+    if (!website) { showBanner("Add the website address on the next step first, then Auto-fill.", "error"); return; }
 
-    const label = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "Reading website…";
+    const labels = btns.map((b) => b.textContent);
+    btns.forEach((b) => { b.disabled = true; b.textContent = "Reading website…"; });
     try {
       const { data: { session } } = await sb.auth.getSession();
       if (!session) throw new Error("No active session");
@@ -1990,8 +1996,7 @@
       console.error("autofillFromWebsite error:", err);
       showBanner("Couldn't reach the website reader — try again in a moment.", "error");
     } finally {
-      btn.disabled = false;
-      btn.textContent = label;
+      btns.forEach((b, i) => { b.disabled = false; b.textContent = labels[i]; });
     }
   }
 
@@ -2027,7 +2032,7 @@
     });
   }
 
-  $("autofill-web-btn").addEventListener("click", autofillFromWebsite);
+  document.querySelectorAll(".autofill-web-btn").forEach((b) => b.addEventListener("click", autofillFromWebsite));
 
   // ---------- Generic list sections (Next Steps, Contacts, Team, Competitors, Top Customers) ----------
   // Each of these now lives on its own dedicated wizard step instead of a
