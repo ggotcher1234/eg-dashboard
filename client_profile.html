@@ -195,6 +195,16 @@
   .logo-card-actions { display: flex; gap: 8px; }
   .logo-card-empty { display: flex; align-items: center; gap: 10px; }
 
+  /* "Auto-fill from website" -- reads the site for logo/socials/description
+     (Greg, 9/5/26). Sits under the Website field on the Links step. */
+  .autofill-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+  .autofill-row button[disabled] { opacity: 0.6; cursor: default; }
+  #autofill-logo-suggest {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px;
+    padding: 10px 12px; background: #f3f6f1; border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px;
+  }
+  #autofill-logo-suggest img { height: 36px; max-width: 150px; object-fit: contain; background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 4px; }
+
   /* Real WYSIWYG editor for Description / Business Issues -- a
      contenteditable box with a proper toolbar, not visible markdown
      characters in a plain textarea. Bold/italic/bullets are serialized
@@ -859,6 +869,11 @@
                     <input type="url" id="co-website" placeholder="https://…" />
                     <a class="url-open-btn" id="co-website-open" href="#" target="_blank" rel="noopener" title="Open">&#8599;</a>
                   </div>
+                  <div class="autofill-row">
+                    <button type="button" class="btn-secondary btn-sm" id="autofill-web-btn">&#10024; Auto-fill from website</button>
+                    <span class="field-hint" style="margin:0;">Reads the site for its logo, social links, and a draft description. Only fills fields that are still empty.</span>
+                  </div>
+                  <div id="autofill-logo-suggest" class="hidden"></div>
                 </div>
                 <div class="subcard-title" style="margin-top:16px;">Social Media</div>
                 <!-- Greg (9/2/26): 3 even rows -- fields flow left-to-right,
@@ -1880,6 +1895,136 @@
     renderLogoField();
     showBanner("Logo removed.", "success");
   }
+
+  // ---------- Auto-fill from website (Greg, 9/5/26) ----------
+  // "use the website address entered by the ceo to grab the logo and
+  // social media listings to fill this page automatically" -- plus a
+  // draft company description. The enrich-from-website Edge Function does
+  // the fetching/parsing/LLM (the browser can't fetch a third-party site).
+  // Fills only fields still empty; the logo is offered as a suggestion,
+  // not applied silently, and the description asks before overwriting.
+  const ENRICH_FN_URL = `${SUPABASE_URL}/functions/v1/enrich-from-website`;
+  const AUTOFILL_SOCIAL_MAP = [
+    ["co-linkedin", "linkedin_url", "linkedin", "LinkedIn"],
+    ["co-facebook", "facebook_url", "facebook", "Facebook"],
+    ["co-instagram", "instagram_url", "instagram", "Instagram"],
+    ["co-twitter", "twitter_url", "twitter", "X / Twitter"],
+    ["co-youtube", "youtube_url", "youtube", "YouTube"],
+  ];
+
+  function dataUrlToFile(dataUrl, filename) {
+    const [head, b64] = dataUrl.split(",");
+    const mime = (head.match(/data:([^;]+)/) || [])[1] || "image/png";
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new File([bytes], filename || "logo", { type: mime });
+  }
+
+  async function autofillFromWebsite() {
+    const btn = $("autofill-web-btn");
+    const website = (getFieldValue("co-website") || "").trim() || (currentClient && currentClient.website_url) || "";
+    if (!website) { showBanner("Enter the website address first, then Auto-fill.", "error"); return; }
+
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Reading website…";
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error("No active session");
+      const res = await fetch(ENRICH_FN_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": SUPABASE_ANON_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url: website }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) { showBanner(data.error || `Couldn't read that website (${res.status}).`, "error"); return; }
+
+      const patch = {};
+      const filled = [];
+
+      if (data.website && !(getFieldValue("co-website") || "").trim()) {
+        setFieldValue("co-website", data.website);
+        patch.website_url = data.website;
+      }
+      for (const [id, col, key, name] of AUTOFILL_SOCIAL_MAP) {
+        const val = data.socials && data.socials[key];
+        if (val && !(getFieldValue(id) || "").trim()) {
+          setFieldValue(id, val);
+          patch[col] = val;
+          filled.push(name);
+        }
+      }
+
+      if (data.description) {
+        const current = (getFieldValue("co-description") || "").trim();
+        if (!current || confirm("Replace the current company description with a draft written from the website? (Review it before continuing.)")) {
+          setFieldValue("co-description", data.description);
+          patch.description = data.description;
+          filled.push("Description");
+        }
+      }
+
+      if (Object.keys(patch).length) {
+        setSaveStatus("saving");
+        const { error } = await sb.from("clients").update(patch).eq("id", currentClient.id);
+        if (error) { showBanner("Couldn't save: " + error.message, "error"); setSaveStatus("error"); return; }
+        Object.assign(currentClient, patch);
+        setSaveStatus("saved");
+        syncAllUrlOpenButtons();
+      }
+
+      renderAutofillLogoSuggest(data);
+
+      showBanner(
+        filled.length
+          ? `Filled from the website: ${filled.join(", ")}. Review before continuing.`
+          : "Read the website — nothing new to fill (the empty fields had no match).",
+        "success",
+      );
+    } catch (err) {
+      console.error("autofillFromWebsite error:", err);
+      showBanner("Couldn't reach the website reader — try again in a moment.", "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
+  function renderAutofillLogoSuggest(data) {
+    const box = $("autofill-logo-suggest");
+    if (currentClient.logo_url || !data.logo || !data.logo.dataUrl) {
+      box.classList.add("hidden");
+      box.innerHTML = "";
+      return;
+    }
+    box.classList.remove("hidden");
+    box.innerHTML = `
+      <img src="${data.logo.dataUrl}" alt="Logo found on the website" />
+      <span>Possible logo from the website — favicons and share images aren't always the real logo, so check it.</span>
+      <button type="button" class="btn-secondary btn-sm" data-use-logo>Use this logo</button>
+      <button type="button" class="btn-secondary btn-sm" data-dismiss-logo>Dismiss</button>
+    `;
+    box.querySelector("[data-use-logo]").addEventListener("click", async () => {
+      try {
+        await uploadLogoFile(dataUrlToFile(data.logo.dataUrl, data.logo.filename));
+        box.classList.add("hidden");
+        box.innerHTML = "";
+      } catch (e) {
+        showBanner("Couldn't use that logo — upload one manually.", "error");
+      }
+    });
+    box.querySelector("[data-dismiss-logo]").addEventListener("click", () => {
+      box.classList.add("hidden");
+      box.innerHTML = "";
+    });
+  }
+
+  $("autofill-web-btn").addEventListener("click", autofillFromWebsite);
 
   // ---------- Generic list sections (Next Steps, Contacts, Team, Competitors, Top Customers) ----------
   // Each of these now lives on its own dedicated wizard step instead of a
