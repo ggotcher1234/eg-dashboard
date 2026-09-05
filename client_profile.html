@@ -393,6 +393,14 @@
   .wizard-topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
   .wizard-topbar h2 { margin: 0; font-size: 22px; color: var(--navy); }
   .wizard-progress-text { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  /* Greg (9/5/26): "add preview client info link on every page of the
+     wizard." The bottom-bar Preview button only shows on the last step,
+     and the top overview card (which had its own preview link) is hidden
+     in embed mode -- so this always-visible copy lives in the wizard
+     topbar, present on every step. */
+  .wizard-topbar .wiz-preview-top { font-size: 13.5px; font-weight: 700; color: var(--accent-dark); text-decoration: none; white-space: nowrap; flex-shrink: 0; margin-top: 3px; }
+  .wizard-topbar .wiz-preview-top:hover { text-decoration: underline; }
+  .wizard-topbar .wiz-preview-top.disabled-link { opacity: 0.45; pointer-events: none; }
 
   .wizard-progress-bar { height: 6px; border-radius: 999px; background: #e7ecf1; overflow: hidden; margin-bottom: 20px; }
   .wizard-progress-fill { height: 100%; border-radius: 999px; background: var(--navy-light); transition: width 0.25s ease; }
@@ -795,6 +803,7 @@
           <h2>Info Wizard</h2>
           <div class="wizard-progress-text">Step <span id="wiz-step-num">1</span> of <span id="wiz-step-total">8</span> &middot; <span id="wiz-pct">13%</span> complete</div>
         </div>
+        <a class="wiz-preview-top" id="wiz-preview-top" href="#" target="_blank" rel="noopener">Preview Client Info &#8599;</a>
       </div>
 
       <div class="wizard-progress-bar"><div class="wizard-progress-fill" id="wiz-progress-fill" style="width:13%;"></div></div>
@@ -1553,8 +1562,10 @@
       openBtn.href = "#";
       openBtn.classList.add("disabled-link");
       copyBtn.disabled = true;
-      $("wiz-preview-btn").href = "#";
-      $("wiz-preview-btn").classList.add("disabled-link");
+      for (const id of ["wiz-preview-btn", "wiz-preview-top"]) {
+        $(id).href = "#";
+        $(id).classList.add("disabled-link");
+      }
       return;
     }
     const shareUrl = new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href;
@@ -1566,8 +1577,13 @@
     // same client dashboard, but with ?preview=1 so the sections the
     // client-facing view hides (company overview, NAICS, socials,
     // competitors, customers, client contacts) render for the review.
-    $("wiz-preview-btn").href = new URL(`client_public.html?slug=${encodeURIComponent(client.slug)}&preview=1`, PUBLIC_SITE_BASE).href;
-    $("wiz-preview-btn").classList.remove("disabled-link");
+    // Two copies: the bottom-bar CTA on the last step, and the always-
+    // visible topbar link on every step.
+    const previewUrl = new URL(`client_public.html?slug=${encodeURIComponent(client.slug)}&preview=1`, PUBLIC_SITE_BASE).href;
+    for (const id of ["wiz-preview-btn", "wiz-preview-top"]) {
+      $(id).href = previewUrl;
+      $(id).classList.remove("disabled-link");
+    }
   }
 
   $("share-link-copy-btn").addEventListener("click", async () => {
