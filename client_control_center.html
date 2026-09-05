@@ -295,17 +295,14 @@
   .cc-nav-section { width: 100%; padding: 12px 14px 5px; font-size: 12.5px; font-weight: 700; color: var(--navy); letter-spacing: 0.01em; }
   .cc-nav-section:first-child { padding-top: 4px; }
   .cc-nav-section:not(:first-child) { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
-  /* Greg (8/31/26): "EG people aren't used to the term Workflow Files...
-     it might be better to have a menu item for each of those instead --
-     but I'm worried about the left menu getting too large." So the 4
-     document names (Discovery/Controlling/Research Review/Close-Out) live
-     under one "Documents" label instead of 4 permanent top-level rows.
-     Greg (9/4/26): "just show the documents" -- dropped the collapse/
-     expand step this group used to need before you could see them; the
-     label is now plain text, not a button. */
-  .cc-nav-label { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; font-size: 14px; font-weight: 600; color: var(--text); }
-  .cc-nav-label svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--muted); }
-  .cc-nav-sub { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 4px 30px; }
+  /* The 4 document names (Discovery/Controlling/Research Review/Close-Out)
+     plus "View Application" render as their own rows in the nav. History:
+     Greg (8/31/26) grouped them under a collapsible "Documents" item to
+     keep the menu short; (9/4/26) "just show the documents" dropped the
+     collapse step; (9/5/26) "remove Documents. it adds no value" dropped
+     the group label entirely -- so these rows now sit flush under the
+     section like every other nav item, no under-a-label indent. */
+  .cc-nav-sub { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 6px; }
   /* View Application (Greg, 9/4/26): moved here from a breadcrumb link up
      top -- "top of the documents list" is exactly what it is, the source
      application this engagement came from. */
@@ -324,7 +321,6 @@
     .cc-nav-btn { width: auto; flex: 1 1 auto; padding: 10px 11px; font-size: 13.5px; }
     .cc-nav-btn svg { width: 17px; height: 17px; }
     .cc-nav-group { width: 100%; }
-    .cc-nav-sub { padding-left: 18px; }
   }
 
 
@@ -1157,7 +1153,6 @@
       team: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
       research: '<circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>',
       setup: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
-      workflow: '<path d="M14.5 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8.5L14.5 3z"/><path d="M14 3v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/>',
       dashboard: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/>',
     };
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[key] || ""}</svg>`;
@@ -1190,13 +1185,15 @@
         // separate breadcrumb link up top) is the first row here, since
         // "top of the documents list" is exactly what it is: the source
         // application this engagement was created from.
+        // Greg (9/5/26): "remove Documents. it adds no value." -- the
+        // group's own label row is gone; the rows just sit directly under
+        // the section like the other nav items.
         const subHtml = `<a class="cc-nav-subbtn cc-nav-sublink" href="client_applications.html?client=${client.id}">View Application &rarr;</a>` +
           item.docs.map((d) => `
             <button type="button" class="cc-nav-subbtn" data-pane="${item.key}" data-doc="${d.key}">${d.label}</button>
           `).join("");
         return secHtml + `
           <div class="cc-nav-group">
-            <div class="cc-nav-label">${navIconSvg(item.key)}<span>${item.label}</span></div>
             <div class="cc-nav-sub" id="cc-nav-sub-${item.key}">${subHtml}</div>
           </div>
         `;
