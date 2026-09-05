@@ -1167,7 +1167,14 @@
     const dashboardHref = client.slug ? new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href : null;
     navItems = [
       { key: "team", label: "Team & Hours", section: "Engagement Workspace" },
-      { key: "research", label: "Add Research", section: "Engagement Workspace", src: `client_research.html?client=${client.id}&embed=1` },
+      // Greg (9/5/26), per Chris's notes: "Add Research" moved out of its
+      // own top-level row and into the flat Application/Documents list,
+      // between Controlling Document and Research Review -- it's a "key
+      // item" of the engagement workspace same as those, not a separate
+      // section. Kept here (hidden: true, no section) purely so
+      // setActivePane can still find its src by key; renderNav below
+      // injects its actual row inline inside the "workflow" group's list.
+      { key: "research", label: "Add Research", src: `client_research.html?client=${client.id}&embed=1`, hidden: true },
       {
         key: "workflow", label: "Documents", group: true, section: "Engagement Workspace",
         docs: DOC_GROUP_ITEMS.map((d) => ({ ...d, src: `client_workflow_files.html?client=${client.id}&embed=1&doc=${d.key}` })),
@@ -1177,6 +1184,7 @@
     ];
     let _navSection = null;
     $("cc-nav").innerHTML = navItems.map((item) => {
+      if (item.hidden) return ""; // rendered inline elsewhere (see "workflow" group below)
       let secHtml = "";
       if (item.section && item.section !== _navSection) {
         _navSection = item.section;
@@ -1192,10 +1200,15 @@
         // Greg (9/5/26): "remove Documents. it adds no value." -- the
         // group's own label row is gone; the rows just sit directly under
         // the section like the other nav items.
+        // Greg (9/5/26), per Chris's notes: "Add Research" (the hidden
+        // navItems entry above) is spliced in right after Controlling
+        // Document, ahead of Research Review -- order is now Application,
+        // Discovery, Controlling, Add Research, Research Review, Close-Out.
+        const researchRow = `<button type="button" class="cc-nav-subbtn" data-pane="research">Add Research</button>`;
         const subHtml = `<a class="cc-nav-subbtn cc-nav-sublink" href="client_applications.html?client=${client.id}">View Application &rarr;</a>` +
           item.docs.map((d) => `
             <button type="button" class="cc-nav-subbtn" data-pane="${item.key}" data-doc="${d.key}">${d.label}</button>
-          `).join("");
+          ` + (d.key === "controlling" ? researchRow : "")).join("");
         return secHtml + `
           <div class="cc-nav-group">
             <div class="cc-nav-sub" id="cc-nav-sub-${item.key}">${subHtml}</div>
@@ -1227,7 +1240,10 @@
       btn.classList.toggle("active", btn.dataset.pane === key);
     });
     $("cc-nav").querySelectorAll(".cc-nav-subbtn[data-pane]").forEach((btn) => {
-      btn.classList.toggle("active", key === "workflow" && btn.dataset.doc === activeDocKey);
+      // "Add Research" is a subbtn row now too (see renderNav), but it isn't
+      // one of the doc-key rotation buttons -- it's active purely by pane
+      // key, same as a normal top-level nav button would be.
+      btn.classList.toggle("active", btn.dataset.pane === "research" ? key === "research" : (key === "workflow" && btn.dataset.doc === activeDocKey));
     });
     $("cc-pane-team").classList.toggle("hidden", key !== "team");
     document.querySelector(".cc-shell").classList.toggle("wide-workspace", WIDE_WORKSPACE_PANE_KEYS.includes(key));
