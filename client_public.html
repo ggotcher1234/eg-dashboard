@@ -49,6 +49,36 @@
   .company-name { font-size: 21px; font-weight: 700; color: var(--navy); margin: 0; }
   .company-address { font-size: 13px; color: var(--muted); margin-top: 3px; }
 
+  .company-description { font-size: 14px; line-height: 1.65; }
+  .company-description p { margin: 0 0 10px; }
+  .company-description p:last-child { margin-bottom: 0; }
+  .company-description ul { margin: 0 0 10px; padding-left: 22px; }
+  .company-description ul:last-child { margin-bottom: 0; }
+  .company-description strong { color: var(--navy); text-transform: uppercase; font-size: 12.5px; letter-spacing: 0.3px; }
+  .company-description em { font-style: italic; }
+
+  .company-naics { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .company-website { display: inline-block; font-size: 13.5px; font-weight: 700; color: var(--accent-dark); text-decoration: none; margin-top: 10px; }
+  .company-website:hover { text-decoration: underline; }
+  .company-socials { margin-top: 8px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .social-link { font-size: 13px; font-weight: 600; text-decoration: none; }
+  .social-link.li { color: #0a66c2; }
+  .social-link.fb { color: #1877f2; }
+  .social-link.ig { color: #c1327a; }
+  .social-link.tw { color: #14304d; }
+  .social-link.yt { color: #c4302b; }
+  .social-link.ot { color: #5b6472; }
+  .social-link:hover { text-decoration: underline; }
+
+  .stat-pills { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .stat-pill { display: inline-flex; align-items: center; gap: 9px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 9px 16px; font-size: 13px; font-weight: 700; color: var(--navy); cursor: pointer; }
+  .stat-pill:hover { border-color: var(--accent); }
+  .stat-pill.open { border-color: var(--accent); background: #f3f6f1; }
+  .stat-pill .count { background: #eef1f4; color: var(--muted); border-radius: 999px; padding: 2px 9px; font-size: 11.5px; }
+  .stat-pill .pill-chevron { color: var(--muted); font-size: 11px; transition: transform 0.15s ease; }
+  .stat-pill.open .pill-chevron { transform: rotate(90deg); }
+  #stat-pill-details .action-body { margin: 10px 0 0; }
+
   .action-bar { background: var(--accent); color: #fff; border-radius: 8px; padding: 13px 20px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; cursor: pointer; font-weight: 700; font-size: 14px; }
   .action-bar:hover { background: var(--accent-dark); }
   .action-bar .ab-chevron { transition: transform 0.15s ease; }
@@ -62,6 +92,29 @@
   .action-row .ar-sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
   .action-row .ar-sub a { color: var(--accent-dark); text-decoration: none; }
   .action-row.done .ar-title { text-decoration: line-through; color: var(--muted); }
+
+  /* Fixed layout so a handful of very long tracking-parameter URLs in the
+     Website column can't blow the table wider than the card -- each column
+     gets a hard percentage cap and long content truncates/wraps inside it
+     instead of pushing later columns off to the right. Greg (8/18/26). */
+  .mini-table { width: 100%; border-collapse: collapse; font-size: 13.5px; table-layout: fixed; }
+  .mini-table th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px;
+    color: var(--muted); font-weight: 700; padding: 0 14px 7px 0; border-bottom: 1px solid var(--border);
+  }
+  .mini-table td { padding: 9px 14px 9px 0; border-bottom: 1px solid #f0f2f4; vertical-align: top; overflow: hidden; }
+  .mini-table tr:last-child td { border-bottom: none; }
+  .mini-table th:nth-child(1), .mini-table td:nth-child(1) { width: 22%; word-break: break-word; }
+  .mini-table th:nth-child(2), .mini-table td:nth-child(2) { width: 36%; }
+  .mini-table th:nth-child(3), .mini-table td:nth-child(3) { width: 20%; word-break: break-word; }
+  .mini-table th:nth-child(4), .mini-table td:nth-child(4) { width: 22%; word-break: break-word; }
+  .mini-table td.mt-name { font-weight: 600; }
+  .mini-table a { color: var(--accent-dark); text-decoration: none; }
+  .mini-table a:hover { text-decoration: underline; }
+  /* Website links truncate to one line with an ellipsis rather than
+     wrapping raw URLs across the row -- the full address is still in the
+     href and shows on hover via the title attribute. */
+  .mini-table td:nth-child(2) a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Close-Out Evaluation has no document to open like the other three
      workflow steps do -- it's rows in client_evaluation_responses, not a
@@ -148,7 +201,7 @@
      expanded, with none of the click-to-open chrome. */
   @media print {
     body { background: #fff; }
-    #print-btn, .ab-chevron { display: none !important; }
+    #print-btn, .stat-pill .count, .ab-chevron, .pill-chevron { display: none !important; }
     .action-bar { cursor: default; }
     .action-body { display: block !important; }
     .card, .research-card, .action-bar, .action-body { break-inside: avoid; }
@@ -208,6 +261,43 @@
     <div class="research-grid" id="research-grid"></div>
 
     <div class="card">
+      <!-- Company Info used to be its own bar with Top Business Issues as a
+           separate bar right after it, plus NAICS/website/socials and the
+           Competitors/Top Customers/Next Steps stat pills all living as
+           plain siblings below both. Chris asked (8/26/26) for all of that
+           to roll up into the one Company Info accordion instead of sitting
+           as separate top-level bars/pills -- so everything below now
+           lives inside bar-company_info-body, and only the single
+           "Company Info" bar toggles it all open/closed. -->
+      <div id="company-info-bar-wrap" class="hidden">
+        <div class="action-bar" id="bar-company_info">
+          <span>&#127970; Company Info</span>
+          <span class="ab-chevron">&#9656;</span>
+        </div>
+        <div class="action-body" id="bar-company_info-body">
+          <div id="company-description-section" class="hidden">
+            <div style="font-weight:700; font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:6px;">&#128196; Company Description</div>
+            <div id="company-description-slot"></div>
+          </div>
+
+          <div id="top-issues-section" class="hidden" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+            <div style="font-weight:700; font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:6px;">&#9888;&#65039; Top Business Issues</div>
+            <div class="company-description" id="top-issues-content"></div>
+          </div>
+
+          <div class="company-naics hidden" id="company-naics"></div>
+          <a class="company-website hidden" id="company-website" target="_blank" rel="noopener"></a>
+          <div class="company-socials" id="company-socials"></div>
+          <div class="stat-pills" id="stat-pills"></div>
+          <div id="stat-pill-details">
+            <div class="action-body" id="detail-competitors"></div>
+            <div class="action-body" id="detail-top_customers"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
       <div id="action-bars"></div>
     </div>
 
@@ -257,6 +347,14 @@
 
   const STATUS_LABELS = { active: "Active Engagement", finalized: "Final Engagement Archive", archived: "Archived" };
 
+  // Greg (9/5/26): the client-facing dashboard hides Company Info (company
+  // overview, NAICS, socials) and Client Contacts -- "they already know
+  // their own information." The Team Lead's "Preview Client Info" button
+  // on the Info Wizard passes ?preview=1 so those sections come back for
+  // an internal review of the full record. The real /c/<slug> share link
+  // never carries it, so clients still don't see them.
+  const previewMode = new URLSearchParams(location.search).get("preview") === "1";
+
   // GIS is folded into Outbound Marketing, not its own card (Greg, 8/22/26).
   const RESEARCH_AREAS = [
     ["market_dynamics", "Market Dynamics Research", "&#128200;"],
@@ -301,6 +399,37 @@
     if (!looksLikeApex) return labels[0];
 
     return null;
+  }
+
+  // Very small markdown-lite renderer for the free-text Company Description
+  // and Top Business Issues fields (client_profile.html's editor writes
+  // this same format): "- " lines become bullets, **text** becomes bold
+  // (uppercase section-label style on Description, see CSS), *text*
+  // becomes italic.
+  function renderDescription(text) {
+    if (!text) return "";
+    const lines = String(text).split(/\r?\n/);
+    let html = "";
+    let inList = false;
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) { if (inList) { html += "</ul>"; inList = false; } continue; }
+      if (line.startsWith("- ")) {
+        if (!inList) { html += "<ul>"; inList = true; }
+        html += `<li>${formatInline(line.slice(2))}</li>`;
+      } else {
+        if (inList) { html += "</ul>"; inList = false; }
+        html += `<p>${formatInline(line)}</p>`;
+      }
+    }
+    if (inList) html += "</ul>";
+    return html;
+  }
+
+  function formatInline(line) {
+    return escapeHtml(line)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>");
   }
 
   // Word/Excel/PowerPoint files have no native in-browser viewer -- opening
@@ -434,13 +563,7 @@
     }
   }
 
-  // Greg (9/4/26): "remove the company info and client contacts on the EG
-  // Dashboard -- they already know their own information." Dropped the
-  // whole Company Info accordion (description, Top Business Issues, NAICS,
-  // website, socials, and the Competitors/Top Customers stat pills that
-  // lived inside it) -- only the brand header (logo/name/address) and the
-  // footer's program name stay.
-  function renderCompany(row) {
+  function renderCompany(row, expandAll) {
     const c = row.company || {};
     if (c.logo_url) {
       $("company-logo-wrap").classList.remove("hidden");
@@ -453,9 +576,101 @@
       $("footer-program-wrap").classList.remove("hidden");
       $("footer-program").textContent = c.program_name;
     }
+
+    if (c.description) {
+      $("company-description-section").classList.remove("hidden");
+      $("company-description-slot").innerHTML = `<div class="company-description">${renderDescription(c.description)}</div>`;
+    }
+
+    if (c.top_business_issues) {
+      $("top-issues-section").classList.remove("hidden");
+      $("top-issues-content").innerHTML = renderDescription(c.top_business_issues);
+    }
+
+    // Everything inside the Company Info accordion now rolls up together
+    // (Greg/Chris, 8/26/26) -- Top Business Issues, NAICS, website, socials,
+    // and the Competitors/Top Customers stat pills all live inside
+    // bar-company_info-body, so the bar itself shows if ANY of that has
+    // content, not just the description. Stat-pill counts come from the
+    // same `row` this function already receives, same as renderStatPills().
+    // (Greg, 8/29/26: Next Steps removed from the client-facing dashboard
+    // entirely -- the workflow tracker above is the only progress display
+    // now, so it's dropped from this check too.)
+    const hasStats = (row.competitors || []).length || (row.top_customers || []).length;
+    const hasSocials = c.linkedin_url || c.facebook_url || c.instagram_url || c.twitter_url || c.youtube_url || c.other_social_url;
+    // Team Lead preview only -- the client-facing view leaves this hidden.
+    if (previewMode && (c.description || c.top_business_issues || c.naics_codes || c.website_url || hasSocials || hasStats)) {
+      $("company-info-bar-wrap").classList.remove("hidden");
+      $("bar-company_info").classList.toggle("open", !!expandAll);
+      $("bar-company_info-body").classList.toggle("open", !!expandAll);
+    }
+
+    if (c.naics_codes) {
+      $("company-naics").classList.remove("hidden");
+      $("company-naics").textContent = "NAICS: " + c.naics_codes;
+    }
+    if (c.website_url) {
+      const websiteEl = $("company-website");
+      websiteEl.classList.remove("hidden");
+      websiteEl.href = c.website_url;
+      websiteEl.textContent = c.website_url;
+    }
+
+    const socials = [
+      c.linkedin_url && ["li", "LinkedIn", c.linkedin_url],
+      c.facebook_url && ["fb", "Facebook", c.facebook_url],
+      c.instagram_url && ["ig", "Instagram", c.instagram_url],
+      c.twitter_url && ["tw", "X / Twitter", c.twitter_url],
+      c.youtube_url && ["yt", "YouTube", c.youtube_url],
+      c.other_social_url && ["ot", "Other", c.other_social_url],
+    ].filter(Boolean);
+    $("company-socials").innerHTML = socials
+      .map(([cls, label, url]) => `<a class="social-link ${cls}" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`)
+      .join("");
   }
 
+  // Competitors / Top Customers used to also get their own full-width
+  // accordion bars below, which just duplicated these pill counts. The
+  // pills are now the only place to see them — clicking one expands the
+  // same list content right underneath instead.
+  // (Greg, 8/29/26: Next Steps pill removed -- Project Next Steps no longer
+  // surfaces on the client-facing dashboard at all; the workflow tracker
+  // above is the sole progress display now.)
+  function renderStatPills(row) {
+    const competitorsCount = (row.competitors || []).length;
+    const customersCount = (row.top_customers || []).length;
+    $("stat-pills").innerHTML = `
+      <div class="stat-pill" data-pill="competitors">&#127970; Competitors <span class="count">${competitorsCount}</span> <span class="pill-chevron">&#9656;</span></div>
+      <div class="stat-pill" data-pill="top_customers">&#127991; Top Customers <span class="count">${customersCount}</span> <span class="pill-chevron">&#9656;</span></div>
+    `;
+
+    $("detail-competitors").innerHTML = renderActionBody("competitors", row.competitors || []);
+    $("detail-top_customers").innerHTML = renderActionBody("top_customers", row.top_customers || []);
+
+    $("stat-pills").querySelectorAll("[data-pill]").forEach((pill) => {
+      pill.addEventListener("click", () => {
+        const key = pill.dataset.pill;
+        const detail = $(`detail-${key}`);
+        const wasOpen = detail.classList.contains("open");
+        // Only one pill's detail shows at a time.
+        $("stat-pills").querySelectorAll(".stat-pill").forEach((p) => p.classList.remove("open"));
+        document.querySelectorAll("#stat-pill-details .action-body").forEach((el) => el.classList.remove("open"));
+        if (!wasOpen) {
+          pill.classList.add("open");
+          detail.classList.add("open");
+        }
+      });
+    });
+  }
+
+  // Competitors, Top Customers, and Next Steps used to be here too — they
+  // now live only under the stat pills above (see renderStatPills), since a
+  // full-width accordion bar down here just duplicated that count.
   const ACTION_BAR_DEFS = [
+    // Client Contacts is Team-Lead-preview-only (?preview=1) -- the
+    // client-facing dashboard drops it, they already have their own
+    // contacts (Greg, 9/4/26).
+    ...(previewMode ? [{ key: "contacts", icon: "&#128100;", label: () => "Client Contacts" }] : []),
     { key: "team", icon: "&#128101;", label: () => "Economic Gardening Team" },
     { key: "resource_vault", icon: "&#128193;", label: () => "Resource Vault" },
   ];
@@ -498,6 +713,14 @@
     // never blanks out this whole section (Greg, 8/19/26).
     const rows = (rowsIn || []).filter(Boolean);
     if (!rows.length) return `<div class="action-empty">Nothing here yet.</div>`;
+    if (key === "contacts") {
+      return rows.map((r) => `
+        <div class="action-row">
+          <div class="ar-title">${escapeHtml(r.name)}</div>
+          <div class="ar-sub">${[r.title, r.email, r.phone].filter(Boolean).map(escapeHtml).join(" · ")}</div>
+        </div>
+      `).join("");
+    }
     if (key === "team") {
       const SPECIALTY_LABELS = { team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing", gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control" };
       return rows.map((r) => `
@@ -521,6 +744,23 @@
           </div>
         `;
       }).join("");
+    }
+    if (key === "competitors" || key === "top_customers") {
+      return `
+        <table class="mini-table">
+          <thead><tr><th>Name</th><th>Website</th><th>Location</th><th>NAICS</th></tr></thead>
+          <tbody>
+            ${rows.map((r) => `
+              <tr>
+                <td class="mt-name">${escapeHtml(r.name)}</td>
+                <td>${r.website_url ? `<a href="${escapeHtml(r.website_url)}" target="_blank" rel="noopener" title="${escapeHtml(r.website_url)}">${escapeHtml(r.website_url)}</a>` : "—"}</td>
+                <td>${escapeHtml(r.location || "—")}</td>
+                <td>${escapeHtml(r.notes || "—")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
     }
     return "";
   }
@@ -686,7 +926,8 @@
     if (isFinalized) $("archive-badge-wrap").classList.remove("hidden");
 
     renderBrandHeader(row);
-    renderCompany(row);
+    renderCompany(row, isFinalized);
+    renderStatPills(row);
     renderActionBars(row, isFinalized);
     renderWorkflow(row.workflow);
     renderResearchGrid(row.research_areas);
@@ -697,6 +938,16 @@
   }
 
   $("print-btn").addEventListener("click", () => window.print());
+
+  // Company Info's bar is static markup (not regenerated per row like the
+  // ACTION_BAR_DEFS ones), so it's wired once here instead of inside
+  // renderActionBars. Top Business Issues, NAICS/website/socials, and the
+  // stat pills all live inside its body now (Greg/Chris, 8/26/26) -- there's
+  // no separate Top Business Issues bar anymore.
+  $("bar-company_info").addEventListener("click", () => {
+    $("bar-company_info").classList.toggle("open");
+    $("bar-company_info-body").classList.toggle("open");
+  });
 
   init();
 </script>
