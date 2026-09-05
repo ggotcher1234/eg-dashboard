@@ -1,24 +1,27 @@
 // enrich-from-website
 //
-// Given a company's website URL, this function fetches the homepage
-// (server-side -- the browser can't, CORS blocks fetching third-party
-// sites) and pulls back three things to pre-fill the Info Wizard's
-// "Website & Social Media Links" step and the "Company Description" step:
+// Given a company's website URL, this function pulls back three things to
+// pre-fill the Info Wizard's "Website & Social Media Links" step and the
+// "Company Description" step:
 //
-//   1. Social links  -- scanned out of the page's <a href> tags by known
-//      host (linkedin/facebook/instagram/x/youtube). Reliable, because
-//      these almost always sit in the footer, which is in the static HTML.
-//   2. A logo guess  -- apple-touch-icon > og:image > icon, fetched and
-//      returned inline as a data: URL so the browser can hand it straight
-//      to the existing logo upload. Best-effort: favicons are low-res and
-//      og:image is often a banner, so the Team Lead still eyeballs it.
+//   1. Social links  -- Brandfetch's Brand API `links` first (clean,
+//      canonical), then any gaps filled from <a href> tags scraped off the
+//      homepage (linkedin/facebook/instagram/x/youtube -- reliable, these
+//      sit in the footer, which is in the static HTML).
+//   2. A logo  -- Brandfetch's proper wordmark (SVG/PNG) when it has the
+//      brand; otherwise a best-effort guess off the page (apple-touch-icon
+//      > og:image > icon). Either way the bytes come back inline as a
+//      data: URL so the browser hands it straight to the existing logo
+//      upload. The Team Lead still eyeballs it.
 //   3. A draft description -- the homepage (plus /about if found) stripped
-//      to text and handed to Claude to write 1-2 plain paragraphs. Works
-//      for any company with real copy on its site, regardless of size.
+//      to text and handed to Claude to write 1-2 plain paragraphs; if the
+//      site is too thin, Brandfetch's own description is the fallback.
 //
-// Nothing here touches Supabase data. Auth is only "is this a real signed-
-// in user" (same Bearer session + publishable apikey every page sends),
-// so a random unauthenticated caller can't use it as a free scraper/LLM.
+// The homepage itself is fetched server-side (the browser can't -- CORS
+// blocks third-party sites). Nothing here touches Supabase data. Auth is
+// only "is this a real signed-in user" (same Bearer session + publishable
+// apikey every page sends), so a random unauthenticated caller can't use
+// it as a free scraper/LLM.
 //
 // HOW TO DEPLOY (no CLI needed)
 //   1. Supabase Dashboard -> Edge Functions -> Create a new function named
@@ -28,10 +31,19 @@
 //   4. In the function's Settings tab, turn OFF "Verify JWT with legacy
 //      secret" (same as eg-dashboard-ai -- this function does its own
 //      session check below).
-//   SUPABASE_URL is injected automatically. ANTHROPIC_API_KEY is the same
-//   secret eg-dashboard-ai already uses -- if that function works, this
-//   one has the key too. Without the key, socials + logo still work and
-//   the description is simply skipped.
+//
+// SECRETS (Edge Functions -> Secrets in the dashboard)
+//   ANTHROPIC_API_KEY  -- the same one eg-dashboard-ai already uses; if
+//                         that function works, this one has it too. Without
+//                         it the Claude-written description is skipped.
+//   BRANDFETCH_API_KEY -- from brandfetch.com -> your org -> Keys & MCP
+//                         (the "Brand API" secret key, the long string
+//                         shown under "Authenticate requests with your API
+//                         key"). Optional: without it, everything still
+//                         works off the homepage scrape alone, just with a
+//                         rougher logo. Brand API calls are metered by
+//                         Brandfetch, so this only fires on button click,
+//                         one call per engagement.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
@@ -43,14 +55,16 @@ const CORS_HEADERS = {
 };
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+const BRANDFETCH_API_KEY = Deno.env.get("BRANDFETCH_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const CLAUDE_MODEL = "claude-sonnet-5";
+const BRANDFETCH_TIMEOUT_MS = 8000;
 
 const FETCH_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 const PAGE_TIMEOUT_MS = 9000;
 const LOGO_TIMEOUT_MS = 7000;
-const MAX_LOGO_BYTES = 600_000;
+const MAX_LOGO_BYTES = 1_200_000;
 const MAX_TEXT_CHARS = 9000;
 
 function jsonResponse(body: unknown, status = 200) {
@@ -82,6 +96,7 @@ Deno.serve(async (req: Request) => {
     const rawUrl = typeof body?.url === "string" ? body.url.trim() : "";
     const homepage = normalizeUrl(rawUrl);
     if (!homepage) return jsonResponse({ error: "That doesn't look like a valid website address." }, 400);
+    const domain = new URL(homepage).hostname.replace(/^www\./i, "");
 
     // ---- Fetch the homepage ----
     let finalUrl = homepage;
@@ -95,10 +110,28 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Couldn't reach that website (it timed out or blocked the request)." }, 502);
     }
 
-    const socials = extractSocials(html, finalUrl);
-    const logoCandidates = extractLogoCandidates(html, finalUrl);
+    // ---- Brandfetch (best source when it has the brand) ----
+    let brand: BrandfetchResult | null = null;
+    if (BRANDFETCH_API_KEY) {
+      try {
+        brand = await fetchBrandfetch(domain);
+      } catch (e) {
+        console.error("fetchBrandfetch failed:", e);
+      }
+    }
 
-    // ---- Description: homepage text (+ /about if we can find one) -> Claude ----
+    // ---- Socials: Brandfetch links first, homepage scrape fills the gaps ----
+    const socials: Record<string, string> = { ...(brand ? brandfetchSocials(brand) : {}) };
+    const scraped = extractSocials(html, finalUrl);
+    for (const [k, v] of Object.entries(scraped)) if (!socials[k]) socials[k] = v;
+
+    // ---- Logo candidates: Brandfetch wordmark first, then page guesses ----
+    const logoCandidates: string[] = [];
+    const bfLogo = brand ? pickBrandfetchLogo(brand) : null;
+    if (bfLogo) logoCandidates.push(bfLogo);
+    for (const c of extractLogoCandidates(html, finalUrl)) if (!logoCandidates.includes(c)) logoCandidates.push(c);
+
+    // ---- Description: homepage text (+ /about) -> Claude; Brandfetch as fallback ----
     let description: string | null = null;
     if (ANTHROPIC_API_KEY) {
       let text = htmlToText(html);
@@ -118,18 +151,24 @@ Deno.serve(async (req: Request) => {
         }
       }
     }
+    if (!description && brand) {
+      const bfText = (brand.longDescription || brand.description || "").trim();
+      if (bfText.length > 60) description = bfText;
+    }
 
-    // ---- Logo: fetch the top candidate's bytes, return inline ----
+    // ---- Logo: fetch the first candidate whose bytes come back, inline it ----
     let logo: { dataUrl: string; filename: string } | null = null;
+    let logoSource: "brandfetch" | "website" | null = null;
     for (const candidate of logoCandidates) {
       logo = await tryFetchLogo(candidate);
-      if (logo) break;
+      if (logo) { logoSource = candidate === bfLogo ? "brandfetch" : "website"; break; }
     }
 
     return jsonResponse({
       website: finalUrl,
       socials,
       logo,
+      logoSource,
       logoSourceUrl: logo ? undefined : (logoCandidates[0] || null),
       description,
     });
@@ -175,6 +214,81 @@ function absolutize(href: string, base: string): string | null {
   } catch {
     return null;
   }
+}
+
+// ---- Brandfetch -----------------------------------------------------------
+// https://docs.brandfetch.com/reference/brand-api  --  GET /v2/brands/{domain}
+// with  Authorization: Bearer <BRANDFETCH_API_KEY>.
+
+interface BrandfetchResult {
+  description?: string;
+  longDescription?: string;
+  links?: { name?: string; url?: string }[];
+  logos?: {
+    type?: string; // "logo" | "symbol" | "icon" | "other"
+    theme?: string; // "light" | "dark"
+    formats?: { src?: string; format?: string; width?: number; height?: number; size?: number }[];
+  }[];
+}
+
+async function fetchBrandfetch(domain: string): Promise<BrandfetchResult | null> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), BRANDFETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(`https://api.brandfetch.io/v2/brands/${encodeURIComponent(domain)}`, {
+      headers: { Authorization: `Bearer ${BRANDFETCH_API_KEY}`, Accept: "application/json" },
+      signal: ctrl.signal,
+    });
+    if (res.status === 404) return null; // no brand on file -- fine, we fall back
+    if (!res.ok) {
+      console.error("Brandfetch API error:", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+    return await res.json() as BrandfetchResult;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// Brandfetch `links` names -> our field keys.
+const BF_LINK_MAP: Record<string, string> = {
+  linkedin: "linkedin",
+  facebook: "facebook",
+  instagram: "instagram",
+  twitter: "twitter",
+  x: "twitter",
+  youtube: "youtube",
+};
+
+function brandfetchSocials(brand: BrandfetchResult): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const link of brand.links || []) {
+    const key = BF_LINK_MAP[(link.name || "").toLowerCase()];
+    if (key && link.url && !out[key]) out[key] = link.url;
+  }
+  return out;
+}
+
+// Pick one logo src: prefer the full wordmark ("logo") over a "symbol"
+// over an "icon"; a light-theme variant (shows on the light dashboard
+// header) over dark; and an SVG, else the widest reasonable PNG.
+function pickBrandfetchLogo(brand: BrandfetchResult): string | null {
+  const logos = brand.logos || [];
+  const typeRank: Record<string, number> = { logo: 0, symbol: 1, icon: 2, other: 3 };
+  const scored = logos
+    .map((l) => ({ l, rank: (typeRank[l.type || "other"] ?? 3) + (l.theme === "dark" ? 0.5 : 0) }))
+    .sort((a, b) => a.rank - b.rank);
+  for (const { l } of scored) {
+    const fmts = (l.formats || []).filter((f) => f.src);
+    const svg = fmts.find((f) => (f.format || "").toLowerCase() === "svg");
+    if (svg) return svg.src!;
+    const png = fmts
+      .filter((f) => (f.format || "").toLowerCase() === "png" && (f.width || 0) <= 2000)
+      .sort((a, b) => (b.width || 0) - (a.width || 0))[0];
+    if (png) return png.src!;
+    if (fmts[0]) return fmts[0].src!;
+  }
+  return null;
 }
 
 // ---- Socials ----------------------------------------------------------------
