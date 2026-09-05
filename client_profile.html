@@ -268,6 +268,25 @@
   .add-row-form .field { margin-bottom: 0; flex: 1; min-width: 140px; }
   .add-row-form label { font-size: 11px; }
 
+  /* Resources (Greg, 9/5/26: moved here from its own Resource Vault (TL)
+     page as wizard step 6, renamed "Resources"). Ported straight from
+     client_research.html's Resource Vault -- a plain client-style list of
+     title + description, the title linking out to its URL or opening its
+     uploaded file, with a red x to remove. */
+  .rv-table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .rv-simple-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 12px 16px; border-bottom: 1px solid #f0f2f4; }
+  .rv-simple-row:last-child { border-bottom: none; }
+  .rv-simple-main { min-width: 0; }
+  .rv-simple-title { font-size: 14px; font-weight: 700; color: var(--accent-dark); line-height: 1.35; word-break: break-word; }
+  .rv-simple-title a, .rv-simple-title .rv-file-link { color: inherit; text-decoration: none; cursor: pointer; }
+  .rv-simple-title a:hover, .rv-simple-title .rv-file-link:hover { text-decoration: underline; }
+  .rv-simple-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; word-break: break-word; }
+  .rv-x-btn {
+    flex-shrink: 0; background: none; border: none; color: var(--danger); font-size: 19px; font-weight: 700;
+    line-height: 1; cursor: pointer; padding: 4px 10px; border-radius: 6px;
+  }
+  .rv-x-btn:hover { color: var(--danger-dark); background: #fdecea; }
+
   /* Competitors / Top Customers: rendered as a real spreadsheet-style
      table (Company | URL | Location | Notes/NAICS Code, one column-
      header row, one line per item, delete "x" inline at the end of the
@@ -978,6 +997,37 @@
             </div>
           </div>
 
+          <!-- Step 6: Resources (Greg, 9/5/26: moved here from its own
+               Resource Vault (TL) page, renamed "Resources"). -->
+          <div class="wizard-panel-card wizard-panel hidden" data-step="6">
+            <h3>Resources</h3>
+            <div class="wizard-panel-hint">Each resource can be a Link URL (opens in a new tab -- a video, quiz, external doc, etc.) or an uploaded file (downloads), whichever fits. Add anything client-specific below; resources set up for every client also show here.</div>
+            <span class="accordion-count" id="resource_vault-count" style="display:inline-block; margin-bottom:10px;"></span>
+            <div class="rv-table-wrap">
+              <div id="resource_vault-list"></div>
+            </div>
+            <form class="add-row-form" id="resource-vault-add-form">
+              <div class="field">
+                <label for="rv-new-title">Title</label>
+                <input type="text" id="rv-new-title" required />
+              </div>
+              <div class="field">
+                <label for="rv-new-description">Description (shows below icon)</label>
+                <input type="text" id="rv-new-description" />
+              </div>
+              <div class="field">
+                <label for="rv-new-url">Link URL (optional)</label>
+                <input type="text" id="rv-new-url" placeholder="https://…" />
+              </div>
+              <div class="field" style="flex: 0 0 auto; min-width:180px;">
+                <label for="rv-new-file">File (optional)</label>
+                <input type="file" id="rv-new-file" />
+              </div>
+              <div class="field-hint" style="flex:1 1 220px; margin-bottom:10px;">Use one or the other &mdash; a link URL opens in a new tab, a file downloads. If both are set, the link wins.</div>
+              <button type="submit" class="btn-secondary btn-sm">+ Add Resource (this client only)</button>
+            </form>
+          </div>
+
         </div>
       </div>
 
@@ -1339,9 +1389,11 @@
   });
 
   // Section keys used by other pages' deep links (?section=…) map onto the
-  // wizard step that now contains that content -- renumbered 8/30/26 when
-  // Workflow Docs moved to step 1.
-  const SECTION_TO_STEP = { contacts: 4, team: 4, competitors: 5, top_customers: 6, workflow: 1 };
+  // wizard step that now contains that content. Kept in sync with
+  // WIZARD_STEPS above by hand -- this was stale (off by one on every key,
+  // plus a "workflow" entry for a step that no longer exists here at all)
+  // until fixed alongside adding the "resources" step (Greg, 9/5/26).
+  const SECTION_TO_STEP = { contacts: 3, team: 3, competitors: 4, top_customers: 5, resources: 6 };
 
   // ---------- Standardized Search/Print/Export/Import toolbar ----------
   // Same four controls, same order, on every internal page (Greg, 8/27/26).
@@ -1474,12 +1526,14 @@
     renderListSections();
     await Promise.all(LIST_CONFIGS.map((cfg) => loadListSection(cfg)));
     await loadPartnerContactsSection();
+    await loadResourceVault(client.id);
 
     // Deep links from other pages (?section=next_steps, ?section=contacts,
     // etc.) land directly on the wizard step that now holds that content,
     // instead of scrolling a long single-page form. ?section=research is
-    // no longer part of this page at all — Resource Vault and the
-    // Economic Gardening Research Reports moved to their own page.
+    // no longer part of this page at all — the Economic Gardening Research
+    // Reports moved to their own page. Resources (the old Resource Vault)
+    // moved the other way, back onto this page as step 6 (Greg, 9/5/26).
     const sectionParam = new URLSearchParams(location.search).get("section");
     if (sectionParam === "research") {
       location.href = `client_research.html?client=${client.id}`;
@@ -2329,6 +2383,191 @@
     return FILE_TYPE_ICONS[ext] || "\u{1F4C4}";
   }
 
+  // ---------- Resources (Greg, 9/5/26: ported from client_research.html's
+  // Resource Vault, now wizard step 6) ----------
+  // Declaring the right Content-Type at upload time (belt-and-suspenders
+  // alongside openStoredDocument() below, which is what actually fixes
+  // rendering -- see its comment for the real root cause).
+  const MIME_BY_EXT = {
+    html: "text/html", htm: "text/html",
+    pdf: "application/pdf",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    csv: "text/csv",
+    ppt: "application/vnd.ms-powerpoint",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+    txt: "text/plain",
+    zip: "application/zip",
+  };
+  function contentTypeFor(file) {
+    const name = (file.name || "").toLowerCase();
+    const dot = name.lastIndexOf(".");
+    const ext = dot === -1 ? "" : name.slice(dot + 1);
+    if (ext === "html" || ext === "htm") return "text/html";
+    return file.type || MIME_BY_EXT[ext] || "application/octet-stream";
+  }
+
+  // Root cause of "uploaded HTML opens as raw source instead of running":
+  // Supabase Storage's own server-side MIME detection runs off magic bytes,
+  // and text-based formats like .html/.svg don't have any -- so no matter
+  // what Content-Type the upload declares, the stored object gets served
+  // back as text/plain. Binary formats (pdf, docx, xlsx, pptx, images) DO
+  // have detectable magic bytes and already open/download correctly, so
+  // only html/htm/svg need the workaround: download the raw bytes
+  // ourselves and hand the browser a freshly-typed Blob instead of
+  // trusting the signed URL's header.
+  const TEXT_RENDER_TYPES = { html: "text/html", htm: "text/html", svg: "image/svg+xml" };
+  // Second layer of the same root-cause fix: old exported "mini apps"
+  // often hardcode their CSS/JS <script>/<link> tags to http:// instead of
+  // https://. The blob: URL these now render from is itself served under
+  // https, so browsers block those http:// subresource loads outright as
+  // mixed content. Injecting the standard `upgrade-insecure-requests` CSP
+  // directive tells the browser to silently retry each blocked http://
+  // asset over https:// first instead of just failing -- a no-op for files
+  // that don't have this problem.
+  function upgradeInsecureRequests(html) {
+    const meta = '<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">';
+    if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (m) => m + meta);
+    if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (m) => m + "<head>" + meta + "</head>");
+    return meta + html;
+  }
+  async function openStoredDocument(path) {
+    const name = (path.split("/").pop() || "").toLowerCase();
+    const dot = name.lastIndexOf(".");
+    const ext = dot === -1 ? "" : name.slice(dot + 1);
+    if (TEXT_RENDER_TYPES[ext]) {
+      const { data, error } = await sb.storage.from("client-documents").download(path);
+      if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+      let blob;
+      if (ext === "html" || ext === "htm") {
+        const text = await data.text();
+        blob = new Blob([upgradeInsecureRequests(text)], { type: "text/html" });
+      } else {
+        blob = new Blob([data], { type: TEXT_RENDER_TYPES[ext] });
+      }
+      window.open(URL.createObjectURL(blob), "_blank");
+      return;
+    }
+    const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, 60);
+    if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+    window.open(data.signedUrl, "_blank");
+  }
+
+  // Resource Vault is a hybrid: the standard EG resources are shared
+  // "templates" (one row in resource_vault_templates, org-wide) linked into
+  // every client -- title/description/file always resolve live from the
+  // template. A client can ALSO have its own custom resources on top of
+  // those, fully editable (including their own uploaded file) right here.
+  async function loadResourceVault(clientId) {
+    const { data, error } = await sb
+      .from("client_resource_vault_items")
+      .select("id, title, description, url, storage_path, template_id, sort_order, resource_vault_templates(title, description, url, storage_path)")
+      .eq("client_id", clientId)
+      .order("sort_order")
+      .order("created_at");
+    if (error) { showBanner("Couldn't load Resources: " + error.message, "error"); return; }
+    listData.resource_vault = data.map((r) => ({
+      id: r.id,
+      isTemplate: !!r.template_id,
+      templateId: r.template_id,
+      title: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.title) || "") : (r.title || ""),
+      description: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.description) || "") : (r.description || ""),
+      url: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.url) || null) : (r.url || null),
+      storagePath: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.storage_path) || null) : (r.storage_path || null),
+    }));
+    const countLabel = listData.resource_vault.length ? `${listData.resource_vault.length} item${listData.resource_vault.length === 1 ? "" : "s"}` : "";
+    $("resource_vault-count").textContent = countLabel;
+    renderResourceVaultRows(listData.resource_vault);
+  }
+
+  // Greg (9/2/26, on the original Resource Vault page): render as a plain
+  // client-style list -- bold title + muted description, one divider per
+  // row, plus a red x to remove. No inline editing here. Shared rows
+  // unlink from this client; a client-specific row deletes outright.
+  function renderResourceVaultRows(rows) {
+    const list = $("resource_vault-list");
+    if (!rows.length) {
+      list.innerHTML = `<div class="list-empty" style="padding:16px;">Nothing added yet.</div>`;
+      return;
+    }
+    list.innerHTML = rows.map((r) => {
+      const title = escapeHtml(r.title || "Untitled");
+      const titleHtml = r.url
+        ? `<a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${title}</a>`
+        : r.storagePath
+        ? `<span class="rv-file-link" data-path="${escapeHtml(r.storagePath)}" title="${escapeHtml(fileNameFromPath(r.storagePath))}">${title}</span>`
+        : title;
+      const removeAttr = r.isTemplate
+        ? `data-unlink-id="${r.id}" title="Remove from this client's Resources"`
+        : `data-delete-id="${r.id}" title="Delete this resource"`;
+      return `
+        <div class="rv-simple-row">
+          <div class="rv-simple-main">
+            <div class="rv-simple-title">${titleHtml}</div>
+            ${r.description ? `<div class="rv-simple-sub">${escapeHtml(r.description)}</div>` : ""}
+          </div>
+          <button type="button" class="rv-x-btn" ${removeAttr}>&times;</button>
+        </div>
+      `;
+    }).join("");
+
+    list.querySelectorAll(".rv-file-link").forEach((el) => {
+      el.addEventListener("click", () => openStoredDocument(el.dataset.path));
+    });
+
+    list.querySelectorAll("[data-unlink-id]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const { error } = await sb.from("client_resource_vault_items").delete().eq("id", btn.dataset.unlinkId);
+        if (error) { showBanner("Couldn't remove: " + error.message, "error"); return; }
+        await loadResourceVault(currentClient.id);
+      });
+    });
+
+    list.querySelectorAll("[data-delete-id]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const row = (listData.resource_vault || []).find((x) => x.id === btn.dataset.deleteId);
+        if (row && row.storagePath) await sb.storage.from("client-documents").remove([row.storagePath]);
+        const { error } = await sb.from("client_resource_vault_items").delete().eq("id", btn.dataset.deleteId);
+        if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
+        await loadResourceVault(currentClient.id);
+      });
+    });
+  }
+
+  async function addCustomResourceVaultItem() {
+    const title = $("rv-new-title").value.trim();
+    const description = $("rv-new-description").value.trim();
+    const url = $("rv-new-url").value.trim();
+    const fileInput = $("rv-new-file");
+    if (!title) { showBanner("Title is required.", "error"); return; }
+
+    let storagePath = null;
+    if (fileInput.files.length) {
+      const file = fileInput.files[0];
+      storagePath = `clients/${currentClient.id}/resource-vault/${Date.now()}-${sanitizeFilename(file.name)}`;
+      const { error: uploadErr } = await sb.storage.from("client-documents").upload(storagePath, file, { contentType: contentTypeFor(file) });
+      if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    }
+
+    const sortOrder = (listData.resource_vault || []).length + 1;
+    const { error } = await sb.from("client_resource_vault_items").insert({
+      client_id: currentClient.id,
+      title,
+      description: description || null,
+      url: url || null,
+      storage_path: storagePath,
+      sort_order: sortOrder,
+    });
+    if (error) { showBanner("Couldn't add resource: " + error.message, "error"); return; }
+    $("resource-vault-add-form").reset();
+    showBanner("Resource added.", "success");
+    await loadResourceVault(currentClient.id);
+  }
+  $("resource-vault-add-form").addEventListener("submit", (e) => { e.preventDefault(); addCustomResourceVaultItem(); });
+
   async function addListRow(cfg) {
     const values = { client_id: currentClient.id };
     for (const f of cfg.fields) {
@@ -2366,6 +2605,7 @@
     { n: 3, key: "contacts", label: "Contacts" },
     { n: 4, key: "competitors", label: "Competitors" },
     { n: 5, key: "top_customers", label: "Customers" },
+    { n: 6, key: "resources", label: "Resources" },
   ];
   let wizStep = 1;
 

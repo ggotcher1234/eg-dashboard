@@ -161,141 +161,24 @@
   .field-hint { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
 
   /* Accordion sections -- same look as the Setup Wizard's former
-     accordion cards, reused here for Resource Vault and each Research Area. */
+     accordion cards, reused here for each Research Area. Resource Vault
+     used to be the other consumer of this look -- it moved to
+     client_profile.html as wizard step 6, "Resources" (Greg, 9/5/26), and
+     took its own rv-*/list-row-edit/add-row-form/tab CSS with it; nothing
+     left in this file used the accordion-count/accordion-header-right
+     variants that were vault-only, so those went too. */
   .accordion-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; gap: 12px; }
   .accordion-header h2 { display: flex; align-items: center; gap: 10px; font-size: 16px; }
-  .accordion-count {
-    font-size: 11.5px; font-weight: 700; color: var(--navy-light); background: #eef3f9;
-    padding: 3px 10px; border-radius: 999px; flex-shrink: 0;
-  }
-
-  .accordion-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .accordion-chevron { font-size: 13px; color: var(--muted); transition: transform 0.15s ease; flex-shrink: 0; }
   .accordion-header.open .accordion-chevron { transform: rotate(90deg); }
   .accordion-body { display: none; margin-top: 14px; }
   .accordion-body.open { display: block; }
 
-  .list-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f0f2f4; }
-  .list-row:last-child { border-bottom: none; }
-  .list-row-main { font-size: 13.5px; }
-  .list-row-main .lr-title { font-weight: 600; }
-  .list-row-main .lr-sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
-  .list-empty { color: var(--muted); font-size: 13.5px; padding: 8px 0; }
-
-  .list-row-edit { display: flex; align-items: flex-end; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0f2f4; }
-  .list-row-edit:first-child { padding-top: 0; }
-  .lre-fields { display: flex; gap: 16px; flex-wrap: wrap; flex: 1; }
-  .lre-fields .field { margin-bottom: 0; flex: 1; min-width: 140px; }
-  .lre-fields label { font-size: 11px; }
-  .rv-readonly { font-size: 13.5px; padding: 8px 0 4px; color: var(--text); }
-  .rv-shared-badge { display: inline-block; background: #eef1f4; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; padding: 2px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
-  .rv-file-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; }
-  .rv-file-link:hover { text-decoration: underline; }
-
-  /* Resource Vault: real spreadsheet-style table -- Title | Description |
-     Link/URL | Replace | Replace All, one header row, one line per
-     resource, instead of stacked field-pairs (Greg, 8/30/26: "make it look
-     exactly like the [reference] page"). Inputs stay borderless/transparent
-     until hovered or focused so editable cells still read as plain table
-     text, matching the reference's look, even though every field still
-     autosaves on blur exactly as before -- this is a reskin, not a
-     behavior change.
-     Round 7 (8/31/26): the old 5th column ("File", a whole separate
-     upload/replace button) plus a 3-button actions cell (Replace, Delete
-     for all clients, and a remove-× ) was too much crammed into one row.
-     File now lives inside the Link/URL cell, stacked under the URL input,
-     and the two removal actions -- remove from just this client, delete
-     for every client -- are their own dedicated columns rendered as plain
-     red × icons: "Replace" and "Replace All". */
-  #panel-vault .accordion-header-right { background: #eef3f9; border-radius: 999px; padding: 5px 12px; gap: 6px; }
-  #panel-vault .accordion-count { background: none; padding: 0; }
-  #panel-vault .accordion-chevron { color: var(--navy-light); }
-  /* Greg (8/30/26, round 3): the real problem was never the column
-     widths -- .page-shell was still capped at max-width:900px even in
-     embed mode, so once .card's own padding came out of that, the table
-     had barely 750px to work with and the previous min-width (760px)
-     missed by a hair. Squeezing every column down with forced ellipsis
-     to compensate just mangled the Title cell (the Shared badge and the
-     truncated title ran together). Fixed at the source instead: embed
-     mode now uncaps .page-shell exactly like client_profile.html already
-     does for .profile-shell, so the vault gets the iframe's actual full
-     width and the table below can use comfortable, reference-matching
-     column widths without needing to crush anything. */
+  /* Kept for embed mode generally (Add Research's own iframe pane relies
+     on it too), even though the rationale that first motivated it --
+     Resource Vault's spreadsheet-style table needing the iframe's full
+     width -- left with that feature. */
   body.embed-mode .page-shell { max-width: none; margin: 0; padding: 0 0 40px; }
-  .rv-table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  /* min-width dropped 620px -> 440px (Greg, 8/31/26): with the file column
-     down to just an icon (see fileHtml above) the row no longer needs
-     620px of breathing room to read cleanly, and that lower floor was
-     itself part of why this table kept forcing a horizontal scrollbar --
-     and a shaky one, since crossing that threshold at the edge of the
-     iframe pane's actual width fed back into the CCC shell's own auto-
-     height resize loop. Letting the fr columns compress further before
-     ever needing to scroll removes that trigger too. */
-  .rv-table-wrap .list-row-edit, .rv-table-head {
-    display: grid; grid-template-columns: 1.3fr 1.6fr 70px; gap: 14px; align-items: center;
-    min-width: 300px; padding: 14px 18px; margin: 0; border-bottom: 1px solid #f0f2f4;
-  }
-  .rv-table-wrap .list-row-edit:last-child { border-bottom: none; }
-  .rv-table-head { background: #f8fafb; border-bottom: 1px solid var(--border); }
-  .rv-table-head span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; }
-  /* Replace All (delete a shared template for every client) removed
-     entirely (Greg, 8/31/26 -- testing whether the extra column was
-     contributing to the CCC iframe's scrollbar blink). Just "Replace"
-     (remove from this client only) remains as a single narrow column.
-     Super Admins who need to delete a shared template globally no longer
-     have that action from this table -- say if you want it back
-     somewhere else. */
-  .rv-table-wrap .field { margin-bottom: 0; min-width: 0; }
-  .rv-table-wrap .field label { display: none; }
-  .rv-title-cell { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
-  .rv-title-cell .rv-shared-badge { flex-shrink: 0; margin-left: 0; }
-  .rv-title-cell input.row-input-edit, .rv-title-cell .rv-readonly { flex: 1 1 auto; min-width: 80px; font-weight: 600; }
-  .rv-table-wrap input.row-input-edit {
-    width: 100%; padding: 7px 9px; border: 1px solid transparent; border-radius: 6px;
-    font-size: 13.5px; line-height: 1.4; background: transparent; font-family: inherit; box-sizing: border-box;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .rv-table-wrap input.row-input-edit:hover, .rv-table-wrap input.row-input-edit:focus {
-    border-color: var(--border); background: #fff;
-  }
-  .rv-table-wrap .rv-readonly,
-  .rv-table-wrap .field > .field-hint {
-    padding: 0; font-size: 13.5px; line-height: 1.4; word-break: break-word;
-  }
-  .rv-table-wrap .rv-file-link { font-size: 13px; line-height: 1.4; word-break: break-word; }
-  /* Link/URL cell: the URL input (or its read-only text) stacks above the
-     file row, so both fields stay visible and editable without needing
-     their own grid column. */
-  .rv-link-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  .rv-file-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
-  .rv-file-inline-btn {
-    background: none; border: none; color: var(--navy-light); font-size: 12px; font-weight: 600;
-    text-decoration: underline; cursor: pointer; padding: 0; flex-shrink: 0;
-  }
-  .rv-file-inline-btn:hover { color: var(--navy); }
-  .rv-file-upload-label {
-    color: var(--navy-light); font-size: 12px; font-weight: 600; text-decoration: underline; cursor: pointer;
-  }
-  .rv-file-upload-label:hover { color: var(--navy); }
-  /* Replace: a plain red × icon, not a filled button -- removes this
-     resource from this client only. */
-  /* Greg (9/2/26): the Resource Vault now renders as a plain client-style
-     list -- bold green title + muted description, one divider per row, plus
-     a red x to remove. No inline editing here. */
-  .rv-simple-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 12px 6px; border-bottom: 1px solid #f0f2f4; }
-  .rv-simple-row:last-child { border-bottom: none; }
-  .rv-simple-main { min-width: 0; }
-  .rv-simple-title { font-size: 14px; font-weight: 700; color: var(--accent-dark); line-height: 1.35; word-break: break-word; }
-  .rv-simple-title a, .rv-simple-title .rv-file-link { color: inherit; text-decoration: none; cursor: pointer; }
-  .rv-simple-title a:hover, .rv-simple-title .rv-file-link:hover { text-decoration: underline; }
-  .rv-simple-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; word-break: break-word; }
-  .rv-action-cell { display: flex; align-items: center; justify-content: center; }
-  .rv-x-btn {
-    flex-shrink: 0;
-    background: none; border: none; color: var(--danger); font-size: 19px; font-weight: 700; line-height: 1;
-    cursor: pointer; padding: 4px 10px; border-radius: 6px;
-  }
-  .rv-x-btn:hover { color: var(--danger-dark); background: #fdecea; }
 
   /* Documents & Links, flat under each research area (Greg/Chris, 8/26/26:
      removed the Research Questions layer -- specialists now just upload a
@@ -320,22 +203,6 @@
   .rq-link-form label { font-size: 11px; }
 
   .icon-btn { padding: 4px 8px; font-size: 13px; line-height: 1; flex-shrink: 0; }
-
-  .add-row-form { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-  .add-row-form .add-row-line { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
-  .add-row-form .field { margin-bottom: 0; flex: 1; min-width: 140px; }
-  .add-row-form label { font-size: 11px; }
-
-  /* Two distinct entry points (Add Research / Modify EG Resources on the
-     Engagement Workspace page) land here on different tabs, instead of
-     both sections always showing stacked on one long page. */
-  .rv-view-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-  .rv-view-tab {
-    background: #eef1f4; color: var(--text); border: 1px solid var(--border); padding: 9px 18px;
-    border-radius: 999px; font-size: 13.5px; font-weight: 700;
-  }
-  .rv-view-tab:hover { background: #e2e6ea; }
-  .rv-view-tab.active { background: var(--navy); color: #fff; border-color: var(--navy); }
 
   #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
   .no-client-note { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 14px; }
@@ -624,55 +491,12 @@
       </div>
 
       <!-- ===== Economic Gardening Research Reports ===== -->
-      <div id="panel-research">
-        <div class="card">
-          <h2>Economic Gardening Research Reports</h2>
-          <div id="research-areas-sections"></div>
-        </div>
-      </div>
-
-      <!-- ===== Resource Vault ===== -->
-      <div id="panel-vault" class="hidden">
-        <div class="card">
-          <div class="accordion-header open" data-accordion="resource_vault">
-            <h2>Default Resource Vault</h2>
-            <div class="accordion-header-right">
-              <span class="accordion-count" id="resource_vault-count"></span>
-              <span class="accordion-chevron">&#9656;</span>
-            </div>
-          </div>
-          <div class="accordion-body open" id="resource_vault-body" style="margin-top:16px;">
-            <div class="field-hint" style="margin-bottom:18px; line-height:1.55; max-width:840px;">Each resource can be a Link URL (opens in a new tab — a video, quiz, external doc, etc.) or an uploaded file (downloads), whichever fits. Rows marked "Shared" show for every client — Admins can edit those right here and the change applies everywhere. Add anything client-specific below.</div>
-            <div class="rv-table-wrap">
-              <div id="resource_vault-list"></div>
-            </div>
-
-            <form class="add-row-form" id="resource-vault-add-form">
-              <div class="add-row-line">
-                <div class="field">
-                  <label for="rv-new-title">Title</label>
-                  <input type="text" id="rv-new-title" required />
-                </div>
-                <div class="field">
-                  <label for="rv-new-description">Description (shows below icon)</label>
-                  <input type="text" id="rv-new-description" />
-                </div>
-                <div class="field">
-                  <label for="rv-new-url">Link URL (optional)</label>
-                  <input type="text" id="rv-new-url" placeholder="https://…" />
-                </div>
-              </div>
-              <div class="add-row-line">
-                <div class="field" style="flex: 0 0 auto; min-width:180px;">
-                  <label for="rv-new-file">File (optional)</label>
-                  <input type="file" id="rv-new-file" />
-                </div>
-                <div class="field-hint" style="flex:1; min-width:200px; margin-bottom:10px;">Use one or the other — a link URL opens in a new tab, a file downloads. If both are set, the link wins.</div>
-                <button type="submit" class="btn-secondary btn-sm">+ Add Resource (this client only)</button>
-              </div>
-            </form>
-          </div>
-        </div>
+      <!-- Resource Vault used to be a second, tab-switched panel here
+           (?view=vault) -- moved to client_profile.html as wizard step 6,
+           "Resources" (Greg, 9/5/26). This is the only view now. -->
+      <div class="card">
+        <h2>Economic Gardening Research Reports</h2>
+        <div id="research-areas-sections"></div>
       </div>
 
     </div>
@@ -1017,100 +841,17 @@
     $("p-lifecycle-badge").className = `badge badge-${client.project_status}`;
     $("p-lifecycle-badge").textContent = client.project_status;
 
-    // Which of the two entry points on the Engagement Workspace page got
-    // clicked -- "Add Research" (?view=research, the default) or "Modify
-    // EG Resources" (?view=vault) -- decides which panel shows. Set this
-    // BEFORE the data loads below (not after) so the page never flashes
-    // the other panel while its content is still loading -- panel-vault
-    // starts hidden in the markup itself for the same reason.
-    const viewParam = new URLSearchParams(location.search).get("view");
-    setResearchView(viewParam === "vault" ? "vault" : "research");
-
-    wireAccordionHeaders();
-    await loadListSection(RESOURCE_VAULT_CONFIG);
-    $("resource-vault-add-form").addEventListener("submit", (e) => { e.preventDefault(); addCustomResourceVaultItem(); });
-
     await Promise.all([loadDocuments(), loadResearchQuestions()]);
     renderResearchAreaSections();
   }
 
-  function setResearchView(view) {
-    const v = view === "vault" ? "vault" : "research";
-    document.querySelectorAll(".rv-view-tab").forEach((btn) => btn.classList.toggle("active", btn.dataset.view === v));
-    $("panel-research").classList.toggle("hidden", v !== "research");
-    $("panel-vault").classList.toggle("hidden", v !== "vault");
-  }
-  document.querySelectorAll(".rv-view-tab").forEach((btn) => {
-    btn.addEventListener("click", () => setResearchView(btn.dataset.view));
-  });
-
-  function wireAccordionHeaders() {
-    document.querySelectorAll("[data-accordion]").forEach((hdr) => {
-      hdr.addEventListener("click", () => {
-        const body = $(`${hdr.dataset.accordion}-body`);
-        const isOpen = hdr.classList.toggle("open");
-        body.classList.toggle("open", isOpen);
-      });
-    });
-  }
-
-  // ---------- Resource Vault ----------
-  // Resource Vault is a hybrid: the 8 standard EG resources are shared
-  // "templates" (one row in resource_vault_templates, org-wide) linked into
-  // every client; title/description/file always resolve live from the
-  // template. Super Admins can edit those templates right here — inline,
-  // per any client's Resource Vault — and the change applies everywhere,
-  // rather than needing a separate standalone admin page. A client can ALSO
-  // have its own custom resources on top of those 8, which stay fully
-  // editable (including their own uploaded file) right on this page.
-  const RESOURCE_VAULT_CONFIG = {
-    key: "resource_vault", title: "Resource Vault",
-    customLoad: async (clientId) => {
-      const { data, error } = await sb
-        .from("client_resource_vault_items")
-        .select("id, title, description, url, storage_path, template_id, sort_order, resource_vault_templates(title, description, url, storage_path)")
-        .eq("client_id", clientId)
-        .order("sort_order")
-        .order("created_at");
-      if (error) { showBanner("Couldn't load Resource Vault: " + error.message, "error"); return []; }
-      return data.map((r) => ({
-        id: r.id,
-        isTemplate: !!r.template_id,
-        templateId: r.template_id,
-        title: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.title) || "") : (r.title || ""),
-        description: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.description) || "") : (r.description || ""),
-        url: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.url) || null) : (r.url || null),
-        storagePath: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.storage_path) || null) : (r.storage_path || null),
-      }));
-    },
-  };
-  const listData = {};
-
-  async function loadListSection(cfg) {
-    listData[cfg.key] = await cfg.customLoad(currentClient.id);
-    renderListRows(cfg);
-  }
-
-  function renderListRows(cfg) {
-    const rows = listData[cfg.key] || [];
-    const countLabel = rows.length ? `${rows.length} item${rows.length === 1 ? "" : "s"}` : "";
-    $(`${cfg.key}-count`).textContent = countLabel;
-    const list = $(`${cfg.key}-list`);
-    if (!rows.length) {
-      list.innerHTML = `<div class="list-empty">Nothing added yet.</div>`;
-      return;
-    }
-    renderResourceVaultRows(rows);
-  }
-
-  // Best-effort human-friendly file name from a storage path like
-  // clients/{id}/resource-vault/1699999999-my_file.pdf -> "my_file.pdf".
-  function fileNameFromPath(path) {
-    if (!path) return "";
-    const last = path.split("/").pop();
-    return last.replace(/^\d+-/, "");
-  }
-
+  // Resource Vault (fileNameFromPath, RESOURCE_VAULT_CONFIG, the generic
+  // loadListSection/renderListRows, renderResourceVaultRows,
+  // handleTemplateFileUpload, addCustomResourceVaultItem) moved to
+  // client_profile.html as wizard step 6, "Resources" (Greg, 9/5/26).
+  // fileIconFor/MIME_BY_EXT/contentTypeFor/TEXT_RENDER_TYPES/
+  // upgradeInsecureRequests/openStoredDocument below stayed -- they're
+  // shared with the Documents & Links feature further down this file.
   const FILE_TYPE_ICONS = {
     pdf: "\u{1F4D5}",
     doc: "\u{1F4D8}", docx: "\u{1F4D8}",
@@ -1203,208 +944,6 @@
     const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, 60);
     if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
     window.open(data.signedUrl, "_blank");
-  }
-
-  function renderResourceVaultRows(rows) {
-    const list = $("resource_vault-list");
-    if (!rows.length) {
-      list.innerHTML = `<div class="list-empty" style="padding:16px;">Nothing added yet.</div>`;
-      return;
-    }
-    // Greg (9/2/26): render exactly like the client dashboard's Resource
-    // Vault -- a plain list of title + description, the title linking out to
-    // its URL or opening its uploaded file. No inline editing here. The one
-    // action kept is the red x: shared rows unlink from this client, a
-    // client-specific row deletes outright. Adding / editing resources
-    // moves to resource_templates.html and future discussion.
-    list.innerHTML = rows.map((r) => {
-      const title = escapeHtml(r.title || "Untitled");
-      const titleHtml = r.url
-        ? `<a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${title}</a>`
-        : r.storagePath
-        ? `<span class="rv-file-link" data-path="${escapeHtml(r.storagePath)}" title="${escapeHtml(fileNameFromPath(r.storagePath))}">${title}</span>`
-        : title;
-      const removeAttr = r.isTemplate
-        ? `data-unlink-id="${r.id}" title="Remove from this client's Resource Vault"`
-        : `data-delete-id="${r.id}" title="Delete this resource"`;
-      return `
-        <div class="rv-simple-row">
-          <div class="rv-simple-main">
-            <div class="rv-simple-title">${titleHtml}</div>
-            ${r.description ? `<div class="rv-simple-sub">${escapeHtml(r.description)}</div>` : ""}
-          </div>
-          <button type="button" class="rv-x-btn" ${removeAttr}>&times;</button>
-        </div>
-      `;
-    }).join("");
-
-    list.querySelectorAll(".row-input-edit[data-rv-field]").forEach((inp) => {
-      const original = inp.value;
-      inp.addEventListener("blur", async () => {
-        const value = inp.value.trim();
-        const rowId = inp.dataset.rvRowId;
-        const fieldName = inp.dataset.rvField;
-        if (value === original) return;
-        if (fieldName === "title" && !value) {
-          showBanner("Title can't be empty.", "error");
-          inp.value = original;
-          return;
-        }
-        const { error } = await sb.from("client_resource_vault_items").update({ [fieldName]: value || null }).eq("id", rowId);
-        if (error) {
-          showBanner("Couldn't save: " + error.message, "error");
-          inp.value = original;
-          return;
-        }
-      });
-    });
-
-    list.querySelectorAll(".rv-file-link").forEach((el) => {
-      el.addEventListener("click", () => openStoredDocument(el.dataset.path));
-    });
-
-    list.querySelectorAll("[data-unlink-id]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const { error } = await sb.from("client_resource_vault_items").delete().eq("id", btn.dataset.unlinkId);
-        if (error) { showBanner("Couldn't remove: " + error.message, "error"); return; }
-        await loadListSection(RESOURCE_VAULT_CONFIG);
-      });
-    });
-
-    list.querySelectorAll("[data-delete-id]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const row = (listData.resource_vault || []).find((x) => x.id === btn.dataset.deleteId);
-        if (row && row.storagePath) await sb.storage.from("client-documents").remove([row.storagePath]);
-        const { error } = await sb.from("client_resource_vault_items").delete().eq("id", btn.dataset.deleteId);
-        if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
-        await loadListSection(RESOURCE_VAULT_CONFIG);
-      });
-    });
-
-    list.querySelectorAll("[data-remove-file]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const rowId = btn.dataset.removeFile;
-        const row = (listData.resource_vault || []).find((x) => x.id === rowId);
-        if (row && row.storagePath) await sb.storage.from("client-documents").remove([row.storagePath]);
-        const { error } = await sb.from("client_resource_vault_items").update({ storage_path: null }).eq("id", rowId);
-        if (error) { showBanner("Couldn't remove file: " + error.message, "error"); return; }
-        await loadListSection(RESOURCE_VAULT_CONFIG);
-      });
-    });
-
-    list.querySelectorAll(".rv-upload-input").forEach((input) => {
-      input.addEventListener("change", async () => {
-        if (!input.files.length) return;
-        const file = input.files[0];
-        const rowId = input.dataset.rowId;
-        input.disabled = true;
-        const path = `clients/${currentClient.id}/resource-vault/${Date.now()}-${sanitizeFilename(file.name)}`;
-        const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file, { contentType: contentTypeFor(file) });
-        if (uploadErr) {
-          showBanner("Couldn't upload file: " + uploadErr.message, "error");
-          input.disabled = false;
-          return;
-        }
-        const { error } = await sb.from("client_resource_vault_items").update({ storage_path: path }).eq("id", rowId);
-        if (error) { showBanner("Couldn't save file: " + error.message, "error"); input.disabled = false; return; }
-        await loadListSection(RESOURCE_VAULT_CONFIG);
-      });
-    });
-
-    // ---- Shared-template editing (Super Admin only) — writes to
-    // resource_vault_templates, not client_resource_vault_items, so the
-    // change is visible from every client's Resource Vault, not just this one.
-    list.querySelectorAll(".row-input-edit[data-rv-tpl-field]").forEach((inp) => {
-      const original = inp.value;
-      inp.addEventListener("blur", async () => {
-        const value = inp.value.trim();
-        const templateId = inp.dataset.rvTplId;
-        const fieldName = inp.dataset.rvTplField;
-        if (value === original) return;
-        if (fieldName === "title" && !value) {
-          showBanner("Title can't be empty.", "error");
-          inp.value = original;
-          return;
-        }
-        const { error } = await sb.from("resource_vault_templates").update({ [fieldName]: value || null }).eq("id", templateId);
-        if (error) {
-          showBanner("Couldn't save: " + error.message, "error");
-          inp.value = original;
-          return;
-        }
-        showBanner("Saved — updated for every client.", "success");
-      });
-    });
-
-    list.querySelectorAll(".rv-tpl-upload-input").forEach((input) => {
-      input.addEventListener("change", () => handleTemplateFileUpload(input.dataset.tplId, input.files[0]));
-    });
-
-    list.querySelectorAll("[data-rv-tpl-replace]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const picker = document.createElement("input");
-        picker.type = "file";
-        picker.addEventListener("change", () => handleTemplateFileUpload(btn.dataset.rvTplReplace, picker.files[0]));
-        picker.click();
-      });
-    });
-
-    list.querySelectorAll("[data-rv-tpl-delete]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const templateId = btn.dataset.rvTplDelete;
-        if (!confirm(`Delete "${btn.dataset.rvTplTitle}"? This removes it from every client's Resource Vault, not just this one.`)) return;
-        const row = (listData.resource_vault || []).find((x) => x.templateId === templateId);
-        if (row && row.storagePath) await sb.storage.from("client-documents").remove([row.storagePath]);
-        const { error } = await sb.from("resource_vault_templates").delete().eq("id", templateId);
-        if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
-        showBanner("Shared resource deleted for every client.", "success");
-        await loadListSection(RESOURCE_VAULT_CONFIG);
-      });
-    });
-  }
-
-  async function handleTemplateFileUpload(templateId, file) {
-    if (!file) return;
-    const row = (listData.resource_vault || []).find((x) => x.templateId === templateId);
-    const oldPath = row ? row.storagePath : null;
-    const path = `resource-templates/${currentClient.organization_id}/${Date.now()}-${sanitizeFilename(file.name)}`;
-    const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file, { contentType: contentTypeFor(file) });
-    if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
-    const { error } = await sb.from("resource_vault_templates").update({ storage_path: path }).eq("id", templateId);
-    if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
-    if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
-    showBanner("File uploaded — updated for every client.", "success");
-    await loadListSection(RESOURCE_VAULT_CONFIG);
-  }
-
-  async function addCustomResourceVaultItem() {
-    const title = $("rv-new-title").value.trim();
-    const description = $("rv-new-description").value.trim();
-    const url = $("rv-new-url").value.trim();
-    const fileInput = $("rv-new-file");
-    if (!title) { showBanner("Title is required.", "error"); return; }
-
-    let storagePath = null;
-    if (fileInput.files.length) {
-      const file = fileInput.files[0];
-      storagePath = `clients/${currentClient.id}/resource-vault/${Date.now()}-${sanitizeFilename(file.name)}`;
-      const { error: uploadErr } = await sb.storage.from("client-documents").upload(storagePath, file, { contentType: contentTypeFor(file) });
-      if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
-    }
-
-    const sortOrder = (listData.resource_vault || []).length + 1;
-    const { error } = await sb.from("client_resource_vault_items").insert({
-      client_id: currentClient.id,
-      title,
-      description: description || null,
-      url: url || null,
-      storage_path: storagePath,
-      sort_order: sortOrder,
-    });
-    if (error) { showBanner("Couldn't add resource: " + error.message, "error"); return; }
-    $("resource-vault-add-form").reset();
-    showBanner("Resource added.", "success");
-    await loadListSection(RESOURCE_VAULT_CONFIG);
   }
 
   // ---------- Economic Gardening Research Reports (flat Documents & Links,
