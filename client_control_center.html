@@ -527,7 +527,13 @@
         <div class="nav-submenu" id="nav-applications-submenu"></div>
       </div>
       <a class="nav-link active" href="index.html">Engagements</a>
-      <a class="nav-link" href="econ_dev_partners_admin.html">Programs</a>
+      <div class="nav-item-dropdown">
+        <button type="button" class="nav-link nav-link-dropdown-btn">Programs <span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu">
+          <a href="econ_dev_partners_admin.html?action=add">Add Program</a>
+          <a href="program_application_links.html">Application Links</a>
+        </div>
+      </div>
       <a class="nav-link" href="team_directory.html">Roster</a>
       <div class="nav-item-dropdown">
         <button type="button" class="nav-link nav-link-dropdown-btn">Invoicing <span class="nav-caret">&#9662;</span></button>
@@ -1177,7 +1183,7 @@
   const DOC_GROUP_ITEMS = [
     { key: "discovery", label: "Discovery Document" },
     { key: "controlling", label: "Controlling Document" },
-    { key: "review", label: "Debriefing" },
+    { key: "review", label: "Research Review" },
     { key: "eval", label: "Close-Out Document" },
   ];
 
@@ -2085,9 +2091,15 @@
       if (!btn || !menu) return;
       let matched = false;
       menu.querySelectorAll("a").forEach((a) => {
-        const isHere = (a.getAttribute("href") || "").split("?")[0] === here;
-        a.classList.toggle("active", isHere);
-        if (isHere) matched = true;
+        const [navHrefPath, navHrefQuery] = (a.getAttribute("href") || "").split("?");
+        const navPathMatches = navHrefPath === here;
+        // A submenu link with a query string (e.g. "?action=add") is an
+        // action shortcut on the current page, not a distinct destination --
+        // it should count toward lighting up the parent dropdown button, but
+        // shouldn't itself look like "the page you're on" (Greg, 9/6/26, for
+        // the new Programs dropdown's "Add Program" item).
+        a.classList.toggle("active", navPathMatches && !navHrefQuery);
+        if (navPathMatches) matched = true;
       });
       btn.classList.toggle("active", matched);
       btn.addEventListener("click", (e) => {
