@@ -61,6 +61,16 @@
     border-radius: 10px; padding: 6px; box-shadow: 0 10px 24px rgba(0,0,0,0.28); display: none; z-index: 97;
   }
   .nav-item-dropdown.open .nav-submenu { display: block; }
+  /* Greg (9/6/26): the top-nav dropdowns open on hover, not click-only.
+     .nav-submenu sits 8px below its nav item (margin-top), and that gap is
+     dead space the pointer would cross on the way down -- the ::before
+     bridge covers it so the menu doesn't blink shut mid-travel. Click still
+     works for touch and keyboard; the nav script clears the clicked-open
+     state on mouseleave so it can't stay stuck open. */
+  @media (hover: hover) {
+    .nav-item-dropdown:hover .nav-submenu { display: block; }
+    .nav-submenu::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
+  }
   .nav-submenu a { display: block; padding: 9px 12px; border-radius: 6px; color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; white-space: normal; }
   .nav-submenu a:hover, .nav-submenu a.active { background: rgba(255,255,255,0.14); color: #fff; }
   /* Applications nav dropdown content (Chris, 9/4/26) -- dynamic, unlike
@@ -72,6 +82,7 @@
   @media (max-width: 980px) {
     .nav-item-dropdown { position: static; }
     .nav-submenu { position: static; display: block !important; box-shadow: none; background: transparent; padding: 0 0 4px 26px; margin-top: 0; }
+    .nav-submenu::before { display: none; }
     .nav-link-dropdown-btn .nav-caret { display: none; }
     .nav-caret-only { display: none; }
   }
@@ -2305,6 +2316,9 @@
         });
         dd.classList.toggle("open");
       });
+      // Hover is what opens these now (CSS above); this only clears the
+      // clicked-open state so a click-then-move-away doesn't leave it open.
+      dd.addEventListener("mouseleave", () => dd.classList.remove("open"));
     });
     document.addEventListener("click", (e) => {
       if (!e.target.closest(".nav-item-dropdown")) {
