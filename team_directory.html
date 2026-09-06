@@ -488,7 +488,7 @@
   @media print {
     body { background: #fff; }
     .no-print, header, .ai-drawer-overlay, .ai-drawer, #banner, .search-wrap, #roster-import-btn,
-    #roster-print-btn, #add-btn, #import-btn, #workload-section, td.actions { display: none !important; }
+    #roster-print-btn, #import-btn, #workload-section, td.actions { display: none !important; }
     main { max-width: none; margin: 0; padding: 0; }
     table { border: 1px solid #ccc; }
   }
@@ -518,7 +518,13 @@
           <a href="program_application_links.html">Application Links</a>
         </div>
       </div>
-      <a href="team_directory.html" class="nav-link active">Roster</a>
+      <div class="nav-item-dropdown nav-split-item">
+        <a href="team_directory.html" class="nav-link active">Roster</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" aria-label="Roster menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu">
+          <a href="team_directory.html?action=add">Add Roster Member</a>
+        </div>
+      </div>
       <div class="nav-item-dropdown">
         <button type="button" class="nav-link nav-link-dropdown-btn">Invoicing <span class="nav-caret">&#9662;</span></button>
         <div class="nav-submenu">
@@ -672,7 +678,9 @@
         <label id="show-hidden-wrap" class="hidden" style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); cursor:pointer; white-space:nowrap;">
           <input type="checkbox" id="show-hidden-toggle" style="width:auto;" /> Show hidden
         </label>
-        <button class="btn-primary hidden" id="add-btn">+ Add Roster Member</button>
+        <!-- "+ Add Roster Member" moved into the top-nav Roster dropdown
+             (Greg, 9/6/26) so it's reachable from any page; removed here to
+             avoid the same action existing in two places. -->
       </div>
     </div>
 
@@ -1339,7 +1347,6 @@
     maybeShowAiNudge();
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = roleLabel(profile.role);
-    $("add-btn").classList.toggle("hidden", !isSuperAdmin);
     $("import-menu-btn").classList.toggle("hidden", !isSuperAdmin);
     $("roster-import-btn").classList.toggle("hidden", !isSuperAdmin);
     $("workload-section").classList.toggle("hidden", !isSuperAdmin);
@@ -1347,6 +1354,7 @@
 
     await loadUsers();
     if (isSuperAdmin) await loadTeamLeadWorkload();
+    applyActionDeepLink();
   }
 
   // Closed-by-default accordion for the Team Lead Workload panel — click
@@ -1739,10 +1747,28 @@
   });
 
   // ---------- Add Roster Member modal ----------
-  $("add-btn").addEventListener("click", () => {
+  // Opened from the top-nav Roster dropdown now that the toolbar button is
+  // gone (Greg, 9/6/26). That link is ?action=add so it works as a real
+  // destination from any other page (applyActionDeepLink below); clicked
+  // from THIS page it would just be a pointless reload, so the click is
+  // intercepted and this is called directly instead.
+  function openAddMember() {
     $("add-form").reset();
     $("add-error").style.display = "none";
     $("add-overlay").classList.add("open");
+  }
+
+  function applyActionDeepLink() {
+    const action = new URLSearchParams(location.search).get("action");
+    if (action === "add" && isSuperAdmin) openAddMember();
+  }
+
+  document.querySelectorAll('a[href="team_directory.html?action=add"]').forEach((a) => {
+    a.addEventListener("click", (e) => {
+      if (!isSuperAdmin) return;
+      e.preventDefault();
+      openAddMember();
+    });
   });
   $("add-cancel").addEventListener("click", () => $("add-overlay").classList.remove("open"));
 
