@@ -1452,7 +1452,17 @@
       const win = window.open("about:blank", "_blank");
       if (win) win.opener = null;
       btn.disabled = true;
-      const url = await ensureEvalLinkUrl();
+      // Greg (9/6/26): "prior to controlling document there are no questions
+      // for the Close Out Document but you should still be able to open it
+      // and look at a blank copy." This used to call ensureEvalLinkUrl(),
+      // which refuses until a research document exists -- a gate whose own
+      // message is about EMAILING the link. Looking at the form is not
+      // emailing it, so opening skips the gate entirely and just builds the
+      // URL. &preview=1 tells evaluation_public.html to render with no
+      // questions instead of "isn't ready yet", and to refuse to submit --
+      // submitting closes the engagement (091), which a preview must never
+      // do. The Create Email button still goes through ensureEvalLinkUrl().
+      const url = evalPreviewUrl();
       btn.disabled = false;
       if (!url) { if (win) win.close(); return; }
       if (win) win.location = url;
@@ -1517,6 +1527,14 @@
   // client_content.evaluation_link_url (evaluation_public.html / 079 fetches
   // the client's name/sponsor/research questions live from Supabase every
   // time the link is opened, so the URL itself never needs to change).
+  // The Team Lead's own read-only look at the close-out form. No research
+  // gate and nothing saved -- it doesn't touch client_content.evaluation_
+  // link_url, which is only written when the link is actually about to be
+  // sent (Greg, 9/6/26).
+  function evalPreviewUrl() {
+    return `${PUBLIC_SITE_BASE}evaluation_public.html?client=${currentClient.id}&preview=1`;
+  }
+
   async function ensureEvalLinkUrl() {
     // Greg (8/26/26): research pages no longer track per-question text --
     // specialists just upload documents/links under a research area. So the

@@ -564,6 +564,13 @@
 // this page is served by Netlify like the rest of the site instead, and
 // only pulls data from Supabase).
 let CLIENT_ID = '';
+// Preview mode (Greg, 9/6/26): the Team Lead's "Open Close-Out Document"
+// button opens this page with &preview=1 so they can look at the form before
+// there are any questions on it. It changes exactly three things -- an empty
+// question list renders instead of erroring, a banner says it's a preview,
+// and Submit is disabled. A real client link has no such flag and behaves
+// exactly as before.
+let IS_PREVIEW = false;
 let STORE_KEY = '';
 // Handle for the autosave interval (set in init(), cleared on a successful
 // submit) -- without this, the interval kept firing every 4s after Submit
@@ -611,6 +618,7 @@ function printForm(){
 // the on-screen summary box (updateRatingsSummary): Very=3, Partial=2,
 // Not=1.
 async function submitEvaluation(){
+  if(IS_PREVIEW) return;   // the button is disabled too; this covers the onclick being reached any other way
   const btn = document.getElementById('submitEvalBtn');
   const errBox = document.getElementById('submitEvalError');
   errBox.classList.add('hidden');
@@ -679,10 +687,32 @@ async function submitEvaluation(){
   }
 }
 
+// Submitting writes a real evaluation response AND closes the engagement
+// (091_close_engagement_on_evaluation.sql), so preview must not be able to
+// reach it -- the button is disabled rather than merely hidden.
+function applyPreviewMode(){
+  const banner = document.createElement('div');
+  banner.style.cssText = 'margin:0 0 18px;padding:12px 18px;background:#fff8e1;border:1px solid #e6cf8b;border-radius:8px;color:#6b5312;font-size:0.9rem;';
+  banner.innerHTML = '<strong>Preview.</strong> This is how the Close-Out Document will look to the client. ' +
+    (state.q1Rows.length ? '' : 'It has no research questions yet, so that section is empty. ') +
+    'Submitting is disabled here.';
+  const form = document.getElementById('clientForm');
+  form.insertBefore(banner, form.firstChild);
+
+  const btn = document.getElementById('submitEvalBtn');
+  if(btn){
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'not-allowed';
+    btn.title = 'Disabled in preview';
+  }
+}
+
 // ── LOAD (fetch client name/sponsor/questions from Supabase, no session needed) ──
 async function init(){
   const params = new URLSearchParams(location.search);
   CLIENT_ID = (params.get('client') || '').trim();
+  IS_PREVIEW = params.get('preview') === '1';
   if(!CLIENT_ID){ showError("This link is missing its client information. Please check the URL you were given, or contact your EG team."); return; }
 
   let formData;
@@ -707,7 +737,9 @@ async function init(){
     showError("We couldn't find this evaluation. Please check the link you were given, or contact your EG team.");
     return;
   }
-  if(!formData.questions || !formData.questions.length){
+  // A client following a real link should never see a half-built form, so
+  // this guard stays for them. In preview it's the whole point.
+  if(!IS_PREVIEW && (!formData.questions || !formData.questions.length)){
     showError("This evaluation form isn't ready yet. Please check back later or contact your EG team.");
     return;
   }
@@ -715,12 +747,13 @@ async function init(){
   STORE_KEY = 'nceg_eval_' + CLIENT_ID;
   state.company = formData.client_name || '';
   state.sponsor = formData.sponsor_name || '';
-  state.q1Rows = formData.questions.map(q => ({ q, rating: '' }));
+  state.q1Rows = (formData.questions || []).map(q => ({ q, rating: '' }));
 
   loadState();
 
   document.getElementById('loading-view').classList.add('hidden');
   document.getElementById('clientForm').classList.remove('hidden');
+  if(IS_PREVIEW) applyPreviewMode();
 
   buildResearchRows();
   buildRefRows();
