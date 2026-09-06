@@ -220,21 +220,15 @@
     background: var(--card); border: 1px solid var(--border); border-radius: 12px;
     box-shadow: 0 1px 3px rgba(20,48,77,0.05);
   }
-  .ccc-summary-main { flex: 1 1 240px; min-width: 0; }
+  .ccc-summary-main { flex: 1 1 220px; min-width: 0; }
   /* Below ~760px the two columns stack; the note keeps its own box so it
      still reads as attached to the header rather than floating loose. */
   @media (max-width: 760px) { .ccc-summary { gap: 12px; } }
-  .cm-wizard-hint { color: var(--text); font-size: 13px; line-height: 1.5; max-width: 460px; margin-left: 20px; text-align: left; background: var(--bg); border: 1px solid var(--border); border-left: 3px solid var(--navy-light); border-radius: 8px; padding: 12px 14px; }
   /* Greg (9/6/26): "put the notes in the top header. make smaller." Same
      idea as .cm-wizard-hint above -- a pane-specific note living in the
      client header -- but a size down, since this one is a standing
      explanation rather than a first-run walkthrough. Full width under the
      status row so it isn't squeezed between the badge and the delay note. */
-  .cm-header-note {
-    color: var(--muted); font-size: 11.5px; line-height: 1.45; max-width: 620px;
-    margin-top: 10px; background: var(--bg); border: 1px solid var(--border);
-    border-left: 3px solid var(--navy-light); border-radius: 6px; padding: 7px 10px;
-  }
   .cm-header-note strong { color: var(--text); }
   .ccc-breadcrumb { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--muted); text-decoration: none; margin-bottom: 6px; }
   .ccc-breadcrumb:hover { color: var(--navy); text-decoration: underline; }
@@ -283,10 +277,20 @@
   .segmented-control .status-pill-on_hold.active { background: var(--amber); color: #fff; }
   .segmented-control .status-pill-closed.active { background: var(--muted); color: #fff; }
 
-  .delay-note {
-    flex: 0 1 330px; margin-top: 0; padding: 9px 11px; border-radius: 8px;
-    background: #f4f6f8; border: 1px solid var(--border);
+  /* One shared box for every note that can appear in the client header --
+     Info Wizard hint, Add Research hint, and the overdue delay note. Same
+     slot, same width, same type, whichever pane you're on (Greg, 9/6/26). */
+  .cm-wizard-hint, .cm-header-note, .delay-note {
+    /* 330 + the 220 main column + the 20px gap fits the pane at the widths
+       this workspace actually renders at. flex-wrap drops an item to the next
+       line before it will shrink it, so these bases have to fit or the note
+       lands under the title instead of beside it. */
+    flex: 0 1 330px; margin: 0; padding: 9px 11px; border-radius: 8px;
+    font-size: 11.5px; line-height: 1.45; color: var(--muted);
+    background: var(--bg); border: 1px solid var(--border); text-align: left;
   }
+  .cm-wizard-hint, .cm-header-note { border-left: 3px solid var(--navy-light); }
+  .cm-wizard-hint strong, .cm-header-note strong { color: var(--text); }
   .delay-note.delay-yellow { background: #fdf7ec; border-color: #f0dca6; }
   .delay-note.delay-red { background: #fbe9e9; border-color: #f0c2c0; }
   .delay-note-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 5px; line-height: 1.35; }
@@ -742,10 +746,18 @@
               <span class="status-dot hidden" id="cm-status-dot" title=""></span>
               <span class="badge hidden" id="cm-status-badge"></span>
               <div class="segmented-control hidden" id="cm-status-toggle"></div>
-              <div class="cm-wizard-hint hidden" id="cm-wizard-hint">Most of the data in the Info Wizard populates automatically from the application but may need a small amount of incremental data. This is where you can add the Competitors and Customer lists from the client.</div>
             </span>
-            <div class="cm-header-note hidden" id="cm-research-hint">The research questions inside each topic come straight from the <strong>Controlling Document</strong> &mdash; they flow in automatically as it's filled out, and are what the CEO's close-out survey asks about. To change them, edit the Controlling Document rather than this page.</div>
             </div>
+
+            <!-- Greg (9/6/26): "make all note boxes in the header the same
+                 size." The three pane notes -- Info Wizard, Add Research and
+                 the overdue delay box -- were three different widths in two
+                 different places. They're siblings in the same right-hand
+                 slot now and share one set of sizing rules, so whichever pane
+                 you're on the note lands in the same spot at the same size.
+                 They're mutually exclusive by pane, so they never collide. -->
+            <div class="cm-wizard-hint hidden" id="cm-wizard-hint">Most of the data in the Info Wizard populates automatically from the application but may need a small amount of incremental data. This is where you can add the Competitors and Customer lists from the client.</div>
+            <div class="cm-header-note hidden" id="cm-research-hint">The research questions inside each topic come straight from the <strong>Controlling Document</strong> &mdash; they flow in automatically as it's filled out, and are what the CEO's close-out survey asks about. To change them, edit the Controlling Document rather than this page.</div>
 
             <div class="delay-note hidden" id="cm-delay-note">
               <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
