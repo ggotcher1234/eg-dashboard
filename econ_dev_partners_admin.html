@@ -204,9 +204,8 @@
   .program-name-link {
     background: transparent; border: none; padding: 0; font-weight: 700; color: var(--navy);
     font-size: 14px; cursor: pointer; text-align: left; display: block; font-family: inherit;
-    text-decoration: underline; text-underline-offset: 2px;
   }
-  .program-name-link:hover { color: var(--navy-light); }
+  .program-name-link:hover { text-decoration: underline; color: var(--navy-light); }
   .program-code-label { font-size: 11.5px; color: var(--muted); font-family: "SF Mono", Menlo, monospace; margin-top: 2px; }
   /* Chris/Greg (9/3/26): the abbreviation under the program name is gone --
      the program's street address sits there instead. */
@@ -363,7 +362,22 @@
     .nav-item-dropdown { position: static; }
     .nav-submenu { position: static; display: block !important; box-shadow: none; background: transparent; padding: 0 0 4px 26px; margin-top: 0; }
     .nav-link-dropdown-btn .nav-caret { display: none; }
+    .nav-caret-only { display: none; }
   }
+  /* "Programs" needs to stay a real link to the Programs list (Greg,
+     9/6/26 -- a plain dropdown-toggle button with no href broke direct
+     navigation there from every other page), while still offering "Add
+     Program" / "Application Links" as a dropdown -- so unlike Invoicing
+     (one button does both), Programs splits into a normal nav-link plus a
+     small separate caret button that only toggles the submenu. */
+  .nav-split-item { display: flex; align-items: center; }
+  .nav-split-item .nav-link { padding-right: 4px; }
+  .nav-caret-only {
+    display: inline-flex; align-items: center; font: inherit; background: none; border: none; cursor: pointer;
+    color: #c9d6e3; padding: 8px 10px 8px 2px; border-radius: 6px;
+  }
+  .nav-caret-only:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  .nav-caret-only .nav-caret { font-size: 9px; opacity: 0.7; }
   .nav-toggle svg { width: 20px; height: 20px; display: block; }
   @media (max-width: 980px) {
     .nav-toggle { display: inline-flex; }
@@ -450,8 +464,9 @@
         <div class="nav-submenu" id="nav-applications-submenu"></div>
       </div>
       <a href="index.html" class="nav-link">Engagements</a>
-      <div class="nav-item-dropdown">
-        <button type="button" class="nav-link nav-link-dropdown-btn">Programs <span class="nav-caret">&#9662;</span></button>
+      <div class="nav-item-dropdown nav-split-item">
+        <a href="econ_dev_partners_admin.html" class="nav-link active">Programs</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" aria-label="Programs menu"><span class="nav-caret">&#9662;</span></button>
         <div class="nav-submenu">
           <a href="econ_dev_partners_admin.html?action=add">Add Program</a>
           <a href="program_application_links.html">Application Links</a>
@@ -584,7 +599,6 @@
       </div>
       <div class="toolbar-right">
         <span class="count" id="row-count"></span>
-        <button class="btn-secondary btn-sm" id="application-links-btn" onclick="location.href='program_application_links.html'">Application Links</button>
         <!-- Contract Signer / Program Administrator / Program Finance CSV --
              one-row-per-Program, overwrites those 3 text blocks on
              econ_dev_companies, matching Chris's periodic "EG Programs
@@ -596,7 +610,10 @@
         <button class="btn-secondary btn-sm hidden" id="program-info-csv-export-btn">&#8595; Export CSV</button>
         <button class="btn-secondary btn-sm hidden" id="program-info-csv-import-btn">&#8593; Import CSV</button>
         <input type="file" accept=".csv,text/csv" id="program-info-csv-file" class="csv-file-input" />
-        <button class="btn-primary hidden" id="add-btn">+ Add Program</button>
+        <!-- "+ Add Program" and "Application Links" used to live here as
+             toolbar buttons; both moved into the top-nav Programs dropdown
+             (Greg, 9/6/26) so they're reachable from any page, not just this
+             one -- removed here to avoid the same action existing twice. -->
       </div>
     </div>
 
@@ -751,13 +768,11 @@
     $("user-role").textContent = roleLabel(profile.role);
 
     if (isSuperAdmin) {
-      $("add-btn").classList.remove("hidden");
       $("actions-header").classList.remove("hidden");
       $("readonly-note").classList.add("hidden");
       $("program-info-csv-export-btn").classList.remove("hidden");
       $("program-info-csv-import-btn").classList.remove("hidden");
     } else {
-      $("add-btn").classList.add("hidden");
       $("actions-header").classList.add("hidden");
       $("readonly-note").classList.remove("hidden");
       $("program-info-csv-export-btn").classList.add("hidden");
@@ -860,19 +875,19 @@
   // that program's Detail popup open so the search actually resolves to an
   // answer, not just the right screen. (Used to expand an Engagements row
   // instead; that column was dropped from this table -- Greg, 8/26/26.)
-  // Same idea as the ?program= deep link just below, for the "Add Program"
+  function applyProgramDeepLink() {
+    const programId = new URLSearchParams(location.search).get("program");
+    if (!programId || !allPartners.some((p) => p.id === programId)) return;
+    openProgramDetail(programId);
+  }
+
+  // Same idea as the ?program= deep link just above, for the "Add Program"
   // item in the top-nav Programs dropdown (Greg, 9/6/26) -- that dropdown
   // lives on every page, so it links here with ?action=add and this pops
   // the Add Program modal open on arrival instead of just landing on the list.
   function applyActionDeepLink() {
     const action = new URLSearchParams(location.search).get("action");
     if (action === "add" && isSuperAdmin) openAdd();
-  }
-
-  function applyProgramDeepLink() {
-    const programId = new URLSearchParams(location.search).get("program");
-    if (!programId || !allPartners.some((p) => p.id === programId)) return;
-    openProgramDetail(programId);
   }
 
   async function loadContacts() {
@@ -1500,7 +1515,20 @@
   });
 
   // ---------- Add / Edit modal ----------
-  $("add-btn").addEventListener("click", () => openAdd());
+  // "+ Add Program" used to be its own toolbar button calling openAdd()
+  // directly; it's gone now that the top-nav Programs dropdown has an "Add
+  // Program" link instead (Greg, 9/6/26). That link points to
+  // ?action=add so it works as a real destination from any other page (see
+  // applyActionDeepLink above) -- but clicked from THIS page, that would
+  // just be a needless full-page reload, so intercept it here and open the
+  // modal directly instead.
+  document.querySelectorAll('a[href="econ_dev_partners_admin.html?action=add"]').forEach((a) => {
+    a.addEventListener("click", (e) => {
+      if (!isSuperAdmin) return;
+      e.preventDefault();
+      openAdd();
+    });
+  });
   $("modal-cancel").addEventListener("click", closeModal);
 
   // Add Program stays a small modal (there's no row to type into yet); every
