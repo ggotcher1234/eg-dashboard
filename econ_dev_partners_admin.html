@@ -226,31 +226,126 @@
   .delete-row-btn { background: transparent; border: none; color: var(--muted); font-size: 17px; padding: 4px 8px; line-height: 1; }
   .delete-row-btn:hover { color: var(--danger-dark); }
 
-  tr.contacts-detail-row td { background: #f8fafb; padding: 16px 18px; border-bottom: 1px solid var(--border); }
-  .contacts-detail-inner { max-width: 780px; }
-  .contact-card {
-    border: 1px solid #e7ecf0; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; background: #fff;
+  /* ---------- Program Detail popup: sectioned layout + contact cards ----------
+     Greg (9/6/26): "a mini business card view for each person and a dropdown
+     in the business card that selects which role they fit and a checkbox if
+     they should be on the cc list." Replaces the old stacked
+     label + free-height contact-card list, where every contact was a full-
+     width block of six inputs and the four categories ran together down one
+     520px column. Now: one bordered section per role with an icon and a
+     contact count, and the contacts inside it laid out as a responsive card
+     grid. The old .contact-card / .cc-row / .contacts-add-row rules went with
+     it -- nothing else on this page used them. */
+  .pd-section {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 16px;
   }
-  .contact-card:last-of-type { margin-bottom: 0; }
-  .cc-row { display: flex; gap: 8px; margin-bottom: 6px; }
-  .cc-row:last-child { margin-bottom: 0; }
-  .cc-row input[type="text"] {
-    flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; background: #fff;
+  .pd-section-head { display: flex; align-items: flex-start; gap: 11px; margin-bottom: 14px; }
+  .pd-section-icon {
+    width: 32px; height: 32px; border-radius: 8px; background: #e8eef4; color: var(--navy);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
-  .contact-card textarea.cc-notes {
-    width: 100%; min-height: 40px; margin-top: 2px; padding: 6px 8px; border: 1px solid var(--border);
-    border-radius: 5px; font-size: 13px; font-family: inherit; resize: vertical;
+  .pd-section-icon svg { width: 17px; height: 17px; }
+  .pd-section-title { flex: 1; min-width: 0; }
+  .pd-section-title h3 { margin: 0; font-size: 15.5px; color: var(--navy); }
+  .pd-section-title p { margin: 1px 0 0; font-size: 12.5px; color: var(--muted); }
+  .pd-section-note { font-size: 12.5px; color: var(--muted); text-align: right; padding-top: 5px; white-space: nowrap; }
+  .pd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .pd-grid label { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+
+  .pd-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 12px; }
+
+  .cc {
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px 13px; background: #fff;
+    display: flex; flex-direction: column; gap: 9px; position: relative;
   }
-  .contact-card-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
-  .contact-card.readonly { padding: 8px 12px; }
-  .cc-readonly-line { font-size: 13px; margin-top: 2px; }
-  .cc-readonly-line:first-child { margin-top: 0; }
-  .cc-readonly-name { font-weight: 600; color: var(--navy); }
-  .cc-readonly-muted { color: var(--muted); }
-  .contacts-empty { padding: 10px 0; color: var(--muted); font-size: 13px; }
-  .contacts-add-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
-  .contacts-add-row input[type="text"] {
-    padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; background: #fff; flex: 1; min-width: 100px;
+  /* The Programs list resolves a "Primary Contact" as the first CC-flagged
+     contact in sort order (the rule the old CC List category carried). The
+     outline and badge make that visible where it's decided. */
+  .cc.is-primary { border-color: var(--navy-light); box-shadow: 0 0 0 1px var(--navy-light); }
+  .cc-top { display: flex; align-items: flex-start; gap: 8px; }
+  .cc-name { font-weight: 700; font-size: 14.5px; color: var(--navy); flex: 1; min-width: 0; word-break: break-word; }
+  .cc-title { font-size: 12.5px; color: var(--muted); margin-top: 1px; font-weight: 400; }
+  .cc-badge {
+    display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--navy); background: #e8eef4; border-radius: 4px; padding: 2px 6px; margin-top: 5px;
+  }
+  .cc-kebab {
+    background: none; border: none; cursor: pointer; color: var(--muted);
+    padding: 2px 6px; border-radius: 6px; line-height: 1; font-size: 16px; flex-shrink: 0;
+  }
+  .cc-kebab:hover { background: #eef1f4; color: var(--text); }
+  .cc-menu {
+    position: absolute; top: 34px; right: 10px; z-index: 5; min-width: 168px; background: #fff;
+    border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 10px 24px rgba(0,0,0,0.16); padding: 5px; display: none;
+  }
+  .cc-menu.open { display: block; }
+  .cc-menu button {
+    display: block; width: 100%; text-align: left; background: none; border: none;
+    padding: 7px 9px; border-radius: 6px; cursor: pointer; color: var(--text); font-size: 13px; font-weight: 500;
+  }
+  .cc-menu button:hover { background: #eef1f4; }
+  .cc-menu button:disabled { color: #b6bcc4; cursor: default; background: none; }
+  .cc-field-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+  .cc select, .cc input[type="text"], .cc textarea {
+    width: 100%; font-family: inherit; font-size: 13px; color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px; padding: 7px 9px; background: #fff;
+  }
+  .cc select:focus, .cc input:focus, .cc textarea:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 2px rgba(31,74,117,0.13); }
+  .cc textarea { resize: vertical; min-height: 34px; }
+  .cc [readonly], .cc select[disabled] { background: #f4f6f8; color: var(--muted); }
+  .cc-contact-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .cc-input-icon { position: relative; }
+  .cc-input-icon svg { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: var(--muted); pointer-events: none; }
+  /* Needs .cc in the selector to outweigh `.cc input[type="text"]` above --
+     without it the shared padding wins and the icon sits on the placeholder. */
+  .cc .cc-input-icon input[type="text"] { padding-left: 27px; }
+  /* Footer pinned to the card bottom so controls line up across a row no
+     matter how much content sits above; CC gets its own line because the
+     checkbox + Edit + Remove don't fit on one at this column width. */
+  .cc-foot { margin-top: auto; padding-top: 9px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+  .cc-foot-btns { display: flex; gap: 7px; }
+  .cc-foot-btns button { flex: 1; justify-content: center; }
+  .cc-cc { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); cursor: pointer; }
+  .cc-cc input { width: auto; margin: 0; accent-color: var(--navy); }
+  .cc-btn { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; border-radius: 7px; padding: 5px 10px; font-size: 12.5px; font-weight: 600; border: 1px solid var(--border); background: #fff; color: var(--text); }
+  .cc-btn:hover { background: #eef1f4; }
+  .cc-btn svg { width: 14px; height: 14px; }
+  .cc-btn.danger { color: var(--danger); border-color: #f0d4d2; }
+  .cc-btn.danger:hover { background: #fdf2f1; }
+
+  .cc-empty {
+    grid-column: 1 / -1; border: 1px solid var(--border); border-radius: 10px; background: #f8fafb;
+    padding: 22px; display: flex; align-items: center; gap: 14px; justify-content: center;
+  }
+  .cc-empty-icon { width: 42px; height: 42px; border-radius: 50%; background: #e8eef4; color: var(--navy); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .cc-empty-icon svg { width: 21px; height: 21px; }
+  .cc-empty-text strong { display: block; font-size: 13.5px; color: var(--text); }
+  .cc-empty-text span { font-size: 12.5px; color: var(--muted); }
+  .cc-add {
+    border: 1.5px dashed #c8d2dc; border-radius: 10px; background: #f8fafb; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 7px; padding: 20px 14px; text-align: center; cursor: pointer; min-height: 150px;
+  }
+  .cc-add:hover { border-color: var(--navy-light); background: #f2f6fa; }
+  .cc-add-plus { width: 32px; height: 32px; border-radius: 50%; background: #e8eef4; color: var(--navy); display: flex; align-items: center; justify-content: center; font-size: 19px; line-height: 1; }
+  .cc-add strong { font-size: 13px; color: var(--text); }
+  .cc-add span { font-size: 12px; color: var(--muted); max-width: 200px; }
+
+  .pd-check { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
+  .pd-check input { margin-top: 3px; accent-color: var(--navy); }
+  .pd-check-text strong { font-size: 13.5px; font-weight: 600; }
+  .pd-check-text p { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
+
+  .pd-header { display: flex; align-items: center; gap: 14px; padding-bottom: 16px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  .pd-header-text h3 { margin: 0; font-size: 21px; color: var(--navy); }
+  .pd-header-text p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+  .pd-footer { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding-top: 14px; border-top: 1px solid var(--border); margin-top: 4px; }
+  .pd-autosave { margin-right: auto; font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .pd-autosave svg { width: 14px; height: 14px; color: var(--accent); }
+
+  @media (max-width: 620px) {
+    .pd-cards { grid-template-columns: 1fr; }
+    .pd-section-note { display: none; }
   }
 
   .csv-file-input { display: none; }
@@ -649,12 +744,27 @@
      address/contacts moved off the row and into this popup; clicking the
      program name in the table opens it. -->
 <div class="overlay" id="program-detail-overlay">
-  <div class="modal" style="width:520px; max-height:82vh; overflow-y:auto;">
-    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
-      <h3 id="pd-modal-title" style="margin:0;">Program</h3>
-      <button type="button" class="ai-drawer-close" id="program-detail-close" aria-label="Close">&times;</button>
+  <!-- Widened from 520px (Greg, 9/6/26): the contact list is a card grid now,
+       and three cards per row is the whole point of it. The logo, title and
+       Close button live in the shell rather than in program-detail-body so
+       the close listener wires once at load instead of on every re-render. -->
+  <div class="modal" style="width:980px; max-width:96vw; max-height:88vh; overflow-y:auto;">
+    <div class="pd-header">
+      <div id="pd-logo-file"></div>
+      <div class="pd-header-text">
+        <h3 id="pd-modal-title">Program</h3>
+        <p>Program Details and Contacts</p>
+      </div>
+      <button type="button" class="ai-drawer-close" id="program-detail-close" aria-label="Close" style="margin-left:auto;">&times;</button>
     </div>
     <div id="program-detail-body"></div>
+    <div class="pd-footer">
+      <span class="pd-autosave">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        Changes save automatically
+      </span>
+      <button type="button" class="btn-primary" id="program-detail-done">Close</button>
+    </div>
   </div>
 </div>
 
@@ -851,44 +961,138 @@
   // added a `category` column to econ_dev_partner_contacts so all four
   // "kinds of Program contact" now live in one structured table instead of
   // three free-form text blobs plus one structured list.
+  //
+  // Greg (9/6/26): CC List is no longer one of them. It was a fourth
+  // CATEGORY, mutually exclusive with the three real roles, so anyone who
+  // both administered a Program and needed copying had to be entered twice.
+  // Migration 112 split the two ideas apart: `category` is the role (these
+  // three), `include_on_cc` is a flag any contact in any role can carry.
   const PROGRAM_CONTACT_CATEGORIES = [
-    { key: "contract_signer", label: "Contract Signer", hint: "Who signed EG's contract for this Program." },
-    { key: "program_administrator", label: "Program Administrator", hint: "Day-to-day contact(s) for this Program -- add Regional Directors or other sub-groups as separate contacts instead of cramming them into one." },
-    { key: "program_finance", label: "Program Finance", hint: "Who receives EG's invoices for this Program." },
-    { key: "cc_list", label: "CC List", hint: "People to keep in the loop day-to-day -- the first one listed doubles as the \"Primary Contact\" shown on the Programs list." },
+    {
+      key: "contract_signer",
+      label: "Contract Signer",
+      hint: "Who signed EG's contract for this Program.",
+      emptyTitle: "No Contract Signer contact yet",
+      emptyHint: "Add the person who signed EG's contract for this Program.",
+      icon: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    },
+    {
+      key: "program_administrator",
+      label: "Program Administrator",
+      hint: "Day-to-day contact(s) for this Program -- add Regional Directors or other sub-groups as separate contacts instead of cramming them into one.",
+      emptyTitle: "No Program Administrator yet",
+      emptyHint: "Add the day-to-day contact for this Program.",
+      icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    },
+    {
+      key: "program_finance",
+      label: "Program Finance",
+      hint: "Who receives EG's invoices for this Program.",
+      emptyTitle: "No Program Finance contact yet",
+      emptyHint: "Add a contact who receives EG's invoices for this Program.",
+      icon: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+    },
   ];
 
+  const CC_ICON_MAIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>';
+  const CC_ICON_PHONE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+
+  // Cards whose Name/Title/Address fields are expanded. Those three are set
+  // once and rarely touched, so the card shows Role/Email/Phone/Notes by
+  // default and "Edit" reveals the rest -- keeps three cards on a row.
+  const expandedContactIds = new Set();
+
+  // Migration 112 left the 'cc_list' enum value in place (dropping a Postgres
+  // enum value means rebuilding the type). No row should still carry it after
+  // the backfill, but if one somehow does, show it as a Program Administrator
+  // rather than dropping it silently out of every section.
+  const roleOf = (c) => (c.category && c.category !== "cc_list" ? c.category : "program_administrator");
+
   function contactsForCategory(partnerId, category) {
-    return contactsForPartner(partnerId).filter((c) => (c.category || "cc_list") === category);
+    return contactsForPartner(partnerId).filter((c) => roleOf(c) === category);
   }
 
-  function renderContactCard(c, editable) {
-    if (!editable) {
-      return `
-        <div class="contact-card readonly">
-          <div class="cc-readonly-line"><span class="cc-readonly-name">${escapeHtml(c.name || "")}</span>${c.title ? ` <span class="cc-readonly-muted">${escapeHtml(c.title)}</span>` : ""}</div>
-          ${c.address ? `<div class="cc-readonly-line cc-readonly-muted">${escapeHtml(c.address)}</div>` : ""}
-          ${(c.email || c.phone) ? `<div class="cc-readonly-line cc-readonly-muted">${[c.email, c.phone].filter(Boolean).map(escapeHtml).join(" · ")}</div>` : ""}
-          ${c.notes ? `<div class="cc-readonly-line cc-readonly-muted" style="white-space:pre-line;">${escapeHtml(c.notes)}</div>` : ""}
-        </div>
-      `;
-    }
+  // The Programs list shows a Primary Contact for each Program. That used to
+  // mean "first row in the CC List category"; with CC as a flag it means the
+  // first CC-flagged contact in sort order, across all three roles. Contacts
+  // arrive from loadContacts() already ordered by sort_order, so "first one
+  // found" is the whole rule -- and "Make primary contact" in the card menu
+  // just renumbers that contact below every other contact in the Program.
+  function primaryContactId(partnerId) {
+    const c = contactsForPartner(partnerId).find((x) => x.include_on_cc);
+    return c ? c.id : null;
+  }
+
+  function renderContactCard(c, editable, isPrimary) {
+    const ro = editable ? "" : "readonly";
+    const expanded = expandedContactIds.has(c.id);
+    const nameHtml = escapeHtml(c.name || "") || '<span style="color:#a4abb4; font-weight:500;">Unnamed contact</span>';
+
+    // The kebab holds the actions that aren't Edit/Remove: ordering, and
+    // which CC contact is the Program's Primary. Ordering matters because
+    // sort_order is what decides Primary and what the Programs list columns
+    // read ("first contact in each category wins").
+    const menuHtml = editable ? `
+      <button type="button" class="cc-kebab" data-cc-action="menu" data-contact-id="${c.id}" title="More" aria-label="More actions">&#8942;</button>
+      <div class="cc-menu" data-cc-menu-for="${c.id}">
+        <button type="button" data-cc-action="primary" data-contact-id="${c.id}" ${isPrimary || !c.include_on_cc ? "disabled" : ""}>Make primary contact</button>
+        <button type="button" data-cc-action="up" data-contact-id="${c.id}">Move up</button>
+        <button type="button" data-cc-action="down" data-contact-id="${c.id}">Move down</button>
+        <button type="button" data-cc-action="remove" data-contact-id="${c.id}" style="color:var(--danger);">Remove contact</button>
+      </div>
+    ` : "";
+
     return `
-      <div class="contact-card">
-        <div class="cc-row">
-          <input type="text" data-contact-id="${c.id}" data-contact-field="name" value="${escapeHtml(c.name || "")}" placeholder="Full Name (e.g. Chris Gibbons)" />
-          <input type="text" data-contact-id="${c.id}" data-contact-field="title" value="${escapeHtml(c.title || "")}" placeholder="Title / Role" />
+      <div class="cc ${isPrimary ? "is-primary" : ""}" data-cc-card="${c.id}">
+        <div class="cc-top">
+          <div class="cc-name">
+            ${nameHtml}
+            ${c.title ? `<div class="cc-title">${escapeHtml(c.title)}</div>` : ""}
+            ${isPrimary ? '<span class="cc-badge" title="Shown as this Program\'s Primary Contact">Primary</span>' : ""}
+          </div>
+          ${menuHtml}
         </div>
-        <div class="cc-row">
-          <input type="text" data-contact-id="${c.id}" data-contact-field="address" value="${escapeHtml(c.address || "")}" placeholder="Address" />
+
+        <div>
+          <div class="cc-field-label">Role</div>
+          <select data-contact-id="${c.id}" data-contact-select="category" ${editable ? "" : "disabled"}>
+            ${PROGRAM_CONTACT_CATEGORIES.map((cat) => `<option value="${cat.key}" ${roleOf(c) === cat.key ? "selected" : ""}>${escapeHtml(cat.label)}</option>`).join("")}
+          </select>
         </div>
-        <div class="cc-row">
-          <input type="text" data-contact-id="${c.id}" data-contact-field="email" value="${escapeHtml(c.email || "")}" placeholder="Email" />
-          <input type="text" data-contact-id="${c.id}" data-contact-field="phone" value="${escapeHtml(c.phone || "")}" placeholder="Phone" />
+
+        ${expanded ? `
+          <input type="text" data-contact-id="${c.id}" data-contact-field="name" value="${escapeHtml(c.name || "")}" placeholder="Full name" ${ro} />
+          <input type="text" data-contact-id="${c.id}" data-contact-field="title" value="${escapeHtml(c.title || "")}" placeholder="Title" ${ro} />
+          <input type="text" data-contact-id="${c.id}" data-contact-field="address" value="${escapeHtml(c.address || "")}" placeholder="Address" ${ro} />
+        ` : ""}
+
+        <div class="cc-contact-row">
+          <div class="cc-input-icon">${CC_ICON_MAIL}<input type="text" data-contact-id="${c.id}" data-contact-field="email" value="${escapeHtml(c.email || "")}" placeholder="Email" ${ro} /></div>
+          <div class="cc-input-icon">${CC_ICON_PHONE}<input type="text" data-contact-id="${c.id}" data-contact-field="phone" value="${escapeHtml(c.phone || "")}" placeholder="Phone" ${ro} /></div>
         </div>
-        <textarea class="cc-notes" data-contact-id="${c.id}" data-contact-field="notes" placeholder="Notes">${escapeHtml(c.notes || "")}</textarea>
-        <div class="contact-card-actions">
-          <button type="button" class="btn-danger icon-btn" data-delete-contact-id="${c.id}" title="Delete">&times;</button>
+
+        <div>
+          <div class="cc-field-label">Notes</div>
+          <textarea data-contact-id="${c.id}" data-contact-field="notes" placeholder="Notes" ${ro}>${escapeHtml(c.notes || "")}</textarea>
+        </div>
+
+        <div class="cc-foot">
+          <label class="cc-cc">
+            <input type="checkbox" data-contact-id="${c.id}" data-contact-check="include_on_cc" ${c.include_on_cc ? "checked" : ""} ${editable ? "" : "disabled"} />
+            Include on CC list
+          </label>
+          ${editable ? `
+            <div class="cc-foot-btns">
+              <button type="button" class="cc-btn" data-cc-action="edit" data-contact-id="${c.id}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>
+                ${expanded ? "Done" : "Edit"}
+              </button>
+              <button type="button" class="cc-btn danger" data-delete-contact-id="${c.id}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                Remove
+              </button>
+            </div>
+          ` : ""}
         </div>
       </div>
     `;
@@ -896,24 +1100,43 @@
 
   function renderContactCategorySection(p, catDef) {
     const contacts = contactsForCategory(p.id, catDef.key);
-    const rowsHtml = contacts.length
-      ? contacts.map((c) => renderContactCard(c, isSuperAdmin)).join("")
-      : `<div class="contacts-empty">No ${escapeHtml(catDef.label)} contacts on file for this program yet.</div>`;
-    const addFormHtml = isSuperAdmin ? `
-      <form class="contacts-add-row" data-add-contact-partner="${p.id}" data-add-contact-category="${catDef.key}">
-        <input type="text" id="new-contact-name-${catDef.key}-${p.id}" placeholder="Full Name (e.g. Chris Gibbons)" required />
-        <input type="text" id="new-contact-title-${catDef.key}-${p.id}" placeholder="Title / Role" />
-        <input type="text" id="new-contact-address-${catDef.key}-${p.id}" placeholder="Address" />
-        <input type="text" id="new-contact-email-${catDef.key}-${p.id}" placeholder="Email" />
-        <input type="text" id="new-contact-phone-${catDef.key}-${p.id}" placeholder="Phone" />
-        <input type="text" id="new-contact-notes-${catDef.key}-${p.id}" placeholder="Notes" />
-        <button type="submit" class="btn-secondary btn-sm">+ Add</button>
-      </form>
+    const primaryId = primaryContactId(p.id);
+    const ccCount = contacts.filter((c) => c.include_on_cc).length;
+
+    const addCardHtml = isSuperAdmin ? `
+      <div class="cc-add" data-add-contact-partner="${p.id}" data-add-contact-category="${catDef.key}" role="button" tabindex="0">
+        <div class="cc-add-plus">+</div>
+        <strong>Add ${escapeHtml(catDef.label)} Contact</strong>
+        <span>${escapeHtml(catDef.emptyHint)}</span>
+      </div>
     ` : "";
+
+    const bodyHtml = contacts.length
+      ? contacts.map((c) => renderContactCard(c, isSuperAdmin, c.id === primaryId)).join("") + addCardHtml
+      : `
+        <div class="cc-empty">
+          <div class="cc-empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></div>
+          <div class="cc-empty-text">
+            <strong>${escapeHtml(catDef.emptyTitle)}</strong>
+            <span>${escapeHtml(catDef.emptyHint)}</span>
+            ${isSuperAdmin ? `<div style="margin-top:9px;"><button type="button" class="btn-secondary btn-sm" data-add-contact-partner="${p.id}" data-add-contact-category="${catDef.key}">+ Add Contact</button></div>` : ""}
+          </div>
+        </div>
+      `;
+
     return `
-      <label style="margin-top:18px;">${escapeHtml(catDef.label)}</label>
-      <div class="field-hint" style="font-size:12px; color:var(--muted); margin:-6px 0 6px;">${escapeHtml(catDef.hint)}</div>
-      <div class="contacts-detail-inner">${rowsHtml}${addFormHtml}</div>
+      <div class="pd-section">
+        <div class="pd-section-head">
+          <div class="pd-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${catDef.icon}</svg></div>
+          <div class="pd-section-title">
+            <h3>${escapeHtml(catDef.label)}</h3>
+            <p>${escapeHtml(catDef.hint)}</p>
+          </div>
+          ${contacts.length ? `<div class="pd-section-note">${contacts.length} contact${contacts.length === 1 ? "" : "s"}${ccCount ? ` &middot; ${ccCount} on CC` : ""}</div>` : ""}
+          ${isSuperAdmin ? `<button type="button" class="btn-secondary btn-sm" style="margin-left:10px; flex-shrink:0;" data-add-contact-partner="${p.id}" data-add-contact-category="${catDef.key}">+ Add Contact</button>` : ""}
+        </div>
+        <div class="pd-cards">${bodyHtml}</div>
+      </div>
     `;
   }
 
@@ -1078,34 +1301,55 @@
     const editableAttrs = isSuperAdmin ? "" : "readonly";
     $("pd-modal-title").textContent = p.name;
     $("program-detail-body").innerHTML = `
-      <label>Logo</label>
-      <div id="pd-logo-file" style="margin-bottom:14px;"></div>
+      <div class="pd-section">
+        <div class="pd-section-head">
+          <div class="pd-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg></div>
+          <div class="pd-section-title">
+            <h3>Program Details</h3>
+            <p>Basic information about this Program.</p>
+          </div>
+        </div>
+        <div class="pd-grid">
+          <div>
+            <label for="pd-name-input">Full name</label>
+            <input type="text" class="inline-edit-input" id="pd-name-input" data-program-id="${p.id}" data-program-field="name" value="${escapeHtml(p.name)}" ${editableAttrs} />
+          </div>
+          <div>
+            <label for="pd-code-input">Abbreviation</label>
+            <input type="text" class="inline-edit-input" id="pd-code-input" data-program-id="${p.id}" data-program-field="code" value="${escapeHtml(p.code)}" ${editableAttrs} />
+          </div>
+          <div>
+            <label for="pd-physical-address-input">Address</label>
+            <input type="text" class="inline-edit-input" id="pd-physical-address-input" data-program-id="${p.id}" data-program-field="physical_address" value="${escapeHtml(p.physical_address || "")}" ${editableAttrs} />
+          </div>
+        </div>
+      </div>
 
-      <label for="pd-name-input">Full name</label>
-      <input type="text" class="inline-edit-input" id="pd-name-input" data-program-id="${p.id}" data-program-field="name" value="${escapeHtml(p.name)}" ${editableAttrs} />
-
-      <label for="pd-code-input">Abbreviation</label>
-      <input type="text" class="inline-edit-input" id="pd-code-input" data-program-id="${p.id}" data-program-field="code" value="${escapeHtml(p.code)}" ${editableAttrs} />
-
-      <label for="pd-physical-address-input" style="margin-top:18px;">Address</label>
-      <input type="text" class="inline-edit-input" id="pd-physical-address-input" data-program-id="${p.id}" data-program-field="physical_address" value="${escapeHtml(p.physical_address || "")}" ${editableAttrs} />
-
-      <!-- Contract Signer / Program Administrator / Program Finance / CC List
-           -- Rita (8/28/26, per the platform review meeting) asked for named
-           fields (Name, Title, Address, Email, Phone, Notes) instead of one
-           free-form text block each. All four share the same structured
-           contact-card component now; old free-form text was copied intact
-           into a placeholder contact's Notes field for re-keying (see
-           089_program_contact_structured_fields.sql). Order matches Chris's
-           standing "EG Programs Contact Info" doc (6/25/26), CC List last. -->
+      <!-- Contract Signer / Program Administrator / Program Finance -- named
+           fields (Name, Title, Address, Email, Phone, Notes) per Rita
+           (8/28/26); one card per person in a grid, and a Role dropdown on
+           each card that re-files them, per Greg (9/6/26). CC List is no
+           longer a fourth section -- it's the checkbox on every card now
+           (112_program_contact_cc_flag.sql). Order matches Chris's standing
+           "EG Programs Contact Info" doc (6/25/26). -->
       ${PROGRAM_CONTACT_CATEGORIES.map((cat) => renderContactCategorySection(p, cat)).join("")}
 
-      <label style="margin-top:18px;">Billing</label>
-      <div class="checkrow" style="margin-top:2px;">
-        <input type="checkbox" id="pd-admin-qc-upfront" data-program-id="${p.id}" ${p.bill_admin_qc_upfront !== false ? "checked" : ""} ${isSuperAdmin ? "" : "disabled"} />
-        <label for="pd-admin-qc-upfront">Bill Admin/QC hours up front</label>
+      <div class="pd-section">
+        <div class="pd-section-head">
+          <div class="pd-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <div class="pd-section-title">
+            <h3>Billing</h3>
+            <p>How this Program's Admin and Quality Control hours are billed.</p>
+          </div>
+        </div>
+        <label class="pd-check" for="pd-admin-qc-upfront">
+          <input type="checkbox" id="pd-admin-qc-upfront" data-program-id="${p.id}" ${p.bill_admin_qc_upfront !== false ? "checked" : ""} ${isSuperAdmin ? "" : "disabled"} />
+          <span class="pd-check-text">
+            <strong>Bill Admin/QC hours up front</strong>
+            <p><b>On (default):</b> Admin and Quality Control hours bill in full the moment they're allotted, same as always.<br /><b>Off:</b> this Program's Admin/QC hours are billed as actually performed, like every other specialty -- specialists log real hours and invoices pull from that.</p>
+          </span>
+        </label>
       </div>
-      <div class="field-hint" style="font-size:12px; color:var(--muted); margin:-4px 0 0;">On (default): Admin and Quality Control hours bill in full the moment they're allotted, same as always. Off: this Program's Admin/QC hours are billed as actually performed, like every other specialty -- specialists log real hours and invoices pull from that.</div>
     `;
     wireProgramInlineEdits();
     wireAdminQcUpfrontToggle();
@@ -1225,6 +1469,10 @@
 
   function closeProgramDetail() {
     $("program-detail-overlay").classList.remove("open");
+    // Cards reopen collapsed -- "expanded" is a per-visit view state, not
+    // something worth remembering between openings.
+    expandedContactIds.clear();
+    closeContactMenus();
   }
 
   function wireProgramDetailLinks() {
@@ -1234,6 +1482,10 @@
   }
 
   $("program-detail-close").addEventListener("click", closeProgramDetail);
+  // Footer Close. There's no Save button to pair it with -- every field in
+  // this popup writes on blur/change, so there is nothing held back to
+  // commit and nothing to discard (Greg, 9/6/26).
+  $("program-detail-done").addEventListener("click", closeProgramDetail);
 
   function wireDeleteButtons() {
     document.querySelectorAll("[data-delete-program]").forEach((btn) => {
@@ -1256,7 +1508,11 @@
   // Administrator, Program Finance, CC List) -- the same generic pattern
   // used before this was split into categories (Greg/Rita, 8/28/26).
   function wireContactsDetail(partnerId) {
-    document.querySelectorAll("[data-contact-id]").forEach((inp) => {
+    // [data-contact-field] narrows this to the text inputs and the notes
+    // textarea. The Role <select> and the CC checkbox also carry
+    // data-contact-id but save on `change`, not blur, and are wired below --
+    // without this they'd hit this handler with an undefined field name.
+    document.querySelectorAll("[data-contact-id][data-contact-field]").forEach((inp) => {
       const original = inp.value;
       inp.addEventListener("blur", async () => {
         const value = inp.value.trim();
@@ -1296,35 +1552,149 @@
       });
     });
 
-    document.querySelectorAll(`[data-add-contact-partner="${partnerId}"]`).forEach((addForm) => {
-      addForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const category = addForm.dataset.addContactCategory;
-        const suffix = `${category}-${partnerId}`;
-        const name = $(`new-contact-name-${suffix}`).value.trim();
-        const title = $(`new-contact-title-${suffix}`).value.trim();
-        const address = $(`new-contact-address-${suffix}`).value.trim();
-        const email = $(`new-contact-email-${suffix}`).value.trim();
-        const phone = $(`new-contact-phone-${suffix}`).value.trim();
-        const notes = $(`new-contact-notes-${suffix}`).value.trim();
-        if (!name) { showBanner("Contact name is required.", "error"); return; }
-        const { error } = await sb.from("econ_dev_partner_contacts").insert({
-          organization_id: currentUser.organization_id,
-          partner_id: partnerId,
-          category,
-          name, title: title || null, address: address || null, email: email || null, phone: phone || null, notes: notes || null,
-          sort_order: contactsForCategory(partnerId, category).length,
-        });
+    // Role dropdown -- re-files a contact into another section. Saves the
+    // same way every other field does, then re-renders so the card physically
+    // moves to the section it now belongs to.
+    document.querySelectorAll("[data-contact-select='category']").forEach((sel) => {
+      const original = sel.value;
+      sel.addEventListener("change", async () => {
+        const contactId = sel.dataset.contactId;
+        const value = sel.value;
+        const c = allContacts.find((x) => x.id === contactId);
+        // Land at the bottom of the section it's moving into, so it doesn't
+        // silently displace whoever is currently that section's first
+        // contact -- the Programs list columns read "first contact wins".
+        const sortOrder = contactsForCategory(c ? c.partner_id : partnerId, value).length;
+        const { error } = await sb.from("econ_dev_partner_contacts").update({ category: value, sort_order: sortOrder }).eq("id", contactId);
         if (error) {
-          showBanner("Couldn't add contact: " + error.message, "error");
+          showBanner("Couldn't change role: " + error.message, "error");
+          sel.value = original;
           return;
         }
         await loadContacts();
         renderTable();
+        renderProgramDetailModal(c ? c.partner_id : partnerId);
+      });
+    });
+
+    // "Include on CC list" -- the flag that replaced the CC List category.
+    document.querySelectorAll("[data-contact-check='include_on_cc']").forEach((box) => {
+      box.addEventListener("change", async () => {
+        const contactId = box.dataset.contactId;
+        const value = box.checked;
+        const c = allContacts.find((x) => x.id === contactId);
+        const { error } = await sb.from("econ_dev_partner_contacts").update({ include_on_cc: value }).eq("id", contactId);
+        if (error) {
+          showBanner("Couldn't update the CC list: " + error.message, "error");
+          box.checked = !value;
+          return;
+        }
+        if (c) c.include_on_cc = value;
+        // Re-render: the Primary badge may have moved to another card.
+        renderTable();
+        renderProgramDetailModal(c ? c.partner_id : partnerId);
+      });
+    });
+
+    document.querySelectorAll("[data-cc-action]").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.ccAction;
+        const id = btn.dataset.contactId;
+        const c = allContacts.find((x) => x.id === id);
+        if (!c) return;
+
+        if (action === "menu") {
+          const menu = document.querySelector(`[data-cc-menu-for="${id}"]`);
+          const wasOpen = menu.classList.contains("open");
+          closeContactMenus();
+          menu.classList.toggle("open", !wasOpen);
+          return;
+        }
+        closeContactMenus();
+
+        if (action === "edit") {
+          expandedContactIds.has(id) ? expandedContactIds.delete(id) : expandedContactIds.add(id);
+          renderProgramDetailModal(c.partner_id);
+          return;
+        }
+        if (action === "remove") {
+          document.querySelector(`[data-delete-contact-id="${id}"]`).click();
+          return;
+        }
+
+        // Ordering. sort_order is per-category, and it decides both which
+        // contact each Programs-list column shows and which CC contact is
+        // Primary -- so these renumber rather than just reordering an array.
+        const siblings = contactsForCategory(c.partner_id, roleOf(c));
+        const i = siblings.indexOf(c);
+        let reordered = null;
+        if (action === "up" && i > 0) {
+          reordered = [...siblings];
+          reordered.splice(i - 1, 0, reordered.splice(i, 1)[0]);
+        }
+        if (action === "down" && i < siblings.length - 1) {
+          reordered = [...siblings];
+          reordered.splice(i + 1, 0, reordered.splice(i, 1)[0]);
+        }
+        if (action === "primary") {
+          // Primary is the first CC-flagged contact in the whole Program, so
+          // this has to beat contacts in the other two sections too -- a
+          // negative sort_order does that without renumbering everyone.
+          const lowest = Math.min(0, ...contactsForPartner(c.partner_id).map((x) => x.sort_order || 0));
+          const { error } = await sb.from("econ_dev_partner_contacts").update({ sort_order: lowest - 1 }).eq("id", id);
+          if (error) { showBanner("Couldn't set the primary contact: " + error.message, "error"); return; }
+          await loadContacts();
+          renderTable();
+          renderProgramDetailModal(c.partner_id);
+          return;
+        }
+        if (!reordered) return;
+
+        const results = await Promise.all(
+          reordered.map((x, idx) => sb.from("econ_dev_partner_contacts").update({ sort_order: idx }).eq("id", x.id))
+        );
+        const failed = results.find((r) => r.error);
+        if (failed) { showBanner("Couldn't reorder contacts: " + failed.error.message, "error"); return; }
+        await loadContacts();
+        renderTable();
+        renderProgramDetailModal(c.partner_id);
+      });
+    });
+
+    // Add -- inserts an empty contact and opens it expanded, rather than
+    // asking for six fields up front in a form the way this used to. The
+    // card IS the form now, and it saves field by field like every other.
+    document.querySelectorAll(`[data-add-contact-partner="${partnerId}"]`).forEach((el) => {
+      el.addEventListener("click", async () => {
+        const category = el.dataset.addContactCategory;
+        const { data, error } = await sb.from("econ_dev_partner_contacts").insert({
+          organization_id: currentUser.organization_id,
+          partner_id: partnerId,
+          category,
+          name: "New contact",
+          sort_order: contactsForCategory(partnerId, category).length,
+        }).select("id").single();
+        if (error) {
+          showBanner("Couldn't add contact: " + error.message, "error");
+          return;
+        }
+        if (data) expandedContactIds.add(data.id);
+        await loadContacts();
+        renderTable();
         renderProgramDetailModal(partnerId);
+        const nameInput = document.querySelector(`[data-contact-id="${data ? data.id : ""}"][data-contact-field="name"]`);
+        if (nameInput) { nameInput.focus(); nameInput.select(); }
       });
     });
   }
+
+  function closeContactMenus() {
+    document.querySelectorAll(".cc-menu.open").forEach((m) => m.classList.remove("open"));
+  }
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".cc-menu") && !e.target.closest("[data-cc-action='menu']")) closeContactMenus();
+  });
 
   function escapeHtml(str) {
     const div = document.createElement("div");
@@ -1639,9 +2009,18 @@
     program_finance: "Program Finance",
   };
 
+  // The three role columns are unchanged, but their contents grew: contacts
+  // that used to sit in the separate CC List category are now filed under a
+  // real role (112_program_contact_cc_flag.sql), so they turn up here for the
+  // first time. "(CC)" marks them -- without it the export would state who
+  // administers a Program but silently drop who gets copied, which is half
+  // of what Chris uses this sheet for (Greg, 9/6/26).
   function summarizeContactsForExport(partnerId, category) {
     return contactsForCategory(partnerId, category)
-      .map((c) => [c.name, c.title, c.address, c.email, c.phone, c.notes].filter((v) => v && String(v).trim()).join(" — "))
+      .map((c) => {
+        const summary = [c.name, c.title, c.address, c.email, c.phone, c.notes].filter((v) => v && String(v).trim()).join(" — ");
+        return c.include_on_cc ? `${summary} (CC)` : summary;
+      })
       .join(" | ");
   }
 
