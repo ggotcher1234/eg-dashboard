@@ -220,16 +220,10 @@
     background: var(--card); border: 1px solid var(--border); border-radius: 12px;
     box-shadow: 0 1px 3px rgba(20,48,77,0.05);
   }
-  .ccc-summary-main { flex: 1 1 220px; min-width: 0; }
+  .ccc-summary-main { flex: 1 1 200px; min-width: 0; }
   /* Below ~760px the two columns stack; the note keeps its own box so it
      still reads as attached to the header rather than floating loose. */
   @media (max-width: 760px) { .ccc-summary { gap: 12px; } }
-  /* Greg (9/6/26): "put the notes in the top header. make smaller." Same
-     idea as .cm-wizard-hint above -- a pane-specific note living in the
-     client header -- but a size down, since this one is a standing
-     explanation rather than a first-run walkthrough. Full width under the
-     status row so it isn't squeezed between the badge and the delay note. */
-  .cm-header-note strong { color: var(--text); }
   .ccc-breadcrumb { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--muted); text-decoration: none; margin-bottom: 6px; }
   .ccc-breadcrumb:hover { color: var(--navy); text-decoration: underline; }
   /* Greg (8/30/26): stack top-to-bottom -- name, then Partner, then the
@@ -277,28 +271,62 @@
   .segmented-control .status-pill-on_hold.active { background: var(--amber); color: #fff; }
   .segmented-control .status-pill-closed.active { background: var(--muted); color: #fff; }
 
-  /* One shared box for every note that can appear in the client header --
-     Info Wizard hint, Add Research hint, and the overdue delay note. Same
-     slot, same width, same type, whichever pane you're on (Greg, 9/6/26). */
-  .cm-wizard-hint, .cm-header-note, .delay-note {
-    /* 330 + the 220 main column + the 20px gap fits the pane at the widths
-       this workspace actually renders at. flex-wrap drops an item to the next
-       line before it will shrink it, so these bases have to fit or the note
-       lands under the title instead of beside it. */
-    flex: 0 1 330px; margin: 0; padding: 9px 11px; border-radius: 8px;
-    font-size: 11.5px; line-height: 1.45; color: var(--muted);
-    background: var(--bg); border: 1px solid var(--border); text-align: left;
+  /* ---------- Header notes (Greg, 9/6/26, to his mockup) ----------
+     One panel design for all three notes that can appear in the client
+     header -- Info Wizard hint, Add Research hint, and the overdue delay
+     note. Icon tile, small eyebrow label, bold title, optional body; the
+     delay note adds a textarea and a Save row. They share a slot so only one
+     is on screen at a time, and they're all the same width. */
+  .ccc-summary-notes {
+    /* Basis kept low deliberately: flex-wrap drops this column below the
+       client name before it will shrink it, so 340 + the 200 name column +
+       the 20px gap has to fit even a narrow pane. max-width lets it grow to
+       the mockup's proportions on a full-width workspace. */
+    flex: 1 1 340px; min-width: 0; max-width: 660px;
+    border-left: 1px solid var(--border); padding-left: 24px;
   }
-  .cm-wizard-hint, .cm-header-note { border-left: 3px solid var(--navy-light); }
-  .cm-wizard-hint strong, .cm-header-note strong { color: var(--text); }
-  .delay-note.delay-yellow { background: #fdf7ec; border-color: #f0dca6; }
-  .delay-note.delay-red { background: #fbe9e9; border-color: #f0c2c0; }
-  .delay-note-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 5px; line-height: 1.35; }
-  .delay-note textarea {
-    width: 100%; min-height: 34px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
-    font-size: 12.5px; font-family: inherit; resize: vertical; box-sizing: border-box;
+  .ccc-summary-notes.is-empty { display: none; }
+
+  .hdr-note {
+    border-radius: 14px; padding: 16px 18px; border: 1px solid var(--border);
+    background: var(--bg); display: flex; flex-direction: column; gap: 12px;
   }
-  .delay-note-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .hdr-note-top { display: flex; align-items: flex-start; gap: 13px; }
+  .hdr-note-icon {
+    width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #e8eef4; color: var(--navy-light);
+  }
+  .hdr-note-icon svg { width: 21px; height: 21px; }
+  .hdr-note-head { flex: 1; min-width: 0; }
+  .hdr-note-eyebrow {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .hdr-note-title { font-size: 15px; font-weight: 700; color: var(--navy); line-height: 1.35; margin-top: 4px; }
+  .hdr-note-body { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-top: 4px; }
+  .hdr-note-body strong { color: var(--text); }
+  .hdr-note textarea {
+    width: 100%; min-height: 62px; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: 10px; font-size: 13.5px; font-family: inherit; resize: vertical;
+    box-sizing: border-box; background: #fff; color: var(--text);
+  }
+  .hdr-note textarea:focus { outline: none; border-color: var(--navy-light); }
+  .hdr-note-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .hdr-note-hint { font-size: 11.5px; color: var(--muted); }
+  .hdr-note-save {
+    background: var(--navy); color: #fff; border: none; border-radius: 9px;
+    padding: 10px 20px; font-size: 13px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+  }
+  .hdr-note-save:hover { background: var(--navy-light); }
+
+  /* Tiers -- the delay note only. Red and amber wash the whole panel and
+     recolour the icon tile; on-schedule stays the neutral grey the two
+     informational hints use. */
+  .hdr-note.tier-red { background: linear-gradient(180deg, #fdf0ef 0%, #fbe9e9 100%); border-color: #f0c2c0; }
+  .hdr-note.tier-red .hdr-note-icon { background: #f9dcda; color: var(--danger); }
+  .hdr-note.tier-amber { background: linear-gradient(180deg, #fdf9f0 0%, #fdf7ec 100%); border-color: #f0dca6; }
+  .hdr-note.tier-amber .hdr-note-icon { background: #f7e9c8; color: var(--amber); }
   .delay-note-saved { font-size: 12px; color: var(--accent-dark); display: none; }
 
 
@@ -756,23 +784,49 @@
                  slot now and share one set of sizing rules, so whichever pane
                  you're on the note lands in the same spot at the same size.
                  They're mutually exclusive by pane, so they never collide. -->
-            <div class="cm-wizard-hint hidden" id="cm-wizard-hint">Most of the data in the Info Wizard populates automatically from the application but may need a small amount of incremental data. This is where you can add the Competitors and Customer lists from the client.</div>
-            <div class="cm-header-note hidden" id="cm-research-hint">The research questions inside each topic come straight from the <strong>Controlling Document</strong> &mdash; they flow in automatically as it's filled out, and are what the CEO's close-out survey asks about. To change them, edit the Controlling Document rather than this page.</div>
+            <div class="ccc-summary-notes is-empty" id="cm-notes-col">
+              <div class="hdr-note hidden" id="cm-wizard-hint">
+                <div class="hdr-note-top">
+                  <div class="hdr-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M15 9h0M17.8 6.2L19 5M3 21l9-9M12.2 6.2L11 5"/></svg></div>
+                  <div class="hdr-note-head">
+                    <div class="hdr-note-eyebrow">Header note</div>
+                    <div class="hdr-note-body">Most of the data in the Info Wizard populates automatically from the application but may need a small amount of incremental data. This is where you can add the Competitors and Customer lists from the client.</div>
+                  </div>
+                </div>
+              </div>
 
-            <div class="delay-note hidden" id="cm-delay-note">
-              <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                <div class="delay-note-label" id="cm-delay-note-label">Why is this taking longer than expected?</div>
-                <button type="button" class="btn-ghost hidden" id="cm-fix-date-btn" style="padding:2px 6px; font-size:11px; color:var(--navy-light); flex-shrink:0;" title="Correct the date this engagement actually went In Progress">Edit date</button>
+              <div class="hdr-note hidden" id="cm-research-hint">
+                <div class="hdr-note-top">
+                  <div class="hdr-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg></div>
+                  <div class="hdr-note-head">
+                    <div class="hdr-note-eyebrow">Header note</div>
+                    <div class="hdr-note-body">The research questions inside each topic come straight from the <strong>Controlling Document</strong> &mdash; they flow in automatically as it's filled out, and are what the CEO's close-out survey asks about. To change them, edit the Controlling Document rather than this page.</div>
+                  </div>
+                </div>
               </div>
-              <div class="hidden" id="cm-fix-date-row" style="display:flex; align-items:center; gap:8px; margin:2px 0 10px; flex-wrap:wrap;">
-                <input type="date" id="cm-fix-date-input" style="padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12.5px;" />
-                <button type="button" class="btn-secondary" id="cm-fix-date-save" style="padding:5px 12px; font-size:12px;">Save date</button>
-                <button type="button" class="btn-ghost" id="cm-fix-date-cancel" style="padding:5px 8px; font-size:12px;">Cancel</button>
-              </div>
-              <textarea id="cm-delay-reason" maxlength="300" class="hidden"></textarea>
-              <div class="delay-note-actions hidden" id="cm-delay-actions">
-                <button type="button" class="btn-secondary" id="cm-delay-save" style="padding:5px 12px; font-size:12px;">Save</button>
-                <span class="delay-note-saved" id="cm-delay-saved">Saved</span>
+
+              <div class="hdr-note hidden" id="cm-delay-note">
+                <div class="hdr-note-top">
+                  <div class="hdr-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M18.5 5.5l1.5-1.5"/></svg></div>
+                  <div class="hdr-note-head">
+                    <div class="hdr-note-eyebrow">Header note</div>
+                    <div class="hdr-note-title" id="cm-delay-note-label">Why is this taking longer than expected?</div>
+                  </div>
+                  <button type="button" class="btn-ghost hidden" id="cm-fix-date-btn" style="padding:2px 6px; font-size:11px; color:var(--navy-light); flex-shrink:0;" title="Correct the date this engagement actually went In Progress">Edit date</button>
+                </div>
+                <div class="hidden" id="cm-fix-date-row" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <input type="date" id="cm-fix-date-input" style="padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12.5px;" />
+                  <button type="button" class="btn-secondary" id="cm-fix-date-save" style="padding:5px 12px; font-size:12px;">Save date</button>
+                  <button type="button" class="btn-ghost" id="cm-fix-date-cancel" style="padding:5px 8px; font-size:12px;">Cancel</button>
+                </div>
+                <textarea id="cm-delay-reason" maxlength="300" class="hidden" placeholder="Add a short note for the team&hellip;"></textarea>
+                <div class="hdr-note-foot hidden" id="cm-delay-actions">
+                  <span class="hdr-note-hint">This note is visible to your engagement team.</span>
+                  <span style="display:flex; align-items:center; gap:10px;">
+                    <span class="delay-note-saved" id="cm-delay-saved">Saved</span>
+                    <button type="button" class="hdr-note-save" id="cm-delay-save">Save note</button>
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -899,6 +953,19 @@
   let delayNoteApplicable = false;
   function refreshDelayNoteVisibility() {
     $("cm-delay-note").classList.toggle("hidden", !delayNoteApplicable || activePane !== "team");
+    syncNotesColumn();
+  }
+
+  // The notes column carries the vertical rule that separates it from the
+  // client name, so it has to collapse entirely when no note is showing --
+  // otherwise a pane with no note leaves a divider hanging in empty space
+  // (Greg, 9/6/26).
+  function syncNotesColumn() {
+    const col = $("cm-notes-col");
+    if (!col) return;
+    const anyVisible = ["cm-wizard-hint", "cm-research-hint", "cm-delay-note"]
+      .some((id) => $(id) && !$(id).classList.contains("hidden"));
+    col.classList.toggle("is-empty", !anyVisible);
   }
 
   const $ = (id) => document.getElementById(id);
@@ -1403,6 +1470,7 @@
     document.querySelector(".cc-shell").classList.toggle("wide-workspace", WIDE_WORKSPACE_PANE_KEYS.includes(key));
     $("cm-wizard-hint").classList.toggle("hidden", key !== "setup");
     $("cm-research-hint").classList.toggle("hidden", key !== "research");
+    syncNotesColumn();
     refreshDelayNoteVisibility();
 
     // Client Dashboard is the one nav item that's a real, client-facing
@@ -1678,12 +1746,12 @@
     $("cm-delay-actions").classList.toggle("hidden", tier !== "red");
     if (tier !== "red") {
       dot.title = `In Progress for ${dayWord} — On Schedule`;
-      note.classList.remove("delay-yellow", "delay-red");
+      note.classList.remove("tier-amber", "tier-red");
       $("cm-delay-note-label").textContent = `In Progress for ${dayWord}: On Schedule`;
     } else {
       dot.title = `In Progress for ${dayWord} — Overdue`;
-      note.classList.remove("delay-yellow");
-      note.classList.add("delay-red");
+      note.classList.remove("tier-amber");
+      note.classList.add("tier-red");
       $("cm-delay-note-label").textContent =
         `In Progress for ${dayWord}: Overdue — why is it taking longer than expected?`;
     }
