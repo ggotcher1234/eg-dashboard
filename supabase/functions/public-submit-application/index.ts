@@ -148,11 +148,18 @@ Deno.serve(async (req: Request) => {
       program_contact_id: null,
       company_name: companyName,
       address,
-      phone: null,
+      // Greg (9/6/26): the public form now asks for everything the internal
+      // application view has a row for, so these stop being hardcoded.
+      // Country keeps "United States" as the fallback -- it's prefilled on
+      // the form, and that was the old constant.
+      phone: strOrNull(incomingData["f-phone"]),
       year_founded: numOrNull(incomingData["f-year-founded"]),
       website: strOrNull(incomingData["f-website"]),
-      country: "United States",
-      is_private: null,
+      country: strOrNull(incomingData["f-country"]) ?? "United States",
+      // Blank stays null, so the internal view still shows "Add Ownership...".
+      is_private: incomingData["f-is-private"] === "private" ? true
+                : incomingData["f-is-private"] === "public" ? false
+                : null,
       primary_officer_name: strOrNull(incomingData["f-p-name"]),
       primary_officer_title: strOrNull(incomingData["f-p-title"]),
       primary_officer_email: strOrNull(incomingData["f-p-email"]),
@@ -163,11 +170,20 @@ Deno.serve(async (req: Request) => {
       secondary_officer_email: strOrNull(incomingData["f-s-email"]),
       secondary_officer_phone: strOrNull(incomingData["f-s-phone"]),
       secondary_officer_temperament: null,
-      tertiary_officer_name: null,
-      tertiary_officer_title: null,
-      tertiary_officer_email: null,
-      tertiary_officer_phone: null,
-      cc_emails: null,
+      tertiary_officer_name: strOrNull(incomingData["f-t-name"]),
+      tertiary_officer_title: strOrNull(incomingData["f-t-title"]),
+      tertiary_officer_email: strOrNull(incomingData["f-t-email"]),
+      tertiary_officer_phone: strOrNull(incomingData["f-t-phone"]),
+      // cc_emails is text[]; the form collects one comma-separated line
+      // (076_application_cc_emails.sql). Split, trim, drop blanks -- and
+      // stay null rather than [] when nothing was entered, so the internal
+      // view's "Add Email CC List..." placeholder still shows.
+      cc_emails: (() => {
+        const raw = strOrNull(incomingData["f-cc-emails"]);
+        if (!raw) return null;
+        const list = raw.split(",").map((s) => s.trim()).filter(Boolean);
+        return list.length ? list : null;
+      })(),
       naics_code: strOrNull(incomingData["f-naics"]),
       fte_range_10_to_100: incomingData["f-fte-range"],
       fte_2023: numOrNull(incomingData["f-fte-2023"]),
