@@ -1577,7 +1577,13 @@
     const canEdit = isSuperAdmin || isTeamLeadHere;
     if (!canEdit) {
       $("cm-status-toggle").classList.add("hidden");
-      $("cm-status-badge").classList.remove("hidden");
+      // Greg (9/6/26): "remove in progress it is redundant." The read-only
+      // badge stays hidden -- the status dot beside it already carries the
+      // state (and spells it out on hover), and for anyone who can change
+      // the status the segmented control below shows it anyway. The element
+      // and its className/textContent wiring are left in place so this is a
+      // one-line revert rather than a re-build.
+      $("cm-status-badge").classList.add("hidden");
       $("cm-status-badge").className = `badge badge-${client.project_status}`;
       $("cm-status-badge").textContent = PROJECT_STATUS_LABELS[client.project_status] || client.project_status;
       return;
@@ -1643,6 +1649,13 @@
     const dayWord = `${days} day${days === 1 ? "" : "s"}`;
     dot.classList.remove("hidden");
     dot.className = `status-dot status-dot-${tier}`;
+    // With the "In Progress" badge gone (Greg, 9/6/26) the dot has nothing
+    // labelling it for a read-only viewer -- a bare coloured circle whose
+    // meaning only shows on hover. Anyone who CAN change the status keeps it,
+    // since the segmented control sits beside it and captions it. Hidden here
+    // rather than by an early return, so the day-count label, textarea and
+    // delay-note tier below still get set for everyone.
+    dot.classList.toggle("hidden", !(isSuperAdmin || isTeamLeadHere));
     delayNoteApplicable = true;
     refreshDelayNoteVisibility();
     // Greg (8/30/26): the reason textarea + Save button only make sense
