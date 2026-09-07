@@ -177,3 +177,28 @@ create trigger econ_dev_partner_contacts_touch_program
 -- Both triggers run as the calling user, which is fine because RLS on both
 -- tables already restricts writes to Super Admin -- anyone allowed to change a
 -- contact is allowed to update its Program.
+
+-- ---------------------------------------------------------------------------
+-- Clear pre-seeded names
+-- ---------------------------------------------------------------------------
+-- Greg (9/7/26): "remove all pre-seeded text."
+--
+-- The form no longer writes a placeholder name when you add a person or a
+-- Regional Director, and the CSV import no longer synthesises one. But rows
+-- created before that change carry the seeded text in the database, so it
+-- keeps showing up in the form no matter what the page does now.
+--
+-- Only exact matches are cleared. A row someone actually typed a name into no
+-- longer holds the literal, so this can't overwrite real data; a row still
+-- holding it was never filled in. Empty string, not null -- name is NOT NULL
+-- (039) -- which is what the form now inserts, so these rows show the "Name"
+-- placeholder like any other blank one.
+update econ_dev_partner_contacts
+   set name = ''
+ where name in (
+         'New contact',
+         'New Regional Director',
+         'Imported from Contract Signer',
+         'Imported from Program Administrator',
+         'Imported from Program Finance'
+       );

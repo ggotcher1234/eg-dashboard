@@ -1816,19 +1816,13 @@
   //
   // Import can't safely parse that summary back apart, so instead of
   // overwriting a whole category it writes the raw cell text into the
-  // Notes field of that category's *first* contact (creating one with a
-  // placeholder name if the category has none yet) -- same non-destructive
+  // Notes field of that category's *first* contact (creating a nameless one
+  // if the category has none yet) -- same non-destructive
   // "copy the text somewhere a human can re-key it" approach the
   // migration's backfill used. This preserves Chris's existing bulk-update
   // workflow: paste his doc into this CSV shape and re-import any time he
   // sends an update.
   const PROGRAM_INFO_CSV_HEADERS = ["Code", "Program Name", "Contract Signer", "Program Administrator", "Program Finance", "Address"];
-  const PROGRAM_INFO_CSV_IMPORT_PLACEHOLDER_LABEL = {
-    is_contract_signer: "Contract Signer",
-    is_program_administrator: "Program Administrator",
-    is_program_finance: "Program Finance",
-  };
-
   // The three role columns are unchanged, but their contents grew: contacts
   // that used to sit in the separate CC List category are now filed under a
   // real role (112_program_contact_cc_flag.sql), so they turn up here for the
@@ -1868,8 +1862,8 @@
   $("program-info-csv-import-btn").addEventListener("click", () => $("program-info-csv-file").click());
 
   // Writes `text` into the Notes field of the first contact holding that
-  // role, creating a placeholder-named one if nobody holds it yet. Roles are
-  // flags now, so the new contact gets the flag set rather than a category.
+  // role, creating a nameless one if nobody holds it yet. Roles are flags
+  // now, so the new contact gets the flag set rather than a category.
   async function upsertRoleNoteFromImport(partner, roleField, text) {
     const existing = contactsForRole(partner.id, roleField);
     if (existing.length) {
@@ -1879,7 +1873,11 @@
       organization_id: currentUser.organization_id,
       partner_id: partner.id,
       [roleField]: true,
-      name: `Imported from ${PROGRAM_INFO_CSV_IMPORT_PLACEHOLDER_LABEL[roleField]}`,
+      // No synthesised name (Greg, 9/7/26: "remove all pre-seeded text").
+      // The CSV carries a note, not a person, so the row goes in nameless and
+      // the ticked role already says which column it came from. Empty string,
+      // not null: name is NOT NULL (039).
+      name: "",
       notes: text,
       sort_order: 0,
     });
