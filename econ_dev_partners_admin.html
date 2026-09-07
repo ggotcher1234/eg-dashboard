@@ -268,7 +268,18 @@
     background: var(--bg); padding-top: 6px; padding-bottom: 6px; font-size: 10.5px;
     font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
   }
-  .pd-row-people { grid-template-columns: 1.15fr 1fr 1.3fr 0.85fr auto 46px 30px; }
+  /* Greg (9/7/26): "make the headings line up with the columns."
+     The Roles track used to be `auto`. The header row and the rows below it are
+     separate grids sharing a template, and a content-sized track resolves to
+     whatever THAT grid's content needs -- 318px of tickboxes in a row, 39px of
+     the word "Roles" in the header. The four fr columns then divided up
+     different leftovers, so every heading from Title rightwards sat off its
+     column by up to 46px.
+     A fixed track is the fix, because it is the only kind that cannot depend on
+     which grid it is in. 334px is the tickboxes at their natural width with a
+     little slack; they wrap inside the cell rather than push it wider if a
+     font renders them larger. */
+  .pd-row-people { grid-template-columns: 1.15fr 1fr 1.3fr 0.85fr 334px 46px 30px; }
   .pd-row-regional { grid-template-columns: 1.2fr 1.1fr 1fr 1.3fr 0.85fr 46px 30px; }
   .pd-row input[type="text"] {
     width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--border);
@@ -1024,12 +1035,26 @@
       </div>
     </div>`;
 
-  function renderPersonRow(c) {
+  // The tickboxes for one person.
+  function rolesCell(c) {
+    const bind = (field, on) =>
+      `<input type="checkbox" data-contact-id="${c.id}" data-contact-check="${field}" ${on ? "checked" : ""} ${isSuperAdmin ? "" : "disabled"} />`;
     const roles = CONTACT_ROLES.map((r) => `
       <label class="pd-role" title="${escapeHtml(r.label)}">
-        <input type="checkbox" data-contact-id="${c.id}" data-contact-check="${r.field}" ${c[r.field] ? "checked" : ""} ${isSuperAdmin ? "" : "disabled"} />
+        ${bind(r.field, c[r.field])}
         ${escapeHtml(r.short)}
       </label>`).join("");
+    return `
+        <div class="pd-roles">
+          ${roles}
+          <label class="pd-role pd-role-cc" title="Include on this Program's CC list">
+            ${bind("include_on_cc", c.include_on_cc)}
+            CC
+          </label>
+        </div>`;
+  }
+
+  function renderPersonRow(c) {
     return `
     <div class="pd-person">
       <div class="pd-row pd-row-people">
@@ -1037,13 +1062,7 @@
         ${cField(c, "title", "Title")}
         ${cField(c, "email", "Email")}
         ${cField(c, "phone", "Phone")}
-        <div class="pd-roles">
-          ${roles}
-          <label class="pd-role pd-role-cc" title="Include on this Program's CC list">
-            <input type="checkbox" data-contact-id="${c.id}" data-contact-check="include_on_cc" ${c.include_on_cc ? "checked" : ""} ${isSuperAdmin ? "" : "disabled"} />
-            CC
-          </label>
-        </div>
+        ${rolesCell(c)}
         ${moreButton(c)}
         ${isSuperAdmin ? `<button type="button" class="pd-row-del" data-delete-contact-id="${c.id}" title="Remove this person">&times;</button>` : "<span></span>"}
       </div>
