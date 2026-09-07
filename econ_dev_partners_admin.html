@@ -226,110 +226,59 @@
   .delete-row-btn { background: transparent; border: none; color: var(--muted); font-size: 17px; padding: 4px 8px; line-height: 1; }
   .delete-row-btn:hover { color: var(--danger-dark); }
 
-  /* ---------- Program Detail popup: sectioned layout + contact cards ----------
-     Greg (9/6/26): "a mini business card view for each person and a dropdown
-     in the business card that selects which role they fit and a checkbox if
-     they should be on the cc list." Replaces the old stacked
-     label + free-height contact-card list, where every contact was a full-
-     width block of six inputs and the four categories ran together down one
-     520px column. Now: one bordered section per role with an icon and a
-     contact count, and the contacts inside it laid out as a responsive card
-     grid. The old .contact-card / .cc-row / .contacts-add-row rules went with
-     it -- nothing else on this page used them. */
-  .pd-section {
-    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-    padding: 16px 18px; margin-bottom: 16px;
-  }
-  .pd-section-head { display: flex; align-items: flex-start; gap: 11px; margin-bottom: 14px; }
-  .pd-section-icon {
-    width: 32px; height: 32px; border-radius: 8px; background: #e8eef4; color: var(--navy);
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  }
-  .pd-section-icon svg { width: 17px; height: 17px; }
-  .pd-section-title { flex: 1; min-width: 0; }
-  .pd-section-title h3 { margin: 0; font-size: 15.5px; color: var(--navy); }
-  .pd-section-title p { margin: 1px 0 0; font-size: 12.5px; color: var(--muted); }
-  .pd-section-note { font-size: 12.5px; color: var(--muted); text-align: right; padding-top: 5px; white-space: nowrap; }
-  .pd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-  .pd-grid label { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+  /* ---------- Program Detail popup ----------
+     Greg (9/6/26): "The contract form is too complicated and big. Drop the
+     business card look." Flat rows now -- one line per person, one line per
+     Regional Director, and the Program's own details on a single line above.
 
-  .pd-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 12px; }
+     Roles are tickboxes, not a dropdown, because people hold more than one:
+     in Chris's contact doc Terrell Ellis is Primary Contact, Program
+     Administrator AND Program Finance on the same Program. One row per human,
+     tick what they are ("a name can have multiple functions and be on the cc
+     list"). */
+  .pd-block { margin-bottom: 20px; }
+  .pd-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+  .pd-block-head h3 { margin: 0; font-size: 14px; color: var(--navy); }
+  .pd-block-hint { font-size: 12px; color: var(--muted); }
 
-  .cc {
-    border: 1px solid var(--border); border-radius: 10px; padding: 12px 13px; background: #fff;
-    display: flex; flex-direction: column; gap: 9px; position: relative;
+  .pd-fields { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+  .pd-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .pd-field label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .pd-field input {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13px; font-family: inherit; background: #fff; color: var(--text);
   }
-  /* The Programs list resolves a "Primary Contact" as the first CC-flagged
-     contact in sort order (the rule the old CC List category carried). The
-     outline and badge make that visible where it's decided. */
-  .cc.is-primary { border-color: var(--navy-light); box-shadow: 0 0 0 1px var(--navy-light); }
-  .cc-top { display: flex; align-items: flex-start; gap: 8px; }
-  .cc-name { font-weight: 700; font-size: 14.5px; color: var(--navy); flex: 1; min-width: 0; word-break: break-word; }
-  .cc-title { font-size: 12.5px; color: var(--muted); margin-top: 1px; font-weight: 400; }
-  .cc-badge {
-    display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.04em; color: var(--navy); background: #e8eef4; border-radius: 4px; padding: 2px 6px; margin-top: 5px;
-  }
-  .cc-kebab {
-    background: none; border: none; cursor: pointer; color: var(--muted);
-    padding: 2px 6px; border-radius: 6px; line-height: 1; font-size: 16px; flex-shrink: 0;
-  }
-  .cc-kebab:hover { background: #eef1f4; color: var(--text); }
-  .cc-menu {
-    position: absolute; top: 34px; right: 10px; z-index: 5; min-width: 168px; background: #fff;
-    border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 10px 24px rgba(0,0,0,0.16); padding: 5px; display: none;
-  }
-  .cc-menu.open { display: block; }
-  .cc-menu button {
-    display: block; width: 100%; text-align: left; background: none; border: none;
-    padding: 7px 9px; border-radius: 6px; cursor: pointer; color: var(--text); font-size: 13px; font-weight: 500;
-  }
-  .cc-menu button:hover { background: #eef1f4; }
-  .cc-menu button:disabled { color: #b6bcc4; cursor: default; background: none; }
-  .cc-field-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
-  .cc select, .cc input[type="text"], .cc textarea {
-    width: 100%; font-family: inherit; font-size: 13px; color: var(--text);
-    border: 1px solid var(--border); border-radius: 7px; padding: 7px 9px; background: #fff;
-  }
-  .cc select:focus, .cc input:focus, .cc textarea:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 2px rgba(31,74,117,0.13); }
-  .cc textarea { resize: vertical; min-height: 34px; }
-  .cc [readonly], .cc select[disabled] { background: #f4f6f8; color: var(--muted); }
-  .cc-contact-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-  .cc-input-icon { position: relative; }
-  .cc-input-icon svg { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: var(--muted); pointer-events: none; }
-  /* Needs .cc in the selector to outweigh `.cc input[type="text"]` above --
-     without it the shared padding wins and the icon sits on the placeholder. */
-  .cc .cc-input-icon input[type="text"] { padding-left: 27px; }
-  /* Footer pinned to the card bottom so controls line up across a row no
-     matter how much content sits above; CC gets its own line because the
-     checkbox + Edit + Remove don't fit on one at this column width. */
-  .cc-foot { margin-top: auto; padding-top: 9px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
-  .cc-foot-btns { display: flex; gap: 7px; }
-  .cc-foot-btns button { flex: 1; justify-content: center; }
-  .cc-cc { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); cursor: pointer; }
-  .cc-cc input { width: auto; margin: 0; accent-color: var(--navy); }
-  .cc-btn { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; border-radius: 7px; padding: 5px 10px; font-size: 12.5px; font-weight: 600; border: 1px solid var(--border); background: #fff; color: var(--text); }
-  .cc-btn:hover { background: #eef1f4; }
-  .cc-btn svg { width: 14px; height: 14px; }
-  .cc-btn.danger { color: var(--danger); border-color: #f0d4d2; }
-  .cc-btn.danger:hover { background: #fdf2f1; }
+  .pd-field input:focus { outline: none; border-color: var(--navy-light); }
+  .pd-field input[readonly] { background: var(--bg); color: var(--muted); }
 
-  .cc-empty {
-    grid-column: 1 / -1; border: 1px solid var(--border); border-radius: 10px; background: #f8fafb;
-    padding: 22px; display: flex; align-items: center; gap: 14px; justify-content: center;
+  /* Grid rather than a real <table>: the inputs and the wrapping role
+     tickboxes fight cell widths in a table, but still need to line up down
+     the list. */
+  .pd-rows { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .pd-row { display: grid; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); background: #fff; }
+  .pd-row:last-child { border-bottom: none; }
+  .pd-row.pd-row-head {
+    background: var(--bg); padding-top: 6px; padding-bottom: 6px; font-size: 10.5px;
+    font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
   }
-  .cc-empty-icon { width: 42px; height: 42px; border-radius: 50%; background: #e8eef4; color: var(--navy); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .cc-empty-icon svg { width: 21px; height: 21px; }
-  .cc-empty-text strong { display: block; font-size: 13.5px; color: var(--text); }
-  .cc-empty-text span { font-size: 12.5px; color: var(--muted); }
-  .cc-add {
-    border: 1.5px dashed #c8d2dc; border-radius: 10px; background: #f8fafb; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 7px; padding: 20px 14px; text-align: center; cursor: pointer; min-height: 150px;
+  .pd-row-people { grid-template-columns: 1.15fr 1fr 1.3fr 0.85fr auto 30px; }
+  .pd-row-regional { grid-template-columns: 1.2fr 1.1fr 1fr 1.3fr 0.85fr 30px; }
+  .pd-row input[type="text"] {
+    width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 12.5px; font-family: inherit; background: #fff; color: var(--text);
   }
-  .cc-add:hover { border-color: var(--navy-light); background: #f2f6fa; }
-  .cc-add-plus { width: 32px; height: 32px; border-radius: 50%; background: #e8eef4; color: var(--navy); display: flex; align-items: center; justify-content: center; font-size: 19px; line-height: 1; }
-  .cc-add strong { font-size: 13px; color: var(--text); }
-  .cc-add span { font-size: 12px; color: var(--muted); max-width: 200px; }
+  .pd-row input[type="text"]:focus { outline: none; border-color: var(--navy-light); }
+  .pd-row input[readonly] { background: var(--bg); color: var(--muted); }
+
+  .pd-roles { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .pd-role { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text); cursor: pointer; white-space: nowrap; }
+  .pd-role input { width: auto; margin: 0; accent-color: var(--navy); }
+  .pd-role-cc { padding-left: 9px; border-left: 1px solid var(--border); }
+
+  .pd-row-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 3px 6px; border-radius: 5px; justify-self: end; }
+  .pd-row-del:hover { background: #fdf2f1; color: var(--danger); }
+  .pd-empty { padding: 14px 12px; font-size: 12.5px; color: var(--muted); background: #fff; }
+  .pd-add { margin-top: 8px; }
 
   .pd-check { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
   .pd-check input { margin-top: 3px; accent-color: var(--navy); }
@@ -343,9 +292,9 @@
   .pd-autosave { margin-right: auto; font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
   .pd-autosave svg { width: 14px; height: 14px; color: var(--accent); }
 
-  @media (max-width: 620px) {
-    .pd-cards { grid-template-columns: 1fr; }
-    .pd-section-note { display: none; }
+  @media (max-width: 860px) {
+    .pd-row-people, .pd-row-regional { grid-template-columns: 1fr 1fr; }
+    .pd-row.pd-row-head { display: none; }
   }
 
   .csv-file-input { display: none; }
@@ -981,177 +930,103 @@
   // both administered a Program and needed copying had to be entered twice.
   // Migration 112 split the two ideas apart: `category` is the role (these
   // three), `include_on_cc` is a flag any contact in any role can carry.
-  const PROGRAM_CONTACT_CATEGORIES = [
-    {
-      key: "contract_signer",
-      label: "Contract Signer",
-      hint: "Who signed EG's contract for this Program.",
-      emptyTitle: "No Contract Signer contact yet",
-      emptyHint: "Add the person who signed EG's contract for this Program.",
-      icon: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
-    },
-    {
-      key: "program_administrator",
-      label: "Program Administrator",
-      hint: "Day-to-day contact(s) for this Program -- add Regional Directors or other sub-groups as separate contacts instead of cramming them into one.",
-      emptyTitle: "No Program Administrator yet",
-      emptyHint: "Add the day-to-day contact for this Program.",
-      icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-    },
-    {
-      key: "program_finance",
-      label: "Program Finance",
-      hint: "Who receives EG's invoices for this Program.",
-      emptyTitle: "No Program Finance contact yet",
-      emptyHint: "Add a contact who receives EG's invoices for this Program.",
-      icon: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
-    },
+  // Roles a Program contact can hold. Flags, not one category: the same
+  // person appears under several headings in Chris's contact doc, and Greg
+  // (9/6/26) -- "a name can have multiple functions and be on the cc list."
+  // Each is a boolean column from 112_program_contacts_and_address.sql.
+  const CONTACT_ROLES = [
+    { field: "is_primary_contact",       short: "Primary", label: "Primary Contact" },
+    { field: "is_program_administrator", short: "Admin",   label: "Program Administrator" },
+    { field: "is_program_finance",       short: "Finance", label: "Program Finance" },
+    { field: "is_contract_signer",       short: "Signer",  label: "Contract Signer" },
   ];
 
-  const CC_ICON_MAIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>';
-  const CC_ICON_PHONE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+  // Regional Directors are the same table with is_regional_director set and a
+  // region name attached, listed separately below the people.
+  const peopleFor   = (pid) => contactsForPartner(pid).filter((c) => !c.is_regional_director);
+  const regionalFor = (pid) => contactsForPartner(pid).filter((c) => c.is_regional_director);
 
-  // Cards whose Name/Title/Address fields are expanded. Those three are set
-  // once and rarely touched, so the card shows Role/Email/Phone/Notes by
-  // default and "Edit" reveals the rest -- keeps three cards on a row.
-  const expandedContactIds = new Set();
-
-  // Migration 112 left the 'cc_list' enum value in place (dropping a Postgres
-  // enum value means rebuilding the type). No row should still carry it after
-  // the backfill, but if one somehow does, show it as a Program Administrator
-  // rather than dropping it silently out of every section.
-  const roleOf = (c) => (c.category && c.category !== "cc_list" ? c.category : "program_administrator");
-
-  function contactsForCategory(partnerId, category) {
-    return contactsForPartner(partnerId).filter((c) => roleOf(c) === category);
+  // Used by the Programs list columns and the CSV export. Reads the flag, so
+  // one person holding three roles is one row that shows in all three columns.
+  function contactsForRole(partnerId, field) {
+    return contactsForPartner(partnerId).filter((c) => c[field]);
   }
 
-  // The Programs list shows a Primary Contact for each Program. That used to
-  // mean "first row in the CC List category"; with CC as a flag it means the
-  // first CC-flagged contact in sort order, across all three roles. Contacts
-  // arrive from loadContacts() already ordered by sort_order, so "first one
-  // found" is the whole rule -- and "Make primary contact" in the card menu
-  // just renumbers that contact below every other contact in the Program.
+  // Primary Contact is a ticked role now, not "whichever CC contact happens to
+  // sort first" -- nothing is inferred from ordering any more.
   function primaryContactId(partnerId) {
-    const c = contactsForPartner(partnerId).find((x) => x.include_on_cc);
+    const c = peopleFor(partnerId).find((x) => x.is_primary_contact);
     return c ? c.id : null;
   }
 
-  function renderContactCard(c, editable, isPrimary) {
-    const ro = editable ? "" : "readonly";
-    const expanded = expandedContactIds.has(c.id);
-    const nameHtml = escapeHtml(c.name || "") || '<span style="color:#a4abb4; font-weight:500;">Unnamed contact</span>';
+  const cField = (c, field, placeholder) =>
+    `<input type="text" data-contact-id="${c.id}" data-contact-field="${field}" value="${escapeHtml(c[field] || "")}" placeholder="${escapeHtml(placeholder)}" ${isSuperAdmin ? "" : "readonly"} />`;
 
-    // The kebab holds the actions that aren't Edit/Remove: ordering, and
-    // which CC contact is the Program's Primary. Ordering matters because
-    // sort_order is what decides Primary and what the Programs list columns
-    // read ("first contact in each category wins").
-    const menuHtml = editable ? `
-      <button type="button" class="cc-kebab" data-cc-action="menu" data-contact-id="${c.id}" title="More" aria-label="More actions">&#8942;</button>
-      <div class="cc-menu" data-cc-menu-for="${c.id}">
-        <button type="button" data-cc-action="primary" data-contact-id="${c.id}" ${isPrimary || !c.include_on_cc ? "disabled" : ""}>Make primary contact</button>
-        <button type="button" data-cc-action="up" data-contact-id="${c.id}">Move up</button>
-        <button type="button" data-cc-action="down" data-contact-id="${c.id}">Move down</button>
-        <button type="button" data-cc-action="remove" data-contact-id="${c.id}" style="color:var(--danger);">Remove contact</button>
-      </div>
-    ` : "";
-
+  function renderPersonRow(c) {
+    const roles = CONTACT_ROLES.map((r) => `
+      <label class="pd-role" title="${escapeHtml(r.label)}">
+        <input type="checkbox" data-contact-id="${c.id}" data-contact-check="${r.field}" ${c[r.field] ? "checked" : ""} ${isSuperAdmin ? "" : "disabled"} />
+        ${escapeHtml(r.short)}
+      </label>`).join("");
     return `
-      <div class="cc ${isPrimary ? "is-primary" : ""}" data-cc-card="${c.id}">
-        <div class="cc-top">
-          <div class="cc-name">
-            ${nameHtml}
-            ${c.title ? `<div class="cc-title">${escapeHtml(c.title)}</div>` : ""}
-            ${isPrimary ? '<span class="cc-badge" title="Shown as this Program\'s Primary Contact">Primary</span>' : ""}
-          </div>
-          ${menuHtml}
-        </div>
-
-        <div>
-          <div class="cc-field-label">Role</div>
-          <select data-contact-id="${c.id}" data-contact-select="category" ${editable ? "" : "disabled"}>
-            ${PROGRAM_CONTACT_CATEGORIES.map((cat) => `<option value="${cat.key}" ${roleOf(c) === cat.key ? "selected" : ""}>${escapeHtml(cat.label)}</option>`).join("")}
-          </select>
-        </div>
-
-        ${expanded ? `
-          <input type="text" data-contact-id="${c.id}" data-contact-field="name" value="${escapeHtml(c.name || "")}" placeholder="Full name" ${ro} />
-          <input type="text" data-contact-id="${c.id}" data-contact-field="title" value="${escapeHtml(c.title || "")}" placeholder="Title" ${ro} />
-          <input type="text" data-contact-id="${c.id}" data-contact-field="address" value="${escapeHtml(c.address || "")}" placeholder="Address" ${ro} />
-        ` : ""}
-
-        <div class="cc-contact-row">
-          <div class="cc-input-icon">${CC_ICON_MAIL}<input type="text" data-contact-id="${c.id}" data-contact-field="email" value="${escapeHtml(c.email || "")}" placeholder="Email" ${ro} /></div>
-          <div class="cc-input-icon">${CC_ICON_PHONE}<input type="text" data-contact-id="${c.id}" data-contact-field="phone" value="${escapeHtml(c.phone || "")}" placeholder="Phone" ${ro} /></div>
-        </div>
-
-        <div>
-          <div class="cc-field-label">Notes</div>
-          <textarea data-contact-id="${c.id}" data-contact-field="notes" placeholder="Notes" ${ro}>${escapeHtml(c.notes || "")}</textarea>
-        </div>
-
-        <div class="cc-foot">
-          <label class="cc-cc">
-            <input type="checkbox" data-contact-id="${c.id}" data-contact-check="include_on_cc" ${c.include_on_cc ? "checked" : ""} ${editable ? "" : "disabled"} />
-            Include on CC list
+      <div class="pd-row pd-row-people">
+        ${cField(c, "name", "Name")}
+        ${cField(c, "title", "Title")}
+        ${cField(c, "email", "Email")}
+        ${cField(c, "phone", "Phone")}
+        <div class="pd-roles">
+          ${roles}
+          <label class="pd-role pd-role-cc" title="Include on this Program's CC list">
+            <input type="checkbox" data-contact-id="${c.id}" data-contact-check="include_on_cc" ${c.include_on_cc ? "checked" : ""} ${isSuperAdmin ? "" : "disabled"} />
+            CC
           </label>
-          ${editable ? `
-            <div class="cc-foot-btns">
-              <button type="button" class="cc-btn" data-cc-action="edit" data-contact-id="${c.id}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>
-                ${expanded ? "Done" : "Edit"}
-              </button>
-              <button type="button" class="cc-btn danger" data-delete-contact-id="${c.id}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
-                Remove
-              </button>
-            </div>
-          ` : ""}
         </div>
-      </div>
-    `;
+        ${isSuperAdmin ? `<button type="button" class="pd-row-del" data-delete-contact-id="${c.id}" title="Remove this person">&times;</button>` : "<span></span>"}
+      </div>`;
   }
 
-  function renderContactCategorySection(p, catDef) {
-    const contacts = contactsForCategory(p.id, catDef.key);
-    const primaryId = primaryContactId(p.id);
-    const ccCount = contacts.filter((c) => c.include_on_cc).length;
-
-    const addCardHtml = isSuperAdmin ? `
-      <div class="cc-add" data-add-contact-partner="${p.id}" data-add-contact-category="${catDef.key}" role="button" tabindex="0">
-        <div class="cc-add-plus">+</div>
-        <strong>Add ${escapeHtml(catDef.label)} Contact</strong>
-        <span>${escapeHtml(catDef.emptyHint)}</span>
-      </div>
-    ` : "";
-
-    const bodyHtml = contacts.length
-      ? contacts.map((c) => renderContactCard(c, isSuperAdmin, c.id === primaryId)).join("") + addCardHtml
-      : `
-        <div class="cc-empty">
-          <div class="cc-empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></div>
-          <div class="cc-empty-text">
-            <strong>${escapeHtml(catDef.emptyTitle)}</strong>
-            <span>${escapeHtml(catDef.emptyHint)}</span>
-            ${isSuperAdmin ? `<div style="margin-top:9px;"><button type="button" class="btn-secondary btn-sm" data-add-contact-partner="${p.id}" data-add-contact-category="${catDef.key}">+ Add Contact</button></div>` : ""}
-          </div>
-        </div>
-      `;
-
+  function renderRegionalRow(c) {
     return `
-      <div class="pd-section">
-        <div class="pd-section-head">
-          <div class="pd-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${catDef.icon}</svg></div>
-          <div class="pd-section-title">
-            <h3>${escapeHtml(catDef.label)}</h3>
-            <p>${escapeHtml(catDef.hint)}</p>
-          </div>
-          ${contacts.length ? `<div class="pd-section-note">${contacts.length} contact${contacts.length === 1 ? "" : "s"}${ccCount ? ` &middot; ${ccCount} on CC` : ""}</div>` : ""}
-          ${isSuperAdmin ? `<button type="button" class="btn-secondary btn-sm" style="margin-left:10px; flex-shrink:0;" data-add-contact-partner="${p.id}" data-add-contact-category="${catDef.key}">+ Add Contact</button>` : ""}
+      <div class="pd-row pd-row-regional">
+        ${cField(c, "region", "Region / organisation")}
+        ${cField(c, "name", "Director name")}
+        ${cField(c, "title", "Title")}
+        ${cField(c, "email", "Email")}
+        ${cField(c, "phone", "Phone")}
+        ${isSuperAdmin ? `<button type="button" class="pd-row-del" data-delete-contact-id="${c.id}" title="Remove this Regional Director">&times;</button>` : "<span></span>"}
+      </div>`;
+  }
+
+  function renderPeopleBlock(p) {
+    const people = peopleFor(p.id);
+    const rows = people.length
+      ? `<div class="pd-row pd-row-head pd-row-people"><span>Name</span><span>Title</span><span>Email</span><span>Phone</span><span>Roles</span><span></span></div>` + people.map(renderPersonRow).join("")
+      : `<div class="pd-empty">No people on file for this Program yet.</div>`;
+    return `
+      <div class="pd-block">
+        <div class="pd-block-head">
+          <h3>People</h3>
+          <span class="pd-block-hint">Tick every role a person holds &mdash; one line per person.</span>
         </div>
-        <div class="pd-cards">${bodyHtml}</div>
-      </div>
-    `;
+        <div class="pd-rows">${rows}</div>
+        ${isSuperAdmin ? `<div class="pd-add"><button type="button" class="btn-secondary btn-sm" data-add-person="${p.id}">+ Add Person</button></div>` : ""}
+      </div>`;
+  }
+
+  function renderRegionalBlock(p) {
+    const dirs = regionalFor(p.id);
+    const rows = dirs.length
+      ? `<div class="pd-row pd-row-head pd-row-regional"><span>Region</span><span>Director</span><span>Title</span><span>Email</span><span>Phone</span><span></span></div>` + dirs.map(renderRegionalRow).join("")
+      : `<div class="pd-empty">No Regional Directors on file for this Program yet.</div>`;
+    return `
+      <div class="pd-block">
+        <div class="pd-block-head">
+          <h3>Regional Directors</h3>
+          <span class="pd-block-hint">Region or organisation first, then the person.</span>
+        </div>
+        <div class="pd-rows">${rows}</div>
+        ${isSuperAdmin ? `<div class="pd-add"><button type="button" class="btn-secondary btn-sm" data-add-regional="${p.id}">+ Add Regional Director</button></div>` : ""}
+      </div>`;
   }
 
   function applySort(rows) {
@@ -1215,9 +1090,9 @@
           <div class="program-address-label">${p.physical_address ? escapeHtml(p.physical_address) : '<span class="cell-muted">No address on file</span>'}</div>
           ${p.archived ? '<span class="archived-badge">Archived</span>' : ""}
         </td>
-        <td class="contact-cell">${renderRoleContactCell(p, "contract_signer")}</td>
-        <td class="contact-cell">${renderRoleContactCell(p, "program_administrator")}</td>
-        <td class="contact-cell">${renderRoleContactCell(p, "program_finance")}</td>
+        <td class="contact-cell">${renderRoleContactCell(p, "is_contract_signer")}</td>
+        <td class="contact-cell">${renderRoleContactCell(p, "is_program_administrator")}</td>
+        <td class="contact-cell">${renderRoleContactCell(p, "is_program_finance")}</td>
         ${actionsCell}
       `;
       tbody.appendChild(tr);
@@ -1235,8 +1110,8 @@
   // phone number underneath -- so Rita never has to open a Program just to
   // find a number. "Billing" is the Program Finance contact (who receives
   // EG's invoices). First contact listed in each category wins.
-  function renderRoleContactCell(p, category) {
-    const list = contactsForCategory(p.id, category);
+  function renderRoleContactCell(p, roleField) {
+    const list = contactsForRole(p.id, roleField);
     const c = list[0];
     if (!c) return '<span class="cell-muted">No contact on file</span>';
     const phoneHtml = c.phone
@@ -1315,46 +1190,34 @@
     const editableAttrs = isSuperAdmin ? "" : "readonly";
     $("pd-modal-title").textContent = p.name;
     $("program-detail-body").innerHTML = `
-      <div class="pd-section">
-        <div class="pd-section-head">
-          <div class="pd-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg></div>
-          <div class="pd-section-title">
-            <h3>Program Details</h3>
-            <p>Basic information about this Program.</p>
-          </div>
+      <div class="pd-block">
+        <div class="pd-block-head">
+          <h3>Program Details</h3>
         </div>
-        <div class="pd-grid">
-          <div>
-            <label for="pd-name-input">Full name</label>
-            <input type="text" class="inline-edit-input" id="pd-name-input" data-program-id="${p.id}" data-program-field="name" value="${escapeHtml(p.name)}" ${editableAttrs} />
-          </div>
-          <div>
-            <label for="pd-code-input">Abbreviation</label>
-            <input type="text" class="inline-edit-input" id="pd-code-input" data-program-id="${p.id}" data-program-field="code" value="${escapeHtml(p.code)}" ${editableAttrs} />
-          </div>
-          <div>
-            <label for="pd-physical-address-input">Address</label>
-            <input type="text" class="inline-edit-input" id="pd-physical-address-input" data-program-id="${p.id}" data-program-field="physical_address" value="${escapeHtml(p.physical_address || "")}" ${editableAttrs} />
-          </div>
+        <div class="pd-fields">
+          <div class="pd-field" style="flex:2 1 210px;"><label for="pd-name-input">Program name</label>
+            <input type="text" id="pd-name-input" data-program-id="${p.id}" data-program-field="name" value="${escapeHtml(p.name)}" ${editableAttrs} /></div>
+          <div class="pd-field" style="flex:1 1 110px;"><label for="pd-code-input">Abbreviation</label>
+            <input type="text" id="pd-code-input" data-program-id="${p.id}" data-program-field="code" value="${escapeHtml(p.code)}" ${editableAttrs} /></div>
+          <div class="pd-field" style="flex:2 1 190px;"><label for="pd-street-input">Street / P.O. Box</label>
+            <input type="text" id="pd-street-input" data-program-id="${p.id}" data-program-field="address_street" value="${escapeHtml(p.address_street || "")}" ${editableAttrs} /></div>
+          <div class="pd-field" style="flex:1 1 120px;"><label for="pd-city-input">City</label>
+            <input type="text" id="pd-city-input" data-program-id="${p.id}" data-program-field="address_city" value="${escapeHtml(p.address_city || "")}" ${editableAttrs} /></div>
+          <div class="pd-field" style="flex:0 1 68px;"><label for="pd-state-input">State</label>
+            <input type="text" id="pd-state-input" maxlength="2" data-program-id="${p.id}" data-program-field="address_state" value="${escapeHtml(p.address_state || "")}" ${editableAttrs} /></div>
+          <div class="pd-field" style="flex:0 1 88px;"><label for="pd-zip-input">Zip</label>
+            <input type="text" id="pd-zip-input" data-program-id="${p.id}" data-program-field="address_zip" value="${escapeHtml(p.address_zip || "")}" ${editableAttrs} /></div>
+          <div class="pd-field" style="flex:1 1 125px;"><label for="pd-phone-input">Phone</label>
+            <input type="text" id="pd-phone-input" data-program-id="${p.id}" data-program-field="phone" value="${escapeHtml(p.phone || "")}" ${editableAttrs} /></div>
         </div>
       </div>
 
-      <!-- Contract Signer / Program Administrator / Program Finance -- named
-           fields (Name, Title, Address, Email, Phone, Notes) per Rita
-           (8/28/26); one card per person in a grid, and a Role dropdown on
-           each card that re-files them, per Greg (9/6/26). CC List is no
-           longer a fourth section -- it's the checkbox on every card now
-           (112_program_contact_cc_flag.sql). Order matches Chris's standing
-           "EG Programs Contact Info" doc (6/25/26). -->
-      ${PROGRAM_CONTACT_CATEGORIES.map((cat) => renderContactCategorySection(p, cat)).join("")}
+      ${renderPeopleBlock(p)}
+      ${renderRegionalBlock(p)}
 
-      <div class="pd-section">
-        <div class="pd-section-head">
-          <div class="pd-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-          <div class="pd-section-title">
-            <h3>Billing</h3>
-            <p>How this Program's Admin and Quality Control hours are billed.</p>
-          </div>
+      <div class="pd-block">
+        <div class="pd-block-head">
+          <h3>Billing</h3>
         </div>
         <label class="pd-check" for="pd-admin-qc-upfront">
           <input type="checkbox" id="pd-admin-qc-upfront" data-program-id="${p.id}" ${p.bill_admin_qc_upfront !== false ? "checked" : ""} ${isSuperAdmin ? "" : "disabled"} />
@@ -1485,7 +1348,6 @@
     $("program-detail-overlay").classList.remove("open");
     // Cards reopen collapsed -- "expanded" is a per-visit view state, not
     // something worth remembering between openings.
-    expandedContactIds.clear();
     closeContactMenus();
   }
 
@@ -1522,10 +1384,8 @@
   // Administrator, Program Finance, CC List) -- the same generic pattern
   // used before this was split into categories (Greg/Rita, 8/28/26).
   function wireContactsDetail(partnerId) {
-    // [data-contact-field] narrows this to the text inputs and the notes
-    // textarea. The Role <select> and the CC checkbox also carry
-    // data-contact-id but save on `change`, not blur, and are wired below --
-    // without this they'd hit this handler with an undefined field name.
+    // [data-contact-field] narrows this to the text inputs. The role and CC
+    // tickboxes carry data-contact-check and save on change instead.
     document.querySelectorAll("[data-contact-id][data-contact-field]").forEach((inp) => {
       const original = inp.value;
       inp.addEventListener("blur", async () => {
@@ -1550,6 +1410,26 @@
       });
     });
 
+    // Every role, plus CC, is an independent boolean -- ticking one never
+    // clears another, which is the whole point of dropping the dropdown.
+    document.querySelectorAll("[data-contact-id][data-contact-check]").forEach((box) => {
+      box.addEventListener("change", async () => {
+        const contactId = box.dataset.contactId;
+        const field = box.dataset.contactCheck;
+        const value = box.checked;
+        const c = allContacts.find((x) => x.id === contactId);
+        const { error } = await sb.from("econ_dev_partner_contacts").update({ [field]: value }).eq("id", contactId);
+        if (error) {
+          showBanner("Couldn't update that role: " + error.message, "error");
+          box.checked = !value;
+          return;
+        }
+        if (c) c[field] = value;
+        renderTable();
+        renderProgramDetailModal(c ? c.partner_id : partnerId);
+      });
+    });
+
     document.querySelectorAll("[data-delete-contact-id]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const id = btn.dataset.deleteContactId;
@@ -1566,149 +1446,34 @@
       });
     });
 
-    // Role dropdown -- re-files a contact into another section. Saves the
-    // same way every other field does, then re-renders so the card physically
-    // moves to the section it now belongs to.
-    document.querySelectorAll("[data-contact-select='category']").forEach((sel) => {
-      const original = sel.value;
-      sel.addEventListener("change", async () => {
-        const contactId = sel.dataset.contactId;
-        const value = sel.value;
-        const c = allContacts.find((x) => x.id === contactId);
-        // Land at the bottom of the section it's moving into, so it doesn't
-        // silently displace whoever is currently that section's first
-        // contact -- the Programs list columns read "first contact wins".
-        const sortOrder = contactsForCategory(c ? c.partner_id : partnerId, value).length;
-        const { error } = await sb.from("econ_dev_partner_contacts").update({ category: value, sort_order: sortOrder }).eq("id", contactId);
-        if (error) {
-          showBanner("Couldn't change role: " + error.message, "error");
-          sel.value = original;
-          return;
-        }
-        await loadContacts();
-        renderTable();
-        renderProgramDetailModal(c ? c.partner_id : partnerId);
+    // Add inserts an empty row and lets it be filled in place, rather than
+    // asking for every field up front -- the row IS the form, and each field
+    // saves on blur like the rest.
+    async function addContact(extra, label) {
+      const { error } = await sb.from("econ_dev_partner_contacts").insert({
+        organization_id: currentUser.organization_id,
+        partner_id: partnerId,
+        name: label,
+        sort_order: contactsForPartner(partnerId).length,
+        ...extra,
       });
+      if (error) {
+        showBanner("Couldn't add: " + error.message, "error");
+        return;
+      }
+      await loadContacts();
+      renderTable();
+      renderProgramDetailModal(partnerId);
+    }
+
+    document.querySelectorAll(`[data-add-person="${partnerId}"]`).forEach((el) => {
+      el.addEventListener("click", () => addContact({}, "New contact"));
     });
-
-    // "Include on CC list" -- the flag that replaced the CC List category.
-    document.querySelectorAll("[data-contact-check='include_on_cc']").forEach((box) => {
-      box.addEventListener("change", async () => {
-        const contactId = box.dataset.contactId;
-        const value = box.checked;
-        const c = allContacts.find((x) => x.id === contactId);
-        const { error } = await sb.from("econ_dev_partner_contacts").update({ include_on_cc: value }).eq("id", contactId);
-        if (error) {
-          showBanner("Couldn't update the CC list: " + error.message, "error");
-          box.checked = !value;
-          return;
-        }
-        if (c) c.include_on_cc = value;
-        // Re-render: the Primary badge may have moved to another card.
-        renderTable();
-        renderProgramDetailModal(c ? c.partner_id : partnerId);
-      });
-    });
-
-    document.querySelectorAll("[data-cc-action]").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const action = btn.dataset.ccAction;
-        const id = btn.dataset.contactId;
-        const c = allContacts.find((x) => x.id === id);
-        if (!c) return;
-
-        if (action === "menu") {
-          const menu = document.querySelector(`[data-cc-menu-for="${id}"]`);
-          const wasOpen = menu.classList.contains("open");
-          closeContactMenus();
-          menu.classList.toggle("open", !wasOpen);
-          return;
-        }
-        closeContactMenus();
-
-        if (action === "edit") {
-          expandedContactIds.has(id) ? expandedContactIds.delete(id) : expandedContactIds.add(id);
-          renderProgramDetailModal(c.partner_id);
-          return;
-        }
-        if (action === "remove") {
-          document.querySelector(`[data-delete-contact-id="${id}"]`).click();
-          return;
-        }
-
-        // Ordering. sort_order is per-category, and it decides both which
-        // contact each Programs-list column shows and which CC contact is
-        // Primary -- so these renumber rather than just reordering an array.
-        const siblings = contactsForCategory(c.partner_id, roleOf(c));
-        const i = siblings.indexOf(c);
-        let reordered = null;
-        if (action === "up" && i > 0) {
-          reordered = [...siblings];
-          reordered.splice(i - 1, 0, reordered.splice(i, 1)[0]);
-        }
-        if (action === "down" && i < siblings.length - 1) {
-          reordered = [...siblings];
-          reordered.splice(i + 1, 0, reordered.splice(i, 1)[0]);
-        }
-        if (action === "primary") {
-          // Primary is the first CC-flagged contact in the whole Program, so
-          // this has to beat contacts in the other two sections too -- a
-          // negative sort_order does that without renumbering everyone.
-          const lowest = Math.min(0, ...contactsForPartner(c.partner_id).map((x) => x.sort_order || 0));
-          const { error } = await sb.from("econ_dev_partner_contacts").update({ sort_order: lowest - 1 }).eq("id", id);
-          if (error) { showBanner("Couldn't set the primary contact: " + error.message, "error"); return; }
-          await loadContacts();
-          renderTable();
-          renderProgramDetailModal(c.partner_id);
-          return;
-        }
-        if (!reordered) return;
-
-        const results = await Promise.all(
-          reordered.map((x, idx) => sb.from("econ_dev_partner_contacts").update({ sort_order: idx }).eq("id", x.id))
-        );
-        const failed = results.find((r) => r.error);
-        if (failed) { showBanner("Couldn't reorder contacts: " + failed.error.message, "error"); return; }
-        await loadContacts();
-        renderTable();
-        renderProgramDetailModal(c.partner_id);
-      });
-    });
-
-    // Add -- inserts an empty contact and opens it expanded, rather than
-    // asking for six fields up front in a form the way this used to. The
-    // card IS the form now, and it saves field by field like every other.
-    document.querySelectorAll(`[data-add-contact-partner="${partnerId}"]`).forEach((el) => {
-      el.addEventListener("click", async () => {
-        const category = el.dataset.addContactCategory;
-        const { data, error } = await sb.from("econ_dev_partner_contacts").insert({
-          organization_id: currentUser.organization_id,
-          partner_id: partnerId,
-          category,
-          name: "New contact",
-          sort_order: contactsForCategory(partnerId, category).length,
-        }).select("id").single();
-        if (error) {
-          showBanner("Couldn't add contact: " + error.message, "error");
-          return;
-        }
-        if (data) expandedContactIds.add(data.id);
-        await loadContacts();
-        renderTable();
-        renderProgramDetailModal(partnerId);
-        const nameInput = document.querySelector(`[data-contact-id="${data ? data.id : ""}"][data-contact-field="name"]`);
-        if (nameInput) { nameInput.focus(); nameInput.select(); }
-      });
+    document.querySelectorAll(`[data-add-regional="${partnerId}"]`).forEach((el) => {
+      el.addEventListener("click", () => addContact({ is_regional_director: true }, "New Regional Director"));
     });
   }
 
-  function closeContactMenus() {
-    document.querySelectorAll(".cc-menu.open").forEach((m) => m.classList.remove("open"));
-  }
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest(".cc-menu") && !e.target.closest("[data-cc-action='menu']")) closeContactMenus();
-  });
 
   function escapeHtml(str) {
     const div = document.createElement("div");
@@ -2018,9 +1783,9 @@
   // sends an update.
   const PROGRAM_INFO_CSV_HEADERS = ["Code", "Program Name", "Contract Signer", "Program Administrator", "Program Finance", "Address"];
   const PROGRAM_INFO_CSV_IMPORT_PLACEHOLDER_LABEL = {
-    contract_signer: "Contract Signer",
-    program_administrator: "Program Administrator",
-    program_finance: "Program Finance",
+    is_contract_signer: "Contract Signer",
+    is_program_administrator: "Program Administrator",
+    is_program_finance: "Program Finance",
   };
 
   // The three role columns are unchanged, but their contents grew: contacts
@@ -2029,8 +1794,8 @@
   // first time. "(CC)" marks them -- without it the export would state who
   // administers a Program but silently drop who gets copied, which is half
   // of what Chris uses this sheet for (Greg, 9/6/26).
-  function summarizeContactsForExport(partnerId, category) {
-    return contactsForCategory(partnerId, category)
+  function summarizeContactsForExport(partnerId, roleField) {
+    return contactsForRole(partnerId, roleField)
       .map((c) => {
         const summary = [c.name, c.title, c.address, c.email, c.phone, c.notes].filter((v) => v && String(v).trim()).join(" — ");
         return c.include_on_cc ? `${summary} (CC)` : summary;
@@ -2044,9 +1809,9 @@
       lines.push([
         p.code,
         p.name,
-        summarizeContactsForExport(p.id, "contract_signer"),
-        summarizeContactsForExport(p.id, "program_administrator"),
-        summarizeContactsForExport(p.id, "program_finance"),
+        summarizeContactsForExport(p.id, "is_contract_signer"),
+        summarizeContactsForExport(p.id, "is_program_administrator"),
+        summarizeContactsForExport(p.id, "is_program_finance"),
         p.physical_address,
       ].map(csvField).join(","));
     }
@@ -2061,19 +1826,19 @@
 
   $("program-info-csv-import-btn").addEventListener("click", () => $("program-info-csv-file").click());
 
-  // Writes `text` into the Notes field of a category's first contact,
-  // creating a placeholder-named contact for that category if it has none
-  // yet -- mirrors the migration's own backfill approach.
-  async function upsertCategoryNoteFromImport(partner, category, text) {
-    const existing = contactsForCategory(partner.id, category);
+  // Writes `text` into the Notes field of the first contact holding that
+  // role, creating a placeholder-named one if nobody holds it yet. Roles are
+  // flags now, so the new contact gets the flag set rather than a category.
+  async function upsertRoleNoteFromImport(partner, roleField, text) {
+    const existing = contactsForRole(partner.id, roleField);
     if (existing.length) {
       return sb.from("econ_dev_partner_contacts").update({ notes: text }).eq("id", existing[0].id);
     }
     return sb.from("econ_dev_partner_contacts").insert({
       organization_id: currentUser.organization_id,
       partner_id: partner.id,
-      category,
-      name: `Imported from ${PROGRAM_INFO_CSV_IMPORT_PLACEHOLDER_LABEL[category]}`,
+      [roleField]: true,
+      name: `Imported from ${PROGRAM_INFO_CSV_IMPORT_PLACEHOLDER_LABEL[roleField]}`,
       notes: text,
       sort_order: 0,
     });
@@ -2101,7 +1866,7 @@
     }
 
     const companyUpdates = [];   // physical_address only -- a plain field, not a contact
-    const contactNoteOps = [];   // { partner, category, text }
+    const contactNoteOps = [];   // { partner, roleField, text }
     const touchedPartnerIds = new Set();
     const unmatchedLabels = new Set();
     let skippedBlank = 0;
@@ -2125,9 +1890,9 @@
         companyUpdates.push({ id: partner.id, fields: { physical_address: addressRaw.trim() } });
         touched = true;
       }
-      if ((contractSignerRaw || "").trim()) { contactNoteOps.push({ partner, category: "contract_signer", text: contractSignerRaw.trim() }); touched = true; }
-      if ((programAdminRaw || "").trim()) { contactNoteOps.push({ partner, category: "program_administrator", text: programAdminRaw.trim() }); touched = true; }
-      if ((financeRaw || "").trim()) { contactNoteOps.push({ partner, category: "program_finance", text: financeRaw.trim() }); touched = true; }
+      if ((contractSignerRaw || "").trim()) { contactNoteOps.push({ partner, roleField: "is_contract_signer", text: contractSignerRaw.trim() }); touched = true; }
+      if ((programAdminRaw || "").trim()) { contactNoteOps.push({ partner, roleField: "is_program_administrator", text: programAdminRaw.trim() }); touched = true; }
+      if ((financeRaw || "").trim()) { contactNoteOps.push({ partner, roleField: "is_program_finance", text: financeRaw.trim() }); touched = true; }
 
       if (touched) touchedPartnerIds.add(partner.id);
     });
@@ -2146,7 +1911,7 @@
 
     const results = await Promise.all([
       ...companyUpdates.map((u) => sb.from("econ_dev_companies").update(u.fields).eq("id", u.id)),
-      ...contactNoteOps.map((op) => upsertCategoryNoteFromImport(op.partner, op.category, op.text)),
+      ...contactNoteOps.map((op) => upsertRoleNoteFromImport(op.partner, op.roleField, op.text)),
     ]);
     const failed = results.filter((r) => r.error);
     if (failed.length === results.length) {
