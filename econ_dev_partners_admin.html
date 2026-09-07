@@ -681,10 +681,14 @@
         <button class="btn-secondary btn-sm hidden" id="program-info-csv-import-btn">&#8593; Import CSV</button>
         <input type="file" accept=".csv,text/csv" id="program-info-csv-file" class="csv-file-input" />
         <button type="button" class="btn-secondary btn-sm" id="std-print-btn" title="Print">Print</button>
-        <!-- "+ Add Program" and "Application Links" used to live here as
-             toolbar buttons; both moved into the top-nav Programs dropdown
-             (Greg, 9/6/26) so they're reachable from any page, not just this
-             one -- removed here to avoid the same action existing twice. -->
+        <!-- Add Program is back on the page (Greg, 9/7/26: "just create an Add
+             Program button on the page and I'll add everything myself"). It
+             also still sits in the top-nav Programs dropdown, which is what
+             makes it reachable from other pages; both open the same modal, so
+             having it in two places costs nothing and this is the place you
+             are standing when you want it. Super Admin only, like every other
+             write on this page -- unhidden in applyRoleVisibility(). -->
+        <button type="button" class="btn-primary btn-sm hidden" id="add-program-btn">+ Add Program</button>
       </div>
     </div>
 
@@ -863,11 +867,13 @@
       $("readonly-note").classList.add("hidden");
       $("program-info-csv-export-btn").classList.remove("hidden");
       $("program-info-csv-import-btn").classList.remove("hidden");
+      $("add-program-btn").classList.remove("hidden");
     } else {
       $("actions-header").classList.add("hidden");
       $("readonly-note").classList.remove("hidden");
       $("program-info-csv-export-btn").classList.add("hidden");
       $("program-info-csv-import-btn").classList.add("hidden");
+      $("add-program-btn").classList.add("hidden");
     }
 
     await loadPartners();
@@ -1742,6 +1748,8 @@
       openAdd();
     });
   });
+
+  $("add-program-btn").addEventListener("click", openAdd);
   $("modal-cancel").addEventListener("click", closeModal);
 
   // Add Program stays a small modal (there's no row to type into yet); every
@@ -1794,6 +1802,14 @@
     closeModal();
     showBanner("Program added.", "success");
     await loadPartners();
+
+    // Open the new Program straight away. The Add modal only asks for a name
+    // and an abbreviation; everything else you'd want to type next -- address,
+    // phone, the people, the Regional Directors -- lives in the detail popup,
+    // and having to find the row you just made before you can get at any of it
+    // is a step for nothing (Greg, 9/7/26: "I'll add everything myself").
+    const added = allPartners.find((x) => x.code === code);
+    if (added) openProgramDetail(added.id);
   });
 
   // ---------- Delete ----------
