@@ -1762,16 +1762,23 @@
     // the row is the only thing that needs toggling -- hiding the textarea
     // separately would leave an empty row with a lone Save button in it.
     $("cm-delay-actions").classList.toggle("hidden", tier !== "red");
-    $("cm-delay-note-sub").classList.toggle("hidden", tier !== "red");
+    // Greg (9/6/26): "move On Schedule to the second line under In Progress
+    // for 26 days." The status word wrapped mid-phrase at this column width
+    // ("... for 26 days: On" / "Schedule"), so it gets the sub line of its
+    // own instead -- the same line the Overdue tier uses for its question.
+    // Shown on both tiers now, not just Overdue.
+    $("cm-delay-note-sub").classList.remove("hidden");
     if (tier !== "red") {
       dot.title = `In Progress for ${dayWord} — On Schedule`;
       note.classList.remove("tier-amber", "tier-red");
-      $("cm-delay-note-label").textContent = `In Progress for ${dayWord}: On Schedule`;
+      $("cm-delay-note-label").textContent = `In Progress for ${dayWord}`;
+      $("cm-delay-note-sub").textContent = "On Schedule";
     } else {
       dot.title = `In Progress for ${dayWord} — Overdue`;
       note.classList.remove("tier-amber");
       note.classList.add("tier-red");
       $("cm-delay-note-label").textContent = `In Progress for ${dayWord}: Overdue`;
+      $("cm-delay-note-sub").textContent = "Why is it taking longer than expected?";
     }
     $("cm-delay-reason").value = client.delay_reason || "";
     $("cm-delay-saved").style.display = "none";
