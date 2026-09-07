@@ -1338,7 +1338,7 @@
   // "never leaves this screen" feel. Resource Vault (TL) used to be its
   // own pane here too, until it moved onto Client Info as its Info Wizard
   // step 6, "Resources" (Greg, 9/5/26).
-  const IFRAME_PANE_KEYS = ["research", "setup", "workflow", "dashboard"];
+  const IFRAME_PANE_KEYS = ["research", "setup", "workflow", "dashboard", "application"];
   // Tracks which pane key's page is currently sitting in the one shared
   // iframe -- NOT "has this pane ever been loaded". Bug (Greg, 8/31/26):
   // this used to be a per-key "loaded once" flag, so after visiting e.g.
@@ -1395,6 +1395,11 @@
       // setActivePane can still find its src by key; renderNav below
       // injects its actual row inline inside the "workflow" group's list.
       { key: "research", label: "Add Research", src: `client_research.html?client=${client.id}&embed=1`, hidden: true },
+      // Greg (9/6/26): "make view application fit into the right column
+      // instead of opening another window." Same hidden-pane trick as Add
+      // Research above -- listed here only so setActivePane can resolve the
+      // src; renderNav injects the row itself up in the top group.
+      { key: "application", label: "View Application", src: `client_applications.html?client=${client.id}&embed=1`, hidden: true },
       {
         key: "workflow", label: "Documents", group: true,
         docs: DOC_GROUP_ITEMS.map((d) => ({ ...d, src: `client_workflow_files.html?client=${client.id}&embed=1&doc=${d.key}` })),
@@ -1439,7 +1444,11 @@
         // Application, Discovery, Controlling, Add Research, Research
         // Review, Close-Out. Every row now gets an icon too.
         const researchRow = `<button type="button" class="cc-nav-subbtn" data-pane="research">${navIconSvg("research")}<span>Add Research</span></button>`;
-        const subHtml = `<a class="cc-nav-subbtn cc-nav-sublink" href="client_applications.html?client=${client.id}">${navIconSvg("application")}<span>View Application</span><svg class="cc-nav-sublink-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></a>` +
+        // Was an <a> out to client_applications.html with a chevron marking
+        // it as a trip off-page; it's a pane now, so it's a button like every
+        // other nav row and the chevron went with the new window (Greg,
+        // 9/6/26).
+        const subHtml = `<button type="button" class="cc-nav-subbtn" data-pane="application">${navIconSvg("application")}<span>View Application</span></button>` +
           `<div class="cc-nav-section">Workflow</div>` +
           item.docs.map((d) => `
             <button type="button" class="cc-nav-subbtn" data-pane="${item.key}" data-doc="${d.key}">${navIconSvg(d.key)}<span>${d.label}</span></button>
@@ -1475,10 +1484,15 @@
       btn.classList.toggle("active", btn.dataset.pane === key);
     });
     $("cc-nav").querySelectorAll(".cc-nav-subbtn[data-pane]").forEach((btn) => {
-      // "Add Research" is a subbtn row now too (see renderNav), but it isn't
-      // one of the doc-key rotation buttons -- it's active purely by pane
-      // key, same as a normal top-level nav button would be.
-      btn.classList.toggle("active", btn.dataset.pane === "research" ? key === "research" : (key === "workflow" && btn.dataset.doc === activeDocKey));
+      // Two kinds of subbtn live in this list. The document rows rotate a
+      // single "workflow" pane and identify themselves by data-doc, so they
+      // match on the doc key. "Add Research" and "View Application" are
+      // ordinary panes that just happen to be rendered as sub-rows, so they
+      // match on the pane key alone -- keyed off the absence of data-doc
+      // rather than a growing list of names (Greg, 9/6/26).
+      btn.classList.toggle("active", btn.dataset.doc
+        ? (key === "workflow" && btn.dataset.doc === activeDocKey)
+        : btn.dataset.pane === key);
     });
     $("cc-pane-team").classList.toggle("hidden", key !== "team");
     document.querySelector(".cc-shell").classList.toggle("wide-workspace", WIDE_WORKSPACE_PANE_KEYS.includes(key));

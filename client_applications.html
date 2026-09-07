@@ -90,6 +90,22 @@
 
   main { max-width: 900px; margin: 28px auto; padding: 0 20px 70px; }
 
+  /* Embed mode (Greg, 9/6/26: "make view application fit into the right
+     column instead of opening another window"). Same contract the other
+     pane pages use: ?embed=1 puts this inside client_control_center.html's
+     iframe pane, where the masthead, breadcrumb and Ask AI drawer are all
+     duplicates of the workspace's own one level up. #review-back goes too --
+     "Back to applications" would navigate the iframe to a list that has no
+     business appearing inside the workspace; the left nav is the way out. */
+  body.embed-mode header,
+  body.embed-mode .breadcrumb-bar,
+  body.embed-mode .ai-drawer,
+  body.embed-mode .ai-drawer-overlay,
+  body.embed-mode .ai-nudge,
+  body.embed-mode .std-toolbar-row,
+  body.embed-mode #review-back { display: none !important; }
+  body.embed-mode main { max-width: none; margin: 0; padding: 0 0 24px; }
+
 
   #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
   #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
@@ -583,6 +599,27 @@
 </style>
 </head>
 <body>
+
+<script>
+  if (new URLSearchParams(location.search).get("embed") === "1") {
+    document.body.classList.add("embed-mode");
+    // Inside the workspace pane, an ordinary internal link would load a whole
+    // second copy of the app inside the iframe -- masthead, nav and all --
+    // with no way back out. "Edit hours & consultants" and the empty-state
+    // "Back to Engagements" both do exactly that. Delegated rather than a
+    // pass over the anchors, because most of this page's links are rendered
+    // after load (Greg, 9/6/26).
+    document.addEventListener("click", (e) => {
+      const a = e.target.closest("a[href]");
+      if (!a || a.target) return;
+      const href = a.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) return;
+      if (!/\.html(\?|$|#)/.test(href)) return;
+      e.preventDefault();
+      window.top.location.href = a.href;
+    });
+  }
+</script>
 
 <div id="loading-view"><div>Loading…</div></div>
 
