@@ -98,3 +98,82 @@ update econ_dev_companies
  where address_street is null
    and physical_address is not null
    and btrim(physical_address) <> '';
+
+-- ---------------------------------------------------------------------------
+-- Last updated
+-- ---------------------------------------------------------------------------
+-- Greg (9/6/26): "add a last updated date field in the header that
+-- automatically update when new fields are added."
+--
+-- Done with triggers rather than having the page set a timestamp when it
+-- saves. The page is not the only thing that writes these rows -- the CSV
+-- import does, and so does anyone in the Supabase table editor -- and a
+-- timestamp the UI maintains is wrong the moment anything else touches the
+-- data. In the database it cannot be forgotten.
+
+alter table econ_dev_companies add column if not exists updated_at timestamptz;
+
+-- Seed from created_at where the table has one, so existing Programs don't all
+-- read as "updated just now" the moment this runs. Guarded because
+-- econ_dev_companies predates this migration set and its original definition
+-- isn't in the repo -- if there's no created_at, existing rows stay null and
+-- the form shows "Not recorded yet" until something actually changes them.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public'
+       and table_name   = 'econ_dev_companies'
+       and column_name  = 'created_at'
+  ) then
+    execute 'update econ_dev_companies set updated_at = created_at where updated_at is null';
+  end if;
+end $$;
+
+-- Any edit to the Program row itself.
+create or replace function touch_econ_dev_company_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end $$;
+
+drop trigger if exists econ_dev_companies_touch_updated_at on econ_dev_companies;
+create trigger econ_dev_companies_touch_updated_at
+  before update on econ_dev_companies
+  for each row execute function touch_econ_dev_company_updated_at();
+
+-- Any edit to one of its people or Regional Directors. "Last updated" means
+-- the Program as a whole -- adding a contact, ticking a role or deleting
+-- someone all count, and none of them write the econ_dev_companies row.
+--
+-- TG_OP is tested explicitly instead of coalesce(new, old): NEW is null on
+-- DELETE and OLD is null on INSERT, and coalescing records is not reliable.
+create or replace function touch_program_from_contact()
+returns trigger language plpgsql as $$
+begin
+  if (tg_op = 'DELETE') then
+    update econ_dev_companies set updated_at = now() where id = old.partner_id;
+    return old;
+  end if;
+
+  update econ_dev_companies set updated_at = now() where id = new.partner_id;
+  -- A contact moved between Programs leaves the old one changed too.
+  if (tg_op = 'UPDATE' and old.partner_id is distinct from new.partner_id) then
+    update econ_dev_companies set updated_at = now() where id = old.partner_id;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists econ_dev_partner_contacts_touch_program on econ_dev_partner_contacts;
+create trigger econ_dev_partner_contacts_touch_program
+  after insert or update or delete on econ_dev_partner_contacts
+  for each row execute function touch_program_from_contact();
+
+-- No recursion: the contacts trigger updates econ_dev_companies, which fires
+-- that table's BEFORE UPDATE trigger, which only sets a field on the row in
+-- hand and writes nothing back to econ_dev_partner_contacts.
+--
+-- Both triggers run as the calling user, which is fine because RLS on both
+-- tables already restricts writes to Super Admin -- anyone allowed to change a
+-- contact is allowed to update its Program.

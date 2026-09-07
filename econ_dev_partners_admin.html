@@ -288,6 +288,9 @@
   .pd-header { display: flex; align-items: center; gap: 14px; padding-bottom: 16px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
   .pd-header-text h3 { margin: 0; font-size: 21px; color: var(--navy); }
   .pd-header-text p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+  /* Set from econ_dev_companies.updated_at, which two database triggers
+     maintain (112) -- the Program row and any of its contacts. */
+  .pd-updated { margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--border); }
   .pd-footer { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding-top: 14px; border-top: 1px solid var(--border); margin-top: 4px; }
   .pd-autosave { margin-right: auto; font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
   .pd-autosave svg { width: 14px; height: 14px; color: var(--accent); }
@@ -711,7 +714,7 @@
       <div id="pd-logo-file"></div>
       <div class="pd-header-text">
         <h3 id="pd-modal-title">Program</h3>
-        <p>Program Details and Contacts</p>
+        <p>Program Details and Contacts <span class="pd-updated" id="pd-updated"></span></p>
       </div>
       <button type="button" class="ai-drawer-close" id="program-detail-close" aria-label="Close" style="margin-left:auto;">&times;</button>
     </div>
@@ -1174,10 +1177,38 @@
         }
         const p = allPartners.find((x) => x.id === id);
         if (p) p[field] = value || null;
+        markProgramUpdatedNow(id);
         if (field === "name") $("pd-modal-title").textContent = value;
         if (field === "name" || field === "code" || field === "physical_address") renderTable();
       });
     });
+  }
+
+  // "Last updated" in the popup header. The value comes from
+  // econ_dev_companies.updated_at, set by triggers rather than by this page --
+  // see 112_program_contacts_and_address.sql. Date only: the question this
+  // answers is "is this list stale", and a time of day doesn't help with that.
+  function formatUpdatedAt(iso) {
+    if (!iso) return "Not recorded yet";
+    const d = new Date(iso);
+    if (isNaN(d)) return "Not recorded yet";
+    return `Last updated ${d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+  }
+
+  function renderProgramUpdatedAt(p) {
+    const el = $("pd-updated");
+    if (el) el.textContent = formatUpdatedAt(p && p.updated_at);
+  }
+
+  // Saves in this popup write single fields and don't re-fetch the Program, so
+  // the label would sit at yesterday's date until the page reloaded. The
+  // triggers have already moved the real value; this just keeps what's on
+  // screen honest about it.
+  function markProgramUpdatedNow(partnerId) {
+    const p = allPartners.find((x) => x.id === partnerId);
+    if (!p) return;
+    p.updated_at = new Date().toISOString();
+    renderProgramUpdatedAt(p);
   }
 
   // ---------- Program Detail popup ----------
@@ -1189,6 +1220,7 @@
     if (!p) return;
     const editableAttrs = isSuperAdmin ? "" : "readonly";
     $("pd-modal-title").textContent = p.name;
+    renderProgramUpdatedAt(p);
     $("program-detail-body").innerHTML = `
       <div class="pd-block">
         <div class="pd-block-head">
@@ -1406,6 +1438,7 @@
         }
         const c = allContacts.find((x) => x.id === contactId);
         if (c) c[fieldName] = value || null;
+        if (c) markProgramUpdatedNow(c.partner_id);
         renderTable();
       });
     });
@@ -1425,6 +1458,7 @@
           return;
         }
         if (c) c[field] = value;
+        markProgramUpdatedNow(c ? c.partner_id : partnerId);
         renderTable();
         renderProgramDetailModal(c ? c.partner_id : partnerId);
       });
@@ -1441,6 +1475,7 @@
           return;
         }
         await loadContacts();
+        if (pid) markProgramUpdatedNow(pid);
         renderTable();
         if (pid) renderProgramDetailModal(pid);
       });
@@ -1449,11 +1484,16 @@
     // Add inserts an empty row and lets it be filled in place, rather than
     // asking for every field up front -- the row IS the form, and each field
     // saves on blur like the rest.
-    async function addContact(extra, label) {
+    async function addContact(extra) {
       const { error } = await sb.from("econ_dev_partner_contacts").insert({
         organization_id: currentUser.organization_id,
         partner_id: partnerId,
-        name: label,
+        // Empty rather than a placeholder name (Greg, 9/6/26: "remove the
+        // pre-filled text in the name field") -- a real-looking value has to
+        // be selected and deleted before typing, and any that slip through
+        // read as actual contacts. Empty string, not null: name is NOT NULL
+        // (039). The field's own placeholder says "Name".
+        name: "",
         sort_order: contactsForPartner(partnerId).length,
         ...extra,
       });
@@ -1462,15 +1502,16 @@
         return;
       }
       await loadContacts();
+      markProgramUpdatedNow(partnerId);
       renderTable();
       renderProgramDetailModal(partnerId);
     }
 
     document.querySelectorAll(`[data-add-person="${partnerId}"]`).forEach((el) => {
-      el.addEventListener("click", () => addContact({}, "New contact"));
+      el.addEventListener("click", () => addContact({}));
     });
     document.querySelectorAll(`[data-add-regional="${partnerId}"]`).forEach((el) => {
-      el.addEventListener("click", () => addContact({ is_regional_director: true }, "New Regional Director"));
+      el.addEventListener("click", () => addContact({ is_regional_director: true }));
     });
   }
 
