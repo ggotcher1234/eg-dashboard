@@ -250,6 +250,13 @@
   }
   .pd-field input:focus { outline: none; border-color: var(--navy-light); }
   .pd-field input[readonly] { background: var(--bg); color: var(--muted); }
+  .pd-notes-field textarea {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13px; font-family: inherit; background: #fff; color: var(--text);
+    resize: vertical; min-height: 52px;
+  }
+  .pd-notes-field textarea:focus { outline: none; border-color: var(--navy-light); }
+  .pd-notes-field textarea[readonly] { background: var(--bg); color: var(--muted); }
 
   /* Grid rather than a real <table>: the inputs and the wrapping role
      tickboxes fight cell widths in a table, but still need to line up down
@@ -261,8 +268,8 @@
     background: var(--bg); padding-top: 6px; padding-bottom: 6px; font-size: 10.5px;
     font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
   }
-  .pd-row-people { grid-template-columns: 1.15fr 1fr 1.3fr 0.85fr auto 30px; }
-  .pd-row-regional { grid-template-columns: 1.2fr 1.1fr 1fr 1.3fr 0.85fr 30px; }
+  .pd-row-people { grid-template-columns: 1.15fr 1fr 1.3fr 0.85fr auto 46px 30px; }
+  .pd-row-regional { grid-template-columns: 1.2fr 1.1fr 1fr 1.3fr 0.85fr 46px 30px; }
   .pd-row input[type="text"] {
     width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--border);
     border-radius: 6px; font-size: 12.5px; font-family: inherit; background: #fff; color: var(--text);
@@ -275,6 +282,29 @@
   .pd-role input { width: auto; margin: 0; accent-color: var(--navy); }
   .pd-role-cc { padding-left: 9px; border-left: 1px solid var(--border); }
 
+  /* Organisation and Notes live behind a toggle rather than as two more
+     columns. Chris's doc carries them for most people (an office address, a
+     "do not cc", a contract date) so they can't be dropped, but they are read
+     rarely and would squeeze the four fields that are read constantly. */
+  .pd-person { border-bottom: 1px solid var(--border); }
+  .pd-person:last-child { border-bottom: none; }
+  .pd-person .pd-row { border-bottom: none; }
+  .pd-more {
+    background: none; border: 1px solid transparent; color: var(--muted); cursor: pointer;
+    font-size: 11px; line-height: 1; padding: 4px 5px; border-radius: 5px; justify-self: end;
+  }
+  .pd-more:hover { background: var(--bg); border-color: var(--border); color: var(--navy); }
+  .pd-more.has-content { color: var(--navy); font-weight: 700; }
+  .pd-extra { padding: 2px 10px 10px 10px; background: #fff; display: none; gap: 10px; }
+  .pd-extra.open { display: flex; flex-wrap: wrap; }
+  .pd-extra .pd-field { flex: 1 1 240px; }
+  .pd-extra textarea {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 12.5px; font-family: inherit; background: #fff; color: var(--text);
+    resize: vertical; min-height: 54px;
+  }
+  .pd-extra textarea:focus { outline: none; border-color: var(--navy-light); }
+  .pd-extra textarea[readonly] { background: var(--bg); color: var(--muted); }
   .pd-row-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 3px 6px; border-radius: 5px; justify-self: end; }
   .pd-row-del:hover { background: #fdf2f1; color: var(--danger); }
   .pd-empty { padding: 14px 12px; font-size: 12.5px; color: var(--muted); background: #fff; }
@@ -965,6 +995,29 @@
   const cField = (c, field, placeholder) =>
     `<input type="text" data-contact-id="${c.id}" data-contact-field="${field}" value="${escapeHtml(c[field] || "")}" placeholder="${escapeHtml(placeholder)}" ${isSuperAdmin ? "" : "readonly"} />`;
 
+  // Organisation and Notes, as imported from Chris's doc (113) or typed here.
+  // The button says "More" or "More *" so a row with something behind it can
+  // be spotted without opening every one.
+  const hasExtra = (c) => !!((c.address || "").trim() || (c.notes || "").trim());
+
+  const moreButton = (c) => `
+    <button type="button" class="pd-more${hasExtra(c) ? " has-content" : ""}"
+            data-toggle-extra="${c.id}"
+            title="${hasExtra(c) ? "Organisation / address and notes are on file" : "Add an organisation, address or note"}"
+            aria-expanded="false">More${hasExtra(c) ? " &bull;" : ""}</button>`;
+
+  const extraRow = (c) => `
+    <div class="pd-extra" data-extra-for="${c.id}">
+      <div class="pd-field">
+        <label>Organisation / address</label>
+        <textarea data-contact-id="${c.id}" data-contact-field="address" placeholder="Organisation, street, city" ${isSuperAdmin ? "" : "readonly"}>${escapeHtml(c.address || "")}</textarea>
+      </div>
+      <div class="pd-field">
+        <label>Notes</label>
+        <textarea data-contact-id="${c.id}" data-contact-field="notes" placeholder="Anything the fields above have no room for" ${isSuperAdmin ? "" : "readonly"}>${escapeHtml(c.notes || "")}</textarea>
+      </div>
+    </div>`;
+
   function renderPersonRow(c) {
     const roles = CONTACT_ROLES.map((r) => `
       <label class="pd-role" title="${escapeHtml(r.label)}">
@@ -972,6 +1025,7 @@
         ${escapeHtml(r.short)}
       </label>`).join("");
     return `
+    <div class="pd-person">
       <div class="pd-row pd-row-people">
         ${cField(c, "name", "Name")}
         ${cField(c, "title", "Title")}
@@ -984,26 +1038,33 @@
             CC
           </label>
         </div>
+        ${moreButton(c)}
         ${isSuperAdmin ? `<button type="button" class="pd-row-del" data-delete-contact-id="${c.id}" title="Remove this person">&times;</button>` : "<span></span>"}
-      </div>`;
+      </div>
+      ${extraRow(c)}
+    </div>`;
   }
 
   function renderRegionalRow(c) {
     return `
+    <div class="pd-person">
       <div class="pd-row pd-row-regional">
         ${cField(c, "region", "Region / organisation")}
         ${cField(c, "name", "Director name")}
         ${cField(c, "title", "Title")}
         ${cField(c, "email", "Email")}
         ${cField(c, "phone", "Phone")}
+        ${moreButton(c)}
         ${isSuperAdmin ? `<button type="button" class="pd-row-del" data-delete-contact-id="${c.id}" title="Remove this Regional Director">&times;</button>` : "<span></span>"}
-      </div>`;
+      </div>
+      ${extraRow(c)}
+    </div>`;
   }
 
   function renderPeopleBlock(p) {
     const people = peopleFor(p.id);
     const rows = people.length
-      ? `<div class="pd-row pd-row-head pd-row-people"><span>Name</span><span>Title</span><span>Email</span><span>Phone</span><span>Roles</span><span></span></div>` + people.map(renderPersonRow).join("")
+      ? `<div class="pd-row pd-row-head pd-row-people"><span>Name</span><span>Title</span><span>Email</span><span>Phone</span><span>Roles</span><span></span><span></span></div>` + people.map(renderPersonRow).join("")
       : `<div class="pd-empty">No people on file for this Program yet.</div>`;
     return `
       <div class="pd-block">
@@ -1019,7 +1080,7 @@
   function renderRegionalBlock(p) {
     const dirs = regionalFor(p.id);
     const rows = dirs.length
-      ? `<div class="pd-row pd-row-head pd-row-regional"><span>Region</span><span>Director</span><span>Title</span><span>Email</span><span>Phone</span><span></span></div>` + dirs.map(renderRegionalRow).join("")
+      ? `<div class="pd-row pd-row-head pd-row-regional"><span>Region</span><span>Director</span><span>Title</span><span>Email</span><span>Phone</span><span></span><span></span></div>` + dirs.map(renderRegionalRow).join("")
       : `<div class="pd-empty">No Regional Directors on file for this Program yet.</div>`;
     return `
       <div class="pd-block">
@@ -1047,6 +1108,16 @@
       if (av > bv) return 1 * dir;
       return 0;
     });
+  }
+
+  // The address moved out of one free-form `physical_address` string into
+  // street/city/state/zip in 112. This list still wants one line, and old rows
+  // that were never re-typed still only have the original string.
+  function programAddressLine(p) {
+    const cityBit = [p.address_city, p.address_state].filter(Boolean).join(", ");
+    const line = [p.address_street, [cityBit, p.address_zip].filter(Boolean).join(" ")]
+      .map((x) => (x || "").trim()).filter(Boolean).join(", ");
+    return line || (p.physical_address || "").trim();
   }
 
   function renderTable() {
@@ -1090,7 +1161,7 @@
       tr.innerHTML = `
         <td class="program-cell">
           <button type="button" class="program-name-link" data-open-program="${p.id}">${escapeHtml(p.name)}</button>
-          <div class="program-address-label">${p.physical_address ? escapeHtml(p.physical_address) : '<span class="cell-muted">No address on file</span>'}</div>
+          <div class="program-address-label">${programAddressLine(p) ? escapeHtml(programAddressLine(p)) : '<span class="cell-muted">No address on file</span>'}</div>
           ${p.archived ? '<span class="archived-badge">Archived</span>' : ""}
         </td>
         <td class="contact-cell">${renderRoleContactCell(p, "is_contract_signer")}</td>
@@ -1179,7 +1250,8 @@
         if (p) p[field] = value || null;
         markProgramUpdatedNow(id);
         if (field === "name") $("pd-modal-title").textContent = value;
-        if (field === "name" || field === "code" || field === "physical_address") renderTable();
+        if (["name", "code", "physical_address", "address_street", "address_city",
+             "address_state", "address_zip"].includes(field)) renderTable();
       });
     });
   }
@@ -1227,20 +1299,22 @@
           <h3>Program Details</h3>
         </div>
         <div class="pd-fields">
-          <div class="pd-field" style="flex:2 1 210px;"><label for="pd-name-input">Program name</label>
+          <div class="pd-field" style="flex:2 1 180px;"><label for="pd-name-input">Program name</label>
             <input type="text" id="pd-name-input" data-program-id="${p.id}" data-program-field="name" value="${escapeHtml(p.name)}" ${editableAttrs} /></div>
-          <div class="pd-field" style="flex:1 1 110px;"><label for="pd-code-input">Abbreviation</label>
+          <div class="pd-field" style="flex:1 1 96px;"><label for="pd-code-input">Abbreviation</label>
             <input type="text" id="pd-code-input" data-program-id="${p.id}" data-program-field="code" value="${escapeHtml(p.code)}" ${editableAttrs} /></div>
-          <div class="pd-field" style="flex:2 1 190px;"><label for="pd-street-input">Street / P.O. Box</label>
+          <div class="pd-field" style="flex:2 1 165px;"><label for="pd-street-input">Street / P.O. Box</label>
             <input type="text" id="pd-street-input" data-program-id="${p.id}" data-program-field="address_street" value="${escapeHtml(p.address_street || "")}" ${editableAttrs} /></div>
-          <div class="pd-field" style="flex:1 1 120px;"><label for="pd-city-input">City</label>
+          <div class="pd-field" style="flex:1 1 104px;"><label for="pd-city-input">City</label>
             <input type="text" id="pd-city-input" data-program-id="${p.id}" data-program-field="address_city" value="${escapeHtml(p.address_city || "")}" ${editableAttrs} /></div>
-          <div class="pd-field" style="flex:0 1 68px;"><label for="pd-state-input">State</label>
+          <div class="pd-field" style="flex:0 1 60px;"><label for="pd-state-input">State</label>
             <input type="text" id="pd-state-input" maxlength="2" data-program-id="${p.id}" data-program-field="address_state" value="${escapeHtml(p.address_state || "")}" ${editableAttrs} /></div>
-          <div class="pd-field" style="flex:0 1 88px;"><label for="pd-zip-input">Zip</label>
+          <div class="pd-field" style="flex:0 1 76px;"><label for="pd-zip-input">Zip</label>
             <input type="text" id="pd-zip-input" data-program-id="${p.id}" data-program-field="address_zip" value="${escapeHtml(p.address_zip || "")}" ${editableAttrs} /></div>
-          <div class="pd-field" style="flex:1 1 125px;"><label for="pd-phone-input">Phone</label>
+          <div class="pd-field" style="flex:1 1 112px;"><label for="pd-phone-input">Phone</label>
             <input type="text" id="pd-phone-input" data-program-id="${p.id}" data-program-field="phone" value="${escapeHtml(p.phone || "")}" ${editableAttrs} /></div>
+          <div class="pd-field pd-notes-field" style="flex:1 1 100%;"><label for="pd-notes-input">Notes</label>
+            <textarea id="pd-notes-input" data-program-id="${p.id}" data-program-field="notes" placeholder="Contract dates, NDA status, anything the fields above have no room for" ${editableAttrs}>${escapeHtml(p.notes || "")}</textarea></div>
         </div>
       </div>
 
@@ -1416,8 +1490,20 @@
   // Administrator, Program Finance, CC List) -- the same generic pattern
   // used before this was split into categories (Greg/Rita, 8/28/26).
   function wireContactsDetail(partnerId) {
-    // [data-contact-field] narrows this to the text inputs. The role and CC
-    // tickboxes carry data-contact-check and save on change instead.
+    // The "More" toggle. Purely a view state -- nothing is saved by opening
+    // it, and it closes again when the popup is reopened.
+    document.querySelectorAll("[data-toggle-extra]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const panel = document.querySelector(`[data-extra-for="${btn.dataset.toggleExtra}"]`);
+        if (!panel) return;
+        const open = panel.classList.toggle("open");
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+    });
+
+    // [data-contact-field] narrows this to the text inputs and the two
+    // textareas behind "More". The role and CC tickboxes carry
+    // data-contact-check and save on change instead.
     document.querySelectorAll("[data-contact-id][data-contact-field]").forEach((inp) => {
       const original = inp.value;
       inp.addEventListener("blur", async () => {
