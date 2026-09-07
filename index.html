@@ -348,6 +348,9 @@
   .badge-active { background: #e9f5ee; color: var(--accent-dark); }
   .badge-finalized { background: #e7eef7; color: var(--navy-light); }
   .badge-archived { background: #eef1f4; color: var(--muted); }
+  .eng-back-link { color: var(--navy); font-weight: 600; text-decoration: underline; white-space: nowrap; margin-left: 4px; }
+  .eng-back-link:hover { color: var(--navy-light); }
+  .cr-closed-on { color: var(--muted); font-size: 12.5px; }
   .badge-accepted { background: #e9f5ee; color: var(--accent-dark); }
   .badge-in_progress { background: #e7eef7; color: var(--navy-light); }
   .badge-on_hold { background: #fdf1dc; color: var(--amber); }
@@ -657,7 +660,13 @@
         <button type="button" class="nav-link nav-link-dropdown-btn">Applications <span class="nav-caret">&#9662;</span></button>
         <div class="nav-submenu" id="nav-applications-submenu"></div>
       </div>
-      <a href="index.html" class="nav-link active">Engagements</a>
+      <div class="nav-item-dropdown nav-split-item">
+        <a href="index.html" class="nav-link active">Engagements</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Engagements menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
+          <a href="index.html?status=closed">Closed Engagements</a>
+        </div>
+      </div>
       <div class="nav-item-dropdown nav-split-item">
         <a href="econ_dev_partners_admin.html" class="nav-link">Programs</a>
         <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Programs menu"><span class="nav-caret">&#9662;</span></button>
@@ -796,13 +805,13 @@
                to a single non-toggling label since "Other" was already
                removed, and "Recent" went with it. A plain description of
                the panel replaces them. -->
-          <div class="eng-panel-desc">Engagements currently In Progress, grouped by Program. Click one to open its Engagement Workspace.</div>
+          <div class="eng-panel-desc" id="eng-panel-desc">Engagements currently In Progress, grouped by Program. Click one to open its Engagement Workspace.</div>
         </div>
         <div class="eng-list-header">
           <div></div>
           <div></div>
           <div class="eng-col-title">Start Date</div>
-          <div class="eng-col-title">Days in Progress</div>
+          <div class="eng-col-title" id="eng-col-days">Days in Progress</div>
         </div>
         <div id="engagements-list"></div>
         <div id="engagements-empty" class="empty-note hidden" style="border:none; box-shadow:none; margin:0;">You're not assigned to any engagements yet.</div>
@@ -924,6 +933,24 @@
   // than inlined) so the pool-filter line below reads the same as it
   // always has.
   let engagementStatusFilter = "in_progress";
+
+  // Closed Engagements (Greg, 9/7/26: "i don't think we've left anywhere to
+  // view archived engagements... Admin view only").
+  //
+  // Closing an engagement is what archives it -- there is no separate archived
+  // flag -- and this list has only ever rendered project_status "in_progress",
+  // so a closed engagement had nowhere left to be seen. Rather than a second
+  // page carrying a sixteenth copy of the nav, the same list renders the
+  // closed ones when ?status=closed is on the URL, reached from the caret
+  // beside Engagements in the nav.
+  //
+  // Read once here but only ACTED on after the profile loads -- an ordinary
+  // user typing the URL gets the normal In Progress list, not a peek at
+  // everything (client-side, so it's tidiness rather than a boundary; RLS is
+  // what actually governs who can read these rows).
+  const requestedStatus = new URLSearchParams(location.search).get("status");
+  let archiveStatus = null;         // null | "closed" -- non-null means the
+                                    // closed view is what's on screen.
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -1200,7 +1227,32 @@
     // (Specialist: my work first. Team Lead: team workload. Admin: everything.).
     engagementScope = isSuperAdminUser ? "all" : "mine";
 
+    // "we no longer use accepted. If a team lead is added it goes right into
+    // In Progress" (Greg, 9/7/26) -- so closed is the only archive there is,
+    // and the only value this accepts.
+    if (isSuperAdminUser && requestedStatus === "closed") {
+      archiveStatus = "closed";
+      engagementStatusFilter = "closed";
+      applyArchiveViewChrome();
+    }
+
     renderEngagementsList();
+  }
+
+  // Everything about the panel that has to read differently when it's holding
+  // finished work rather than live work.
+  function applyArchiveViewChrome() {
+    document.title = "Closed Engagements — EG Dashboard";
+    const heading = $("eng-panel-desc");
+    if (heading) {
+      heading.innerHTML =
+        'Closed engagements, grouped by Program. Click one to open its Engagement Workspace. ' +
+        '<a href="index.html" class="eng-back-link">&larr; Back to In Progress</a>';
+    }
+    // "Days in Progress" is meaningless once an engagement is closed -- the
+    // clock it counts from stopped. The column shows when it closed instead.
+    const daysCol = $("eng-col-days");
+    if (daysCol) daysCol.textContent = "Closed";
   }
 
   // ---------- Notifications (Super Admin only) ----------
@@ -1785,6 +1837,14 @@
     const startDateText = submittedAtByClient[c.id] ? formatLastActivity(submittedAtByClient[c.id]) : "—";
     const daysInProgress = daysSince(c.first_in_progress_at || c.status_since);
     const daysInProgressText = Number.isFinite(daysInProgress) ? `${daysInProgress} day${daysInProgress === 1 ? "" : "s"}` : "—";
+    // In the closed view the same cell carries the closing date. status_since
+    // is when the row last changed status, which for a closed engagement is
+    // when it was closed. No aging dot -- statusAgeDotHtml already returns
+    // nothing for anything but In Progress, but the count beside it would
+    // otherwise read as "closed 400 days ago" dressed up as progress.
+    const lastCellHtml = archiveStatus
+      ? `<span class="cr-closed-on">${c.status_since ? formatLastActivity(c.status_since) : "—"}</span>`
+      : `<span class="status-pill">${statusAgeDotHtml(c)}${daysInProgressText}</span>`;
     return `
       <div class="client-row" data-client-id="${c.id}">
         <div>
@@ -1795,7 +1855,7 @@
           ${teamLead ? `<div><div class="eng-tl-caption">Team Lead</div><div class="eng-tl-name-row"><div class="avatar-sm">${teamLeadAvatar ? `<img src="${escapeHtml(teamLeadAvatar)}" alt="" />` : escapeHtml(initials(teamLead))}</div><span class="eng-tl-name">${escapeHtml(teamLead)}</span></div></div>` : `<span class="cr-meta">No Team Lead</span>`}
         </div>
         <div class="cr-start-date">${startDateText}</div>
-        <div class="cr-days-in-progress"><span class="status-pill">${statusAgeDotHtml(c)}${daysInProgressText}</span></div>
+        <div class="cr-days-in-progress">${lastCellHtml}</div>
       </div>
     `;
   }
@@ -1859,9 +1919,13 @@
     // there reads like an access problem when really there just aren't any
     // In Progress engagements right now). Now it reflects both filters
     // actually in effect.
-    $("engagements-empty").textContent = engagementScope === "mine"
-      ? `You're not assigned to any In Progress engagements.`
-      : `Nothing In Progress right now.`;
+    $("engagements-empty").textContent = archiveStatus
+      ? (engagementScope === "mine"
+          ? `None of the engagements you're assigned to have been closed.`
+          : `No engagements have been closed yet.`)
+      : (engagementScope === "mine"
+          ? `You're not assigned to any In Progress engagements.`
+          : `Nothing In Progress right now.`);
     $("engagements-empty").classList.toggle("hidden", pool.length > 0);
 
     // Greg (9/2/26): always show the full In Progress list on open -- no
