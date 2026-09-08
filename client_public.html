@@ -48,6 +48,10 @@
   .company-logo img { max-width: 100%; max-height: 100%; }
   .company-name { font-size: 21px; font-weight: 700; color: var(--navy); margin: 0; }
   .company-address { font-size: 13px; color: var(--muted); margin-top: 3px; }
+  /* "Updated:" under the address (Greg, 9/8/26) -- a quieter line than the
+     address above it, since it is a freshness note rather than information
+     about the company. */
+  .company-updated { font-size: 12px; color: var(--muted); margin-top: 5px; opacity: 0.85; }
 
   .company-description { font-size: 14px; line-height: 1.65; }
   .company-description p { margin: 0 0 10px; }
@@ -247,6 +251,7 @@
         <div>
           <h2 class="company-name" id="company-name"></h2>
           <div class="company-address" id="company-address"></div>
+          <div class="company-updated hidden" id="company-updated"></div>
         </div>
       </div>
     </div>
@@ -563,6 +568,16 @@
     }
   }
 
+  // Date only -- the question this answers is "how current is this page",
+  // and a time of day doesn't help with that. Returns "" for anything that
+  // isn't a real date so the caller can hide the line entirely.
+  function formatUpdatedDate(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d)) return "";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+
   function renderCompany(row, expandAll) {
     const c = row.company || {};
     if (c.logo_url) {
@@ -571,6 +586,16 @@
     }
     $("company-name").textContent = row.client_name;
     $("company-address").textContent = c.address || "";
+
+    // "Updated:" -- the latest of the engagement row, its activity stamp and
+    // the newest client-facing document (115_public_view_updated_at.sql).
+    // Hidden rather than blank when there is no date: a finalized engagement
+    // is served from its snapshot, which has no updated_at until it is
+    // re-finalized, and a frozen dashboard should not claim a date at all.
+    const updatedEl = $("company-updated");
+    const updatedText = formatUpdatedDate(c.updated_at);
+    updatedEl.textContent = updatedText ? `Updated: ${updatedText}` : "";
+    updatedEl.classList.toggle("hidden", !updatedText);
 
     if (c.program_name) {
       $("footer-program-wrap").classList.remove("hidden");
