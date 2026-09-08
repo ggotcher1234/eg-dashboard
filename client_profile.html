@@ -205,7 +205,8 @@
   .logo-card-empty { display: flex; align-items: center; gap: 10px; }
 
   /* "Auto-fill from website" -- reads the site for logo/socials/description
-     (Greg, 9/5/26). Sits under the Website field on the Links step. */
+     (Greg, 9/5/26). Sits beside Upload logo on the Links step (Greg,
+     9/8/26), and above the Description editor on the Description step. */
   .autofill-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
   .autofill-row button[disabled] { opacity: 0.6; cursor: default; }
   #autofill-logo-suggest {
@@ -921,10 +922,20 @@
 
             <div class="wizard-subcard">
               <form id="company-form-2">
+                <!-- Auto-fill sits beside Upload logo rather than under the
+                     Website field (Greg, 9/8/26). Finding the logo is the
+                     main thing it does, and the suggestion it comes back with
+                     appears right here, so the button belongs next to the
+                     manual way of doing the same job -- not two fields below
+                     it, reading as though it were about the Website box. -->
                 <div class="field">
                   <label>Logo</label>
-                  <div id="co-logo-file"></div>
-                  <div class="field-hint">Displayed in the client dashboard header.</div>
+                  <div class="autofill-row" style="margin-top:0;">
+                    <div id="co-logo-file"></div>
+                    <button type="button" class="btn-secondary btn-sm autofill-web-btn">&#10024; Auto-fill from website</button>
+                  </div>
+                  <div class="field-hint">Displayed in the client dashboard header. Auto-fill reads the Website below for a logo, social links and a draft description &mdash; it only fills what's still empty.</div>
+                  <div id="autofill-logo-suggest" class="hidden"></div>
                 </div>
                 <div class="field">
                   <label for="co-website">Website</label>
@@ -932,11 +943,6 @@
                     <input type="url" id="co-website" placeholder="https://…" />
                     <a class="url-open-btn" id="co-website-open" href="#" target="_blank" rel="noopener" title="Open">&#8599;</a>
                   </div>
-                  <div class="autofill-row">
-                    <button type="button" class="btn-secondary btn-sm autofill-web-btn">&#10024; Auto-fill from website</button>
-                    <span class="field-hint" style="margin:0;">Reads the site for its logo, social links, and a draft description. Only fills fields that are still empty.</span>
-                  </div>
-                  <div id="autofill-logo-suggest" class="hidden"></div>
                 </div>
                 <div class="subcard-title" style="margin-top:16px;">Social Media</div>
                 <!-- Greg (9/2/26): 3 even rows -- fields flow left-to-right,
@@ -1995,7 +2001,7 @@
 
   async function autofillFromWebsite() {
     // There are two "Auto-fill from website" buttons -- one by the
-    // description (step 1), one by the website field (step 2) -- both run
+    // description (step 1), one beside Upload logo (step 2) -- both run
     // this. Disable/relabel whichever exist while it works.
     const btns = [...document.querySelectorAll(".autofill-web-btn")];
     const website = (getFieldValue("co-website") || "").trim() || (currentClient && currentClient.website_url) || "";
