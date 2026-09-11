@@ -17,7 +17,7 @@
     --amber: #a9740f;
     --danger: #b3403a;
     --danger-dark: #922f2b;
-    --bg: #f4f6f8;
+    --bg: #eaeff4;
     --card: #ffffff;
     --border: #dde3e9;
     --text: #1f2937;
@@ -214,7 +214,7 @@
   .stat-coral .stat-value { color: #a3352a; }
   .stat-coral .stat-label { color: #b8402f; }
 
-  .stat-purple { background: linear-gradient(135deg, #e2e9ef 0%, #f8fafb 75%); }
+  .stat-purple { background: linear-gradient(135deg, #e2e9ef 0%, #eef2f6 75%); }
   .stat-purple::before { background: #5e7c97; }
   .stat-purple .stat-value { color: #354d61; }
   .stat-purple .stat-label { color: #3f5b73; }
@@ -281,7 +281,7 @@
   .q-amber .ql-icon { background: #d4dcb4; color: #4f5a1f; }
   .q-amber .ql-title { color: #4a5420; }
 
-  .q-purple { background: linear-gradient(135deg, #e2e9ef 0%, #f8fafb 72%); }
+  .q-purple { background: linear-gradient(135deg, #e2e9ef 0%, #eef2f6 72%); }
   .q-purple::before { background: #5e7c97; }
   .q-purple .ql-icon { background: #cfdae3; color: #3f5b73; }
   .q-purple .ql-title { color: #354d61; }
@@ -324,7 +324,7 @@
     letter-spacing: 0.4px; color: var(--navy-light); background: #f4f6f8; border-bottom: 1px solid var(--border);
   }
   .eng-program-header:first-child { padding-top: 10px; }
-  .client-row:hover { background: #f8fafb; }
+  .client-row:hover { background: #eef2f6; }
   .client-row .cr-name { font-weight: 700; font-size: 13.5px; color: var(--navy); text-decoration: underline; }
   .client-row .cr-meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
   /* Overdue engagement (no activity in 60+ days) -- Chris's whole job is
@@ -366,6 +366,8 @@
   .badge-active { background: #e9f5ee; color: var(--accent-dark); }
   .badge-finalized { background: #e7eef7; color: var(--navy-light); }
   .badge-archived { background: #eef1f4; color: var(--muted); }
+  .gsr-inlist { color: var(--muted); font-style: italic; cursor: default; }
+  .gsr-inlist:hover { background: transparent; }
   .eng-back-link { color: var(--navy); font-weight: 600; text-decoration: underline; white-space: nowrap; margin-left: 4px; }
   .eng-back-link:hover { color: var(--navy-light); }
   .cr-closed-on { color: var(--muted); font-size: 12.5px; }
@@ -567,7 +569,7 @@
   .attention-empty-strip .ae-check { font-size: 15px; }
   .attention-row { display: flex; align-items: center; gap: 12px; padding: 12px 18px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.15s ease; }
   .attention-row:last-child { border-bottom: none; }
-  .attention-row:hover { background: #f8fafb; }
+  .attention-row:hover { background: #eef2f6; }
   .attention-dot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; }
   .attention-dot.sev-high { background: var(--danger); }
   .attention-dot.sev-med { background: var(--amber); }
@@ -637,7 +639,7 @@
   .inv-field input, .inv-field select { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; font-size: 13.5px; font-family: inherit; }
   .inv-field input:focus, .inv-field select:focus { outline: none; border-color: var(--navy-light); }
   .inv-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin: 20px 0 8px; }
-  .inv-billfrom, .inv-billto { background: #f8fafb; border-radius: 8px; padding: 12px 14px; }
+  .inv-billfrom, .inv-billto { background: #eef2f6; border-radius: 8px; padding: 12px 14px; }
   .inv-lines-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
   .inv-lines-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); padding: 6px 6px; border-bottom: 1px solid var(--border); }
   .inv-lines-table td { padding: 6px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
@@ -802,7 +804,7 @@
       <div class="global-search-wrap">
         <div class="search-box">
           <span class="search-icon">&#128269;</span>
-          <input type="text" id="global-search-input" placeholder="Search…" autocomplete="off" />
+          <input type="text" id="global-search-input" placeholder="Search engagements, people or Programs…" autocomplete="off" />
         </div>
         <div class="global-search-results hidden" id="global-search-results"></div>
       </div>
@@ -959,6 +961,14 @@
   // than inlined) so the pool-filter line below reads the same as it
   // always has.
   let engagementStatusFilter = "in_progress";
+
+  // What's typed in the toolbar search. Rita (9/11/26 review): "the search
+  // defaults to contacts." It was a global search -- it dropped a panel of
+  // people, Programs and engagements and left the list underneath untouched,
+  // and since there are more people than engagements the panel read as a
+  // contact lookup. Typing now filters the list itself; the panel keeps the
+  // things that aren't in the list.
+  let engagementQuery = "";
 
   // Closed Engagements (Greg, 9/7/26: "i don't think we've left anywhere to
   // view archived engagements... Admin view only").
@@ -1963,6 +1973,19 @@
 
     let pool = scopedPool.filter((c) => c.project_status === engagementStatusFilter);
 
+    // Name, Program and Team Lead -- the three things visible on the row, so
+    // a match is always something you can see once the list redraws.
+    const q = engagementQuery.trim().toLowerCase();
+    if (q) {
+      pool = pool.filter((c) => {
+        const program = (c.econ_dev_companies && c.econ_dev_companies.name) || "";
+        const lead = teamLeadByClient[c.id] || "";
+        return (c.name || "").toLowerCase().includes(q)
+          || program.toLowerCase().includes(q)
+          || lead.toLowerCase().includes(q);
+      });
+    }
+
     if (engagementTab === "recent") {
       // "Recent" picks its top 10 by last activity first.
       pool = [...pool].sort((a, b) => new Date(b.last_activity_at || b.updated_at) - new Date(a.last_activity_at || a.updated_at)).slice(0, 10);
@@ -1975,6 +1998,12 @@
     // there reads like an access problem when really there just aren't any
     // In Progress engagements right now). Now it reflects both filters
     // actually in effect.
+    if (q && pool.length === 0) {
+      $("engagements-empty").textContent = `No ${archiveStatus ? "closed" : "In Progress"} engagement matches “${engagementQuery.trim()}”.`;
+      $("engagements-empty").classList.remove("hidden");
+      list.innerHTML = "";
+      return;
+    }
     $("engagements-empty").textContent = archiveStatus
       ? (engagementScope === "mine"
           ? `None of the engagements you're assigned to have been closed.`
@@ -1999,19 +2028,16 @@
     const q = query.trim().toLowerCase();
     if (!q) { box.classList.add("hidden"); box.innerHTML = ""; return; }
 
-    const engMatches = allClients.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 5);
+    // Engagements are no longer listed here -- they're filtered into the list
+    // below as you type, so repeating the first five in a panel over the top
+    // of them was both redundant and the reason people read this as a
+    // contacts box (Rita, 9/11/26). The count still shows, so it's obvious
+    // the list moved rather than nothing having happened.
+    const engMatchCount = document.querySelectorAll("#engagements-list .client-row").length;
     const specMatches = allSpecialists.filter((u) => u.full_name && u.full_name.toLowerCase().includes(q)).slice(0, 5);
     const progMatches = allPrograms.filter((p) => (p.name || "").toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q)).slice(0, 5);
 
-    let html = "";
-    if (engMatches.length) {
-      html += `<div class="gsr-group-label">Engagements</div>` + engMatches.map((c) => `
-        <div class="gsr-item" data-gsr-nav="client_control_center.html?client=${c.id}">
-          <span class="gsr-name">${escapeHtml(c.name)}</span>
-          <span class="gsr-meta">${escapeHtml(PROJECT_STATUS_LABELS[c.project_status] || c.project_status)}</span>
-        </div>
-      `).join("");
-    }
+    let html = `<div class="gsr-item gsr-inlist"><span class="gsr-name">${engMatchCount} engagement${engMatchCount === 1 ? "" : "s"} in the list below</span></div>`;
     if (specMatches.length) {
       html += `<div class="gsr-group-label">Specialists</div>` + specMatches.map((u) => `
         <div class="gsr-item" data-gsr-nav="team_directory.html">
@@ -2050,7 +2076,11 @@
       });
     }
   }
-  $("global-search-input").addEventListener("input", () => renderGlobalSearchResults($("global-search-input").value));
+  $("global-search-input").addEventListener("input", () => {
+    engagementQuery = $("global-search-input").value;
+    renderEngagementsList();                 // the list first...
+    renderGlobalSearchResults(engagementQuery); // ...so the panel can count it
+  });
   $("global-search-input").addEventListener("focus", () => {
     if ($("global-search-input").value.trim()) renderGlobalSearchResults($("global-search-input").value);
   });
