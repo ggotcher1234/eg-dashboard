@@ -425,6 +425,23 @@
 
   .accept-box { background: #eef2f6; border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; margin-top: 22px; }
   .accept-box h3 { margin: 0 0 4px; font-size: 15px; }
+  .cc-picker { margin: 16px 0 4px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .cc-picker-head { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+  .cc-picker-head .hint { font-weight: 400; color: var(--muted); }
+  .cc-list { display: flex; flex-direction: column; gap: 2px; }
+  .cc-row {
+    display: grid; grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1.4fr);
+    align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; cursor: pointer;
+  }
+  .cc-row:hover { background: #fff; }
+  .cc-row input { margin: 0; width: auto; accent-color: var(--navy); }
+  .cc-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .cc-meta { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cc-empty { font-size: 12.5px; color: var(--muted); }
+  @media (max-width: 640px) {
+    .cc-row { grid-template-columns: 18px minmax(0, 1fr); }
+    .cc-meta { grid-column: 2; }
+  }
   .accept-box .desc { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
   .slug-preview { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
   .slug-preview strong { color: var(--navy); font-family: "SF Mono", Menlo, monospace; }
@@ -1819,6 +1836,7 @@
             </div>
           </div>
           <div class="desc" style="margin-top:-4px;">Team Lead, Admin, and QC slots are created automatically with these hours — Admin and QC start unassigned and can be given to a specific consultant later, from the Client Workspace.</div>
+          ${ccPickerHtml(a)}
           <div class="field">
             <label>Client web address <span class="required-star">*</span> <span class="hint">(memorable, lowercase — Section 8.1)</span></label>
             <input type="text" id="accept-slug" value="${escapeHtml(suggestedSlug)}" />
@@ -2076,6 +2094,47 @@
     renderReview();
   });
 
+  // Who gets copied on correspondence for THIS engagement (Chris/Rita,
+  // 9/11/26) -- chosen here rather than carried by a flag on the Program, so a
+  // Team Lead never emails a Program about an engagement it has no part in.
+  //
+  // Greg: "list the program administrators with check boxes." That's the
+  // default list. If a Program has nobody flagged as Program Administrator --
+  // easy to happen, since the flags were backfilled from a single old
+  // category -- the picker would otherwise be empty with no way forward, so it
+  // falls back to that Program's full contact list and says why.
+  function ccPickerHtml(a) {
+    const partner = partnersById()[a.econ_dev_company_id];
+    if (!partner) {
+      return `<div class="cc-picker"><div class="cc-picker-head">Copy on correspondence</div>
+        <div class="cc-empty">This application isn't linked to a Program, so there are no contacts to choose from.</div></div>`;
+    }
+    const all = allPartnerContacts.filter((c) => c.partner_id === partner.id && (c.name || "").trim());
+    const admins = all.filter((c) => c.is_program_administrator);
+    const list = admins.length ? admins : all;
+    const fallback = !admins.length && all.length;
+
+    if (!list.length) {
+      return `<div class="cc-picker"><div class="cc-picker-head">Copy on correspondence</div>
+        <div class="cc-empty">${escapeHtml(partner.name)} has no contacts on file yet. Add them on the Programs page, or leave this and set it from the engagement later.</div></div>`;
+    }
+    return `
+      <div class="cc-picker">
+        <div class="cc-picker-head">Copy on correspondence <span class="hint">— for this engagement only</span></div>
+        <div class="desc" style="margin-bottom:10px;">${fallback
+          ? `No one at ${escapeHtml(partner.name)} is marked Program Administrator, so every contact is listed.`
+          : `Program Administrators at ${escapeHtml(partner.name)}. Tick the ones this engagement concerns.`}</div>
+        <div class="cc-list">
+          ${list.map((c) => `
+            <label class="cc-row">
+              <input type="checkbox" class="cc-check" value="${c.id}" />
+              <span class="cc-name">${escapeHtml(c.name)}</span>
+              <span class="cc-meta">${escapeHtml([c.title, c.email].filter(Boolean).join(" · ") || "No email on file")}</span>
+            </label>`).join("")}
+        </div>
+      </div>`;
+  }
+
   async function submitAccept(appId) {
     const budget = $("accept-budget").value;
     const teamLeadId = $("accept-tl").value;
@@ -2116,6 +2175,19 @@
         showBanner("Couldn't accept: " + error.message, "error");
       }
       return;
+    }
+
+    // The CC picks, now that there's an engagement to hang them on. Done here
+    // rather than inside accept_client_application() so the RPC keeps its
+    // current signature -- same reasoning as the Team Lead hours below.
+    const ccIds = [...document.querySelectorAll(".cc-check:checked")].map((el) => el.value);
+    if (ccIds.length) {
+      const { error: ccErr } = await sb.from("client_cc_contacts").insert(
+        ccIds.map((contactId) => ({ client_id: clientId, partner_contact_id: contactId }))
+      );
+      // Non-fatal: the engagement exists and is usable, and the CC list can be
+      // corrected from the engagement. Losing it silently would be worse.
+      if (ccErr) showBanner(`Engagement created, but the CC list didn't save: ${ccErr.message}. Set it from the engagement instead.`, "error");
     }
 
     // accept_client_application() creates the Team Lead's own assignment row
