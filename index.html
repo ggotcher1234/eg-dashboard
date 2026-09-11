@@ -334,11 +334,19 @@
      "Overdue" (Greg, 8/29/26), so it's now a solid, bold badge sitting
      right next to the client name instead of buried in the meta text. */
   .client-row .cr-meta.cr-overdue { color: var(--danger-dark); font-weight: 700; }
+  /* The badge moved out of the name cell and into the Why Overdue column
+     (Greg, 9/11/26). Beside the name it only looked right when the name was
+     short enough to share the line -- "Clippard Instrument Labs" pushed it
+     onto a second row, and "JCS Process & Controls Inc.(and its subsidiary
+     UltraPhil)" would have given it a third. In its own column it sits on
+     one line whatever the engagement is called, next to the reason it's
+     overdue, which is the thing you read straight after it anyway. */
   .overdue-badge {
-    display: inline-flex; align-items: center; margin-left: 8px; padding: 2px 9px; border-radius: 5px;
+    display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 5px;
     background: var(--danger); color: #fff; font-size: 10.5px; font-weight: 800;
-    text-transform: uppercase; letter-spacing: 0.4px; vertical-align: middle;
+    text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0;
   }
+  .cr-overdue-cell { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
   /* Overdue delay reason (Chris, 9/4/26) -- the Team Lead's own note on
      why an Overdue engagement is stuck, same text as the box on Client
      Control Center's Team & Hours pane (clients.delay_reason). */
@@ -346,7 +354,7 @@
      engagement name (Greg, 9/11/26, from the review). Under the name it
      pushed every other row's height around and buried the reason in the
      one place the eye had already left. */
-  .cr-overdue-reason { font-size: 11.5px; color: var(--danger-dark); line-height: 1.35; }
+  .cr-overdue-reason { font-size: 11.5px; color: var(--danger-dark); line-height: 1.35; min-width: 0; }
   .empty-note { padding: 26px; text-align: center; color: var(--muted); font-size: 13.5px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
   @media (max-width: 720px) {
     .client-row { display: block; }
@@ -1896,14 +1904,14 @@
     return `
       <div class="client-row" data-client-id="${c.id}">
         <div>
-          <div class="cr-name">${escapeHtml(c.name)}${overdue ? '<span class="overdue-badge">Overdue</span>' : ""}</div>
+          <div class="cr-name">${escapeHtml(c.name)}</div>
         </div>
         <div class="eng-tl-block">
           ${teamLead ? `<div><div class="eng-tl-caption">Team Lead</div><div class="eng-tl-name-row"><div class="avatar-sm">${teamLeadAvatar ? `<img src="${escapeHtml(teamLeadAvatar)}" alt="" />` : escapeHtml(initials(teamLead))}</div><span class="eng-tl-name">${escapeHtml(teamLead)}</span></div></div>` : `<span class="cr-meta">No Team Lead</span>`}
         </div>
         <div class="cr-start-date">${startDateText}</div>
         <div class="cr-days-in-progress">${lastCellHtml}</div>
-        <div class="cr-overdue-reason">${overdueReason ? escapeHtml(overdueReason) : ""}</div>
+        <div class="cr-overdue-cell">${overdue ? '<span class="overdue-badge">Overdue</span>' : ""}${overdueReason ? `<span class="cr-overdue-reason">${escapeHtml(overdueReason)}</span>` : ""}</div>
       </div>
     `;
   }
