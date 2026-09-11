@@ -1054,6 +1054,12 @@
             </div>
 
             <div class="wizard-subcard">
+              <div class="subcard-title">Copied on Correspondence</div>
+              <div class="card-hint" style="margin-top:-6px;">Contacts at this engagement's Program who get copied on its emails. Chosen when the application was accepted &mdash; change it here if this engagement's circle is different.</div>
+              <div id="engagement-cc-section"><div class="field-hint">Loading&hellip;</div></div>
+            </div>
+
+            <div class="wizard-subcard">
               <div class="subcard-title">Team Members</div>
               <div class="card-hint" style="margin-top:-6px;">Managed from Assignments &amp; Hours on the Client Workspace page.</div>
               <span class="accordion-count" id="team-count" style="display:inline-block; margin-bottom:10px;"></span>
@@ -1653,6 +1659,7 @@
     renderListSections();
     await Promise.all(LIST_CONFIGS.map((cfg) => loadListSection(cfg)));
     await loadPartnerContactsSection();
+    await loadEngagementCcSection();
     await loadResourceVault(client.id);
 
     // Deep links from other pages (?section=next_steps, ?section=contacts,
@@ -2416,6 +2423,95 @@
   // managed on the Econ Dev Partners page, and get selected in per client
   // via client_team_partner_contacts. Only the ones checked here show on the
   // public dashboard's combined Economic Gardening Team list (Section 041).
+  // Who's copied on THIS engagement's correspondence -- client_cc_contacts,
+  // set when the application was accepted (Chris/Rita, 9/11/26). Same shape as
+  // the partner-contacts picker below, deliberately: they answer neighbouring
+  // questions and shouldn't look like two different features.
+  //
+  // Editable here, not just displayed. RLS lets anyone assigned to the
+  // engagement write, so a Team Lead can correct their own list without
+  // waiting on Rita -- which is the point of moving it off the Program.
+  async function loadEngagementCcSection() {
+    const container = $("engagement-cc-section");
+    if (!container) return;
+
+    if (!currentClient.econ_dev_company_id) {
+      container.innerHTML = `<div class="field-hint">No Program is assigned to this engagement, so there are no contacts to copy.</div>`;
+      return;
+    }
+
+    const [{ data: partner }, { data: contacts, error: contactsErr }, { data: picks, error: pickErr }] = await Promise.all([
+      sb.from("econ_dev_companies").select("name").eq("id", currentClient.econ_dev_company_id).single(),
+      sb.from("econ_dev_partner_contacts").select("*").eq("partner_id", currentClient.econ_dev_company_id).eq("active", true).order("sort_order").order("created_at"),
+      sb.from("client_cc_contacts").select("partner_contact_id").eq("client_id", currentClient.id),
+    ]);
+
+    if (contactsErr || pickErr) {
+      container.innerHTML = `<div class="field-hint">Couldn't load the CC list: ${escapeHtml((contactsErr || pickErr).message)}</div>`;
+      return;
+    }
+
+    const pickedIds = new Set((picks || []).map((r) => r.partner_contact_id));
+    const named = (contacts || []).filter((c) => (c.name || "").trim());
+
+    if (!named.length) {
+      container.innerHTML = `<div class="field-hint">No contacts on file for ${escapeHtml(partner ? partner.name : "this Program")} yet. Add them from the <a href="econ_dev_partners_admin.html" target="_blank">Programs</a> page.</div>`;
+      return;
+    }
+
+    const picked = named.filter((c) => pickedIds.has(c.id));
+    // Program Administrators first in the picker -- they're who this list is
+    // normally drawn from, and the accept screen offers them first too.
+    const available = named.filter((c) => !pickedIds.has(c.id))
+      .sort((a, b) => (b.is_program_administrator ? 1 : 0) - (a.is_program_administrator ? 1 : 0));
+
+    const pickedHtml = picked.length
+      ? picked.map((c) => `
+          <div class="list-row">
+            <div class="list-row-main">
+              <div class="lr-title">${escapeHtml(c.name)}</div>
+              <div class="lr-sub">${[c.title, c.email, c.phone].filter(Boolean).map(escapeHtml).join(" · ") || "No email on file"}</div>
+            </div>
+            <button type="button" class="btn-danger icon-btn" data-remove-cc-id="${c.id}" title="Stop copying this contact">&times;</button>
+          </div>
+        `).join("")
+      : `<div class="list-empty">Nobody is copied on this engagement yet.</div>`;
+
+    const addHtml = available.length ? `
+      <div class="contacts-add-row" style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); display:flex; align-items:center; gap:8px;">
+        <select id="engagement-cc-picker" style="flex:1; padding:7px 9px; border:1px solid var(--border); border-radius:6px; font-size:13.5px;">
+          ${available.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}${c.title ? " — " + escapeHtml(c.title) : ""}${c.is_program_administrator ? " (Program Administrator)" : ""}</option>`).join("")}
+        </select>
+        <button type="button" class="btn-secondary btn-sm" id="engagement-cc-add-btn">+ Add</button>
+      </div>` : "";
+
+    container.innerHTML = pickedHtml + addHtml;
+
+    container.querySelectorAll("[data-remove-cc-id]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        const { error } = await sb.from("client_cc_contacts").delete()
+          .eq("client_id", currentClient.id).eq("partner_contact_id", btn.dataset.removeCcId);
+        if (error) { showBanner("Couldn't remove from the CC list: " + error.message, "error"); btn.disabled = false; return; }
+        await loadEngagementCcSection();
+      });
+    });
+
+    const addBtn = document.getElementById("engagement-cc-add-btn");
+    if (addBtn) {
+      addBtn.addEventListener("click", async () => {
+        const picker = document.getElementById("engagement-cc-picker");
+        if (!picker || !picker.value) return;
+        addBtn.disabled = true;
+        const { error } = await sb.from("client_cc_contacts")
+          .insert({ client_id: currentClient.id, partner_contact_id: picker.value });
+        addBtn.disabled = false;
+        if (error) { showBanner("Couldn't add to the CC list: " + error.message, "error"); return; }
+        await loadEngagementCcSection();
+      });
+    }
+  }
+
   async function loadPartnerContactsSection() {
     const container = $("partner-contacts-section");
     if (!container) return;

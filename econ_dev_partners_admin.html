@@ -301,7 +301,6 @@
   .pd-roles { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
   .pd-role { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text); cursor: pointer; white-space: nowrap; }
   .pd-role input { width: auto; margin: 0; accent-color: var(--navy); }
-  .pd-role-cc { padding-left: 9px; border-left: 1px solid var(--border); }
 
   /* Organisation and Notes live behind a toggle rather than as two more
      columns. Chris's doc carries them for most people (an office address, a
@@ -1018,7 +1017,8 @@
   // CATEGORY, mutually exclusive with the three real roles, so anyone who
   // both administered a Program and needed copying had to be entered twice.
   // Migration 112 split the two ideas apart: `category` is the role (these
-  // three), `include_on_cc` is a flag any contact in any role can carry.
+  // three). `include_on_cc` used to be a fourth flag here -- it was removed on
+  // 9/11/26; CC is chosen per engagement now, not per Program.
   // Roles a Program contact can hold. Flags, not one category: the same
   // person appears under several headings in Chris's contact doc, and Greg
   // (9/6/26) -- "a name can have multiple functions and be on the cc list."
@@ -1083,13 +1083,15 @@
         ${bind(r.field, c[r.field])}
         ${escapeHtml(r.short)}
       </label>`).join("");
+    // No CC tickbox here any more (Chris/Rita, 9/11/26). "Copy this person on
+    // everything this Program touches" is the behaviour Rita objected to -- a
+    // Team Lead emailing a Program about an engagement it has no part in. Who
+    // gets copied is now chosen per engagement when the application is
+    // accepted, and editable afterwards from Client Info
+    // (116_engagement_cc_contacts.sql).
     return `
         <div class="pd-roles">
           ${roles}
-          <label class="pd-role pd-role-cc" title="Include on this Program's CC list">
-            ${bind("include_on_cc", c.include_on_cc)}
-            CC
-          </label>
         </div>`;
   }
 
@@ -1988,12 +1990,13 @@
   // real role (112_program_contact_cc_flag.sql), so they turn up here for the
   // first time. "(CC)" marks them -- without it the export would state who
   // administers a Program but silently drop who gets copied, which is half
-  // of what Chris uses this sheet for (Greg, 9/6/26).
+  // of what Chris uses this sheet for (Greg, 9/6/26). The "(CC)" marker came
+  // off on 9/11/26 with the flag itself -- CC is a per-engagement decision
+  // now, so there is no Program-wide CC list for this sheet to report.
   function summarizeContactsForExport(partnerId, roleField) {
     return contactsForRole(partnerId, roleField)
       .map((c) => {
-        const summary = [c.name, c.title, c.address, c.email, c.phone, c.notes].filter((v) => v && String(v).trim()).join(" — ");
-        return c.include_on_cc ? `${summary} (CC)` : summary;
+        return [c.name, c.title, c.address, c.email, c.phone, c.notes].filter((v) => v && String(v).trim()).join(" — ");
       })
       .join(" | ");
   }
