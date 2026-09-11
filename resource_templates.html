@@ -116,6 +116,8 @@
   }
   #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
   #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  #userbox .user-email { color: #c9d6e3; font-size: 11px; opacity: 0.7; margin-left: 2px; white-space: nowrap; }
+  @media (max-width: 900px) { #userbox .user-email { display: none; } }
   button { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; }
   .btn-primary { background: var(--accent); color: #fff; }
   .btn-primary:hover { background: var(--accent-dark); }
@@ -366,7 +368,7 @@
         </div>
       </div>
       <span id="user-name"></span>
-      <span class="role-pill" id="user-role"></span>
+      <span class="role-pill" id="user-role"></span><span class="user-email" id="user-email" title="The account you are signed in as"></span>
       <div id="profile-wrap">
         <button class="btn-ghost" id="profile-btn" title="Account menu">
           <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
@@ -449,6 +451,24 @@
   // EG terminology: Consultant -> Specialist, Super Admin -> Admin.
   // The underlying role VALUES in the database ("consultant", "super_admin", etc.)
   // are unchanged -- only what is displayed on screen is remapped here.
+  // Which account am I signed in as? (Greg, 9/11/26 -- he holds three logins
+  // with the same name: Super Admin, Team Lead and Specialist. The role pill
+  // said "Specialist" but nothing said WHICH Specialist, and an assignment
+  // made under one login is invisible from another.)
+  //
+  // Read from the auth session rather than the users row, because the profile
+  // query on each page selects a different set of columns and most don't ask
+  // for email. The session always has it.
+  async function showSignedInEmail() {
+    const el = document.getElementById("user-email");
+    if (!el) return;
+    try {
+      const { data } = await sb.auth.getUser();
+      const email = data && data.user && data.user.email;
+      if (email) el.textContent = email;
+    } catch (e) { /* non-essential -- the name and role pill still show */ }
+  }
+
   function roleLabel(role) {
     return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
   }
@@ -552,6 +572,7 @@
     $("app-view").classList.remove("hidden");
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = roleLabel(profile.role);
+    showSignedInEmail();
     // Application Links and the whole Invoicing menu are Admin-only
     // (Greg, 9/6/26). Marked in the markup with data-super-admin-only so
     // this one line covers every nav copy on the page, including the

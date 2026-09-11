@@ -71,6 +71,8 @@
   .brand-subline { display: block; font-size: 12.5px; font-weight: 600; color: #c9d6e3; margin-top: 1px; }
   #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
   #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  #userbox .user-email { color: #c9d6e3; font-size: 11px; opacity: 0.7; margin-left: 2px; white-space: nowrap; }
+  @media (max-width: 900px) { #userbox .user-email { display: none; } }
 
   button, a.btn { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 9px 16px; font-weight: 600; transition: background 0.15s ease; text-decoration: none; display: inline-block; }
   .btn-primary { background: var(--accent); color: #fff; }
@@ -237,6 +239,14 @@
   #cm-program { font-size: 13.5px; color: var(--muted); margin-top: 4px; display: flex; align-items: center; gap: 6px; }
   #cm-program svg { color: var(--muted); flex-shrink: 0; }
   #cm-team-lead { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+  /* What THIS login is on THIS engagement (Greg, 9/11/26). The account role
+     pill in the header says "Specialist"; this says whether you are the Team
+     Lead here, which is what decides whether you can change anything. */
+  #cm-my-role { font-size: 12.5px; margin-top: 4px; display: inline-flex; align-items: center; gap: 6px;
+                padding: 2px 9px; border-radius: 999px; background: #eef2f7; color: var(--navy); font-weight: 600; }
+  #cm-my-role.is-off-team { background: #f4f5f7; color: var(--muted); font-weight: 500; }
+  .tw-manage-note { margin-top: 12px; padding: 9px 12px; border-radius: 8px; background: var(--bg);
+                    border: 1px solid var(--border); font-size: 12.5px; color: var(--muted); }
 
   /* Status-age dot -- green under 30 days in the current status, yellow
      under 60, red 60+. Only ever shown for In Progress, since that's the
@@ -710,7 +720,7 @@
         </div>
       </div>
       <span id="user-name"></span>
-      <span class="role-pill" id="user-role"></span>
+      <span class="role-pill" id="user-role"></span><span class="user-email" id="user-email" title="The account you are signed in as"></span>
       <div id="profile-wrap">
         <button class="btn-ghost" id="profile-btn" title="Account menu">
           <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
@@ -799,6 +809,7 @@
             <h2 id="cm-name"></h2>
             <div id="cm-program"></div>
             <div id="cm-team-lead"></div>
+            <div id="cm-my-role"></div>
             <span class="status-badge-wrap">
               <span class="status-dot hidden" id="cm-status-dot" title=""></span>
               <span class="badge hidden" id="cm-status-badge"></span>
@@ -966,6 +977,7 @@
   let isTeamLeadHere = false; // is currentUser the Team Lead on activeClient?
   let allUsers = [];
   let userSpecialties = {}; // user_id -> array of specialty keys
+  let nameCounts = {};      // full_name -> how many accounts carry it, hidden included
   let currentAssignments = [];
   let activePane = "team"; // the one native pane that swaps in place (the rest are iframed)
   // Greg (8/30/26): the overdue delay-reason box is Team & Hours-specific
@@ -995,6 +1007,24 @@
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
   // EG terminology: Consultant -> Specialist, Super Admin -> Admin.
+  // Which account am I signed in as? (Greg, 9/11/26 -- he holds three logins
+  // with the same name: Super Admin, Team Lead and Specialist. The role pill
+  // said "Specialist" but nothing said WHICH Specialist, and an assignment
+  // made under one login is invisible from another.)
+  //
+  // Read from the auth session rather than the users row, because the profile
+  // query on each page selects a different set of columns and most don't ask
+  // for email. The session always has it.
+  async function showSignedInEmail() {
+    const el = document.getElementById("user-email");
+    if (!el) return;
+    try {
+      const { data } = await sb.auth.getUser();
+      const email = data && data.user && data.user.email;
+      if (email) el.textContent = email;
+    } catch (e) { /* non-essential -- the name and role pill still show */ }
+  }
+
   function roleLabel(role) {
     return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
   }
@@ -1018,7 +1048,7 @@
   }
   function userLabel(u) {
     if (!u) return "";
-    const collides = allUsers.filter((x) => x.full_name === u.full_name).length > 1;
+    const collides = (nameCounts[(u.full_name || "").trim()] || 0) > 1;
     if (!collides) return u.full_name;
     const descriptor = specialtyDescriptor(u);
     const label = `${u.full_name} — ${descriptor}`;
@@ -1222,6 +1252,7 @@
     maybeShowAiNudge();
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = roleLabel(profile.role);
+    showSignedInEmail();
     // Application Links and the whole Invoicing menu are Admin-only
     // (Greg, 9/6/26). Marked in the markup with data-super-admin-only so
     // this one line covers every nav copy on the page, including the
@@ -1247,12 +1278,23 @@
   });
 
   async function loadUsers() {
-    const [{ data, error }, { data: specialtyRows, error: specErr }] = await Promise.all([
+    const [{ data, error }, { data: specialtyRows, error: specErr }, { data: nameRows }] = await Promise.all([
       sb.from("users").select("id, full_name, role, email").eq("hidden_from_roster", false).order("full_name"),
       sb.from("user_specialties").select("user_id, specialty"),
+      // Every account's name, hidden ones included. A duplicated name has to
+      // show its email even when only ONE of the duplicates is on the visible
+      // roster -- otherwise the picker offers a bare "Greg Gotcher" that is
+      // silently one of three logins, which is exactly how JLR ended up
+      // assigned to an account Greg never signs into (9/11/26).
+      sb.from("users").select("full_name"),
     ]);
     if (error) return;
     allUsers = data;
+    nameCounts = {};
+    (nameRows || data).forEach((u) => {
+      const n = (u.full_name || "").trim();
+      if (n) nameCounts[n] = (nameCounts[n] || 0) + 1;
+    });
     userSpecialties = {};
     if (!specErr) {
       (specialtyRows || []).forEach((r) => {
@@ -1319,15 +1361,21 @@
 
     const { data: assignRows } = await sb
       .from("client_assignments")
-      .select("is_team_lead, user_id, users(full_name)")
+      .select("is_team_lead, user_id, specialty_type, users(full_name, email)")
       .eq("client_id", client.id)
       .not("user_id", "is", null);
     let teamLead = null;
+    teamLeadContact = null;
     for (const r of assignRows || []) {
-      if (r.is_team_lead && r.users && r.users.full_name) { teamLead = r.users.full_name; break; }
+      if (r.is_team_lead && r.users && r.users.full_name) {
+        teamLead = r.users.full_name;
+        teamLeadContact = { name: r.users.full_name, email: r.users.email || "" };
+        break;
+      }
     }
     $("cm-team-lead").textContent = `Team Lead: ${teamLead || "—"}`;
     isTeamLeadHere = (assignRows || []).some((r) => r.is_team_lead && r.user_id === currentUser.id);
+    renderMyRoleHere(assignRows || []);
     renderStatusToggle(client);
 
     renderNav(client);
@@ -1933,7 +1981,7 @@
   // area anyway and specialty text wouldn't disambiguate them.
   function consultantOptionLabel(u) {
     if (!u) return "";
-    const collides = allUsers.filter((x) => x.full_name === u.full_name).length > 1;
+    const collides = (nameCounts[(u.full_name || "").trim()] || 0) > 1;
     if (!collides) return u.full_name;
     return u.email ? `${u.full_name} (${u.email})` : `${u.full_name} — ${specialtyDescriptor(u)}`;
   }
@@ -1963,6 +2011,30 @@
     isTeamLeadHere = isTeamLeadHere || currentAssignments.some((r) => r.user_id === currentUser.id && r.is_team_lead);
   }
 
+  // "Your role here" -- the single line that would have saved Greg an hour on
+  // 9/11/26. He has three logins sharing one name; the header role pill named
+  // the account type but nothing said whether THIS login was on THIS
+  // engagement's team, which is what governs the edit controls below.
+  let teamLeadContact = null;
+  function renderMyRoleHere(assignRows) {
+    const el = $("cm-my-role");
+    if (!el) return;
+    const mine = assignRows.filter((r) => r.user_id === currentUser.id);
+    const labels = mine.map((r) => SPECIALTY_LABELS[r.specialty_type] || r.specialty_type);
+    el.classList.remove("is-off-team");
+
+    if (mine.length) {
+      el.textContent = `You here: ${[...new Set(labels)].join(", ")}`;
+    } else if (isSuperAdmin) {
+      // Admins can edit everything without being on the team at all -- say so
+      // rather than "not on this team", which would read as a warning.
+      el.textContent = "You here: Super Admin (not on this team)";
+    } else {
+      el.textContent = "You here: not on this engagement's team";
+      el.classList.add("is-off-team");
+    }
+  }
+
   function renderTeamPane() {
     const c = activeClient;
     if (!c) return;
@@ -1972,9 +2044,36 @@
     $("tw-summary-error").style.display = "none";
     $("tw-add-row-btn").classList.toggle("hidden", !canManage);
     $("tw-actions-header").classList.toggle("hidden", !canManage);
+    renderManageNote(canManage, editable);
 
     renderTeamTable(canManage);
     recalcTeamStats();
+  }
+
+  // When the assignment controls aren't there, say who they belong to. Before
+  // this the table just went quiet, which reads as a bug rather than a
+  // permission (Greg, 9/11/26: "i can't add a resource on the hours page").
+  function renderManageNote(canManage, editable) {
+    let el = document.getElementById("tw-manage-note");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "tw-manage-note";
+      el.className = "tw-manage-note";
+      const btn = $("tw-add-row-btn");
+      btn.parentNode.insertBefore(el, btn);
+    }
+    if (canManage) { el.classList.add("hidden"); return; }
+    el.classList.remove("hidden");
+
+    if (!editable) {
+      const why = activeClient && activeClient.project_status === "closed" ? "closed" : "On Hold";
+      el.textContent = `This engagement is ${why}, so its team and hours are locked. A Super Admin can still make changes.`;
+      return;
+    }
+    const tl = teamLeadContact
+      ? `${teamLeadContact.name}${teamLeadContact.email ? ` (${teamLeadContact.email})` : ""}`
+      : "this engagement's Team Lead";
+    el.textContent = `Only ${tl} or a Super Admin can change who's assigned here. You can still log your own hours.`;
   }
 
   function renderTeamTable(canManage) {
