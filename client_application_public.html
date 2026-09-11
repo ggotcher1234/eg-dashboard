@@ -399,8 +399,29 @@
     $("banner").textContent = "";
   }
 
+  // Which Program is this application for? Mirrors resolveSlug() in
+  // client_public.html, for the same reason.
+  function resolveProgramCode() {
+    // ?program= always wins when present -- every link generated before the
+    // short form existed looks like this, and they are permanent, printed
+    // and forwarded. They must keep working forever.
+    const qs = new URLSearchParams(location.search).get("program");
+    if (qs) return qs;
+
+    // The short /apply/<code> link (netlify.toml rewrites /apply/:code to
+    // /client_application_public.html?program=:code) is a server-side
+    // rewrite: Netlify serves this page's bytes for that request, but the
+    // browser's address bar -- and so location.search -- still shows
+    // /apply/<code> and never the rewritten query string. So the page has to
+    // recognise its own short-link path directly.
+    const m = location.pathname.match(/^\/apply\/([^/]+)\/?$/);
+    if (m) return decodeURIComponent(m[1]);
+
+    return null;
+  }
+
   async function init() {
-    const programCode = new URLSearchParams(location.search).get("program");
+    const programCode = resolveProgramCode();
     if (!programCode) {
       $("loading-view").classList.add("hidden");
       $("invalid-view").classList.remove("hidden");

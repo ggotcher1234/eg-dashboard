@@ -11,3 +11,28 @@
   from = "/c/:slug"
   to = "/client_public.html?slug=:slug"
   status = 200
+
+# Greg (9/11/26): "the client application links are permanent and probably
+# worth creating a designer link that looks more professional." Shortens
+#   /client_application_public.html?program=ALLOY
+# to
+#   /apply/alloy
+# Same shape and the same status 200 as /c/:slug above -- a rewrite, not a
+# redirect, so the browser keeps showing the short URL instead of flashing
+# over to the long one. That is the whole point of a link a Program prints
+# on a flyer.
+#
+# status 200 means this page's JS never sees ?program= (the address bar, and
+# so location.search, still say /apply/alloy), which is why
+# client_application_public.html reads the code off its own path too --
+# resolveProgramCode() there, mirroring resolveSlug() in client_public.html.
+#
+# The code is matched case-insensitively in the database
+# (get_public_program_by_code lowercases both sides), so /apply/alloy,
+# /apply/ALLOY and /apply/Alloy all reach the same Program.
+#
+# Purely additive: every ?program= link already in the wild keeps working.
+[[redirects]]
+  from = "/apply/:code"
+  to = "/client_application_public.html?program=:code"
+  status = 200
