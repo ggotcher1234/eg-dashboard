@@ -297,7 +297,7 @@
      run 8px 14px padding at 13.5px text; this list used cards-y 14px 18px
      padding, which read noticeably looser sitting right above/below it. */
   .client-row {
-    display: grid; grid-template-columns: 2fr 1.4fr 130px 1.6fr; align-items: center; gap: 10px;
+    display: grid; grid-template-columns: 2fr 1.4fr 130px 1.1fr 1.5fr; align-items: center; gap: 10px;
     padding: 9px 14px; cursor: pointer; border-bottom: 1px solid var(--border);
     transition: background 0.15s ease;
   }
@@ -307,7 +307,7 @@
      labeled, since Engagement/Team Lead are already self-evident from the
      row content itself. */
   .eng-list-header {
-    display: grid; grid-template-columns: 2fr 1.4fr 130px 1.6fr; gap: 10px;
+    display: grid; grid-template-columns: 2fr 1.4fr 130px 1.1fr 1.5fr; gap: 10px;
     padding: 0 14px 6px;
   }
   .eng-col-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); }
@@ -342,7 +342,11 @@
   /* Overdue delay reason (Chris, 9/4/26) -- the Team Lead's own note on
      why an Overdue engagement is stuck, same text as the box on Client
      Control Center's Team & Hours pane (clients.delay_reason). */
-  .cr-overdue-reason { font-size: 11.5px; color: var(--danger-dark); margin-top: 3px; line-height: 1.35; }
+  /* Its own column on the right of the row, not a second line under the
+     engagement name (Greg, 9/11/26, from the review). Under the name it
+     pushed every other row's height around and buried the reason in the
+     one place the eye had already left. */
+  .cr-overdue-reason { font-size: 11.5px; color: var(--danger-dark); line-height: 1.35; }
   .empty-note { padding: 26px; text-align: center; color: var(--muted); font-size: 13.5px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
   @media (max-width: 720px) {
     .client-row { display: block; }
@@ -368,10 +372,17 @@
      shown for In Progress rows; other statuses don't carry the same
      "should be moving" expectation. */
   .status-pill { display: inline-flex; align-items: center; gap: 6px; }
-  .status-dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
-  .status-dot-green { background: var(--accent); }
-  .status-dot-yellow { background: var(--amber); }
-  .status-dot-red { background: var(--danger); }
+  /* Two states, not three (Greg, 9/11/26, from the Chris/Rita review): red
+     means Overdue, green means it isn't. The old green/amber/red gradient
+     implied a 30-day warning tier that nothing in the process acts on, and
+     amber at 45 days read as a problem when there wasn't one.
+     Brighter than the muted --accent/--danger used for text and badges --
+     these are 8px dots competing with a whole row, and Greg asked for them
+     to stand out. Kept to the same hues so they still read as the app's
+     palette rather than stoplight stickers. */
+  .status-dot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; }
+  .status-dot-green { background: #4ca82f; box-shadow: 0 0 0 2px rgba(76, 168, 47, 0.18); }
+  .status-dot-red   { background: #e0342b; box-shadow: 0 0 0 2px rgba(224, 52, 43, 0.18); }
 
   @media (max-width: 720px) {
     .client-row { flex-wrap: wrap; row-gap: 10px; }
@@ -818,6 +829,7 @@
           <div></div>
           <div class="eng-col-title">Start Date</div>
           <div class="eng-col-title" id="eng-col-days">Days in Progress</div>
+          <div class="eng-col-title" id="eng-col-why">Why Overdue</div>
         </div>
         <div id="engagements-list"></div>
         <div id="engagements-empty" class="empty-note hidden" style="border:none; box-shadow:none; margin:0;">You're not assigned to any engagements yet.</div>
@@ -1278,6 +1290,9 @@
     // clock it counts from stopped. The column shows when it closed instead.
     const daysCol = $("eng-col-days");
     if (daysCol) daysCol.textContent = "Closed";
+    // A closed engagement is never overdue, so that column is dead weight here.
+    const whyCol = $("eng-col-why");
+    if (whyCol) whyCol.textContent = "";
   }
 
   // ---------- Notifications (Super Admin only) ----------
@@ -1826,12 +1841,20 @@
   // status_since (051_engagement_status_tracking.sql) which restarts on
   // every status change. status_since is kept only as a fallback for rows
   // from before 086 backfilled first_in_progress_at.
+  // One definition of "overdue", used by the badge, the dot and Needs
+  // Attention alike.
+  const OVERDUE_DAYS = 60;
+
   function statusAgeDotHtml(c) {
     const since = c.first_in_progress_at || c.status_since;
     if (c.project_status !== "in_progress" || !since) return "";
     const days = Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / (1000 * 60 * 60 * 24)));
-    const tier = days >= 60 ? "red" : days >= 30 ? "yellow" : "green";
-    return `<span class="status-dot status-dot-${tier}" title="In Progress for ${days} day${days === 1 ? "" : "s"}"></span>`;
+    // Red at the same 60-day line the OVERDUE badge uses, so the dot and the
+    // badge can never disagree on screen -- which is what made a 66-day
+    // engagement look wrong in the review.
+    const tier = days >= OVERDUE_DAYS ? "red" : "green";
+    const label = days >= OVERDUE_DAYS ? "Overdue" : "On schedule";
+    return `<span class="status-dot status-dot-${tier}" title="${label} — in Progress for ${days} day${days === 1 ? "" : "s"}"></span>`;
   }
 
   function clientRowHtml(c) {
@@ -1846,7 +1869,7 @@
     // way until the engagement is actually closed" (Greg, 8/29/26). This is
     // the exact list Chris is working from, so it needs to be impossible to
     // miss (Greg, 8/27/26).
-    const overdue = c.project_status !== "closed" && daysSince(c.first_in_progress_at || c.status_since) >= 60;
+    const overdue = c.project_status !== "closed" && daysSince(c.first_in_progress_at || c.status_since) >= OVERDUE_DAYS;
     // Overdue delay reason (Chris, 9/4/26) -- the Team Lead's answer to
     // "why is it taking longer than expected?" (clients.delay_reason,
     // entered in the Overdue box on client_control_center.html) shown
@@ -1874,13 +1897,13 @@
       <div class="client-row" data-client-id="${c.id}">
         <div>
           <div class="cr-name">${escapeHtml(c.name)}${overdue ? '<span class="overdue-badge">Overdue</span>' : ""}</div>
-          ${overdueReason ? `<div class="cr-overdue-reason">${escapeHtml(overdueReason)}</div>` : ""}
         </div>
         <div class="eng-tl-block">
           ${teamLead ? `<div><div class="eng-tl-caption">Team Lead</div><div class="eng-tl-name-row"><div class="avatar-sm">${teamLeadAvatar ? `<img src="${escapeHtml(teamLeadAvatar)}" alt="" />` : escapeHtml(initials(teamLead))}</div><span class="eng-tl-name">${escapeHtml(teamLead)}</span></div></div>` : `<span class="cr-meta">No Team Lead</span>`}
         </div>
         <div class="cr-start-date">${startDateText}</div>
         <div class="cr-days-in-progress">${lastCellHtml}</div>
+        <div class="cr-overdue-reason">${overdueReason ? escapeHtml(overdueReason) : ""}</div>
       </div>
     `;
   }
