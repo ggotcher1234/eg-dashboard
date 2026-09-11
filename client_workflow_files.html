@@ -681,6 +681,15 @@
         No contact email found on file for this client — add the CEO's email in Company Contacts, or type it in above.
       </div>
       <div class="field">
+        <label>Cc</label>
+        <!-- A textarea, not a single-line input like To: five or more
+             addresses scroll straight out of a one-line field, and the whole
+             point of a pre-filled CC list is that the Team Lead can SEE who
+             is being copied before they send. -->
+        <textarea id="eem-cc" rows="3"></textarea>
+        <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">Team Lead, the Program&rsquo;s Administrators, this engagement&rsquo;s CC list, Chris and Rita. Edit freely before sending.</div>
+      </div>
+      <div class="field">
         <label>Subject</label>
         <input type="text" id="eem-subject" />
       </div>
@@ -712,6 +721,15 @@
       </div>
       <div id="cdem-no-contact" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
         No contact email found on file for this client — add the CEO's email in Company Contacts, or type it in above.
+      </div>
+      <div class="field">
+        <label>Cc</label>
+        <!-- A textarea, not a single-line input like To: five or more
+             addresses scroll straight out of a one-line field, and the whole
+             point of a pre-filled CC list is that the Team Lead can SEE who
+             is being copied before they send. -->
+        <textarea id="cdem-cc" rows="3"></textarea>
+        <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">Team Lead, the Program&rsquo;s Administrators, this engagement&rsquo;s CC list, Chris and Rita. Edit freely before sending.</div>
       </div>
       <div class="field">
         <label>Subject</label>
@@ -1127,8 +1145,71 @@
       .not("user_id", "is", null)
       .order("is_team_lead", { ascending: false });
     listData.team = team || [];
+
+    // Everyone who gets copied on a customer email (Greg, 9/11/26):
+    // "all customer emails should cc the team leader, PA and assigned cc
+    // list, cgibbons@economicgardening.org and rbenson@economicgardening.org"
+    //
+    // The assigned CC list is client_cc_contacts -- chosen per engagement
+    // when the application was accepted (116_engagement_cc_contacts.sql) and
+    // editable on Client Info. The PAs are the Program's own Program
+    // Administrators, which is a wider set: someone can be a PA on the
+    // Program without having been ticked for this engagement, and Greg wants
+    // both. Both sets are Program contacts, so the dedupe below collapses
+    // the overlap.
+    const programId = currentClient && currentClient.econ_dev_company_id;
+    if (programId) {
+      const [{ data: admins }, { data: ccRows }] = await Promise.all([
+        sb.from("econ_dev_partner_contacts").select("id, name, email")
+          .eq("partner_id", programId).eq("active", true).eq("is_program_administrator", true),
+        sb.from("client_cc_contacts").select("econ_dev_partner_contacts(id, name, email)")
+          .eq("client_id", clientId),
+      ]);
+      listData.programAdmins = admins || [];
+      listData.ccContacts = (ccRows || []).map((r) => r.econ_dev_partner_contacts).filter(Boolean);
+    } else {
+      listData.programAdmins = [];
+      listData.ccContacts = [];
+    }
   }
   const listData = {};
+
+  // ---------- Customer email CC list (Greg, 9/11/26) ----------
+  // "all customer emails should cc the team leader, PA and assigned cc list,
+  // cgibbons@economicgardening.org and rbenson@economicgardening.org"
+  //
+  // Chris and Rita are on every customer email regardless of Program, so they
+  // are constants here rather than data -- if that ever stops being true it
+  // becomes a row in organization_settings, but two hard-coded addresses beat
+  // a settings screen nobody will find.
+  const CUSTOMER_CC_ALWAYS = ["cgibbons@economicgardening.org", "rbenson@economicgardening.org"];
+
+  // Built in Greg's stated order -- Team Lead, PAs, assigned CC list, then
+  // Chris and Rita -- and deduped case-insensitively while keeping the first
+  // spelling of each address. `exclude` drops anyone already in the To field,
+  // so the CEO is never both addressee and copy.
+  function customerCcList(exclude) {
+    const excluded = new Set((exclude || "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean));
+    const teamRows = listData.team || [];
+    const lead = teamRows.find((r) => r.is_team_lead && r.users && r.users.email);
+    const emails = [
+      lead ? lead.users.email : "",
+      ...(listData.programAdmins || []).map((c) => c && c.email),
+      ...(listData.ccContacts || []).map((c) => c && c.email),
+      ...CUSTOMER_CC_ALWAYS,
+    ];
+    const seen = new Set();
+    const out = [];
+    for (const raw of emails) {
+      const email = (raw || "").trim();
+      if (!email) continue;
+      const key = email.toLowerCase();
+      if (seen.has(key) || excluded.has(key)) continue;
+      seen.add(key);
+      out.push(email);
+    }
+    return out.join(", ");
+  }
 
   // ---------- Customer email subject line (Greg, 9/11/26) ----------
   // "All customer emails should use the same subject-line hierarchy as
@@ -1648,6 +1729,7 @@
     $("eem-no-contact").classList.toggle("hidden", !!(ceoContact && ceoContact.email));
 
     const ceoFirstName = ceoContact && ceoContact.name ? ceoContact.name.split(" ")[0] : "there";
+    $("eem-cc").value = customerCcList($("eem-to").value);
     $("eem-subject").value = customerSubject("Close-Out Survey", "for completion");
     const sponsorLine = programName
       ? `It also gets shared with ${programName}, your program sponsor, so it carries real weight heading into that conversation.`
@@ -1675,9 +1757,17 @@ ${teamLeadName || teamLeadFirstName || "Your EG Team Lead"}`;
     $("eval-email-overlay").classList.add("open");
   }
 
+  // mailto takes cc as a query parameter, and the address list inside it has
+  // to be comma-separated with each address encoded on its own -- encoding the
+  // whole string would turn the separators into %2C and Outlook would read it
+  // as one malformed recipient.
+  function addressParam(value) {
+    return (value || "").split(",").map((s) => s.trim()).filter(Boolean).map(encodeURIComponent).join(",");
+  }
+
   function updateEvalEmailMailto() {
-    const toParam = $("eem-to").value.split(",").map((s) => s.trim()).filter(Boolean).map(encodeURIComponent).join(",");
-    $("eem-mailto-btn").href = `mailto:${toParam}?subject=${encodeURIComponent($("eem-subject").value)}&body=${encodeURIComponent($("eem-body-text").value)}`;
+    const cc = addressParam($("eem-cc").value);
+    $("eem-mailto-btn").href = `mailto:${addressParam($("eem-to").value)}?${cc ? `cc=${cc}&` : ""}subject=${encodeURIComponent($("eem-subject").value)}&body=${encodeURIComponent($("eem-body-text").value)}`;
   }
 
   $("eem-close").addEventListener("click", () => $("eval-email-overlay").classList.remove("open"));
@@ -1685,10 +1775,11 @@ ${teamLeadName || teamLeadFirstName || "Your EG Team Lead"}`;
     if (e.target === $("eval-email-overlay")) $("eval-email-overlay").classList.remove("open");
   });
   $("eem-to").addEventListener("input", updateEvalEmailMailto);
+  $("eem-cc").addEventListener("input", updateEvalEmailMailto);
   $("eem-subject").addEventListener("input", updateEvalEmailMailto);
   $("eem-body-text").addEventListener("input", updateEvalEmailMailto);
   $("eem-copy-btn").addEventListener("click", async () => {
-    const text = `To: ${$("eem-to").value}\nSubject: ${$("eem-subject").value}\n\n${$("eem-body-text").value}`;
+    const text = `To: ${$("eem-to").value}\nCc: ${$("eem-cc").value}\nSubject: ${$("eem-subject").value}\n\n${$("eem-body-text").value}`;
     try {
       await navigator.clipboard.writeText(text);
       showBanner("Email text copied — paste it into your email client.", "success");
@@ -1831,6 +1922,7 @@ ${teamLeadName || teamLeadFirstName || "Your EG Team Lead"}`;
     $("cdem-no-contact").classList.toggle("hidden", !!(ceoContact && ceoContact.email));
 
     const ceoFirstName = ceoContact && ceoContact.name ? ceoContact.name.split(" ")[0] : "there";
+    $("cdem-cc").value = customerCcList($("cdem-to").value);
     $("cdem-subject").value = customerSubject("Controlling Document", "for review");
     $("cdem-body-text").value = `Hi ${ceoFirstName},
 
@@ -1850,8 +1942,8 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
   }
 
   function updateControllingEmailMailto() {
-    const toParam = $("cdem-to").value.split(",").map((s) => s.trim()).filter(Boolean).map(encodeURIComponent).join(",");
-    $("cdem-mailto-btn").href = `mailto:${toParam}?subject=${encodeURIComponent($("cdem-subject").value)}&body=${encodeURIComponent($("cdem-body-text").value)}`;
+    const cc = addressParam($("cdem-cc").value);
+    $("cdem-mailto-btn").href = `mailto:${addressParam($("cdem-to").value)}?${cc ? `cc=${cc}&` : ""}subject=${encodeURIComponent($("cdem-subject").value)}&body=${encodeURIComponent($("cdem-body-text").value)}`;
   }
 
   $("cdem-close").addEventListener("click", () => $("cd-email-overlay").classList.remove("open"));
@@ -1859,10 +1951,11 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     if (e.target === $("cd-email-overlay")) $("cd-email-overlay").classList.remove("open");
   });
   $("cdem-to").addEventListener("input", updateControllingEmailMailto);
+  $("cdem-cc").addEventListener("input", updateControllingEmailMailto);
   $("cdem-subject").addEventListener("input", updateControllingEmailMailto);
   $("cdem-body-text").addEventListener("input", updateControllingEmailMailto);
   $("cdem-copy-btn").addEventListener("click", async () => {
-    const text = `To: ${$("cdem-to").value}\nSubject: ${$("cdem-subject").value}\n\n${$("cdem-body-text").value}`;
+    const text = `To: ${$("cdem-to").value}\nCc: ${$("cdem-cc").value}\nSubject: ${$("cdem-subject").value}\n\n${$("cdem-body-text").value}`;
     try {
       await navigator.clipboard.writeText(text);
       showBanner("Email text copied — paste it into your email client.", "success");
