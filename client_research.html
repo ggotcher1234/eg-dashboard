@@ -207,6 +207,24 @@
   .rq-doc-order-btns { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
   .rq-move-btn { padding: 0 6px; font-size: 9px; line-height: 1.5; }
   .rq-move-btn:disabled { opacity: 0.25; cursor: default; }
+  /* Greg (9/11/26): "make the question box larger to show the entire
+     question." Research questions are full sentences -- "Which market
+     segments, applications, and Clippard product families offer the..." --
+     and a one-line input showed the first half of one. A textarea that sizes
+     itself to its content (autosizeQuestion below) shows all of it without
+     making short questions take up three lines each.
+     The row aligns to the top, not centre, so the delete button stays beside
+     the FIRST line of a three-line question rather than floating to its
+     middle. */
+  .rq-question-row { align-items: flex-start; }
+  .rq-question-input {
+    flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13.5px; font-family: inherit; line-height: 1.45;
+    background: #fff; color: var(--text); resize: none; overflow: hidden;
+    display: block;
+  }
+  .rq-question-input:focus { outline: none; border-color: var(--navy-light); }
+  .rq-question-row .icon-btn { margin-top: 1px; }
   .rq-add-row { display: flex; gap: 8px; margin-top: 6px; }
   .rq-link-form { display: none; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); align-items: flex-end; }
   .rq-link-form.open { display: flex; }
@@ -1148,7 +1166,14 @@
         });
         if (!wasOpen) {
           hdr.classList.add("open");
-          $(`ra-${hdr.dataset.raAccordion}-body`).classList.add("open");
+          const body = $(`ra-${hdr.dataset.raAccordion}-body`);
+          body.classList.add("open");
+          // The question textareas size themselves from scrollHeight, which
+          // reads 0 inside a display:none accordion -- every area but the
+          // open one is rendered collapsed, so they'd all come back as a
+          // zero-height sliver the first time they're expanded. Re-measure
+          // now that the body actually has a box.
+          body.querySelectorAll(".rq-question-input").forEach(autosizeQuestion);
           openResearchArea = hdr.dataset.raAccordion;
         } else {
           openResearchArea = null;
@@ -1207,11 +1232,12 @@
       el.innerHTML = `<div class="field-hint" style="margin-bottom:10px;">No research questions yet — these are what the CEO close-out survey asks about.</div>`;
     } else {
       el.innerHTML = questions.map((q) => `
-        <div class="rq-doc-row">
-          <input type="text" class="row-input-edit rq-question-input" data-question-id="${q.id}" value="${escapeHtml(q.question || "")}" placeholder="e.g. Who are our fastest-growing competitors?" style="flex:1; padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13.5px; font-family:inherit;" />
+        <div class="rq-doc-row rq-question-row">
+          <textarea class="row-input-edit rq-question-input" rows="1" data-question-id="${q.id}" placeholder="e.g. Who are our fastest-growing competitors?">${escapeHtml(q.question || "")}</textarea>
           <button type="button" class="btn-danger icon-btn" data-delete-question="${q.id}" title="Delete">&times;</button>
         </div>
       `).join("");
+      el.querySelectorAll(".rq-question-input").forEach(autosizeQuestion);
       wireQuestionHandlers(el, area);
     }
     updateAreaAddButtonsState(area);
@@ -1234,16 +1260,44 @@
     });
   }
 
+  // Height follows content. Two things this has to get right:
+  //
+  //  1. Reset to auto first. scrollHeight only ever reports the CURRENT
+  //     height or more, so a question edited down from three lines to one
+  //     would keep all three.
+  //  2. Account for box-sizing. This page sets `* { box-sizing: border-box }`,
+  //     and scrollHeight measures content + padding -- no border. Assigning it
+  //     straight to a border-box height leaves the content box 2px short and
+  //     the last line stays clipped, which is the whole bug we are fixing.
+  //     So add the borders back under border-box, and subtract the padding
+  //     under content-box.
+  function autosizeQuestion(el) {
+    el.style.height = "auto";
+    const cs = getComputedStyle(el);
+    const adjust = cs.boxSizing === "border-box"
+      ? parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth)
+      : -(parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom));
+    el.style.height = (el.scrollHeight + adjust) + "px";
+  }
+
   function wireQuestionHandlers(scopeEl, area) {
     scopeEl.querySelectorAll(".rq-question-input").forEach((inp) => {
       const original = inp.value;
+      inp.addEventListener("input", () => autosizeQuestion(inp));
+      // A question is one sentence, not a paragraph, so Enter commits it the
+      // way it did when this was an <input> -- blur runs the save below.
+      // Shift+Enter still breaks a line for anyone who wants one.
+      inp.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); inp.blur(); }
+      });
       inp.addEventListener("blur", async () => {
         const value = inp.value.trim();
         if (value === original) return;
         const { error } = await sb.from("client_research_questions").update({ question: value || null }).eq("id", inp.dataset.questionId);
-        if (error) { showBanner("Couldn't save question: " + error.message, "error"); inp.value = original; return; }
+        if (error) { showBanner("Couldn't save question: " + error.message, "error"); inp.value = original; autosizeQuestion(inp); return; }
         const q = allQuestions.find((x) => x.id === inp.dataset.questionId);
         if (q) q.question = value || null;
+        autosizeQuestion(inp);
         updateAreaAddButtonsState(area);
       });
     });
