@@ -156,7 +156,12 @@ Deno.serve(async (req: Request) => {
       year_founded: numOrNull(incomingData["f-year-founded"]),
       website: strOrNull(incomingData["f-website"]),
       country: strOrNull(incomingData["f-country"]) ?? "United States",
-      // Blank stays null, so the internal view still shows "Add Ownership...".
+      // "Private or Public?" was taken off the public form in the 9/11/26
+      // Chris/Rita review, so nothing sends this any more and it lands null.
+      // The mapping stays rather than being deleted: the column and the
+      // internal view's row are still there for applications collected
+      // before the change, and if the question ever comes back this function
+      // doesn't need redeploying to accept it again.
       is_private: incomingData["f-is-private"] === "private" ? true
                 : incomingData["f-is-private"] === "public" ? false
                 : null,
