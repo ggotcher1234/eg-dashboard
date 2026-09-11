@@ -1023,11 +1023,18 @@
   // person appears under several headings in Chris's contact doc, and Greg
   // (9/6/26) -- "a name can have multiple functions and be on the cc list."
   // Each is a boolean column from 112_program_contacts_and_address.sql.
+  //
+  // Three roles, in Chris's words (9/11/26 review): Signer, PA, Finance.
+  // Greg: "combine Primary and Admin into one and label it PA." Primary
+  // Contact was never a job title -- in practice the Program Administrator IS
+  // who you call first, so the two tickboxes said the same thing and invited
+  // disagreement between them. Merged into is_program_administrator by
+  // 117_merge_primary_into_pa.sql; the old column is still there, just no
+  // longer offered.
   const CONTACT_ROLES = [
-    { field: "is_primary_contact",       short: "Primary", label: "Primary Contact" },
-    { field: "is_program_administrator", short: "Admin",   label: "Program Administrator" },
-    { field: "is_program_finance",       short: "Finance", label: "Program Finance" },
     { field: "is_contract_signer",       short: "Signer",  label: "Contract Signer" },
+    { field: "is_program_administrator", short: "PA",      label: "Program Administrator — also the first person to call" },
+    { field: "is_program_finance",       short: "Finance", label: "Program Finance" },
   ];
 
   // Regional Directors are the same table with is_regional_director set and a
@@ -1039,13 +1046,6 @@
   // one person holding three roles is one row that shows in all three columns.
   function contactsForRole(partnerId, field) {
     return contactsForPartner(partnerId).filter((c) => c[field]);
-  }
-
-  // Primary Contact is a ticked role now, not "whichever CC contact happens to
-  // sort first" -- nothing is inferred from ordering any more.
-  function primaryContactId(partnerId) {
-    const c = peopleFor(partnerId).find((x) => x.is_primary_contact);
-    return c ? c.id : null;
   }
 
   const cField = (c, field, placeholder) =>
