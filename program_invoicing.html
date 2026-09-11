@@ -583,8 +583,10 @@
           <strong>How the Setup Fee works:</strong> it's a one-time charge per engagement, the
           <strong>same amount for every engagement in the program</strong>, and set by the program itself
           (the Setup Fee field below saves straight back to the program, just like the Hourly Rate).
-          A monthly invoice can cover several engagements; each one's Setup Fee is added the first
-          time it appears on any invoice, then never again.
+          A monthly invoice can cover several engagements; each one's Setup Fee is added once, then
+          never again. <em>When</em> it is added is the program's own choice &mdash; on the engagement's
+          first invoice, or held back until the engagement closes. The line under the Setup Fee field
+          says which applies to the program you've picked.
         </div>
         <div class="toolbar-row">
           <div class="field-group">
@@ -624,6 +626,7 @@
               <span class="rate-prefix">$</span>
               <input type="number" id="pi-setup-fee" min="0" step="0.01" disabled />
             </div>
+            <div id="pi-setup-fee-timing" style="font-size:11.5px; color:var(--muted); margin-top:4px; max-width:230px;"></div>
           </div>
           <button type="button" class="btn-primary" id="pi-generate-btn" disabled>Generate Invoice</button>
         </div>
@@ -905,7 +908,7 @@
   async function loadPrograms() {
     const { data, error } = await sb
       .from("econ_dev_companies")
-      .select("id, name, address, billing_hourly_rate, bill_admin_qc_upfront, setup_fee")
+      .select("id, name, address, billing_hourly_rate, bill_admin_qc_upfront, bill_setup_fee_upfront, setup_fee")
       .order("name", { ascending: true });
     if (error) { showBanner("Couldn't load Programs: " + error.message, "error"); return; }
     programs = data || [];
@@ -947,6 +950,20 @@
     const program = programs.find((p) => p.id === programId);
     $("pi-setup-fee").disabled = !program;
     $("pi-setup-fee").value = program ? (Number(program.setup_fee) || 0) : "";
+    // Chris/Rita (9/11/26): "GRE invoices bill setup at the end of the
+    // engagement, not the beginning." Per-Program, same shape as
+    // bill_admin_qc_upfront (118_program_setup_fee_timing.sql). Said out loud
+    // here because the two timings produce very different invoices from the
+    // same Program and month, and nothing else on this screen would explain
+    // a missing Set-Up Fee line.
+    const timing = $("pi-setup-fee-timing");
+    if (timing) {
+      timing.textContent = !program
+        ? ""
+        : billsSetupFeeUpfront(program)
+          ? "Billed on each engagement's first invoice."
+          : "Held back until the engagement closes, then billed on that month's invoice.";
+    }
   }
 
   async function saveSetupFeeForSelectedProgram() {
@@ -1115,10 +1132,11 @@
     const rate = Number($("pi-rate").value) || DEFAULT_BILLING_RATE;
     const selectedProgram = programs.find((p) => p.id === programId);
     const billUpfront = !selectedProgram || selectedProgram.bill_admin_qc_upfront !== false;
+    const setupUpfront = billsSetupFeeUpfront(selectedProgram);
 
     const { data: clients, error: clientsErr } = await sb
       .from("clients")
-      .select("id, name, setup_fee_billed")
+      .select("id, name, setup_fee_billed, project_status, closed_at")
       .eq("econ_dev_company_id", programId);
     if (clientsErr) { showBanner("Couldn't load clients for this Program: " + clientsErr.message, "error"); return; }
 
@@ -1202,7 +1220,8 @@
       // activity yet still needs its one-time fee applied on its first
       // invoice (Greg, 8/22/26). The dollar amount is the Program's
       // setup_fee (rules 3 + 4), applied uniformly in recomputeSetupFeeAmounts().
-      if (!lines.length && client.setup_fee_billed) continue; // nothing left to bill for this client
+      const setupDue = setupFeeDueThisInvoice(client, setupUpfront, end);
+      if (!lines.length && !setupDue) continue; // nothing left to bill for this client
 
       const subtotal = round2(lines.reduce((s, l) => s + l.amount, 0));
 
@@ -1212,6 +1231,7 @@
         lines,
         setup_fee: null,                     // set by recomputeSetupFeeAmounts() below, from the Program's setup_fee
         setup_fee_billed: !!client.setup_fee_billed,
+        setup_fee_due: setupDue,
         subtotal,
       });
     }
@@ -1222,13 +1242,46 @@
   }
 
   // ---------- Setup Fee ----------
+  // Two timings, chosen per Program (118_program_setup_fee_timing.sql):
+  //   bill_setup_fee_upfront true  -- the long-standing behaviour. The fee
+  //     lands on the first invoice the engagement appears on, including a
+  //     brand-new engagement with no hours logged yet (Greg, 8/22/26).
+  //   bill_setup_fee_upfront false -- GRE. Nothing until the engagement is
+  //     closed; then it bills on the invoice for the month it closed in.
+  // Missing flag reads as true, so a Program row fetched before the migration
+  // ran behaves exactly as it does today rather than silently dropping fees.
+  function billsSetupFeeUpfront(program) {
+    return !program || program.bill_setup_fee_upfront !== false;
+  }
+
+  // Is this engagement's one-time fee due on THIS invoice? Already-billed is
+  // the first gate either way; after that it is purely the timing question.
+  // For the at-close Programs the engagement must be closed on or before the
+  // end of the invoiced month -- the month bound matters because invoices get
+  // generated for past months, and an engagement that closed in April must
+  // not appear on a re-run of March.
+  //
+  // monthEnd is monthBounds().end, a plain "YYYY-MM-DD" string, and
+  // closed_at is a timestamptz. Compared as date strings, not Dates: the
+  // rest of this page already treats the month bounds as plain dates (they
+  // go straight into the time_entries query that way), and parsing either
+  // side into a Date would drag the browser's timezone into a question that
+  // is about which calendar month the close falls in.
+  function setupFeeDueThisInvoice(client, upfront, monthEnd) {
+    if (client.setup_fee_billed) return false;
+    if (upfront) return true;
+    if (client.project_status !== "closed") return false;
+    if (!client.closed_at) return true; // closed with no timestamp on file -- don't strand the fee
+    return String(client.closed_at).slice(0, 10) <= monthEnd;
+  }
+
   // The amount is the Program's own setup_fee (loaded/saved by
   // loadSetupFeeForSelectedProgram / saveSetupFeeForSelectedProgram). Here
   // it's just spread across every engagement on this invoice that hasn't
   // had its one-time fee billed yet -- same fee for all of them (rule 3).
   function recomputeSetupFeeAmounts() {
     const amount = Number($("pi-setup-fee").value) || 0;
-    const eligible = previewClients.filter((c) => !c.setup_fee_billed);
+    const eligible = previewClients.filter((c) => c.setup_fee_due);
     for (const c of eligible) {
       c.setup_fee = amount > 0 ? round2(amount) : null;
       c.subtotal = round2(c.lines.reduce((s, l) => s + l.amount, 0) + (c.setup_fee || 0));
@@ -1255,10 +1308,12 @@
       }
       // Read-only display (Greg, 8/22/26) -- the amount comes from the
       // single Setup Fee field in the header, not editable per row here.
-      // Shown for any engagement that hasn't had a setup fee billed yet,
-      // even while the header field is still blank/zero, so it's obvious
-      // which engagement(s) the header field is about to apply to.
-      if (!c.setup_fee_billed) {
+      // Shown for any engagement whose fee is due on THIS invoice (see
+      // setupFeeDueThisInvoice), even while the header field is still
+      // blank/zero, so it's obvious which engagement(s) it is about to
+      // apply to. On an at-close Program an open engagement shows its hours
+      // and no Set-Up Fee line.
+      if (c.setup_fee_due) {
         rows += `<tr><td style="padding-left:22px;">Set-Up Fee</td><td class="num">1</td><td class="num">${money(c.setup_fee || 0)}</td><td class="num">${money(c.setup_fee || 0)}</td></tr>`;
       }
       rows += `<tr class="subtotal-row"><td colspan="4">Subtotal: ${money(c.subtotal)}</td></tr>`;
