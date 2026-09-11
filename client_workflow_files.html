@@ -1130,8 +1130,30 @@
   }
   const listData = {};
 
+  // ---------- Customer email subject line (Greg, 9/11/26) ----------
+  // "All customer emails should use the same subject-line hierarchy as
+  // follows. (GRE) Controlling Document - for review." -- i.e.
+  // "(program) subject - action". GRE is the Program code
+  // (econ_dev_companies.code), not the engagement, so a CEO who works with
+  // more than one Program can see at a glance which one an email belongs
+  // to, and a Program Administrator copied on it can file it.
+  //
+  // Every customer-facing email in the app is built through here. If the
+  // engagement has no Program on file, or the Program has no code, the
+  // parenthetical is dropped rather than left as "()" -- the subject still
+  // reads correctly, just without the prefix.
+  function programCode() {
+    const p = currentClient && currentClient.econ_dev_companies;
+    return p && p.code ? String(p.code).trim().toUpperCase() : "";
+  }
+
+  function customerSubject(subject, action) {
+    const code = programCode();
+    return `${code ? `(${code}) ` : ""}${subject} - ${action}`;
+  }
+
   async function loadClient(clientId) {
-    const { data: client, error } = await sb.from("clients").select("*, econ_dev_companies(name)").eq("id", clientId).single();
+    const { data: client, error } = await sb.from("clients").select("*, econ_dev_companies(name, code)").eq("id", clientId).single();
     if (error || !client) {
       $("no-client-view").classList.remove("hidden");
       showBanner("Couldn't load that client — you may not be assigned to it.", "error");
@@ -1620,17 +1642,13 @@
     const teamLeadName = leadRow ? leadRow.users.full_name : "";
     const teamLeadFirstName = teamLeadName ? teamLeadName.split(" ")[0] : "";
 
-    let programName = "";
-    if (currentClient.econ_dev_company_id) {
-      const { data: partner } = await sb.from("econ_dev_companies").select("name").eq("id", currentClient.econ_dev_company_id).single();
-      programName = (partner && partner.name) || "";
-    }
+    const programName = (currentClient.econ_dev_companies && currentClient.econ_dev_companies.name) || "";
 
     $("eem-to").value = (ceoContact && ceoContact.email) || "";
     $("eem-no-contact").classList.toggle("hidden", !!(ceoContact && ceoContact.email));
 
     const ceoFirstName = ceoContact && ceoContact.name ? ceoContact.name.split(" ")[0] : "there";
-    $("eem-subject").value = `Wrapping up ${currentClient.name} — your feedback + a quick call`;
+    $("eem-subject").value = customerSubject("Close-Out Survey", "for completion");
     const sponsorLine = programName
       ? `It also gets shared with ${programName}, your program sponsor, so it carries real weight heading into that conversation.`
       : `It also gets shared with your program sponsor, so it carries real weight heading into that conversation.`;
@@ -1813,7 +1831,7 @@ ${teamLeadName || teamLeadFirstName || "Your EG Team Lead"}`;
     $("cdem-no-contact").classList.toggle("hidden", !!(ceoContact && ceoContact.email));
 
     const ceoFirstName = ceoContact && ceoContact.name ? ceoContact.name.split(" ")[0] : "there";
-    $("cdem-subject").value = `Your Controlling Document — ${currentClient.name}`;
+    $("cdem-subject").value = customerSubject("Controlling Document", "for review");
     $("cdem-body-text").value = `Hi ${ceoFirstName},
 
 We've put together the Controlling Document for ${currentClient.name} — the set of research questions that will guide your Economic Gardening engagement.
