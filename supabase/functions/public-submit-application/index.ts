@@ -224,13 +224,37 @@ Deno.serve(async (req: Request) => {
 
     if (insertErr) return jsonResponse({ error: insertErr.message }, 400);
 
-    // ---------- Notify Chris, Rita, and Greg ----------
-    // Never let an email hiccup lose the application itself -- the row
-    // above is already saved by this point regardless of what happens here.
+    // ---------- Notify every Admin ----------
+    // Greg (9/14/26): "Every admin needs to get an email notification and a
+    // bell notification when a new application is submitted." The bell half
+    // is a database trigger (119_application_notifications_on_real_table.sql);
+    // this is the email half.
+    //
+    // The recipient list used to be three hardcoded addresses. It is now
+    // whoever holds the Admin role, so adding or removing an admin in the
+    // app is all it takes -- no redeploy of this function.
+    //
+    // Never let an email hiccup lose the application itself -- the row above
+    // is already saved by this point regardless of what happens here.
     let emailWarning: string | null = null;
     try {
       const resendKey = Deno.env.get("RESEND_API_KEY");
       if (!resendKey) throw new Error("RESEND_API_KEY secret is not set.");
+
+      const { data: admins, error: adminsErr } = await adminClient
+        .from("users")
+        .select("email")
+        .eq("role", "super_admin");
+      if (adminsErr) throw new Error(`Couldn't look up admins: ${adminsErr.message}`);
+
+      const recipients = [...new Set(
+        (admins ?? [])
+          .map((u: { email: string | null }) => (u.email ?? "").trim())
+          .filter((e: string) => e.length > 0)
+          .map((e: string) => e.toLowerCase()),
+      )];
+      if (recipients.length === 0) throw new Error("No Admin accounts with an email address on file.");
+
       const officerName = String(incomingData["f-p-name"] || "").trim();
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -239,14 +263,21 @@ Deno.serve(async (req: Request) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          // greggotcher@gmail.com can't be used as a Resend "from" address --
-          // Resend requires the sender domain be verified via DNS, and Gmail
-          // won't let Greg do that for gmail.com. onboarding@resend.dev is
-          // Resend's own shared, pre-verified sending domain -- no setup
-          // needed, and it can send to any recipient. Swap this for a
-          // verified economicgardening.org address later if wanted.
+          // IMPORTANT, and the reason these emails have not been arriving:
+          // onboarding@resend.dev is Resend's shared TESTING domain, and it
+          // can only deliver to the email address on the Resend account
+          // itself. Any other recipient makes Resend reject the request with
+          // a 403 -- and it rejects the WHOLE send, so adding Chris and Rita
+          // to the list meant nobody got it, not even Greg.
+          // https://resend.com/docs/knowledge-base/403-error-resend-dev-domain
+          //
+          // The fix is not code: verify a real sending domain in the Resend
+          // dashboard and change the `from` below to an address on it (e.g.
+          // "EG Dashboard <noreply@economicgardening.org>"). Until then this
+          // send fails, which is exactly why the bell notification exists as
+          // the reliable channel -- see 073's header.
           from: "EG Dashboard <onboarding@resend.dev>",
-          to: ["cgibbons@economicgardening.org", "rbenson@economicgardening.org", "greggotcher@gmail.com"],
+          to: recipients,
           subject: `New Application: ${companyName} (${program.name})`,
           html: `
             <p>A new Economic Gardening Program application was just submitted through ${escapeHtml(program.name)}'s application link.</p>
@@ -264,8 +295,13 @@ Deno.serve(async (req: Request) => {
         throw new Error(`Resend returned ${res.status}: ${errText}`);
       }
     } catch (emailErr) {
-      console.error("Notification email failed:", emailErr instanceof Error ? emailErr.message : emailErr);
-      emailWarning = "Application saved, but the notification email failed to send.";
+      const detail = emailErr instanceof Error ? emailErr.message : String(emailErr);
+      console.error("Notification email failed:", detail);
+      // Surfaced to the submitting page (which logs it) and to the function
+      // logs. Admins are told about the application by the bell regardless,
+      // so a failure here delays nothing -- it just means the email copy
+      // didn't go out.
+      emailWarning = `Application saved, but the notification email failed to send: ${detail}`;
     }
 
     return jsonResponse({ ok: true, applicationId: inserted.id, warning: emailWarning });
