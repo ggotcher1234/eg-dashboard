@@ -278,7 +278,15 @@ Deno.serve(async (req: Request) => {
           // the reliable channel -- see 073's header.
           from: "EG Dashboard <onboarding@resend.dev>",
           to: recipients,
-          subject: `New Application: ${companyName} (${program.name})`,
+          // Greg (9/14/26): "apply naming convention (GRE) New Application
+          // Recieved to internal emails as well" -- the same
+          // "(program) subject" shape the customer emails use
+          // (customerSubject() in client_workflow_files.html), so everything
+          // this app sends sorts and filters the same way in an inbox.
+          // No " - action" half: an admin notification is not asking the
+          // reader to do one specific thing, and Greg's example had none.
+          // The company name moves into the body, which already carries it.
+          subject: `(${program.code}) New Application Received`,
           html: `
             <p>A new Economic Gardening Program application was just submitted through ${escapeHtml(program.name)}'s application link.</p>
             <p>
