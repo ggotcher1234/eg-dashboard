@@ -86,7 +86,7 @@
   .required-legend .req { color: var(--danger); font-weight: 700; }
 
   .arow-field input[type="text"], .arow-field input[type="url"], .arow-field input[type="email"],
-  .arow-field input[type="number"], .arow-field select, .arow-field textarea {
+  .arow-field input[type="number"], .arow-field input[type="text"], .arow-field select, .arow-field textarea {
     width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 7px;
     font-size: 14px; font-family: inherit; background: #fff; color: var(--text);
   }
@@ -327,15 +327,15 @@
         </div>
         <div class="arow">
           <div class="arow-label"><span class="req">*</span>2025 Annual Gross Income (USD)</div>
-          <div class="arow-field"><input type="number" step="0.01" id="f-rev-2025" required /></div>
+          <div class="arow-field"><input type="text" inputmode="decimal" class="money-input" id="f-rev-2025" required /></div>
         </div>
         <div class="arow">
           <div class="arow-label"><span class="req">*</span>2024 Annual Gross Income (USD)</div>
-          <div class="arow-field"><input type="number" step="0.01" id="f-rev-2024" required /></div>
+          <div class="arow-field"><input type="text" inputmode="decimal" class="money-input" id="f-rev-2024" required /></div>
         </div>
         <div class="arow">
           <div class="arow-label"><span class="req">*</span>2023 Annual Gross Income (USD)</div>
-          <div class="arow-field"><input type="number" step="0.01" id="f-rev-2023" required /></div>
+          <div class="arow-field"><input type="text" inputmode="decimal" class="money-input" id="f-rev-2023" required /></div>
         </div>
 
         <div class="arow">
@@ -419,6 +419,53 @@
 
     return null;
   }
+
+  // ---------- Revenue fields (Greg, 9/14/26) ----------
+  // "allow comma's in the revenue fields of the applications."
+  //
+  // These were type="number", which silently refuses a value carrying a $ or
+  // a comma -- a CEO pasting "$35,030,501.00" off their own P&L gets an empty
+  // box and no explanation. Same bug, same fix as the internal review screen
+  // (client_applications.html, Greg 8/29/26 "cut and paste revenue numbers
+  // and those fields are acting wonky"): type="text" with a live sanitizer.
+  //
+  // While the field has focus it holds a plain sanitized number, so typing
+  // and pasting never fight the formatter. On blur it shows "$35,030,501";
+  // on focus it goes back to plain digits so it's easy to re-edit. Same
+  // three functions and the same .money-input hook as the internal screen,
+  // deliberately -- one behaviour for revenue everywhere in the app.
+  //
+  // `required` still works: the sanitizer means anything non-empty is a
+  // number by construction, so "must not be blank" is the only rule left for
+  // the browser to enforce. No `pattern` -- a blurred field reads "$35,030,501"
+  // and would fail a numeric one.
+  function sanitizeMoneyInput(el) {
+    const cleaned = el.value.replace(/[^0-9.]/g, "");
+    const firstDot = cleaned.indexOf(".");
+    const noExtraDots = firstDot === -1 ? cleaned : cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
+    if (noExtraDots !== el.value) el.value = noExtraDots;
+  }
+  function formatMoneyDisplay(el) {
+    const raw = el.value.replace(/[^0-9.]/g, "");
+    if (raw === "" || raw === ".") { el.value = ""; return; }
+    const rounded = Math.round(Number(raw));
+    el.value = isNaN(rounded) ? "" : "$" + rounded.toLocaleString("en-US");
+  }
+  function unformatMoneyDisplay(el) {
+    const raw = el.value.replace(/[^0-9.]/g, "");
+    el.value = raw;
+  }
+  document.querySelectorAll(".money-input").forEach((el) => {
+    el.addEventListener("input", () => sanitizeMoneyInput(el));
+    el.addEventListener("focus", () => unformatMoneyDisplay(el));
+    el.addEventListener("blur", () => formatMoneyDisplay(el));
+  });
+
+  // What goes in the payload. The submitted value may be sitting in its
+  // blurred "$35,030,501" form, so strip back to digits before sending. The
+  // Edge Function strips too, but a clean payload is worth more than one
+  // that only survives because something downstream tidies it.
+  const moneyValue = (id) => $(id).value.replace(/[^0-9.]/g, "");
 
   async function init() {
     const programCode = resolveProgramCode();
@@ -539,9 +586,9 @@
       "f-fte-2024": $("f-fte-2024").value,
       "f-fte-2023": $("f-fte-2023").value,
       "f-sales-range": yesNo("f-sales-range"),
-      "f-rev-2025": $("f-rev-2025").value,
-      "f-rev-2024": $("f-rev-2024").value,
-      "f-rev-2023": $("f-rev-2023").value,
+      "f-rev-2025": moneyValue("f-rev-2025"),
+      "f-rev-2024": moneyValue("f-rev-2024"),
+      "f-rev-2023": moneyValue("f-rev-2023"),
       "f-sales-external": yesNo("f-sales-external"),
       "f-pct-instate": $("f-pct-instate").value,
       "f-top-issues": $("f-top-issues").value.trim(),
