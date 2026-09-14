@@ -2018,18 +2018,32 @@
     if (!el) return;
     const mine = assignRows.filter((r) => r.user_id === currentUser.id);
     const labels = mine.map((r) => SPECIALTY_LABELS[r.specialty_type] || r.specialty_type);
-    el.classList.remove("is-off-team");
+    el.classList.remove("is-off-team", "hidden");
 
     if (mine.length) {
+      // The case this was built for: which hat am I wearing HERE.
       el.textContent = `You here: ${[...new Set(labels)].join(", ")}`;
-    } else if (isSuperAdmin) {
-      // Admins can edit everything without being on the team at all -- say so
-      // rather than "not on this team", which would read as a warning.
-      el.textContent = "You here: Super Admin (not on this team)";
-    } else {
-      el.textContent = "You here: not on this engagement's team";
-      el.classList.add("is-off-team");
+      return;
     }
+
+    if (isSuperAdmin) {
+      // Greg (9/14/26): "this seems like a very strange statement. do we
+      // really need anything in the highlighted area?" No. It used to read
+      // "You here: Super Admin (not on this team)", which announces a
+      // limitation that does not exist -- an Admin can already do everything
+      // on every engagement, so nothing about the page changes because of it.
+      // The chip earns its space when you hold a real role here (above) or
+      // when missing controls need explaining (below); for an Admin passing
+      // through it is noise, so it is not rendered at all.
+      el.textContent = "";
+      el.classList.add("hidden");
+      return;
+    }
+
+    // Worth saying: this is the line that explains why the edit controls
+    // below are missing for a specialist who isn't on this engagement.
+    el.textContent = "You here: not on this engagement's team";
+    el.classList.add("is-off-team");
   }
 
   function renderTeamPane() {

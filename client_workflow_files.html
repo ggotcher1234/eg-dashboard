@@ -596,6 +596,8 @@
                 <div id="wf-review-actions"></div>
               </div>
               <div id="wf-review-file"></div>
+              <div class="wf-item-hint" style="margin-top:12px;">Tell the client the research is finished and ask for time to walk them through it. Goes to the CEO, copying the EG team and this engagement&rsquo;s CC list.</div>
+              <div id="wf-review-client"></div>
             </div>
           </div>
           <div class="wf-item-row hidden" id="wf-row-eval">
@@ -700,6 +702,47 @@
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
         <button type="button" class="btn-secondary btn-sm" id="eem-copy-btn">Copy Email Text</button>
         <a class="btn-primary btn-sm" id="eem-mailto-btn" href="#">Send Email &rarr;</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="eem-overlay" id="rr-email-overlay">
+  <div class="eem-modal">
+    <div class="eem-modal-header">
+      <div>
+        <h3>Research Complete &mdash; Schedule Review Email</h3>
+        <div class="eem-modal-meta">Review and edit, then send it from here or copy it into Outlook.</div>
+      </div>
+      <button class="eem-modal-close" id="rrem-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="rrem-body">
+      <div class="field">
+        <label>To</label>
+        <input type="text" id="rrem-to" />
+      </div>
+      <div id="rrem-no-contact" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
+        No contact email found on file for this client — add the CEO's email in Company Contacts, or type it in above.
+      </div>
+      <div class="field">
+        <label>Cc</label>
+        <textarea id="rrem-cc" rows="3"></textarea>
+        <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">The EG team on this engagement, the Program&rsquo;s Administrators, this engagement&rsquo;s CC list, Chris and Rita. Edit freely before sending.</div>
+      </div>
+      <div class="field">
+        <label>Subject</label>
+        <input type="text" id="rrem-subject" />
+      </div>
+      <div class="field">
+        <label>Body</label>
+        <textarea id="rrem-body-text" rows="14"></textarea>
+      </div>
+      <div id="rrem-no-dashboard" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
+        This engagement has no client dashboard link yet, so the email doesn&rsquo;t include one. Set the slug on Client Info and create the email again.
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button type="button" class="btn-secondary btn-sm" id="rrem-copy-btn">Copy Email Text</button>
+        <a class="btn-primary btn-sm" id="rrem-mailto-btn" href="#">Send Email &rarr;</a>
       </div>
     </div>
   </div>
@@ -1188,12 +1231,24 @@
   // Chris and Rita -- and deduped case-insensitively while keeping the first
   // spelling of each address. `exclude` drops anyone already in the To field,
   // so the CEO is never both addressee and copy.
-  function customerCcList(exclude) {
+  // The EG people assigned to THIS engagement -- Team Lead and every
+  // specialist with a real account in the slot. customerCcList() deliberately
+  // covers the Program side (PAs, the engagement's CC list, Chris and Rita);
+  // the Research Review email is the one that also goes to our own team,
+  // because it is proposing a meeting they have to attend.
+  function egTeamEmails() {
+    return (listData.team || [])
+      .map((r) => (r.users && r.users.email ? r.users.email.trim() : ""))
+      .filter(Boolean);
+  }
+
+  function customerCcList(exclude, extra) {
     const excluded = new Set((exclude || "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean));
     const teamRows = listData.team || [];
     const lead = teamRows.find((r) => r.is_team_lead && r.users && r.users.email);
     const emails = [
       lead ? lead.users.email : "",
+      ...(extra || []),
       ...(listData.programAdmins || []).map((c) => c && c.email),
       ...(listData.ccContacts || []).map((c) => c && c.email),
       ...CUSTOMER_CC_ALWAYS,
@@ -1332,6 +1387,7 @@
     WORKFLOW_FIELDS.forEach(renderWorkflowFileField);
     renderEvalLinkField();
     renderControllingClientField();
+    renderReviewClientField();
   }
 
   // Greg (8/31/26): "Replace and Remove are secondary actions on the same
@@ -1940,6 +1996,89 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     updateControllingEmailMailto();
     $("cd-email-overlay").classList.add("open");
   }
+
+  // ---------- Research Complete email (Greg, 9/14/26) ----------
+  // "i want a 'Create Email' button here to the client, EG Team and CC list.
+  // the email subject should be (Alloy) Research Completed - Schedule Review.
+  // This brief email should let them know that the team has completed the
+  // research which can be found at the appropriate EG Dashboard link and that
+  // we'd like to get on your calendar next week to review. we'll need about
+  // 1.5 hours."
+  //
+  // Third customer email on this page, built the same way as the other two:
+  // customerSubject() for the subject, customerCcList() for the Cc -- here
+  // with the EG team added, since they have to be at the meeting it proposes.
+  function renderReviewClientField() {
+    const container = $("wf-review-client");
+    if (!container) return;
+    container.innerHTML = `<button type="button" class="wf-btn wf-btn-icon-email" id="rr-email-create-btn">Create Email</button>`;
+    container.querySelector("#rr-email-create-btn").addEventListener("click", openReviewEmailModal);
+  }
+
+  // The client's own dashboard -- the same short /c/<slug> link Client Info
+  // shows. Null when the engagement has no slug yet, in which case the email
+  // simply omits the link rather than shipping a broken one.
+  function clientDashboardUrl() {
+    const slug = currentClient && currentClient.slug;
+    return slug ? new URL(`c/${encodeURIComponent(slug)}`, PUBLIC_SITE_BASE).href : null;
+  }
+
+  function openReviewEmailModal() {
+    const contacts = listData.contacts || [];
+    const ceoContact = contacts.find((c) => (c.title || "").toLowerCase().includes("ceo")) || contacts[0] || null;
+    const teamRows = listData.team || [];
+    const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
+    const teamLeadName = leadRow && leadRow.users.full_name ? leadRow.users.full_name : "";
+    const teamLeadFirstName = teamLeadName ? teamLeadName.split(" ")[0] : "";
+
+    $("rrem-to").value = (ceoContact && ceoContact.email) || "";
+    $("rrem-no-contact").classList.toggle("hidden", !!(ceoContact && ceoContact.email));
+    $("rrem-cc").value = customerCcList($("rrem-to").value, egTeamEmails());
+    $("rrem-subject").value = customerSubject("Research Completed", "Schedule Review");
+
+    const url = clientDashboardUrl();
+    $("rrem-no-dashboard").classList.toggle("hidden", !!url);
+    const ceoFirstName = ceoContact && ceoContact.name ? ceoContact.name.split(" ")[0] : "there";
+    const dashboardLine = url
+      ? `You can see everything on your Economic Gardening dashboard:\n\n${url}\n`
+      : `Everything is posted to your Economic Gardening dashboard.\n`;
+
+    $("rrem-body-text").value = `Hi ${ceoFirstName},
+
+Good news — the team has completed the research for ${currentClient.name}.
+
+${dashboardLine}
+We'd like to get on your calendar next week to walk through what we found and agree on what happens next. Please set aside about an hour and a half.
+
+What day and time work best for you? Send over a couple of options and I'll get the invitation out.
+
+Thanks,
+${teamLeadFirstName || "Your EG Team Lead"}`;
+
+    updateReviewEmailMailto();
+    $("rr-email-overlay").classList.add("open");
+  }
+
+  function updateReviewEmailMailto() {
+    const cc = addressParam($("rrem-cc").value);
+    $("rrem-mailto-btn").href = `mailto:${addressParam($("rrem-to").value)}?${cc ? `cc=${cc}&` : ""}subject=${encodeURIComponent($("rrem-subject").value)}&body=${encodeURIComponent($("rrem-body-text").value)}`;
+  }
+
+  $("rrem-close").addEventListener("click", () => $("rr-email-overlay").classList.remove("open"));
+  $("rr-email-overlay").addEventListener("click", (e) => {
+    if (e.target === $("rr-email-overlay")) $("rr-email-overlay").classList.remove("open");
+  });
+  ["rrem-to", "rrem-cc", "rrem-subject", "rrem-body-text"].forEach((id) =>
+    $(id).addEventListener("input", updateReviewEmailMailto));
+  $("rrem-copy-btn").addEventListener("click", async () => {
+    const text = `To: ${$("rrem-to").value}\nCc: ${$("rrem-cc").value}\nSubject: ${$("rrem-subject").value}\n\n${$("rrem-body-text").value}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      showBanner("Email text copied -- paste it into your email client.", "success");
+    } catch (e) {
+      showBanner("Couldn't copy automatically -- select the text below and copy manually.", "error");
+    }
+  });
 
   function updateControllingEmailMailto() {
     const cc = addressParam($("cdem-cc").value);
