@@ -173,14 +173,51 @@
      research-area boxes the same height in the row regardless of how much
      each one holds -- overflow-y:auto lets a box with more documents than
      fit just scroll internally instead of growing past its neighbors. */
-  .research-card .rc-body { padding: 12px 14px; height: 180px; overflow-y: auto; }
+  /* Greg (9/14/26): raised from 180px when the documents became cards. 180
+     was sized for one-line list rows; a card is ~54px (70 when the name
+     wraps), so at 180 the third one was sliced in half by the scroll edge --
+     which reads as broken rather than as "there is more below". 300 shows
+     four comfortably. The fixed height and the internal scroll are both kept
+     deliberately: they are what keeps the four boxes level in the row. */
+  .research-card .rc-body { padding: 12px 14px; height: 300px; overflow-y: auto; }
   .research-card .rc-empty { color: var(--muted); font-size: 12.5px; font-style: italic; }
   .rc-question-block { margin-bottom: 12px; }
   .rc-question-block:last-child { margin-bottom: 0; }
   .rc-question-title { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
-  .doc-link { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--accent-dark); margin-bottom: 6px; cursor: pointer; text-decoration: none; }
-  .doc-link:hover { text-decoration: underline; }
-  .doc-link:last-child { margin-bottom: 0; }
+  /* Greg (9/14/26): "I prefer the legacy EG Dashboard look and feel for the
+     research items. Each item has it's own card and a colorful icon telling
+     what type of file it is."
+     Each document is its own tile rather than a line in a list: the name on
+     the left, a colour-coded type badge and an open arrow on the right. The
+     badge colours are each format's own brand colour, so the type is
+     readable before the name is. */
+  .doc-card {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: #eef1f6; border: 1px solid #e1e7ef; border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 8px; cursor: pointer; text-decoration: none;
+    color: var(--text); font-size: 12.5px; line-height: 1.35;
+  }
+  .doc-card:last-child { margin-bottom: 0; }
+  .doc-card:hover { background: #e6ebf3; border-color: #cfd8e4; }
+  .doc-card.is-dead { opacity: 0.6; cursor: default; }
+  .doc-card.is-dead:hover { background: #eef1f6; border-color: #e1e7ef; }
+  .doc-card-name { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+  .doc-card-meta { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+  .doc-card-arrow { color: var(--muted); font-size: 12px; line-height: 1; }
+  .doc-badge {
+    display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: 0.5px;
+    text-transform: uppercase; color: #fff; padding: 3px 6px; border-radius: 5px; white-space: nowrap;
+  }
+  /* Each format's own brand colour, so the badge reads the way the app's own
+     icon does on a desktop. */
+  .doc-badge-pdf   { background: #d93025; }
+  .doc-badge-doc   { background: #2b579a; }
+  .doc-badge-xls   { background: #217346; }
+  .doc-badge-ppt   { background: #d24726; }
+  .doc-badge-img   { background: #7b5ea7; }
+  .doc-badge-zip   { background: #6b7683; }
+  .doc-badge-link  { background: #1a9e4b; }
+  .doc-badge-file  { background: #64748b; }
 
   footer { background: var(--navy); color: #a9bdd2; padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; border-radius: 10px; }
   footer .footer-left { display: flex; align-items: center; gap: 12px; }
@@ -470,6 +507,34 @@
     return FILE_TYPE_ICONS[fileExtension(path)] || "\u{1F4C4}";
   }
 
+  // The label and colour on a document card's badge. Grouped by family, so
+  // .docx and .doc read the same and a reader doesn't have to know which
+  // Office version produced a file.
+  const FILE_TYPE_BADGES = {
+    pdf:  ["PDF", "pdf"],
+    doc:  ["DOC", "doc"],  docx: ["DOC", "doc"],  rtf: ["DOC", "doc"],  txt: ["TXT", "file"],
+    xls:  ["XLS", "xls"],  xlsx: ["XLS", "xls"],  csv: ["CSV", "xls"],
+    ppt:  ["PPT", "ppt"],  pptx: ["PPT", "ppt"],
+    png:  ["IMG", "img"],  jpg:  ["IMG", "img"],  jpeg: ["IMG", "img"],
+    gif:  ["IMG", "img"],  svg:  ["IMG", "img"],  webp: ["IMG", "img"],
+    zip:  ["ZIP", "zip"],
+    html: ["WEB", "link"], htm: ["WEB", "link"],
+  };
+  function badgeFor(nameOrPath, isLink) {
+    const hit = FILE_TYPE_BADGES[fileExtension(nameOrPath)];
+    // A link with no recognisable extension is labelled LINK rather than the
+    // legacy dashboard's "APP" -- most are apps, but not all, and a news
+    // article badged APP would be wrong. A link that DOES point at a file
+    // (".../report.pdf") gets that file's badge, which is more useful than
+    // either.
+    if (hit) return hit;
+    return isLink ? ["LINK", "link"] : ["FILE", "file"];
+  }
+  function badgeHtml(nameOrPath, isLink) {
+    const [label, tone] = badgeFor(nameOrPath, isLink);
+    return `<span class="doc-badge doc-badge-${tone}">${label}</span>`;
+  }
+
   // Text-based formats (html, htm, svg) have no magic bytes for Supabase
   // Storage's server-side MIME sniffer to detect, so no matter what
   // Content-Type the upload declared, the object gets served back as
@@ -545,14 +610,26 @@
       // display_name is an optional staff-set label; the file-type icon and
       // the actual download are unchanged.
       const shownName = d.display_name || d.file_name;
-      if (d.url) return `<a class="doc-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">&#128279; ${escapeHtml(shownName || d.url)}</a>`;
-      if (d.storage_path) return `<a class="doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(shownName)}</a>`;
-      return `<div class="doc-link" style="opacity:0.6; cursor:default;">&#128279; ${escapeHtml(shownName || "Untitled link")}</div>`;
+      const card = (attrs, name, badge) =>
+        `<a class="doc-card" ${attrs}><span class="doc-card-name">${escapeHtml(name)}</span>` +
+        `<span class="doc-card-meta">${badge}<span class="doc-card-arrow">&#8599;</span></span></a>`;
+      if (d.url) {
+        return card(`href="${escapeHtml(d.url)}" target="_blank" rel="noopener"`,
+                    shownName || d.url, badgeHtml(d.url, true));
+      }
+      if (d.storage_path) {
+        return card(`data-path="${escapeHtml(d.storage_path)}"`,
+                    shownName, badgeHtml(d.storage_path, false));
+      }
+      // Neither a file nor a usable URL -- shown, but plainly not clickable,
+      // and without the arrow that would promise it opens something.
+      return `<div class="doc-card is-dead"><span class="doc-card-name">${escapeHtml(shownName || "Untitled link")}</span>` +
+             `<span class="doc-card-meta">${badgeHtml(shownName || "", true)}</span></div>`;
     }).join("");
   }
 
   function wireDocLinks(container) {
-    container.querySelectorAll(".doc-link[data-path]").forEach((el) => {
+    container.querySelectorAll(".doc-card[data-path]").forEach((el) => {
       el.addEventListener("click", (e) => { e.preventDefault(); openSignedDoc(el.dataset.path)(); });
     });
   }
