@@ -722,7 +722,7 @@
         <input type="text" id="rrem-to" />
       </div>
       <div id="rrem-no-contact" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
-        No contact email found on file for this client — add the CEO's email in Company Contacts, or type it in above.
+        No contact emails on file for this client — add them in Company Contacts, or type them in above.
       </div>
       <div class="field">
         <label>Cc</label>
@@ -1179,7 +1179,8 @@
 
   // ---------- Load client + minimal contact/team data for the eval email ----------
   async function loadEvalEmailContext(clientId) {
-    const { data: contacts } = await sb.from("client_contacts").select("*").eq("client_id", clientId);
+    const { data: contacts } = await sb.from("client_contacts").select("*").eq("client_id", clientId)
+      .order("sort_order", { ascending: true }).order("created_at", { ascending: true });
     listData.contacts = contacts || [];
     const { data: team } = await sb
       .from("client_assignments")
@@ -1236,6 +1237,27 @@
   // covers the Program side (PAs, the engagement's CC list, Chris and Rita);
   // the Research Review email is the one that also goes to our own team,
   // because it is proposing a meeting they have to attend.
+  // Greg (9/14/26): "somehow did not pick up secondary client Andrew."
+  // The composer took ONE contact -- the first with "CEO" in the title, else
+  // whichever row came back first -- which is right for a survey addressed to
+  // the CEO personally, and wrong for this email: it proposes a meeting, and
+  // 060_accept_application_contacts.sql files a Primary, a Secondary and a
+  // 3rd officer precisely because more than one person runs the engagement
+  // from the client's side. Everyone on file with an email is now addressed,
+  // in sort_order (Primary first).
+  function clientContacts() {
+    return (listData.contacts || []).filter((c) => c && (c.email || "").trim());
+  }
+
+  // "Hi Rob," / "Hi Rob and Andrew," / "Hi Rob, Andrew and Dana," -- greeting
+  // one person by name while three are on the To line reads as a mistake.
+  function greetingNames(contacts) {
+    const first = contacts.map((c) => (c.name || "").trim().split(/\s+/)[0]).filter(Boolean);
+    if (!first.length) return "there";
+    if (first.length === 1) return first[0];
+    return first.slice(0, -1).join(", ") + " and " + first[first.length - 1];
+  }
+
   function egTeamEmails() {
     return (listData.team || [])
       .map((r) => (r.users && r.users.email ? r.users.email.trim() : ""))
@@ -2024,26 +2046,24 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
   }
 
   function openReviewEmailModal() {
-    const contacts = listData.contacts || [];
-    const ceoContact = contacts.find((c) => (c.title || "").toLowerCase().includes("ceo")) || contacts[0] || null;
+    const recipients = clientContacts();
     const teamRows = listData.team || [];
     const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
     const teamLeadName = leadRow && leadRow.users.full_name ? leadRow.users.full_name : "";
     const teamLeadFirstName = teamLeadName ? teamLeadName.split(" ")[0] : "";
 
-    $("rrem-to").value = (ceoContact && ceoContact.email) || "";
-    $("rrem-no-contact").classList.toggle("hidden", !!(ceoContact && ceoContact.email));
+    $("rrem-to").value = recipients.map((c) => c.email.trim()).join(", ");
+    $("rrem-no-contact").classList.toggle("hidden", recipients.length > 0);
     $("rrem-cc").value = customerCcList($("rrem-to").value, egTeamEmails());
     $("rrem-subject").value = customerSubject("Research Completed", "Schedule Review");
 
     const url = clientDashboardUrl();
     $("rrem-no-dashboard").classList.toggle("hidden", !!url);
-    const ceoFirstName = ceoContact && ceoContact.name ? ceoContact.name.split(" ")[0] : "there";
     const dashboardLine = url
       ? `You can see everything on your Economic Gardening dashboard:\n\n${url}\n`
       : `Everything is posted to your Economic Gardening dashboard.\n`;
 
-    $("rrem-body-text").value = `Hi ${ceoFirstName},
+    $("rrem-body-text").value = `Hi ${greetingNames(recipients)},
 
 Good news — the team has completed the research for ${currentClient.name}.
 
