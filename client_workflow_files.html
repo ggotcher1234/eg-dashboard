@@ -225,13 +225,32 @@
   /* Close-Out Evaluation email modal */
   .eem-overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); z-index: 200; align-items: center; justify-content: center; }
   .eem-overlay.open { display: flex; }
-  .eem-modal { background: #fff; border-radius: 10px; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 22px 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+  /* Greg (9/14/26): "open up the email box/window making it longer like you
+     did in the dashboard window." 560px wrapped the body into a narrow
+     column and pushed a five-address Cc onto four lines; 760 lets a
+     paragraph sit on two lines instead of four and shortens the whole
+     window as a side effect. Still capped to the viewport, so it never
+     grows past the screen on a laptop. */
+  .eem-modal { background: #fff; border-radius: 10px; width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; padding: 22px 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
   .eem-modal-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
   .eem-modal-header h3 { margin: 0 0 4px; color: var(--navy); }
   .eem-modal-meta { font-size: 12.5px; color: var(--muted); }
   .eem-modal-close { background: none; border: none; font-size: 20px; line-height: 1; cursor: pointer; color: var(--muted); padding: 2px 6px; }
-  #eem-body input, #eem-body textarea { width: 100%; font-family: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; }
-  #eem-body textarea { resize: vertical; }
+  /* Was #eem-body only -- the two later modals (Controlling Document,
+     Research Complete) never picked it up and fell back to the generic
+     .field styling at a different font size. All three now match. */
+  #eem-body input, #eem-body textarea,
+  #rrem-body input, #rrem-body textarea,
+  #cdem-body input, #cdem-body textarea {
+    width: 100%; font-family: inherit; font-size: 13.5px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box;
+  }
+  #eem-body textarea, #rrem-body textarea, #cdem-body textarea { resize: vertical; }
+  /* The body grows to fit the draft (autosizeEmailBody below) rather than
+     sitting at a fixed row count with the end of the email out of sight.
+     Capped so a very long one scrolls inside the box instead of pushing the
+     buttons off the bottom of the screen. */
+  .eem-body-text { max-height: 46vh; overflow-y: auto; line-height: 1.5; }
 
   #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
   .no-client-note { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 14px; }
@@ -697,7 +716,7 @@
       </div>
       <div class="field">
         <label>Body</label>
-        <textarea id="eem-body-text" rows="12"></textarea>
+        <textarea id="eem-body-text" class="eem-body-text" rows="12"></textarea>
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
         <button type="button" class="btn-secondary btn-sm" id="eem-copy-btn">Copy Email Text</button>
@@ -738,7 +757,7 @@
       </div>
       <div class="field">
         <label>Body</label>
-        <textarea id="rrem-body-text" rows="14"></textarea>
+        <textarea id="rrem-body-text" class="eem-body-text" rows="14"></textarea>
       </div>
       <div id="rrem-no-dashboard" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
         This engagement has no client dashboard link yet, so the email doesn&rsquo;t include one. Set the slug on Client Info and create the email again.
@@ -786,7 +805,7 @@
       </div>
       <div class="field">
         <label>Body</label>
-        <textarea id="cdem-body-text" rows="14"></textarea>
+        <textarea id="cdem-body-text" class="eem-body-text" rows="14"></textarea>
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
         <button type="button" class="btn-secondary btn-sm" id="cdem-copy-btn">Copy Email Text</button>
@@ -1852,12 +1871,28 @@ ${teamLeadName || teamLeadFirstName || "Your EG Team Lead"}`;
 
     updateEvalEmailMailto();
     $("eval-email-overlay").classList.add("open");
+    autosizeEmailBody($("eem-body-text"));
   }
 
   // mailto takes cc as a query parameter, and the address list inside it has
   // to be comma-separated with each address encoded on its own -- encoding the
   // whole string would turn the separators into %2C and Outlook would read it
   // as one malformed recipient.
+  // Grow the body box to the draft that is in it. Same two rules the research
+  // questions taught us (client_research.html): reset to auto first, because
+  // scrollHeight never reports less than the current height; and add the
+  // borders back, because this page is border-box and scrollHeight measures
+  // content + padding only -- assign it straight and the last line stays
+  // clipped. The CSS max-height caps it, so a runaway draft scrolls inside
+  // the box rather than pushing the buttons off screen.
+  function autosizeEmailBody(el) {
+    if (!el) return;
+    el.style.height = "auto";
+    const cs = getComputedStyle(el);
+    const borders = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+    el.style.height = (el.scrollHeight + borders) + "px";
+  }
+
   function addressParam(value) {
     return (value || "").split(",").map((s) => s.trim()).filter(Boolean).map(encodeURIComponent).join(",");
   }
@@ -1874,6 +1909,7 @@ ${teamLeadName || teamLeadFirstName || "Your EG Team Lead"}`;
   $("eem-to").addEventListener("input", updateEvalEmailMailto);
   $("eem-cc").addEventListener("input", updateEvalEmailMailto);
   $("eem-subject").addEventListener("input", updateEvalEmailMailto);
+  $("eem-body-text").addEventListener("input", () => autosizeEmailBody($("eem-body-text")));
   $("eem-body-text").addEventListener("input", updateEvalEmailMailto);
   $("eem-copy-btn").addEventListener("click", async () => {
     const text = `To: ${$("eem-to").value}\nCc: ${$("eem-cc").value}\nSubject: ${$("eem-subject").value}\n\n${$("eem-body-text").value}`;
@@ -2036,6 +2072,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
 
     updateControllingEmailMailto();
     $("cd-email-overlay").classList.add("open");
+    autosizeEmailBody($("cdem-body-text"));
   }
 
   // ---------- Research Complete email (Greg, 9/14/26) ----------
@@ -2108,6 +2145,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
 
     updateReviewEmailMailto();
     $("rr-email-overlay").classList.add("open");
+    autosizeEmailBody($("rrem-body-text"));
   }
 
   function updateReviewEmailMailto() {
@@ -2121,6 +2159,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
   });
   ["rrem-to", "rrem-cc", "rrem-subject", "rrem-body-text"].forEach((id) =>
     $(id).addEventListener("input", updateReviewEmailMailto));
+  $("rrem-body-text").addEventListener("input", () => autosizeEmailBody($("rrem-body-text")));
   $("rrem-copy-btn").addEventListener("click", async () => {
     const text = `To: ${$("rrem-to").value}\nCc: ${$("rrem-cc").value}\nSubject: ${$("rrem-subject").value}\n\n${$("rrem-body-text").value}`;
     try {
@@ -2143,6 +2182,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
   $("cdem-to").addEventListener("input", updateControllingEmailMailto);
   $("cdem-cc").addEventListener("input", updateControllingEmailMailto);
   $("cdem-subject").addEventListener("input", updateControllingEmailMailto);
+  $("cdem-body-text").addEventListener("input", () => autosizeEmailBody($("cdem-body-text")));
   $("cdem-body-text").addEventListener("input", updateControllingEmailMailto);
   $("cdem-copy-btn").addEventListener("click", async () => {
     const text = `To: ${$("cdem-to").value}\nCc: ${$("cdem-cc").value}\nSubject: ${$("cdem-subject").value}\n\n${$("cdem-body-text").value}`;
