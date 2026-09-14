@@ -175,14 +175,46 @@
      accordion cards, reused here for each Research Area. Resource Vault
      used to be the other consumer of this look -- it moved to
      client_profile.html as wizard step 6, "Resources" (Greg, 9/5/26), and
-     took its own rv-*/list-row-edit/add-row-form/tab CSS with it; nothing
+     took its own rv-, list-row-edit, add-row-form and tab CSS with it (the
+     slash-star spelling of that list used to sit here and silently ended
+     this comment early -- see below); nothing
      left in this file used the accordion-count/accordion-header-right
      variants that were vault-only, so those went too. */
-  .accordion-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; gap: 12px; }
-  .accordion-header h2 { display: flex; align-items: center; gap: 10px; font-size: 16px; }
-  .accordion-chevron { font-size: 13px; color: var(--muted); transition: transform 0.15s ease; flex-shrink: 0; }
+  /* Greg (9/14/26): "the research boxes are a little funky. the cursor turns
+     into edit mode and it's not clear that each box is a clickable link.
+     Make the boxes easily identifiable as click on the box of your choice.
+     maybe animate them on hover."
+     The header always had cursor:pointer -- but it was only as tall as its
+     own text line, sitting inside .card's 22px/26px padding. Everything
+     around the title was the CARD, not the target, so most of a box gave a
+     text I-beam and no hover response even though clicking there did nothing.
+     The padding moves off the card and onto the header, so when a box is
+     collapsed the header IS the whole box: the entire thing takes the
+     pointer, highlights, and responds. */
+  .ra-card { padding: 0; overflow: hidden; transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease; }
+  .ra-card-collapsed:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(20,48,77,0.12);
+    border-color: var(--navy-light);
+  }
+  .accordion-header {
+    display: flex; align-items: center; justify-content: space-between; cursor: pointer;
+    user-select: none; gap: 12px; padding: 18px 24px; border-radius: 10px;
+    transition: background 0.15s ease;
+  }
+  .accordion-header:hover { background: #eef3f9; }
+  .accordion-header:focus-visible { outline: 2px solid var(--navy-light); outline-offset: -2px; }
+  .accordion-header.open { border-bottom: 1px solid var(--border); border-radius: 10px 10px 0 0; }
+  .accordion-header h2 { display: flex; align-items: center; gap: 10px; font-size: 16px; margin: 0; }
+  .accordion-chevron { font-size: 13px; color: var(--muted); transition: transform 0.15s ease, color 0.15s ease; flex-shrink: 0; }
+  .accordion-header:hover .accordion-chevron { color: var(--navy); transform: translateX(3px); }
   .accordion-header.open .accordion-chevron { transform: rotate(90deg); }
-  .accordion-body { display: none; margin-top: 14px; }
+  .accordion-header.open:hover .accordion-chevron { transform: rotate(90deg) translateX(3px); }
+  /* The words that say so out loud -- an animated box still leaves a reader
+     guessing what the click DOES. Appears on hover and on keyboard focus. */
+  .accordion-hint { font-size: 12px; color: var(--navy-light); font-weight: 600; opacity: 0; transition: opacity 0.15s ease; flex-shrink: 0; }
+  .accordion-header:hover .accordion-hint, .accordion-header:focus-visible .accordion-hint { opacity: 1; }
+  .accordion-body { display: none; padding: 16px 24px 20px; }
   .accordion-body.open { display: block; }
 
   /* Kept for embed mode generally (Add Research's own iframe pane relies
@@ -1123,9 +1155,11 @@
     container.innerHTML = RESEARCH_AREAS.map(([key, label]) => {
       const isOpen = openResearchArea === key;
       return `
-      <div class="card" style="margin-bottom:12px;">
-        <div class="accordion-header ${isOpen ? "open" : ""}" data-ra-accordion="${key}">
+      <div class="card ra-card ${isOpen ? "" : "ra-card-collapsed"}" style="margin-bottom:12px;">
+        <div class="accordion-header ${isOpen ? "open" : ""}" data-ra-accordion="${key}"
+             role="button" tabindex="0" aria-expanded="${isOpen}" aria-controls="ra-${key}-body">
           <h2><span class="accordion-chevron">&#9656;</span> ${escapeHtml(label)}</h2>
+          <span class="accordion-hint">${isOpen ? "Click to close" : "Click to open"}</span>
         </div>
         <div class="accordion-body ${isOpen ? "open" : ""}" id="ra-${key}-body">
           <div class="rq-docs-label">Research Questions</div>
@@ -1158,14 +1192,29 @@
     }).join("");
 
     container.querySelectorAll("[data-ra-accordion]").forEach((hdr) => {
+      // A div acting as a button has to behave like one: Enter and Space
+      // toggle it, and Space must not scroll the page first.
+      hdr.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") { e.preventDefault(); hdr.click(); }
+      });
       hdr.addEventListener("click", () => {
         const wasOpen = hdr.classList.contains("open");
         container.querySelectorAll("[data-ra-accordion]").forEach((h) => {
           h.classList.remove("open");
+          h.setAttribute("aria-expanded", "false");
+          const hint = h.querySelector(".accordion-hint");
+          if (hint) hint.textContent = "Click to open";
+          // The lift-on-hover belongs to a CLOSED box only -- an open one
+          // holding text inputs must not float when the pointer crosses it.
+          h.closest(".ra-card")?.classList.add("ra-card-collapsed");
           $(`ra-${h.dataset.raAccordion}-body`).classList.remove("open");
         });
         if (!wasOpen) {
           hdr.classList.add("open");
+          hdr.setAttribute("aria-expanded", "true");
+          const openHint = hdr.querySelector(".accordion-hint");
+          if (openHint) openHint.textContent = "Click to close";
+          hdr.closest(".ra-card")?.classList.remove("ra-card-collapsed");
           const body = $(`ra-${hdr.dataset.raAccordion}-body`);
           body.classList.add("open");
           // The question textareas size themselves from scrollHeight, which
