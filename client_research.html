@@ -260,9 +260,25 @@
   /* Up/down reorder controls -- this is the order the client dashboard now
      shows documents in too (Greg, 8/24/26), so this is the one place that
      order gets set. */
-  .rq-doc-order-btns { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
-  .rq-move-btn { padding: 0 6px; font-size: 9px; line-height: 1.5; }
-  .rq-move-btn:disabled { opacity: 0.25; cursor: default; }
+  /* Greg (9/15/26): "can we change the way we order the files from the
+     up/down arrow to drag and drop?" The two stacked arrows are gone; the
+     row is dragged by the grip on its left.
+     Only the HANDLE is draggable, not the row -- a draggable row would make
+     the document name un-clickable and kill text selection across the whole
+     line, because the browser starts a drag instead. */
+  .rq-drag-handle {
+    flex-shrink: 0; cursor: grab; color: var(--muted); font-size: 17px; line-height: 1;
+    padding: 4px 3px; border-radius: 5px; user-select: none; background: none; border: none;
+    font-family: inherit;
+  }
+  .rq-drag-handle:hover { background: var(--bg); color: var(--navy); }
+  .rq-drag-handle:active { cursor: grabbing; }
+  .rq-drag-handle:focus-visible { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .rq-doc-row.is-dragging { opacity: 0.4; }
+  /* The gap the row will land in. A line rather than a moving placeholder --
+     it cannot be knocked out of step with the pointer. */
+  .rq-doc-row.drop-above { box-shadow: inset 0 2px 0 0 var(--navy-light); }
+  .rq-doc-row.drop-below { box-shadow: inset 0 -2px 0 0 var(--navy-light); }
   /* Greg (9/11/26): "make the question box larger to show the entire
      question." Research questions are full sentences -- "Which market
      segments, applications, and Clippard product families offer the..." --
@@ -1446,11 +1462,10 @@
         ? `${badgeHtml(d.url, true)}<a class="rq-doc-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">${escapeHtml(shownName || d.url)}</a>`
         : `${badgeHtml(d.storage_path, false)}<span class="rq-doc-link" data-path="${escapeHtml(d.storage_path)}">${escapeHtml(shownName)}</span>`;
       return `
-      <div class="rq-doc-row">
-        <div class="rq-doc-order-btns">
-          <button type="button" class="btn-secondary icon-btn rq-move-btn" data-move-doc="${d.id}" data-move-dir="up" data-move-scope="${scope}" ${i === 0 ? "disabled" : ""} title="Move up (this is the order clients see it in)">&#9650;</button>
-          <button type="button" class="btn-secondary icon-btn rq-move-btn" data-move-doc="${d.id}" data-move-dir="down" data-move-scope="${scope}" ${i === docs.length - 1 ? "disabled" : ""} title="Move down">&#9660;</button>
-        </div>
+      <div class="rq-doc-row" data-row-doc="${d.id}">
+        <button type="button" class="rq-drag-handle" draggable="true" data-drag-doc="${d.id}" data-drag-scope="${scope}"
+                title="Drag to reorder -- this is the order clients see. Or focus this and press the up/down arrow keys."
+                aria-label="Reorder ${escapeHtml(shownName || "document")}">&#10303;</button>
         ${linkHtml}
         <button type="button" class="btn-secondary icon-btn" data-rename-doc="${d.id}" title="Rename -- sets the label the client sees, not the file itself">&#9998;</button>
         <button type="button" class="btn-secondary icon-btn rq-visibility-toggle" data-id="${d.id}" data-visibility="${d.visibility}">
@@ -1503,8 +1518,74 @@
         RESEARCH_AREAS.forEach(([key]) => renderAreaDocs(key));
       });
     });
-    scopeEl.querySelectorAll(".rq-move-btn").forEach((btn) => {
-      btn.addEventListener("click", () => moveDocument(btn.dataset.moveDoc, btn.dataset.moveDir, btn.dataset.moveScope));
+    wireDocDragHandlers(scopeEl);
+  }
+
+  // ---------- Drag to reorder (Greg, 9/15/26) ----------
+  // Native HTML5 drag and drop -- no library, same as everything else here.
+  //
+  // The handle is what carries draggable=true, but the thing that MOVES is
+  // its row, so dragstart sets the drag image to the row: otherwise the
+  // browser drags a picture of the little grip and there is nothing to aim
+  // with. dragover on each row decides above-or-below from the midpoint of
+  // the row under the pointer, and drop reads that back -- so the line you
+  // saw is exactly where the row lands.
+  let dragDocId = null;
+  let dragScope = null;
+
+  function clearDropMarkers(scopeEl) {
+    scopeEl.querySelectorAll(".rq-doc-row").forEach((r) => r.classList.remove("drop-above", "drop-below"));
+  }
+
+  function wireDocDragHandlers(scopeEl) {
+    scopeEl.querySelectorAll(".rq-drag-handle").forEach((handle) => {
+      const row = handle.closest(".rq-doc-row");
+
+      handle.addEventListener("dragstart", (e) => {
+        dragDocId = handle.dataset.dragDoc;
+        dragScope = handle.dataset.dragScope;
+        e.dataTransfer.effectAllowed = "move";
+        // Firefox refuses to start a drag unless something is set.
+        e.dataTransfer.setData("text/plain", dragDocId);
+        if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(row, 20, row.offsetHeight / 2);
+        row.classList.add("is-dragging");
+      });
+
+      handle.addEventListener("dragend", () => {
+        row.classList.remove("is-dragging");
+        clearDropMarkers(scopeEl);
+        dragDocId = null; dragScope = null;
+      });
+
+      // Keyboard equivalent. Drag and drop is unreachable without a pointer,
+      // and the arrows this replaced were not -- so the handle keeps the
+      // same move on the same keys.
+      handle.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+        e.preventDefault();
+        moveDocumentBy(handle.dataset.dragDoc, e.key === "ArrowUp" ? -1 : 1, handle.dataset.dragScope);
+      });
+    });
+
+    scopeEl.querySelectorAll(".rq-doc-row").forEach((row) => {
+      row.addEventListener("dragover", (e) => {
+        if (!dragDocId || row.dataset.rowDoc === dragDocId) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const box = row.getBoundingClientRect();
+        const below = e.clientY > box.top + box.height / 2;
+        clearDropMarkers(scopeEl);
+        row.classList.add(below ? "drop-below" : "drop-above");
+      });
+
+      row.addEventListener("drop", (e) => {
+        if (!dragDocId || row.dataset.rowDoc === dragDocId) return;
+        e.preventDefault();
+        const box = row.getBoundingClientRect();
+        const below = e.clientY > box.top + box.height / 2;
+        clearDropMarkers(scopeEl);
+        reorderDocument(dragDocId, row.dataset.rowDoc, below, dragScope);
+      });
     });
   }
 
@@ -1516,23 +1597,65 @@
     return allDocuments.filter((d) => d.research_area === id);
   }
 
-  // Swaps sort_order with the adjacent row and re-renders -- this is the
-  // one control that sets the order both this page and the client
-  // dashboard show documents in (Greg, 8/24/26: "the dashboard order
+  // This is the one control that sets the order BOTH this page and the
+  // client dashboard show documents in (Greg, 8/24/26: "the dashboard order
   // should match the research reports order").
-  async function moveDocument(docId, direction, scope) {
+  //
+  // The old arrows swapped two rows' sort_order values. Dragging can move a
+  // row several places at once, so swapping no longer describes it: the list
+  // is rebuilt in its new order and renumbered 1..n. Renumbering also
+  // quietly repairs rows that arrived with duplicate or missing sort_order.
+  async function persistDocOrder(ordered) {
+    const writes = ordered.map((d, i) =>
+      sb.from("documents").update({ sort_order: i + 1 }).eq("id", d.id));
+    const results = await Promise.all(writes);
+    const failed = results.find((r) => r.error);
+    if (failed) { showBanner("Couldn't reorder: " + failed.error.message, "error"); return false; }
+    return true;
+  }
+
+  async function applyDocOrder(ordered, scope) {
+    // Paint the new order immediately, then persist. A reorder that waited
+    // on six round trips before moving anything feels broken.
+    const [, area] = scope.split(":");
+    const rest = allDocuments.filter((d) => d.research_area !== area);
+    allDocuments = rest.concat(ordered.map((d, i) => ({ ...d, sort_order: i + 1 })));
+    renderAreaDocs(area);
+    if (!(await persistDocOrder(ordered))) {
+      // Put the screen back to what the database actually holds.
+      await loadDocuments();
+      RESEARCH_AREAS.forEach(([key]) => renderAreaDocs(key));
+    }
+  }
+
+  // Drop: pull the dragged row out, put it back next to the target.
+  async function reorderDocument(docId, targetId, below, scope) {
     const docs = docsForScope(scope);
-    const idx = docs.findIndex((d) => d.id === docId);
-    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (idx < 0 || swapIdx < 0 || swapIdx >= docs.length) return;
-    const a = docs[idx], b = docs[swapIdx];
-    const [r1, r2] = await Promise.all([
-      sb.from("documents").update({ sort_order: b.sort_order }).eq("id", a.id),
-      sb.from("documents").update({ sort_order: a.sort_order }).eq("id", b.id),
-    ]);
-    if (r1.error || r2.error) { showBanner("Couldn't reorder: " + (r1.error || r2.error).message, "error"); return; }
-    await loadDocuments();
-    RESEARCH_AREAS.forEach(([key]) => renderAreaDocs(key));
+    const from = docs.findIndex((d) => d.id === docId);
+    if (from < 0) return;
+    const moved = docs[from];
+    const without = docs.filter((d) => d.id !== docId);
+    const targetIdx = without.findIndex((d) => d.id === targetId);
+    if (targetIdx < 0) return;
+    const insertAt = below ? targetIdx + 1 : targetIdx;
+    if (insertAt === from) return; // landed where it started
+    without.splice(insertAt, 0, moved);
+    await applyDocOrder(without, scope);
+  }
+
+  // Keyboard: one place up or down, the move the arrows used to make.
+  async function moveDocumentBy(docId, delta, scope) {
+    const docs = docsForScope(scope);
+    const from = docs.findIndex((d) => d.id === docId);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= docs.length) return;
+    const next = docs.slice();
+    next.splice(to, 0, next.splice(from, 1)[0]);
+    await applyDocOrder(next, scope);
+    // Keep the focus on the handle that just moved, so the next press
+    // continues the move instead of doing nothing.
+    const handle = document.querySelector(`.rq-drag-handle[data-drag-doc="${docId}"]`);
+    if (handle) handle.focus();
   }
 
   // Next sort_order for a newly added document/link -- appended to the end
