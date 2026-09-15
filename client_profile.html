@@ -935,9 +935,9 @@
                   <label>Logo</label>
                   <div class="autofill-row" style="margin-top:0;">
                     <div id="co-logo-file"></div>
-                    <button type="button" class="btn-secondary btn-sm autofill-web-btn">&#10024; Auto-fill from website</button>
+                    <button type="button" class="btn-secondary btn-sm autofill-web-btn" data-autofill-scope="links">&#10024; Auto-fill from website</button>
                   </div>
-                  <div class="field-hint">Displayed in the client dashboard header. Auto-fill reads the Website below for a logo, social links and a draft description &mdash; it only fills what's still empty.</div>
+                  <div class="field-hint">Displayed in the client dashboard header. Auto-fill reads the Website below for a logo and social links &mdash; it only fills what's still empty, and tells you what it couldn't find.</div>
                   <div id="autofill-logo-suggest" class="hidden"></div>
                 </div>
                 <div class="field">
@@ -1007,7 +1007,7 @@
             <div class="wizard-subcard" style="margin-top:0; padding-top:0; border-top:none;">
               <div class="subcard-title">Engagement Description</div>
               <div class="autofill-row" style="margin-bottom:8px;">
-                <button type="button" class="btn-secondary btn-sm autofill-web-btn">&#10024; Auto-fill from website</button>
+                <button type="button" class="btn-secondary btn-sm autofill-web-btn" data-autofill-scope="description">&#10024; Auto-fill from website</button>
                 <span class="field-hint" style="margin:0;">Drafts this from the company's website. Fills the logo and social links on the next step too, if they're still empty.</span>
               </div>
               <div class="rt-toolbar" data-rt-target="co-description">
@@ -2028,13 +2028,25 @@
     return new File([bytes], filename || "logo", { type: mime });
   }
 
-  async function autofillFromWebsite() {
-    // There are two "Auto-fill from website" buttons -- one by the
-    // description (step 1), one beside Upload logo (step 2) -- both run
-    // this. Disable/relabel whichever exist while it works.
+  // Greg (9/15/26): "when i clicked it, it asked if it was ok to replace the
+  // business description which is not even a topic on this page. this
+  // autofill is supposed to go get the logo and any links from the website.
+  // if it cannot get them it should so advise."
+  //
+  // Both buttons ran one function that filled everything it could, so the
+  // one on the Links step prompted about a field two steps away and off
+  // screen. `scope` fixes that: "links" touches the logo, the website and
+  // the socials and never mentions the description; "description" is the
+  // step-1 button and behaves as before.
+  //
+  // And it now says what it did NOT find. It used to report only what it
+  // filled, so "no logo on that site", "logo already set" and "I found one,
+  // look below" were all the same silence.
+  async function autofillFromWebsite(scope) {
+    const wantsDescription = scope !== "links";
     const btns = [...document.querySelectorAll(".autofill-web-btn")];
     const website = (getFieldValue("co-website") || "").trim() || (currentClient && currentClient.website_url) || "";
-    if (!website) { showBanner("Add the website address on the next step first, then Auto-fill.", "error"); return; }
+    if (!website) { showBanner("Add the website address on the Links step first, then Auto-fill.", "error"); return; }
 
     const labels = btns.map((b) => b.textContent);
     btns.forEach((b) => { b.disabled = true; b.textContent = "Reading website…"; });
@@ -2054,22 +2066,33 @@
       if (!res.ok || data.error) { showBanner(data.error || `Couldn't read that website (${res.status}).`, "error"); return; }
 
       const patch = {};
-      const filled = [];
+      const filled = [];      // newly written
+      const alreadySet = [];  // found, but the field was not empty
+      const notFound = [];    // the site had nothing
 
       if (data.website && !(getFieldValue("co-website") || "").trim()) {
         setFieldValue("co-website", data.website);
         patch.website_url = data.website;
       }
+
       for (const [id, col, key, name] of AUTOFILL_SOCIAL_MAP) {
         const val = data.socials && data.socials[key];
-        if (val && !(getFieldValue(id) || "").trim()) {
-          setFieldValue(id, val);
-          patch[col] = val;
-          filled.push(name);
-        }
+        const hasValue = !!(getFieldValue(id) || "").trim();
+        if (!val) { notFound.push(name); continue; }
+        if (hasValue) { alreadySet.push(name); continue; }
+        setFieldValue(id, val);
+        patch[col] = val;
+        filled.push(name);
       }
 
-      if (data.description) {
+      // The logo is never written silently -- it is offered below the button
+      // for a look first (a favicon is not always the real logo), so it is
+      // reported separately from the fields that really were filled.
+      const hasLogoSuggestion = !!(data.logo && data.logo.dataUrl);
+      if (!hasLogoSuggestion) notFound.push("Logo");
+      else if (currentClient.logo_url) alreadySet.push("Logo");
+
+      if (wantsDescription && data.description) {
         const current = (getFieldValue("co-description") || "").trim();
         if (!current || confirm("Replace the current company description with a draft written from the website? (Review it before continuing.)")) {
           setFieldValue("co-description", data.description);
@@ -2089,12 +2112,21 @@
 
       renderAutofillLogoSuggest(data);
 
-      showBanner(
-        filled.length
-          ? `Filled from the website: ${filled.join(", ")}. Review before continuing.`
-          : "Read the website — nothing new to fill (the empty fields had no match).",
-        "success",
-      );
+      // One sentence per outcome, in the order that matters: what changed,
+      // what was left alone, what the site does not have.
+      const parts = [];
+      if (filled.length) parts.push(`Filled: ${filled.join(", ")}.`);
+      // The suggestion renders in #autofill-logo-suggest, which lives on the
+      // Links step -- so "below" is only true when that is where you are.
+      if (hasLogoSuggestion && !currentClient.logo_url) {
+        parts.push(wantsDescription
+          ? "Found a possible logo — it's waiting on the Links step for you to approve."
+          : "Found a possible logo — check it below and choose Use this logo.");
+      }
+      if (alreadySet.length) parts.push(`Already had a value, left alone: ${alreadySet.join(", ")}.`);
+      if (notFound.length) parts.push(`Not on the website: ${notFound.join(", ")}.`);
+      const tone = filled.length || (hasLogoSuggestion && !currentClient.logo_url) ? "success" : "error";
+      showBanner(parts.length ? parts.join(" ") : "Read the website but found nothing to fill.", tone);
     } catch (err) {
       console.error("autofillFromWebsite error:", err);
       showBanner("Couldn't reach the website reader — try again in a moment.", "error");
@@ -2135,7 +2167,8 @@
     });
   }
 
-  document.querySelectorAll(".autofill-web-btn").forEach((b) => b.addEventListener("click", autofillFromWebsite));
+  document.querySelectorAll(".autofill-web-btn").forEach((b) =>
+    b.addEventListener("click", () => autofillFromWebsite(b.dataset.autofillScope || "description")));
 
   // ---------- Generic list sections (Next Steps, Contacts, Team, Competitors, Top Customers) ----------
   // Each of these now lives on its own dedicated wizard step instead of a
