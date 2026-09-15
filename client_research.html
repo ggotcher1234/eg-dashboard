@@ -231,6 +231,30 @@
      per-question card. */
   .rq-docs-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; }
   .rq-doc-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  /* Greg (9/15/26): "can you use the same file type icons that you use for
+     the client dashboard." Lifted from client_public.html verbatim -- same
+     labels, same brand colours -- so a specialist adding a file here sees
+     the badge the client will see on their dashboard. Replaces the coloured
+     book emoji, which rendered differently on every OS and said nothing a
+     reader could name. */
+  .doc-badge {
+    display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: 0.5px;
+    text-transform: uppercase; color: #fff; padding: 3px 6px; border-radius: 5px;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .doc-badge-pdf   { background: #d93025; }
+  .doc-badge-doc   { background: #2b579a; }
+  .doc-badge-xls   { background: #217346; }
+  .doc-badge-ppt   { background: #d24726; }
+  .doc-badge-img   { background: #7b5ea7; }
+  .doc-badge-zip   { background: #6b7683; }
+  .doc-badge-link  { background: #1a9e4b; }
+  .doc-badge-file  { background: #64748b; }
+  /* In a list the badges stack vertically, so a 3-letter PPT and a 4-letter
+     LINK would start each name at a different x and the column would read as
+     ragged. One fixed width lines every name up. The client dashboard needs
+     no such rule -- its badges are right-aligned against the card edge. */
+  .rq-doc-row .doc-badge { min-width: 44px; text-align: center; }
   .rq-doc-row .rq-doc-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; flex: 1; text-decoration: none; }
   .rq-doc-row .rq-doc-link:hover { text-decoration: underline; }
   /* Up/down reorder controls -- this is the order the client dashboard now
@@ -995,11 +1019,37 @@
     png: "\u{1F5BC}\u{FE0F}", jpg: "\u{1F5BC}\u{FE0F}", jpeg: "\u{1F5BC}\u{FE0F}", gif: "\u{1F5BC}\u{FE0F}",
     zip: "\u{1F5C3}\u{FE0F}",
   };
-  function fileIconFor(path) {
-    const name = (path.split("/").pop() || "").toLowerCase();
+  function fileExtension(path) {
+    if (!path) return "";
+    const name = (String(path).split("/").pop() || "").toLowerCase();
     const dot = name.lastIndexOf(".");
-    const ext = dot === -1 ? "" : name.slice(dot + 1);
-    return FILE_TYPE_ICONS[ext] || "\u{1F4C4}";
+    return dot === -1 ? "" : name.slice(dot + 1);
+  }
+  function fileIconFor(path) {
+    return FILE_TYPE_ICONS[fileExtension(path)] || "\u{1F4C4}";
+  }
+
+  // The client dashboard's badges (client_public.html), same table, so the
+  // two screens name a file type identically. FILE_TYPE_ICONS above is kept:
+  // openStoredDocument and the workflow rows still use the emoji.
+  const FILE_TYPE_BADGES = {
+    pdf:  ["PDF", "pdf"],
+    doc:  ["DOC", "doc"],  docx: ["DOC", "doc"],  rtf: ["DOC", "doc"],  txt: ["TXT", "file"],
+    xls:  ["XLS", "xls"],  xlsx: ["XLS", "xls"],  csv: ["CSV", "xls"],
+    ppt:  ["PPT", "ppt"],  pptx: ["PPT", "ppt"],
+    png:  ["IMG", "img"],  jpg:  ["IMG", "img"],  jpeg: ["IMG", "img"],
+    gif:  ["IMG", "img"],  svg:  ["IMG", "img"],  webp: ["IMG", "img"],
+    zip:  ["ZIP", "zip"],
+    html: ["WEB", "link"], htm: ["WEB", "link"],
+  };
+  function badgeFor(nameOrPath, isLink) {
+    const hit = FILE_TYPE_BADGES[fileExtension(nameOrPath)];
+    if (hit) return hit;
+    return isLink ? ["LINK", "link"] : ["FILE", "file"];
+  }
+  function badgeHtml(nameOrPath, isLink) {
+    const [label, tone] = badgeFor(nameOrPath, isLink);
+    return `<span class="doc-badge doc-badge-${tone}">${label}</span>`;
   }
 
   // Declaring the right Content-Type at upload time (belt-and-suspenders
@@ -1390,9 +1440,11 @@
       // KW Files") shown instead of the raw upload filename; the real
       // file_name and its download are untouched.
       const shownName = d.display_name || d.file_name || d.url;
+      // The badge sits where the emoji did, ahead of the name, and is not
+      // part of the link text -- clicking the type shouldn't open the file.
       const linkHtml = d.url
-        ? `<a class="rq-doc-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">&#128279; ${escapeHtml(shownName || d.url)}</a>`
-        : `<span class="rq-doc-link" data-path="${escapeHtml(d.storage_path)}">${fileIconFor(d.storage_path)} ${escapeHtml(shownName)}</span>`;
+        ? `${badgeHtml(d.url, true)}<a class="rq-doc-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">${escapeHtml(shownName || d.url)}</a>`
+        : `${badgeHtml(d.storage_path, false)}<span class="rq-doc-link" data-path="${escapeHtml(d.storage_path)}">${escapeHtml(shownName)}</span>`;
       return `
       <div class="rq-doc-row">
         <div class="rq-doc-order-btns">
