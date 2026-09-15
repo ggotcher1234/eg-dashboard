@@ -406,6 +406,26 @@
   body.embed-mode .std-toolbar-row,
   body.embed-mode #sec-overview { display: none !important; }
   body.embed-mode .page-shell { max-width: none; margin: 0; padding: 0 0 40px; }
+
+  /* Greg (9/15/26): "i thought we extended this email window so it's not so
+     tiny with continuous scrolling."
+     It WAS extended -- and then this page gets embedded in the Engagement
+     Workspace's iframe, where every vh unit means the IFRAME's height, not
+     the screen's. The iframe is sized to this page's content, so it is
+     often only ~300px tall; `max-height: calc(100vh - 48px)` then resolved
+     to about 250px and the 46vh body box to about 140px. The window was
+     capping itself to a box the size of its own container.
+     In embed mode the overlay therefore leaves the viewport box entirely:
+     absolutely positioned in the document, so opening it makes the PAGE
+     taller, the parent's ResizeObserver sees that, and the iframe grows to
+     fit. No caps -- the window ends up exactly as long as the email. */
+  body.embed-mode { position: relative; }
+  body.embed-mode .eem-overlay.open {
+    position: absolute; inset: 0 0 auto 0; min-height: 100%;
+    align-items: flex-start; padding: 16px 0 24px;
+  }
+  body.embed-mode .eem-modal { max-height: none; overflow-y: visible; }
+  body.embed-mode .eem-body-text { max-height: none; overflow-y: hidden; }
 </style>
 </head>
 <body>
@@ -1872,6 +1892,7 @@ ${teamLeadName || teamLeadFirstName || "Your EG Team Lead"}`;
     updateEvalEmailMailto();
     $("eval-email-overlay").classList.add("open");
     autosizeEmailBody($("eem-body-text"));
+    revealEmailModal($("eval-email-overlay"));
   }
 
   // mailto takes cc as a query parameter, and the address list inside it has
@@ -1885,12 +1906,61 @@ ${teamLeadName || teamLeadFirstName || "Your EG Team Lead"}`;
   // content + padding only -- assign it straight and the last line stays
   // clipped. The CSS max-height caps it, so a runaway draft scrolls inside
   // the box rather than pushing the buttons off screen.
+  // In the workspace iframe the modal sits in the document rather than over
+  // the viewport, so it can open below whatever the reader is looking at.
+  // scrollIntoView walks same-origin ancestor frames, so this scrolls the
+  // workspace page as well as this one.
+  // The workspace sizes the iframe from this page's own box, watching it with
+  // a ResizeObserver. An absolutely positioned overlay does not change that
+  // box, so opening one would leave the iframe at its old height and the
+  // modal cut off. Holding the body open to the modal's height is what the
+  // observer actually notices -- then the iframe grows and the whole email
+  // is on screen. Cleared on close so the page shrinks straight back.
+  function syncEmbedHeight(overlay) {
+    if (!document.body.classList.contains("embed-mode")) return;
+    const modal = overlay && overlay.classList.contains("open") ? overlay.querySelector(".eem-modal") : null;
+
+    if (modal) {
+      document.body.style.minHeight = (modal.offsetHeight + 56) + "px";
+      return;
+    }
+
+    // Closing is the harder half. Clearing min-height is not enough: once the
+    // workspace has grown the frame, this document's body reports the frame's
+    // own height as a floor, so the workspace measures the tall value again
+    // and the pane stays stretched with white space under it -- a ratchet
+    // that only ever goes up. Collapsing the frame to the real content height
+    // first gives it something honest to measure; its own settle pass then
+    // agrees or corrects within a couple of hundred milliseconds.
+    document.body.style.minHeight = "";
+    const frame = window.frameElement; // same origin, so this is readable
+    const shell = document.querySelector(".page-shell");
+    if (frame && shell) frame.style.height = Math.max(120, Math.ceil(shell.getBoundingClientRect().height)) + "px";
+  }
+
+  function closeEmailOverlay(overlayId) {
+    const overlay = $(overlayId);
+    overlay.classList.remove("open");
+    syncEmbedHeight(null);
+  }
+
+  function revealEmailModal(overlay) {
+    if (!document.body.classList.contains("embed-mode")) return;
+    requestAnimationFrame(() => {
+      syncEmbedHeight(overlay);
+      const modal = overlay.querySelector(".eem-modal");
+      if (modal && modal.scrollIntoView) modal.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  }
+
   function autosizeEmailBody(el) {
     if (!el) return;
     el.style.height = "auto";
     const cs = getComputedStyle(el);
     const borders = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
     el.style.height = (el.scrollHeight + borders) + "px";
+    const overlay = el.closest(".eem-overlay");
+    if (overlay) syncEmbedHeight(overlay);
   }
 
   function addressParam(value) {
@@ -1902,9 +1972,9 @@ ${teamLeadName || teamLeadFirstName || "Your EG Team Lead"}`;
     $("eem-mailto-btn").href = `mailto:${addressParam($("eem-to").value)}?${cc ? `cc=${cc}&` : ""}subject=${encodeURIComponent($("eem-subject").value)}&body=${encodeURIComponent($("eem-body-text").value)}`;
   }
 
-  $("eem-close").addEventListener("click", () => $("eval-email-overlay").classList.remove("open"));
+  $("eem-close").addEventListener("click", () => closeEmailOverlay("eval-email-overlay"));
   $("eval-email-overlay").addEventListener("click", (e) => {
-    if (e.target === $("eval-email-overlay")) $("eval-email-overlay").classList.remove("open");
+    if (e.target === $("eval-email-overlay")) closeEmailOverlay("eval-email-overlay");
   });
   $("eem-to").addEventListener("input", updateEvalEmailMailto);
   $("eem-cc").addEventListener("input", updateEvalEmailMailto);
@@ -2073,6 +2143,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     updateControllingEmailMailto();
     $("cd-email-overlay").classList.add("open");
     autosizeEmailBody($("cdem-body-text"));
+    revealEmailModal($("cd-email-overlay"));
   }
 
   // ---------- Research Complete email (Greg, 9/14/26) ----------
@@ -2146,6 +2217,7 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     updateReviewEmailMailto();
     $("rr-email-overlay").classList.add("open");
     autosizeEmailBody($("rrem-body-text"));
+    revealEmailModal($("rr-email-overlay"));
   }
 
   function updateReviewEmailMailto() {
@@ -2153,9 +2225,9 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     $("rrem-mailto-btn").href = `mailto:${addressParam($("rrem-to").value)}?${cc ? `cc=${cc}&` : ""}subject=${encodeURIComponent($("rrem-subject").value)}&body=${encodeURIComponent($("rrem-body-text").value)}`;
   }
 
-  $("rrem-close").addEventListener("click", () => $("rr-email-overlay").classList.remove("open"));
+  $("rrem-close").addEventListener("click", () => closeEmailOverlay("rr-email-overlay"));
   $("rr-email-overlay").addEventListener("click", (e) => {
-    if (e.target === $("rr-email-overlay")) $("rr-email-overlay").classList.remove("open");
+    if (e.target === $("rr-email-overlay")) closeEmailOverlay("rr-email-overlay");
   });
   ["rrem-to", "rrem-cc", "rrem-subject", "rrem-body-text"].forEach((id) =>
     $(id).addEventListener("input", updateReviewEmailMailto));
@@ -2175,9 +2247,9 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     $("cdem-mailto-btn").href = `mailto:${addressParam($("cdem-to").value)}?${cc ? `cc=${cc}&` : ""}subject=${encodeURIComponent($("cdem-subject").value)}&body=${encodeURIComponent($("cdem-body-text").value)}`;
   }
 
-  $("cdem-close").addEventListener("click", () => $("cd-email-overlay").classList.remove("open"));
+  $("cdem-close").addEventListener("click", () => closeEmailOverlay("cd-email-overlay"));
   $("cd-email-overlay").addEventListener("click", (e) => {
-    if (e.target === $("cd-email-overlay")) $("cd-email-overlay").classList.remove("open");
+    if (e.target === $("cd-email-overlay")) closeEmailOverlay("cd-email-overlay");
   });
   $("cdem-to").addEventListener("input", updateControllingEmailMailto);
   $("cdem-cc").addEventListener("input", updateControllingEmailMailto);
