@@ -344,16 +344,38 @@
   .lre-table-head span {
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); font-weight: 700;
   }
+  /* Greg (9/15/26): "we need to be able to manually add competitors and
+     customers." The row form was built, then disabled on 8/30/26 because a
+     blank row under the table "read as a stray empty table, not an obvious
+     way to add something". It is back, with the two things that were missing
+     then: every cell carries a placeholder naming its column, and the button
+     says what it does instead of being a 34px icon. The tinted background
+     and the top border keep it reading as a form, not another record. */
   .company-table-addform.add-row-form {
-    display: grid; grid-template-columns: 1fr 1.3fr 1fr 1.3fr 34px; gap: 0 14px; align-items: center;
-    min-width: 620px; margin: 0; padding: 9px 14px; border: none; border-top: 1px solid var(--border);
-    background: #fafbfc;
+    display: block; min-width: 620px; margin: 0; padding: 10px 14px;
+    border: none; border-top: 1px solid var(--border); background: #fafbfc;
   }
+  /* The inputs reuse a data row's exact structure -- the same
+     .list-row-edit grid with the same trailing 34px delete-button column,
+     left empty here -- so the form's cells sit under the table's columns
+     to the pixel instead of being squeezed by whatever the button is wide.
+     The button then goes on its own line below them. */
+  .company-table-addform .lre-addrow { padding: 0; border: none; margin: 0; }
+  .company-table-addform button[type="submit"] { margin-top: 8px; }
   .company-table-addform .field { margin-bottom: 0; }
-  .company-table-addform .field label { display: none; }
-  .company-table-addform button[type="submit"] {
-    grid-column: 5 / 6; justify-self: center; width: 28px; height: 28px; padding: 0; font-size: 16px; line-height: 1; border-radius: 6px;
+  /* The table header above already names the columns, so a second set of
+     labels in the form is noise -- the placeholders carry it instead, and
+     the labels stay in the DOM for screen readers. */
+  .company-table-addform .field label {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
   }
+  .company-table-addform input { padding: 7px 9px; font-size: 13.5px; }
+  .company-table-addform button[type="submit"] { white-space: nowrap; }
+  /* The two rules that used to sit here sized the button as a 28px "+"
+     icon in a 34px column and hid the labels outright. Both are replaced
+     above: the button now carries its own text, and the labels are hidden
+     visually but left readable to a screen reader. */
 
   /* Company Contacts: Name/Title/Email/Phone in one row -- the generic
      equal-width flex-wrap (used by every other list) was letting Phone
@@ -2296,16 +2318,34 @@
     for (const cfg of LIST_CONFIGS) {
       if (cfg.readOnly) continue; // Team Members has no add-form
       const form = $(`${cfg.key}-add-form`);
-      // Competitors/Top Customers: dropped the blank "+" row entirely
-      // (Greg, 8/30/26, round 6 -- it read as a stray empty table, not an
-      // obvious way to add something). Import CSV / Export CSV / Clear
-      // Contents above the table already cover adding, updating and
-      // wiping this list in bulk, which is the point of a CSV-backed
-      // list in the first place -- so there's nothing lost by not also
-      // offering a one-row-at-a-time form underneath it.
+      // Competitors/Top Customers (Greg, 9/15/26: "we need to be able to
+      // manually add competitors and customers"). This form existed, was
+      // disabled on 8/30/26 as a stray-looking blank row, and CSV import was
+      // left as the only way in -- which is a lot of ceremony for adding one
+      // competitor somebody just named on a call, and the step's own hint
+      // has been promising "can be built manually below" ever since.
+      // Rebuilt as a spreadsheet-style row lined up under the table columns,
+      // with a placeholder in every cell and a button that says what it does.
       if (cfg.rowLayout === "company3") {
-        form.classList.add("hidden");
-        form.innerHTML = "";
+        form.classList.remove("hidden");
+        form.classList.add("company-table-addform");
+        const noun = cfg.key === "competitors" ? "Competitor" : "Customer";
+        form.innerHTML = `
+          <div class="list-row-edit lre-addrow">
+            <div class="lre-fields fields-3col">
+              ${cfg.fields.map((f) => `
+                <div class="field">
+                  <label for="${cfg.key}-new-${f.name}">${escapeHtml(f.label)}</label>
+                  <input class="row-input-edit" type="${f.type}" id="${cfg.key}-new-${f.name}"
+                         ${f.required ? "required" : ""} placeholder="${escapeHtml(f.label)}" />
+                </div>
+              `).join("")}
+            </div>
+            <span></span>
+          </div>
+          <button type="submit" class="btn-secondary btn-sm">+ Add ${escapeHtml(noun)}</button>
+        `;
+        form.addEventListener("submit", (e) => { e.preventDefault(); addListRow(cfg); });
       } else {
         form.classList.toggle("fields-contact4", cfg.rowLayout === "contact4");
         form.classList.toggle("fields-cc3", cfg.rowLayout === "cc3");
