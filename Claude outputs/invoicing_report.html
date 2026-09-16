@@ -1,0 +1,2525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Invoicing Report</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #eaeff4;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  header { background: var(--navy); color: #fff; padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; letter-spacing: 0.2px; }
+  header .sub { font-size: 12.5px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  header .brand-row { display: flex; align-items: center; gap: 14px; }
+  /* Chris (9/4/26): logo same size everywhere as the Home page. */
+  .brand-badge { background: #fff; border-radius: 8px; padding: 8px 14px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 36px; display: block; }
+  /* Greg (9/11/26): "remove all title text to the right of the logo." The
+     brand row is the NCEG logo alone now -- .brand-tagline and .brand-subline
+     are gone rather than hidden, so nothing is left to un-hide by accident. */
+
+  /* ---------- Top nav + Ask AI ---------- */
+  header { position: relative; }
+  header .site-nav { display: flex; align-items: center; gap: 4px; }
+  header .nav-link { color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 8px 12px; border-radius: 6px; position: relative; }
+  header .nav-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  header .nav-link.active { color: #fff; }
+  header .nav-link.active::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -14px; height: 2px; background: #fff; }
+  .nav-toggle {
+    display: none; align-items: center; justify-content: center; width: 34px; height: 34px;
+    background: rgba(255,255,255,0.1); border: none; border-radius: 6px; color: #fff; cursor: pointer; flex-shrink: 0;
+  }
+  .nav-toggle:hover { background: rgba(255,255,255,0.18); }
+  /* Chris (9/4/26): dropdown top-nav submenu, piloted on Invoicing --
+     Time Sheets / Program Invoices / Pay Statements. Click-to-toggle
+     (not hover-only) so it matches the account-menu pattern already used
+     elsewhere and stays usable on touch. Active state (parent + child) is
+     set by JS below based on the current page, not hardcoded per file. */
+  .nav-item-dropdown { position: relative; }
+  .nav-link-dropdown-btn { display: inline-flex; align-items: center; gap: 4px; font: inherit; background: none; border: none; cursor: pointer; }
+  .nav-link-dropdown-btn .nav-caret { font-size: 9px; opacity: 0.7; }
+  .nav-submenu {
+    position: absolute; top: 100%; left: 0; margin-top: 8px; min-width: 230px; max-width: 320px; background: var(--navy);
+    border-radius: 10px; padding: 6px; box-shadow: 0 10px 24px rgba(0,0,0,0.28); display: none; z-index: 97;
+  }
+  .nav-item-dropdown.open .nav-submenu { display: block; }
+  /* Greg (9/6/26): the top-nav dropdowns open on hover, not click-only.
+     .nav-submenu sits 8px below its nav item (margin-top), and that gap is
+     dead space the pointer would cross on the way down -- the ::before
+     bridge covers it so the menu doesn't blink shut mid-travel. Click still
+     works for touch and keyboard; the nav script clears the clicked-open
+     state on mouseleave so it can't stay stuck open. */
+  @media (hover: hover) {
+    .nav-item-dropdown:hover .nav-submenu { display: block; }
+    .nav-submenu::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
+  }
+  .nav-submenu a { display: block; padding: 9px 12px; border-radius: 6px; color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; white-space: normal; }
+  .nav-submenu a:hover, .nav-submenu a.active { background: rgba(255,255,255,0.14); color: #fff; }
+  /* Applications nav dropdown content (Chris, 9/4/26) -- dynamic, unlike
+     Invoicing's fixed 3 links, so it needs a meta line, an empty state,
+     and a "View All" footer row the static dropdown didn't. */
+  .nav-submenu .nav-submenu-meta { display: block; font-size: 11px; font-weight: 400; color: #9fb3c8; margin-top: 1px; }
+  .nav-submenu .nav-submenu-empty { padding: 9px 12px; font-size: 12.5px; color: #9fb3c8; font-weight: 400; }
+  .nav-submenu .nav-submenu-viewall { font-weight: 700; border-top: 1px solid rgba(255,255,255,0.14); margin-top: 4px; padding-top: 10px; }
+  @media (max-width: 980px) {
+    .nav-item-dropdown { position: static; }
+    .nav-submenu { position: static; display: block !important; box-shadow: none; background: transparent; padding: 0 0 4px 26px; margin-top: 0; }
+    .nav-submenu::before { display: none; }
+    .nav-link-dropdown-btn .nav-caret { display: none; }
+    .nav-caret-only { display: none; }
+  }
+  /* "Programs" needs to stay a real link to the Programs list (Greg,
+     9/6/26 -- a plain dropdown-toggle button with no href broke direct
+     navigation there from every other page), while still offering "Add
+     Program" / "Application Links" as a dropdown -- so unlike Invoicing
+     (one button does both), Programs splits into a normal nav-link plus a
+     small separate caret button that only toggles the submenu. */
+  .nav-split-item { display: flex; align-items: center; }
+  .nav-split-item .nav-link { padding-right: 4px; }
+  .nav-caret-only {
+    display: inline-flex; align-items: center; font: inherit; background: none; border: none; cursor: pointer;
+    color: #c9d6e3; padding: 8px 10px 8px 2px; border-radius: 6px;
+  }
+  .nav-caret-only:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  .nav-caret-only .nav-caret { font-size: 9px; opacity: 0.7; }
+  .nav-toggle svg { width: 20px; height: 20px; display: block; }
+  @media (max-width: 980px) {
+    .nav-toggle { display: inline-flex; }
+    header .site-nav {
+      display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; gap: 2px;
+      background: var(--navy); padding: 8px; box-shadow: 0 10px 24px rgba(0,0,0,0.28); z-index: 96;
+      border-radius: 0 0 10px 10px;
+    }
+    header .site-nav.open { display: flex; }
+    header .nav-link { padding: 12px 14px; border-radius: 6px; }
+    header .nav-link.active { background: rgba(255,255,255,0.14); }
+    header .nav-link.active::after { display: none; }
+  }
+
+  .ask-ai-btn {
+    display: inline-flex; align-items: center; gap: 6px; background: rgba(124,63,196,0.18); color: #d9c8f5;
+    border: 1px solid rgba(124,63,196,0.5); padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  }
+  .ask-ai-btn:hover { background: rgba(124,63,196,0.3); color: #fff; }
+  .ask-ai-btn svg { width: 14px; height: 14px; }
+  .ask-ai-wrap { position: relative; }
+  .ai-nudge { position: absolute; top: calc(100% + 12px); right: 0; width: 220px; background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.22); padding: 12px 26px 12px 14px; font-size: 12.5px; line-height: 1.45; z-index: 95; }
+  .ai-nudge.hidden { display: none; }
+  .ai-nudge::before { content: ""; position: absolute; top: -6px; right: 22px; width: 11px; height: 11px; background: #fff; border-left: 1px solid var(--border); border-top: 1px solid var(--border); transform: rotate(45deg); }
+  .ai-nudge-close { position: absolute; top: 6px; right: 8px; background: transparent; border: none; color: var(--muted); font-size: 15px; line-height: 1; padding: 2px; cursor: pointer; }
+
+  .ai-drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.25); z-index: 90; }
+  .ai-drawer-overlay.open { display: block; }
+  .ai-drawer {
+    position: fixed; top: 0; right: -460px; width: 440px; max-width: 92vw; height: 100vh; background: #fff;
+    box-shadow: -8px 0 28px rgba(20,48,77,0.18); z-index: 91; display: flex; flex-direction: column; transition: right 0.22s ease;
+  }
+  .ai-drawer.open { right: 0; }
+  .ai-drawer-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 20px 22px 14px; border-bottom: 1px solid var(--border); }
+  .ai-drawer-header h3 { margin: 0; font-size: 18px; color: var(--navy); display: flex; align-items: center; gap: 8px; }
+  .ai-drawer-header h3 svg { color: #7c3fc4; width: 19px; height: 19px; }
+  .ai-drawer-header .card-hint { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+  .ai-drawer-close { background: transparent; border: none; color: var(--muted); font-size: 20px; padding: 4px; cursor: pointer; line-height: 1; }
+  .ai-drawer-close:hover { color: var(--text); }
+  .ai-drawer-body { flex: 1; overflow-y: auto; padding: 18px 22px; }
+  .ai-context-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; }
+  .ai-context-chip { display: flex; align-items: center; gap: 8px; background: #f4f6f8; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--text); margin-bottom: 18px; }
+  .ai-context-chip svg { color: var(--navy-light); flex-shrink: 0; width: 15px; height: 15px; }
+  .ai-greeting-bubble { background: #f4f0fb; color: var(--text); border: 1px solid #e3d5f7; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.5; margin-bottom: 18px; }
+  .ai-ask-label { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+  .ai-ask-row { display: flex; gap: 8px; margin-bottom: 18px; }
+  .ai-ask-row input { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13.5px; font-family: inherit; }
+  .ai-ask-row input:focus { outline: none; border-color: #7c3fc4; }
+  .ai-ask-send { width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #7c3fc4; color: #fff; border-radius: 8px; }
+  .ai-ask-send:hover { background: #6528a3; }
+  .ai-ask-send svg { width: 17px; height: 17px; }
+  .ai-suggested-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 8px; }
+  .ai-suggested-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 20px; }
+  .ai-suggested-chip { text-align: left; background: #f4f0fb; color: #5a2494; border: 1px solid #e3d5f7; border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; width: 100%; }
+  .ai-suggested-chip:hover { background: #ecdffa; }
+  .ai-suggested-chip svg { width: 13px; height: 13px; flex-shrink: 0; color: #7c3fc4; }
+  .ai-answer-block { border-top: 1px solid var(--border); padding-top: 16px; }
+  .ai-answer-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .ai-answer-meta .ai-answer-title { font-size: 13px; font-weight: 700; color: var(--navy); }
+  .ai-answer-meta .ai-answer-time { font-size: 11.5px; color: var(--muted); }
+  .ai-answer-card { background: #f4f0fb; border-radius: 10px; padding: 14px 16px; font-size: 13.5px; line-height: 1.55; color: var(--text); }
+  .ai-answer-card ul { margin: 8px 0; padding-left: 18px; }
+  .ai-answer-card li { margin-bottom: 3px; }
+  .ai-answer-card strong { color: var(--navy); }
+  .ai-answer-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .ai-answer-actions button { background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; color: var(--muted); font-size: 12px; }
+  .ai-answer-actions button:hover { color: var(--text); background: #f4f6f8; }
+  .ai-drawer-footer { padding: 12px 22px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); text-align: center; }
+  #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  #userbox .user-email { color: #c9d6e3; font-size: 11px; opacity: 0.7; margin-left: 2px; white-space: nowrap; }
+  @media (max-width: 900px) { #userbox .user-email { display: none; } }
+  button, a.btn { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; text-decoration: none; display: inline-block; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+
+  /* Account menu -- Change Password + Sign out tucked into one dropdown
+     instead of sitting in the top bar as separate buttons, per Chris's
+     "slim it down" request (8/18/26). */
+  #profile-wrap, #profile-wrap2 { position: relative; }
+  #profile-btn, #profile-btn2 { display: flex; align-items: center; gap: 4px; padding: 4px 6px; }
+  #profile-btn .avatar-icon, #profile-btn2 .avatar-icon {
+    width: 24px; height: 24px; border-radius: 999px; background: rgba(255,255,255,0.14);
+    display: flex; align-items: center; justify-content: center; color: #c9d6e3;
+  }
+  #profile-btn .avatar-icon svg, #profile-btn2 .avatar-icon svg { width: 14px; height: 14px; }
+  #profile-btn .chevron, #profile-btn2 .chevron { font-size: 9px; color: #c9d6e3; }
+  .profile-dropdown {
+    position: absolute; top: 40px; right: 0; width: 150px; padding: 6px; background: #fff; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60;
+  }
+  .profile-dropdown button, header .profile-dropdown button {
+    width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--text);
+  }
+  .profile-dropdown button:hover, header .profile-dropdown button:hover { background: #eef1f4; color: var(--text); }
+
+  /* Notification bell (Chris, 9/4/26): same styling as the Home page,
+     added everywhere so it's "prominently displayed on every page." */
+  #notif-wrap { position: relative; }
+  #notif-bell { position: relative; font-size: 15px; line-height: 1; }
+  .notif-count { position: absolute; top: -3px; right: -3px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; min-width: 16px; height: 16px; border-radius: 999px; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
+  .notif-dropdown { position: absolute; top: 40px; right: 0; width: min(320px, calc(100vw - 24px)); max-height: 420px; overflow-y: auto; background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60; }
+  .notif-dropdown-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; font-weight: 700; }
+  .notif-item { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .notif-item:last-child { border-bottom: none; }
+  .notif-item .notif-msg { margin-bottom: 5px; line-height: 1.4; }
+  .notif-item .notif-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--muted); gap: 8px; }
+  .notif-item .notif-meta a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
+  .notif-item .notif-meta a:hover { text-decoration: underline; }
+  .notif-empty { padding: 22px 14px; text-align: center; color: var(--muted); font-size: 13px; }
+
+  main { max-width: 1160px; margin: 28px auto; padding: 0 20px 70px; }
+  .hidden { display: none !important; }
+  /* Greg (9/6/26): "hide the dropdowns on Programs and Roster for Specialists
+     and Team Members." Everything in those two submenus is an Admin action
+     (Add Program, Application Links, Add Roster Member), so for everyone else
+     the caret opens an empty menu -- the label stays a plain link instead.
+     This needs its own rule rather than leaning on .hidden: the <=900px nav
+     sets `.nav-submenu { display: block !important }` further down the sheet,
+     which beats a bare .hidden at equal specificity and would pop the menu
+     back open on a phone. Two classes outrank one. */
+  [data-super-admin-only].hidden { display: none !important; }
+  /* Chris/Greg (9/2/26): retire the header Ask AI drawer, and drop the name/role chip (the account menu stays). */
+  .ask-ai-wrap, .ai-drawer, .ai-drawer-overlay, .ai-nudge { display: none !important; }
+  #user-name, #user-role { display: none !important; }
+  /* Chris (9/4/26): breadcrumb moved out of the dark header (where it sat
+     jammed against the logo) into its own light bar below, matching
+     Podio's own breadcrumb strip -- centered, colors flipped for a light
+     background. */
+  .breadcrumb-bar { background: #fff; border-bottom: 1px solid var(--border); padding: 10px 20px; }
+  .breadcrumb { font-size: 13px; color: var(--muted); margin: 0; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; justify-content: center; line-height: 1.4; }
+  .breadcrumb a { color: var(--navy-light); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb .sep { opacity: 0.5; }
+  .breadcrumb .current { color: var(--navy); font-weight: 700; }
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+  #not-admin-note { max-width: 460px; margin: 90px auto; text-align: center; color: var(--muted); font-size: 14px; }
+
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; margin-top: 20px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+
+  /* Month + Export CSV in one clean bordered control row, matching the
+     "control panel" toolbar pattern used elsewhere in the app -- not a
+     button floating on its own above the page. */
+  .toolbar-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    margin: 22px 0 20px; background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 16px; box-shadow: 0 1px 3px rgba(20,48,77,0.05);
+  }
+  .month-field { display: flex; align-items: center; gap: 8px; }
+  .month-field label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-right: 2px; }
+  .month-field input[type="month"] { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; background: #f6f8fa; }
+  .month-nav-btn {
+    width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;
+    background: #eef1f4; color: var(--navy); border-radius: 8px; font-size: 16px; line-height: 1;
+  }
+  .month-nav-btn:hover { background: #e2e6ea; }
+  .month-nav-btn:disabled { opacity: 0.4; cursor: default; }
+  .btn-sm { padding: 8px 12px; font-size: 13px; }
+  #month-today { margin-left: 4px; }
+  .toolbar-actions { display: flex; gap: 10px; }
+
+  /* Standardized Search/Print/Export/Import toolbar (Greg, 8/27/26) -- same
+     four controls, same order, on every internal page. The sitewide search
+     sits above the existing Month/tab toolbar; Export already exists per
+     tab (Export CSV / Export Payroll CSV / Export YTD CSV) so it isn't
+     duplicated here. */
+  .std-toolbar-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .global-search-wrap { position: relative; flex: 1; max-width: 480px; }
+  .global-search-wrap .search-box { position: relative; }
+  .global-search-wrap .search-box input {
+    width: 100%; height: 36px; padding: 0 14px 0 38px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13.5px; background: #fff;
+  }
+  .global-search-wrap .search-box input:focus { outline: none; border-color: var(--navy-light); }
+  .global-search-wrap .search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
+  .global-search-results {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #fff;
+    border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(20,48,77,0.15);
+    z-index: 70; max-height: 420px; overflow-y: auto;
+  }
+  .gsr-group-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; padding: 10px 14px 4px; }
+  .gsr-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; cursor: pointer; font-size: 13.5px; }
+  .gsr-item:hover { background: #f4f6f8; }
+  .gsr-item .gsr-name { font-weight: 600; color: var(--text); }
+  .gsr-item .gsr-meta { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .std-toolbar-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .std-toolbar-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* KPI cards -- same bold, colorful treatment used across the rest of the
+     app: left accent bar + diagonal tint wash + matching icon chip. Budget
+     Alerts flips from green (success) to coral (warning) treatment only
+     when there's an actual overage; zero is good news, not a warning. */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .kpi-card {
+    position: relative; border: none; border-radius: 12px; padding: 13px 16px 13px 19px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(20,48,77,0.07), 0 3px 8px rgba(20,48,77,0.05);
+    transition: box-shadow 0.18s ease, transform 0.18s ease;
+  }
+  .kpi-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; }
+  .kpi-card:hover { box-shadow: 0 8px 18px rgba(20,48,77,0.14); transform: translateY(-2px); }
+  .kpi-icon {
+    width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5), 0 1px 2px rgba(20,48,77,0.08);
+  }
+  .kpi-icon svg { width: 15px; height: 15px; }
+  .kpi-value { font-size: 21px; font-weight: 800; line-height: 1.1; }
+  .kpi-label { font-size: 11px; font-weight: 700; margin-top: 4px; }
+  .kpi-sublabel { font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+
+  /* Tints pulled from the NCEG logo (navy, slate-blue, sage, pale green)
+     instead of a rainbow of unrelated pastels -- Chris (8/18/26). kpi-warn
+     stays red on purpose: it's a real overage/warning signal, not a
+     decorative category color. */
+  .kpi-card.kpi-navy { background: linear-gradient(135deg, #dde5ee 0%, #f7f9fb 75%); }
+  .kpi-card.kpi-navy::before { background: #1f4a75; }
+  .kpi-card.kpi-navy .kpi-icon { background: #c7d6e3; color: #1f4a75; }
+  .kpi-card.kpi-navy .kpi-value, .kpi-card.kpi-navy .kpi-label { color: #14304d; }
+
+  .kpi-card.kpi-purple { background: linear-gradient(135deg, #e2e9ef 0%, #eef2f6 75%); }
+  .kpi-card.kpi-purple::before { background: #5e7c97; }
+  .kpi-card.kpi-purple .kpi-icon { background: #cfdae3; color: #3f5b73; }
+  .kpi-card.kpi-purple .kpi-value, .kpi-card.kpi-purple .kpi-label { color: #354d61; }
+
+  .kpi-card.kpi-success { background: linear-gradient(135deg, #dfe9d5 0%, #f8faf5 75%); }
+  .kpi-card.kpi-success::before { background: #5c7248; }
+  .kpi-card.kpi-success .kpi-icon { background: #cddabb; color: #46592f; }
+  .kpi-card.kpi-success .kpi-value, .kpi-card.kpi-success .kpi-label { color: #3d4f2a; }
+
+  .kpi-card.kpi-warn { background: linear-gradient(135deg, #fbdcd8 0%, #fdf3f2 75%); }
+  .kpi-card.kpi-warn::before { background: #d9503f; }
+  .kpi-card.kpi-warn .kpi-icon { background: #f6c9c3; color: #a3352a; }
+  .kpi-card.kpi-warn .kpi-value, .kpi-card.kpi-warn .kpi-label { color: #a3352a; }
+
+  .kpi-card.kpi-money { background: linear-gradient(135deg, #ecefdc 0%, #fafbf5 75%); }
+  .kpi-card.kpi-money::before { background: #8ea45a; }
+  .kpi-card.kpi-money .kpi-icon { background: #dee6c1; color: #5f6f33; }
+  .kpi-card.kpi-money .kpi-value, .kpi-card.kpi-money .kpi-label { color: #56652d; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; margin-bottom: 18px; }
+  .card h2 { margin: 0 0 4px; font-size: 15.5px; }
+  .card .card-hint { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+  .card-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+  .card-header-row h2 { margin-bottom: 4px; }
+  .card-header-row .card-hint { margin-bottom: 0; }
+  .card-header-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+  /* Budget Alerts -- a compact success panel when everything's fine,
+     auto-expanding into a real table only when there's something to flag. */
+  .alert-card { padding: 18px 22px; }
+  .alert-header { display: flex; align-items: flex-start; gap: 14px; }
+  .alert-icon {
+    width: 36px; height: 36px; border-radius: 9px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    background: #e2eee5; color: var(--accent-dark);
+  }
+  .alert-card.has-alerts .alert-icon { background: #fbe9e9; color: var(--danger-dark); }
+  .alert-icon svg { width: 18px; height: 18px; }
+  .alert-header-body { flex: 1; min-width: 0; }
+  .alert-header-body h2 { margin: 0; font-size: 15.5px; }
+  .alert-header-body .card-hint { margin: 3px 0 0; }
+  .alert-toggle { flex-shrink: 0; background: transparent; color: var(--muted); font-size: 13px; padding: 4px 8px; transition: transform 0.15s ease; }
+  .alert-toggle:hover { background: #eef1f4; }
+  .alert-toggle.open { transform: rotate(180deg); }
+  .alert-success-line {
+    display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600;
+    color: var(--accent-dark); margin-top: 12px;
+  }
+  .alert-body { margin-top: 14px; }
+  .rate-field { display: flex; align-items: center; gap: 7px; }
+  .rate-field label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); }
+  .rate-field .rate-prefix-wrap { position: relative; display: flex; align-items: center; }
+  .rate-field .rate-prefix { position: absolute; left: 9px; font-size: 13.5px; color: var(--muted); pointer-events: none; }
+  .rate-field input[type="number"] {
+    width: 84px; padding: 7px 8px 7px 20px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13.5px; font-family: inherit; background: #fff; font-variant-numeric: tabular-nums;
+  }
+  .rate-field .rate-suffix { font-size: 12.5px; color: var(--muted); }
+  .rate-field .rate-saved { font-size: 11.5px; color: var(--accent-dark); font-weight: 600; opacity: 0; transition: opacity 0.2s ease; }
+  .rate-field .rate-saved.show { opacity: 1; }
+
+  /* Payroll table styled like a standard accounting ledger: numbers right-
+     aligned and set in tabular figures so the decimal points line up, with
+     a bold double-bordered total row at the bottom. */
+  #payroll-table th.money, #payroll-table td.money,
+  #ytd-payroll-table th.money, #ytd-payroll-table td.money {
+    text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
+  }
+  #payroll-table tbody td:first-child, #payroll-table tfoot td:first-child,
+  #ytd-payroll-table tbody td:first-child, #ytd-payroll-table tfoot td:first-child { text-align: left; }
+  #payroll-tfoot td, #ytd-payroll-tfoot td {
+    padding: 10px; font-size: 13.5px; font-weight: 700; color: var(--navy);
+    border-top: 2px solid var(--navy); font-variant-numeric: tabular-nums;
+  }
+
+  /* Hours by Specialist -- a real 5-column table (Specialist / Engagement /
+     Hours / Used-Budget / Remaining) instead of stacked cards. Each
+     specialist gets one accent color, reused for their avatar and every
+     usage bar on their row(s); when a specialist has more than one
+     engagement, their name cell spans all of their rows (rowspan) so the
+     eye isn't asked to re-read the same name over and over. */
+  /* Class-based, not nth-child -- continuation rows for a multi-engagement
+     specialist only render 4 <td>s (the specialist cell is skipped in favor
+     of the rowspan from the first row), which shifts every cell's DOM
+     position left by one and breaks nth-child column targeting. */
+  .specialist-table th.col-remaining, .specialist-table td.remaining-cell { text-align: right; }
+  .specialist-table td { vertical-align: top; padding: 12px 10px; }
+  .specialist-table tr.group-start td { border-top: 1px solid var(--border); }
+  .specialist-table tr.group-start:first-child td { border-top: none; }
+
+  .sp-cell { display: flex; align-items: flex-start; gap: 10px; }
+  .specialist-avatar {
+    width: 34px; height: 34px; border-radius: 999px; flex-shrink: 0; display: flex; align-items: center;
+    justify-content: center; color: #fff; font-size: 12.5px; font-weight: 700; letter-spacing: 0.2px; margin-top: 1px;
+  }
+  .sp-name { font-weight: 700; font-size: 14px; color: var(--navy); line-height: 1.3; text-decoration: underline; }
+  .sp-role { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+  .eng-name-btn { background: none; border: none; padding: 0; font: inherit; text-align: left; cursor: pointer; color: var(--text); }
+  .eng-name-btn:hover .eng-name { color: var(--navy); }
+  .eng-open-btn { background: none; border: none; padding: 0; margin: 0; font: inherit; text-align: left; cursor: pointer; color: var(--text); }
+  .eng-open-btn:hover .sp-name { color: var(--navy-light); }
+  .eng-name { font-size: 13.5px; font-weight: 600; color: var(--navy-light); text-decoration: underline; line-height: 1.3; }
+  .eng-role { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 50; }
+  .overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 10px; width: 460px; max-width: 92vw; padding: 26px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
+  .modal h3 { margin: 0 0 10px; font-size: 16.5px; }
+  .modal .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .history-summary { display: flex; gap: 18px; flex-wrap: wrap; background: #f4f6f8; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
+  .history-summary strong { display: block; font-size: 15px; color: var(--text); }
+  .history-summary span { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .history-list { max-height: 380px; overflow-y: auto; }
+  .history-month { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .history-month:last-child { border-bottom: none; }
+  .history-month-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13.5px; font-weight: 700; }
+  .history-month-meta { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .history-entry { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); padding: 4px 0 0 4px; }
+  .history-entry-note { color: var(--muted); font-style: italic; }
+  .history-empty { text-align: center; color: var(--muted); font-size: 13.5px; padding: 20px 0; }
+
+  .hours-month { font-size: 13.5px; font-weight: 700; color: var(--navy); white-space: nowrap; }
+  .hours-month .over-flag { display: block; margin: 3px 0 0; }
+
+  .ub-text { font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; }
+
+  /* ---------- Engagement detail (merged Cumulative Hours report) ---------- */
+  .eng-filter-wrap { display: flex; align-items: center; gap: 8px; }
+  .eng-filter-wrap label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); }
+  .eng-filter-wrap select { min-width: 220px; }
+
+  .eng-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-bottom: 16px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+  .eng-detail-name { font-size: 19px; font-weight: 700; color: var(--navy); margin: 0; }
+  .eng-detail-address { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .eng-detail-meta-row { display: flex; gap: 26px; flex-wrap: wrap; }
+  .eng-detail-field label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 3px; }
+  .eng-detail-field .meta-static { font-size: 14px; color: var(--text); font-weight: 600; }
+  .eng-detail-back { margin-bottom: 14px; }
+
+  .cum-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .cum-table th { text-align: right; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); background: #eef2f6; padding: 10px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .cum-table th:first-child, .cum-table th:nth-child(2) { text-align: left; }
+  .cum-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; text-align: right; white-space: nowrap; }
+  .cum-table td:first-child, .cum-table td:nth-child(2) { text-align: left; }
+  .cum-table tbody tr:last-child td { border-bottom: none; }
+  .cum-table td.blank-cell { color: var(--border); }
+  .cum-table td.remaining-negative { color: var(--danger-dark); font-weight: 700; }
+  .cum-table .ed-specialty-name { font-weight: 700; color: var(--navy); }
+  .cum-table .ed-person-name { color: var(--muted); font-size: 12.5px; }
+  .cum-table tfoot td { padding: 12px 14px; font-size: 13.5px; font-weight: 700; border-top: 2px solid var(--border); background: #eef2f6; text-align: right; }
+  .cum-table tfoot td:first-child { text-align: left; }
+  .eng-detail-section { margin-top: 22px; }
+  .eng-detail-section h3 { margin: 0 0 4px; font-size: 14.5px; }
+  .eng-detail-section .card-hint { margin: 0 0 12px; }
+
+  .remaining-value { font-size: 13.5px; font-weight: 700; white-space: nowrap; }
+  .remaining-value.negative { color: var(--danger-dark); }
+
+  table { width: 100%; border-collapse: collapse; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  @media (max-width: 640px) { .table-scroll table { min-width: 560px; } }
+  thead th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted);
+    padding: 7px 10px; border-bottom: 1px solid var(--border);
+  }
+  tbody td { padding: 8px 10px; border-bottom: 1px solid #f0f2f4; font-size: 13.5px; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  th.num, td.num { text-align: center; white-space: nowrap; }
+  td.num.negative { color: var(--danger-dark); font-weight: 700; }
+  .over-flag {
+    display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+    color: var(--danger-dark); background: #fbe9e9; padding: 2px 8px; border-radius: 999px; margin-left: 6px;
+  }
+
+  .overage-row td { background: #fdf9f2; }
+  .empty-note { padding: 26px; text-align: center; color: var(--muted); font-size: 13.5px; }
+
+  /* ---------- Sticky top zone (Month bar + KPIs) ---------- */
+  /* Stays visible above the tabs no matter how far the page (or the
+     internally-scrolling specialist table) scrolls, so the four headline
+     numbers are always in view -- a real "dashboard" feel per Greg. */
+  .sticky-top-wrap { position: sticky; top: 0; z-index: 30; background: var(--bg); padding-top: 4px; padding-bottom: 4px; }
+
+  /* ---------- Tabs ---------- */
+  /* Greg: the tabs were getting lost against all the surrounding info --
+     switched from a subtle file-folder-tab look to solid, colored pills so
+     they read as the primary navigation at a glance. */
+  .tab-bar { display: flex; gap: 8px; background: transparent; border: none; padding: 0 0 10px; }
+  .tab-btn {
+    display: flex; align-items: center; gap: 7px; background: #fff; color: var(--navy); font-weight: 700;
+    font-size: 13.5px; padding: 11px 18px; border-radius: 999px; border: 1.5px solid var(--border);
+  }
+  .tab-btn svg { width: 15px; height: 15px; }
+  .tab-btn:hover { background: #eef1f4; border-color: var(--accent); }
+  .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: 0 3px 10px rgba(92, 114, 72, 0.35); }
+  .tab-panel-frame {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 18px 18px 4px;
+    margin-bottom: 22px;
+  }
+  .tab-panel-frame .card { box-shadow: none; border: 1px solid var(--border); }
+
+  /* ---------- Budget Alerts: badge + compact strip ---------- */
+  .alert-badge {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 19px; height: 19px; padding: 0 5px;
+    background: var(--danger); color: #fff; border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 6px;
+    vertical-align: middle;
+  }
+  .alert-strip-row {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 10px 14px; background: #fdf3f2;
+    border: 1px solid #f6c9c3; border-radius: 8px; font-size: 13px; color: var(--text); margin-bottom: 8px;
+  }
+  .alert-strip-row:last-child { margin-bottom: 0; }
+  .alert-strip-row .sep { opacity: 0.4; }
+  .alert-strip-row .alert-strip-name { font-weight: 700; color: var(--navy); }
+  .alert-strip-row .alert-strip-over { color: var(--danger-dark); font-weight: 700; }
+  .alert-table-scroll { max-height: 280px; overflow-y: auto; }
+  .alert-table-scroll thead th { position: sticky; top: 0; background: #fff; z-index: 1; }
+
+  /* ---------- Hours by Specialist: filter row, fixed-height scroll,
+     collapsible groups, pagination ---------- */
+  .sp-controls { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 14px; }
+  .sp-controls select {
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit;
+    background: #fff; color: var(--text);
+  }
+  .sp-search-wrap { position: relative; flex: 1; min-width: 200px; }
+  .sp-search-wrap svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); width: 15px; height: 15px; }
+  .sp-search-wrap input {
+    width: 100%; padding: 8px 10px 8px 32px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px;
+    font-family: inherit; background: #fff; color: var(--text);
+  }
+
+  .specialist-scroll { max-height: 560px; overflow-y: auto; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+  .specialist-scroll thead th { position: sticky; top: 0; background: #fff; z-index: 1; }
+  @media (max-width: 640px) { .specialist-scroll table { min-width: 560px; } }
+
+  .sortable-th { cursor: pointer; user-select: none; }
+  .sortable-th .sort-icon { margin-left: 4px; color: var(--muted); font-size: 10px; }
+
+  .sp-toggle {
+    background: transparent; border: none; padding: 3px; margin-top: 2px; cursor: pointer; color: var(--muted);
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform 0.15s ease;
+  }
+  .sp-toggle:hover { color: var(--navy); }
+  .sp-toggle.collapsed svg { transform: rotate(-90deg); }
+  .sp-collapsed-summary { font-size: 12.5px; color: var(--muted); }
+  .sp-collapsed-summary strong { color: var(--navy); font-size: 13.5px; }
+
+  .sp-pagination { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: 14px 0 16px; font-size: 12.5px; color: var(--muted); }
+  .sp-pagination .sp-pagination-right { display: flex; align-items: center; gap: 10px; }
+  .sp-pagination label { display: flex; align-items: center; gap: 6px; }
+  .sp-pagination select {
+    padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; font-size: 12.5px; font-family: inherit; background: #fff;
+  }
+  .sp-page-btn {
+    width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center;
+    background: #eef1f4; color: var(--navy); border-radius: 6px; font-size: 13px;
+  }
+  .sp-page-btn:hover { background: #e2e6ea; }
+  .sp-page-btn:disabled { opacity: 0.4; cursor: default; }
+  .sp-page-current {
+    min-width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+    background: var(--navy); color: #fff; border-radius: 6px; font-weight: 700; font-size: 12.5px;
+  }
+
+  .ytd-total-figure { font-size: 22px; font-weight: 800; color: var(--navy); white-space: nowrap; }
+  .ytd-total-figure .ytd-total-label { display: block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-top: 2px; }
+
+  /* ---------- Print / Save as PDF ----------
+     Prints whatever is currently on screen in the Time Sheets panel --
+     either the flat "All Engagements" table or the merged per-engagement
+     detail view, whichever is visible (the other already carries the
+     .hidden class, so display:none takes care of the rest). Everything
+     else (header, tabs, AI drawer, month/search controls, pagination,
+     the print button itself) is chrome that shouldn't end up on the page. */
+  @media print {
+    /* Landscape by default -- the Cumulative Hours/Value tables add one
+       column per active month (an engagement running 6+ months easily
+       outgrows a portrait page), so print wide instead of clipping. */
+    @page { size: landscape; margin: 0.4in; }
+    body { background: #fff; }
+    .no-print, header, .ai-drawer-overlay, .ai-drawer, #banner, .sticky-top-wrap, .tab-bar,
+    .sp-controls, .sp-pagination, #ts-print-btn, #eng-detail-back,
+    #panel-payroll-mtd, #panel-payroll-ytd { display: none !important; }
+    main { max-width: none; margin: 0; padding: 0; }
+    .tab-panel-frame { border: none; padding: 0; margin: 0; box-shadow: none; }
+    .card { border: none; padding: 0; box-shadow: none; }
+    table { border: 1px solid #ccc; }
+    .specialist-scroll, .specialist-scroll table { max-height: none; overflow: visible; }
+    /* On screen, .table-scroll clips a too-wide cum-table behind a
+       horizontal scrollbar -- fine for viewing, but a scrollbar can't be
+       printed, so anything past the visible width would silently vanish
+       from the page instead. overflow: visible + a smaller, tighter table
+       lets the real print engine handle the overflow (wrapping to
+       additional pages) rather than losing columns. */
+    .table-scroll { overflow-x: visible; }
+    .cum-table { table-layout: auto; }
+    .cum-table th, .cum-table td { padding: 5px 7px; font-size: 10.5px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="not-admin-view" class="hidden">
+  <header class="no-print">
+    <div class="brand-row">
+      <a class="brand-badge" href="index.html"><img src="/NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
+    </div>
+    <nav class="site-nav">
+      <div class="nav-item-dropdown hidden" id="nav-applications-dropdown">
+        <button type="button" class="nav-link nav-link-dropdown-btn">Applications <span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" id="nav-applications-submenu"></div>
+      </div>
+      <div class="nav-item-dropdown nav-split-item">
+        <a class="nav-link" href="index.html">Engagements</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Engagements menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
+          <a href="index.html?status=closed">Closed Engagements</a>
+        </div>
+      </div>
+      <div class="nav-item-dropdown nav-split-item">
+        <a href="econ_dev_partners_admin.html" class="nav-link">Programs</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Programs menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
+          <a href="econ_dev_partners_admin.html?action=add">Add Program</a>
+          <a href="program_application_links.html" data-super-admin-only>Application Links</a>
+        </div>
+      </div>
+      <div class="nav-item-dropdown nav-split-item">
+        <a href="team_directory.html" class="nav-link">Roster</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Roster menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
+          <a href="team_directory.html?action=add">Add Roster Member</a>
+        </div>
+      </div>
+      <div class="nav-item-dropdown" data-super-admin-only>
+        <button type="button" class="nav-link nav-link-dropdown-btn">Invoicing <span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu">
+          <a href="invoicing_report.html">Time Sheets</a>
+          <a href="program_invoicing.html">Program Invoices</a>
+          <a href="specialist_invoices.html">Pay Statements</a>
+        </div>
+      </div>
+    </nav>
+    <button type="button" class="nav-toggle" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div id="userbox2">
+      <div id="profile-wrap2">
+        <button class="btn-ghost" id="profile-btn2" title="Account menu">
+          <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="chevron">&#9662;</span>
+        </button>
+        <div id="profile-dropdown2" class="profile-dropdown hidden">
+          <button class="btn-ghost" id="change-password-btn2">Change Password</button>
+          <button class="btn-ghost" id="signout-btn2">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+  <div id="not-admin-note">This page is Admin only. Ask an Admin to pull the monthly invoicing report.</div>
+</div>
+
+<div id="app-view" class="hidden">
+  <header class="no-print">
+    <div class="brand-row">
+      <a class="brand-badge" href="index.html"><img src="/NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
+    </div>
+    <nav class="site-nav">
+      <div class="nav-item-dropdown hidden" id="nav-applications-dropdown">
+        <button type="button" class="nav-link nav-link-dropdown-btn">Applications <span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" id="nav-applications-submenu"></div>
+      </div>
+      <div class="nav-item-dropdown nav-split-item">
+        <a class="nav-link" href="index.html">Engagements</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Engagements menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
+          <a href="index.html?status=closed">Closed Engagements</a>
+        </div>
+      </div>
+      <div class="nav-item-dropdown nav-split-item">
+        <a href="econ_dev_partners_admin.html" class="nav-link">Programs</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Programs menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
+          <a href="econ_dev_partners_admin.html?action=add">Add Program</a>
+          <a href="program_application_links.html" data-super-admin-only>Application Links</a>
+        </div>
+      </div>
+      <div class="nav-item-dropdown nav-split-item">
+        <a href="team_directory.html" class="nav-link">Roster</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Roster menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
+          <a href="team_directory.html?action=add">Add Roster Member</a>
+        </div>
+      </div>
+      <div class="nav-item-dropdown" data-super-admin-only>
+        <button type="button" class="nav-link nav-link-dropdown-btn">Invoicing <span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu">
+          <a href="invoicing_report.html">Time Sheets</a>
+          <a href="program_invoicing.html">Program Invoices</a>
+          <a href="specialist_invoices.html">Pay Statements</a>
+        </div>
+      </div>
+    </nav>
+    <button type="button" class="nav-toggle" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div id="userbox">
+      <div class="ask-ai-wrap">
+        <button class="ask-ai-btn" id="ask-ai-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6L12 2z"/><path d="M19 15l.9 2.6L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.4L19 15z"/></svg>
+          Ask AI
+        </button>
+        <div class="ai-nudge hidden" id="ai-nudge">
+          <button type="button" class="ai-nudge-close" id="ai-nudge-close" aria-label="Dismiss">&times;</button>
+          I'm here if you have any questions — just click <strong>Ask AI</strong> any time.
+        </div>
+      </div>
+      <!-- Notification bell (Chris, 9/4/26): "make sure the bell is
+           prominently displayed on every page" -- was Home-page only.
+           Wired by a self-contained script (see end of file) that does
+           its own admin check, same pattern as the Applications nav
+           dropdown. -->
+      <div id="notif-wrap" class="hidden">
+        <button class="btn-ghost" id="notif-bell" title="Notifications">
+          &#128276;
+          <span id="notif-count" class="notif-count hidden">0</span>
+        </button>
+        <div id="notif-dropdown" class="notif-dropdown hidden">
+          <div class="notif-dropdown-header">
+            <span>Notifications</span>
+            <button class="btn-ghost btn-sm" id="notif-mark-all">Mark all read</button>
+          </div>
+          <div id="notif-list"></div>
+        </div>
+      </div>
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span><span class="user-email" id="user-email" title="The account you are signed in as"></span>
+      <div id="profile-wrap">
+        <button class="btn-ghost" id="profile-btn" title="Account menu">
+          <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="chevron">&#9662;</span>
+        </button>
+        <div id="profile-dropdown" class="profile-dropdown hidden">
+          <button class="btn-ghost" id="change-password-btn">Change Password</button>
+          <button class="btn-ghost" id="signout-btn">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="breadcrumb-bar no-print">
+    <div class="breadcrumb"><span>Invoicing</span><span class="sep">›</span><span class="current">Time Sheets</span></div>
+  </nav>
+
+  <!-- Billing history -->
+  <div class="overlay" id="history-overlay">
+    <div class="modal">
+      <h3 id="history-title">Billing History</h3>
+      <div class="history-summary" id="history-summary"></div>
+      <div class="history-list" id="history-list"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="history-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ai-drawer-overlay no-print" id="ai-drawer-overlay"></div>
+  <aside class="ai-drawer no-print" id="ai-drawer">
+    <div class="ai-drawer-header">
+      <div>
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6L12 2z"/><path d="M19 15l.9 2.6L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.4L19 15z"/></svg>
+          Ask AI
+        </h3>
+        <div class="card-hint">Ask about this page or anything across EG Group.</div>
+      </div>
+      <button class="ai-drawer-close" id="ai-drawer-close">&times;</button>
+    </div>
+    <div class="ai-drawer-body">
+      <div class="ai-context-label">Context</div>
+      <div class="ai-context-chip" id="ai-context-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span id="ai-context-text">Invoicing Report</span>
+      </div>
+      <div class="ai-greeting-bubble">Hi! I'm your EG Group assistant. Ask me anything about hours, payroll, or invoicing, or about engagements, applications, and team data across the app.</div>
+      <div class="ai-ask-label">Ask a question</div>
+      <div class="ai-ask-row">
+        <input type="text" id="ai-question-input" placeholder="e.g. Who is over budget this month?" />
+        <button class="ai-ask-send" id="ai-ask-send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div class="ai-suggested-label">Suggested questions</div>
+      <div class="ai-suggested-list" id="ai-suggested-list"></div>
+      <div class="ai-answer-block hidden" id="ai-answer-block">
+        <div class="ai-answer-meta">
+          <span class="ai-answer-title">Answer</span>
+          <span class="ai-answer-time" id="ai-answer-time"></span>
+        </div>
+        <div class="ai-answer-card" id="ai-answer-card"></div>
+        <div class="ai-answer-actions">
+          <button id="ai-copy-answer">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="ai-drawer-footer">Answers are AI-generated from EG Group data and may not always be accurate.</div>
+  </aside>
+
+  <main>
+    <div id="banner"></div>
+
+    <div class="std-toolbar-row no-print">
+      <div class="global-search-wrap">
+        <div class="search-box">
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="global-search-input" placeholder="Search…" autocomplete="off" />
+        </div>
+        <div class="global-search-results hidden" id="global-search-results"></div>
+      </div>
+      <div class="std-toolbar-actions">
+        <button type="button" class="btn-secondary btn-sm" id="std-print-btn" title="Print the current view">Print</button>
+        <button type="button" class="btn-secondary btn-sm" id="std-import-btn" title="This is a computed payroll report -- nothing to bulk import here" disabled>&#8593; Import</button>
+      </div>
+    </div>
+
+    <div class="sticky-top-wrap" id="sticky-toolbar">
+      <div class="toolbar-row">
+        <div class="month-field">
+          <label for="report-month">Month</label>
+          <button type="button" class="month-nav-btn" id="month-prev" title="Previous month" aria-label="Previous month">&#8249;</button>
+          <input type="month" id="report-month" />
+          <button type="button" class="month-nav-btn" id="month-next" title="Next month" aria-label="Next month">&#8250;</button>
+          <button type="button" class="btn-secondary btn-sm" id="month-today">This Month</button>
+        </div>
+        <div class="toolbar-actions">
+          <button class="btn-secondary" id="export-csv-btn">Export CSV</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- These are the real in-page panels only: Time Sheets and the two
+         Payroll views. "Specialist Pay Statements" and "Program Invoices"
+         used to sit here too as links out to their own pages, but the
+         Invoicing top-nav dropdown now covers all three destinations, so
+         they were removed as duplicates (Greg, 9/6/26). -->
+    <div class="tab-bar" id="report-tabs">
+      <button type="button" class="tab-btn active" data-tab="hours" id="tab-hours">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        Time Sheets
+      </button>
+      <button type="button" class="tab-btn" data-tab="payroll-mtd" id="tab-payroll-mtd">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        Payroll MTD
+      </button>
+      <button type="button" class="tab-btn" data-tab="payroll-ytd" id="tab-payroll-ytd">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
+        Payroll YTD
+      </button>
+    </div>
+
+    <div class="tab-panel-frame">
+      <div class="tab-panel" id="panel-hours">
+        <div class="card">
+          <div class="card-header-row">
+            <div>
+              <h2>Time Sheets</h2>
+              <!-- Grouped by Program + Engagement, not Specialist (Chris,
+                   8/22/26) -- matches how the actual invoice document itself
+                   groups line items, so this table reads like a preview of
+                   what's about to get billed. -->
+              <div class="card-hint" id="month-label-hint"></div>
+            </div>
+            <div class="card-header-actions">
+              <button class="btn-secondary" id="ts-print-btn">Print / Save as PDF</button>
+            </div>
+          </div>
+
+          <div class="sp-controls">
+            <div class="eng-filter-wrap">
+              <label for="eng-filter">Engagement</label>
+              <select id="eng-filter">
+                <option value="">All Engagements</option>
+              </select>
+            </div>
+            <div class="sp-search-wrap" id="sp-search-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input type="text" id="sp-search" placeholder="Search engagement or specialist…" autocomplete="off" />
+            </div>
+          </div>
+
+          <div id="flat-view-wrap">
+            <div class="specialist-scroll" id="specialist-scroll">
+              <table id="specialist-table" class="specialist-table">
+                <thead>
+                  <tr>
+                    <th class="sortable-th" id="sp-sort-name">Engagement <span class="sort-icon" id="sp-sort-icon">&#9650;</span></th>
+                    <th>Specialist / Role</th>
+                    <th title="Hours logged in the selected month only.">Hours (This Month)</th>
+                    <th title="Total hours logged on this engagement to date, compared against its hours budget -- not limited to the selected month.">Cumulative / Budget</th>
+                    <th class="col-remaining">Remaining</th>
+                  </tr>
+                </thead>
+                <tbody id="monthly-groups"></tbody>
+              </table>
+            </div>
+            <div id="monthly-empty" class="empty-note hidden">No hours logged for this month yet.</div>
+            <div id="specialist-filtered-empty" class="empty-note hidden">No specialists match your search or filters.</div>
+
+            <div class="sp-pagination" id="sp-pagination">
+              <div id="sp-pagination-info">Showing 0 to 0 of 0 specialists</div>
+              <div class="sp-pagination-right">
+                <label for="sp-page-size">Rows per page:
+                  <select id="sp-page-size">
+                    <option value="10">10</option>
+                    <option value="15" selected>15</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                  </select>
+                </label>
+                <button type="button" class="sp-page-btn" id="sp-page-prev" aria-label="Previous page">&#8249;</button>
+                <span class="sp-page-current" id="sp-page-current">1</span>
+                <button type="button" class="sp-page-btn" id="sp-page-next" aria-label="Next page">&#8250;</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Combined per-engagement report (formerly client_cumulative_hours.html)
+               -- shown instead of the flat table above whenever a single
+               Engagement is picked from the dropdown. Greg (8/22/26): merge
+               the two reports together and drop the separate Cumulative
+               Hours page/button entirely. This view shows full engagement
+               history regardless of the Month picker above, same as the
+               standalone page did. -->
+          <div id="engagement-detail-wrap" class="hidden">
+            <button type="button" class="btn-ghost eng-detail-back" id="eng-detail-back">&larr; All Engagements</button>
+            <div class="eng-detail-header">
+              <div>
+                <div class="eng-detail-name" id="ed-name"></div>
+                <div class="eng-detail-address" id="ed-address"></div>
+              </div>
+              <div class="eng-detail-meta-row">
+                <div class="eng-detail-field">
+                  <label>Opened</label>
+                  <div class="meta-static" id="ed-opened">—</div>
+                </div>
+                <div class="eng-detail-field" id="ed-closed-wrap" style="display:none;">
+                  <label>Closed</label>
+                  <div class="meta-static" id="ed-closed">—</div>
+                </div>
+                <div class="eng-detail-field">
+                  <label>Hourly Rate (Pay)</label>
+                  <div class="meta-static" id="ed-rate">—</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="eng-detail-section">
+              <h3>Cumulative Hours by Specialist</h3>
+              <div class="card-hint">Only months with logged hours are shown.</div>
+              <div class="table-scroll">
+                <table class="cum-table" id="ed-hours-table">
+                  <thead><tr id="ed-hours-thead"></tr></thead>
+                  <tbody id="ed-hours-tbody"></tbody>
+                  <tfoot><tr id="ed-hours-tfoot"></tr></tfoot>
+                </table>
+              </div>
+              <div id="ed-hours-empty" class="empty-note hidden">No specialists are assigned to this engagement yet.</div>
+            </div>
+
+            <div class="eng-detail-section">
+              <h3>Cumulative Value by Specialist</h3>
+              <div class="card-hint">Same hours, priced at the Pay rate above.</div>
+              <div class="table-scroll">
+                <table class="cum-table" id="ed-dollars-table">
+                  <thead><tr id="ed-dollars-thead"></tr></thead>
+                  <tbody id="ed-dollars-tbody"></tbody>
+                  <tfoot><tr id="ed-dollars-tfoot"></tr></tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel hidden" id="panel-payroll-mtd">
+        <div class="card">
+          <div class="card-header-row">
+            <div>
+              <h2 id="payroll-mtd-title">Payroll</h2>
+              <div class="card-hint">Every team member is paid the same flat rate, regardless of role.</div>
+            </div>
+            <div class="card-header-actions">
+              <div class="rate-field">
+                <label for="rate-input">Rate</label>
+                <div class="rate-prefix-wrap">
+                  <span class="rate-prefix">$</span>
+                  <input type="number" id="rate-input" min="0" step="0.01" />
+                </div>
+                <span class="rate-suffix">/hr</span>
+                <span class="rate-saved" id="rate-saved">Saved</span>
+              </div>
+              <button class="btn-secondary" id="export-payroll-csv-btn">Export Payroll CSV</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table id="payroll-table">
+              <thead>
+                <tr>
+                  <th>Team Member</th>
+                  <th class="money">Hours</th>
+                  <th class="money">Rate</th>
+                  <th class="money">Total Pay</th>
+                </tr>
+              </thead>
+              <tbody id="payroll-tbody"></tbody>
+              <tfoot id="payroll-tfoot"></tfoot>
+            </table>
+          </div>
+          <div id="payroll-empty" class="empty-note hidden">No hours logged for this month yet.</div>
+        </div>
+      </div>
+
+      <div class="tab-panel hidden" id="panel-payroll-ytd">
+        <div class="card">
+          <div class="card-header-row">
+            <div>
+              <h2 id="payroll-ytd-title">YTD Payroll</h2>
+              <div class="card-hint" id="ytd-label-hint">Cumulative pay by team member, January 1 through the selected month — handy for 1099 prep at year end.</div>
+            </div>
+            <div class="card-header-actions">
+              <div class="ytd-total-figure" id="ytd-total-figure">$0.00<span class="ytd-total-label">YTD Payroll</span></div>
+              <button class="btn-secondary" id="export-ytd-payroll-csv-btn">Export YTD CSV</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table id="ytd-payroll-table">
+              <thead>
+                <tr>
+                  <th>Team Member</th>
+                  <th class="money">Hours (YTD)</th>
+                  <th class="money">Rate</th>
+                  <th class="money">Total Pay (YTD)</th>
+                </tr>
+              </thead>
+              <tbody id="ytd-payroll-tbody"></tbody>
+              <tfoot id="ytd-payroll-tfoot"></tfoot>
+            </table>
+          </div>
+          <div id="ytd-payroll-empty" class="empty-note hidden">No hours logged yet this year.</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentUser = null;
+  let reportRows = []; // one row per active, assigned, hour-tracked client_assignment
+  let clientsById = {}; // for the merged per-engagement detail view (Opened/Closed/Setup Fee/address)
+
+  const $ = (id) => document.getElementById(id);
+  // Chris asked (8/11/26 call) that role names shown to users match current
+  // EG terminology: Consultant -> Specialist, Super Admin -> Admin.
+  // The underlying role VALUES in the database ("consultant", "super_admin", etc.)
+  // are unchanged -- only what is displayed on screen is remapped here.
+  // Which account am I signed in as? (Greg, 9/11/26 -- he holds three logins
+  // with the same name: Super Admin, Team Lead and Specialist. The role pill
+  // said "Specialist" but nothing said WHICH Specialist, and an assignment
+  // made under one login is invisible from another.)
+  //
+  // Read from the auth session rather than the users row, because the profile
+  // query on each page selects a different set of columns and most don't ask
+  // for email. The session always has it.
+  async function showSignedInEmail() {
+    const el = document.getElementById("user-email");
+    if (!el) return;
+    try {
+      const { data } = await sb.auth.getUser();
+      const email = data && data.user && data.user.email;
+      if (email) el.textContent = email;
+    } catch (e) { /* non-essential -- the name and role pill still show */ }
+  }
+
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
+  function redirectToLogin() {
+    const dest = location.pathname.split("/").pop() + location.search;
+    location.href = "index.html?return=" + encodeURIComponent(dest);
+  }
+
+  const SPECIALTY_LABELS = {
+    team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
+    gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
+  };
+  // Admin and Quality Control hours are a flat sunk-cost allocation, not
+  // logged hour-by-hour in time_entries (see client_workspace.html) -- so
+  // the flat Time Sheets table (grouped by month) still excludes them, same
+  // as before. But the merged per-engagement detail view (formerly
+  // client_cumulative_hours.html) needs them, so loadData() below no longer
+  // drops them at fetch time -- they're just flagged isSunk and filtered
+  // out of the flat-table/payroll inputs instead (Greg, 8/22/26 merge).
+  // A Program can opt out via econ_dev_companies.bill_admin_qc_upfront
+  // (Greg, 8/23/26: GRE bills Admin/QC as actually performed instead).
+  const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+  function isSunkCostSpecialty(specialtyType, partner) {
+    if (!SUNK_COST_SPECIALTIES.includes(specialtyType)) return false;
+    return !partner || partner.bill_admin_qc_upfront !== false;
+  }
+
+  // Flat rate, same for every team member regardless of role (Team Lead,
+  // Market Research, etc.) -- per Greg, 8/12/26. Loaded from
+  // organization_settings.hourly_rate (047 migration) and editable by
+  // Admins right on this page; 95 here is just the pre-load fallback in
+  // case that fetch hasn't resolved yet.
+  let hourlyRate = 95;
+  function money(n) {
+    return "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  /* ---------- Ask AI ----------
+     Browser -> eg-dashboard-ai Supabase Edge Function -> Claude API. The
+     Claude key lives only as a secret on that function; this page just
+     forwards the signed-in user's own session token so the function can
+     tell who's asking (and, for Admins only, answer from live data). */
+  const AI_CONTEXT_LABEL = "Invoicing Report";
+  const AI_PAGE_KEY = "invoicing";
+  const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/eg-dashboard-ai`;
+  // Short-term memory for this drawer session only (not persisted) -- lets
+  // natural follow-ups like "what about her hours" work without the user
+  // having to restate context every time.
+  let aiHistory = [];
+  const AI_SUGGESTED = [
+    "Who is over budget this month?",
+    "What's total payroll this month?",
+    "Which specialist logged the most hours?",
+    "What's the YTD payroll total?",
+  ];
+
+  function initAskAi() {
+    const btn = $("ask-ai-btn");
+    if (!btn) return;
+    $("ai-context-text").textContent = AI_CONTEXT_LABEL;
+    renderAiSuggested();
+    btn.addEventListener("click", openAiDrawer);
+    $("ai-drawer-close").addEventListener("click", closeAiDrawer);
+    $("ai-drawer-overlay").addEventListener("click", closeAiDrawer);
+    $("ai-ask-send").addEventListener("click", submitAiQuestion);
+    $("ai-question-input").addEventListener("keydown", (e) => { if (e.key === "Enter") submitAiQuestion(); });
+    $("ai-copy-answer").addEventListener("click", () => {
+      const text = $("ai-answer-card").innerText;
+      navigator.clipboard?.writeText(text);
+    });
+  }
+
+  function renderAiSuggested() {
+    const list = $("ai-suggested-list");
+    list.innerHTML = AI_SUGGESTED.map((q, i) => `
+      <button class="ai-suggested-chip" data-idx="${i}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"/><path d="M12 17h.01"/></svg>
+        ${escapeHtml(q)}
+      </button>
+    `).join("");
+    list.querySelectorAll(".ai-suggested-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const q = AI_SUGGESTED[Number(chip.dataset.idx)];
+        $("ai-question-input").value = q;
+        askAi(q);
+      });
+    });
+  }
+
+  function openAiDrawer() {
+    $("ai-drawer-overlay").classList.add("open");
+    $("ai-drawer").classList.add("open");
+  }
+
+  function closeAiDrawer() {
+    $("ai-drawer-overlay").classList.remove("open");
+    $("ai-drawer").classList.remove("open");
+  }
+
+  function submitAiQuestion() {
+    const q = $("ai-question-input").value.trim();
+    if (!q) return;
+    askAi(q);
+  }
+
+  // Turns Claude's plain-text answer (occasional **bold**, blank-line
+  // paragraphs, "- " list items) into safe HTML -- text is escaped first,
+  // so nothing the model returns is ever interpreted as markup.
+  function renderAiMarkup(text) {
+    const escaped = escapeHtml(text || "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    return escaped.split(/\n\n+/).map((block) => {
+      const lines = block.split("\n").filter((l) => l.trim());
+      if (lines.length && lines.every((l) => /^\s*-\s+/.test(l))) {
+        return `<ul>${lines.map((l) => `<li>${l.replace(/^\s*-\s+/, "")}</li>`).join("")}</ul>`;
+      }
+      return `<p>${lines.join("<br>")}</p>`;
+    }).join("");
+  }
+
+  async function askAi(question) {
+    $("ai-answer-block").classList.remove("hidden");
+    $("ai-answer-card").innerHTML = `<p style="color:var(--muted);">Thinking…</p>`;
+    $("ai-answer-time").textContent = "";
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error("No active session");
+      const res = await fetch(AI_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": SUPABASE_ANON_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ question, pageKey: AI_PAGE_KEY, pageContext: AI_CONTEXT_LABEL, history: aiHistory }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || `Request failed (${res.status})`);
+      showAiAnswer(renderAiMarkup(data.answer));
+      aiHistory.push({ role: "user", content: question }, { role: "assistant", content: data.answer });
+      aiHistory = aiHistory.slice(-6);
+    } catch (err) {
+      console.error("Ask AI error:", err);
+      showAiAnswer(`<p>Sorry, I couldn't reach the AI service just now. Try again in a moment.</p>`);
+    }
+  }
+
+  function showAiAnswer(html) {
+    $("ai-answer-card").innerHTML = html;
+    $("ai-answer-block").classList.remove("hidden");
+    $("ai-answer-time").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  initAskAi();
+
+  // One-time "I'm here if you have questions" popup pointing at the Ask AI
+  // button, shown once ever across the whole app (localStorage-gated), the
+  // first time someone lands on any page after signing in.
+  function maybeShowAiNudge() {
+    if (localStorage.getItem("eg_ai_nudge_seen")) return;
+    localStorage.setItem("eg_ai_nudge_seen", "1");
+    setTimeout(() => {
+      const nudge = $("ai-nudge");
+      if (!nudge) return;
+      nudge.classList.remove("hidden");
+      const hide = () => nudge.classList.add("hidden");
+      $("ai-nudge-close").addEventListener("click", hide);
+      $("ask-ai-btn").addEventListener("click", hide, { once: true });
+      setTimeout(hide, 10000);
+    }, 900);
+  }
+
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 3000);
+  }
+
+  async function signOut() {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    $("not-admin-view").classList.add("hidden");
+    redirectToLogin();
+  }
+  $("signout-btn").addEventListener("click", signOut);
+  $("signout-btn2").addEventListener("click", signOut);
+
+  function changePassword() {
+    location.href = "reset_password.html";
+  }
+  $("change-password-btn").addEventListener("click", changePassword);
+  $("change-password-btn2").addEventListener("click", changePassword);
+
+  $("profile-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("profile-dropdown").classList.toggle("hidden");
+  });
+  $("profile-btn2").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("profile-dropdown2").classList.toggle("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!$("profile-wrap").contains(e.target)) $("profile-dropdown").classList.add("hidden");
+    if (!$("profile-wrap2").contains(e.target)) $("profile-dropdown2").classList.add("hidden");
+  });
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users")
+      .select("id, full_name, role, organization_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      await sb.auth.signOut();
+      redirectToLogin();
+      return;
+    }
+
+    currentUser = profile;
+    $("loading-view").classList.add("hidden");
+
+    if (profile.role !== "super_admin") {
+      $("not-admin-view").classList.remove("hidden");
+      return;
+    }
+
+    $("app-view").classList.remove("hidden");
+    maybeShowAiNudge();
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = roleLabel(profile.role);
+    showSignedInEmail();
+    // Application Links and the whole Invoicing menu are Admin-only
+    // (Greg, 9/6/26). Marked in the markup with data-super-admin-only so
+    // this one line covers every nav copy on the page, including the
+    // second header some pages render inside #not-admin-view.
+    document.querySelectorAll("[data-super-admin-only]").forEach((el) => el.classList.toggle("hidden", profile.role !== "super_admin"));
+
+    const now = new Date();
+    $("report-month").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    $("report-month").addEventListener("change", render);
+    wireMonthNav();
+    wireTabs();
+    wireSpecialistControls();
+
+    await loadHourlyRate();
+    await loadData();
+    loadGlobalSearchIndex();
+  }
+
+  // ---------- Tabs ----------
+  function wireTabs() {
+    // Every tab here is a real in-page panel now; the cross-page links that
+    // used to share this bar (Program Invoices / Specialist Pay Statements)
+    // moved to the Invoicing top-nav dropdown. The [data-tab] filter stays
+    // so anything link-shaped added here later still navigates normally.
+    document.querySelectorAll(".tab-btn[data-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn[data-tab]").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const tab = btn.dataset.tab;
+        // Clicking Time Sheets while looking at a single engagement's
+        // Cumulative Hours/Value detail acts as a "back" step to the full
+        // engagement list, instead of just re-showing the same detail view
+        // it's already on (Greg, 8/22/26).
+        if (tab === "hours" && $("eng-filter").value) {
+          $("eng-filter").value = "";
+          applyEngagementFilter();
+        }
+        $("panel-hours").classList.toggle("hidden", tab !== "hours");
+        $("panel-payroll-mtd").classList.toggle("hidden", tab !== "payroll-mtd");
+        $("panel-payroll-ytd").classList.toggle("hidden", tab !== "payroll-ytd");
+        updateStickyToolbarVisibility();
+      });
+    });
+  }
+
+  // The Month picker + Export CSV only mean anything for the flat
+  // "All Engagements" table and the Payroll MTD/YTD tabs -- the merged
+  // per-engagement detail view always shows an engagement's FULL history
+  // regardless of month, so the toolbar has nothing to do there and just
+  // reads as broken/unresponsive. Hide it in that one case only; it stays
+  // put for every other tab/view (Greg, 8/22/26).
+  function updateStickyToolbarVisibility() {
+    const hoursTabActive = !$("panel-hours").classList.contains("hidden");
+    const detailShowing = !$("engagement-detail-wrap").classList.contains("hidden");
+    $("sticky-toolbar").classList.toggle("hidden", hoursTabActive && detailShowing);
+  }
+
+  // ---------- Month navigation ----------
+  // Prev/Next step the picker one calendar month at a time; "This Month"
+  // jumps straight back to the current month -- the same pattern most
+  // accounting software uses for flipping between statement periods.
+  function shiftMonth(delta) {
+    const [y, m] = $("report-month").value.split("-").map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    $("report-month").value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    render();
+  }
+  function wireMonthNav() {
+    $("month-prev").addEventListener("click", () => shiftMonth(-1));
+    $("month-next").addEventListener("click", () => shiftMonth(1));
+    $("month-today").addEventListener("click", () => {
+      const n = new Date();
+      $("report-month").value = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+      render();
+    });
+  }
+
+  // ---------- Pay rate (organization_settings.hourly_rate) ----------
+  async function loadHourlyRate() {
+    const { data, error } = await sb
+      .from("organization_settings")
+      .select("hourly_rate")
+      .eq("organization_id", currentUser.organization_id)
+      .single();
+
+    if (error || !data) {
+      // Backfilled by the 047 migration for every existing org, so this
+      // shouldn't normally happen -- fall back to the default rather than
+      // blocking the page if it does.
+      showBanner("Couldn't load the pay rate, using the default of $95/hr.", "error");
+    } else {
+      hourlyRate = Number(data.hourly_rate);
+    }
+    $("rate-input").value = hourlyRate;
+  }
+
+  $("rate-input").addEventListener("change", async () => {
+    const input = $("rate-input");
+    const newRate = round2(Number(input.value));
+    if (!(newRate > 0)) {
+      showBanner("Pay rate must be a positive number.", "error");
+      input.value = hourlyRate;
+      return;
+    }
+    if (newRate === hourlyRate) return;
+
+    input.disabled = true;
+    const { error } = await sb
+      .from("organization_settings")
+      .update({ hourly_rate: newRate, updated_at: new Date().toISOString() })
+      .eq("organization_id", currentUser.organization_id);
+    input.disabled = false;
+
+    if (error) {
+      showBanner("Couldn't save the new rate: " + error.message, "error");
+      input.value = hourlyRate;
+      return;
+    }
+
+    hourlyRate = newRate;
+    input.value = hourlyRate;
+    const savedTag = $("rate-saved");
+    savedTag.classList.add("show");
+    setTimeout(() => savedTag.classList.remove("show"), 1800);
+    render();
+  });
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      afterSignIn();
+    } else {
+      redirectToLogin();
+    }
+  });
+
+  // ---------- Data loading ----------
+  // Pulls every active, hour-tracked assignment plus every logged time entry
+  // for the whole org, then does the month/cumulative grouping client-side.
+  // At EG's current scale (~30 specialists, a handful of logged hours each
+  // per month) this is a small amount of data -- no need for a database
+  // function just to add two numbers together.
+  // ---------- Standardized Search/Print/Export/Import toolbar ----------
+  // Same four controls, same order, on every internal page (Greg, 8/27/26).
+  // Export already exists per tab (Export CSV / Export Payroll CSV / Export
+  // YTD CSV) so it isn't duplicated here. Import is disabled -- this is a
+  // computed payroll report, not an editable record list.
+  let gsClients = [], gsUsers = [], gsPrograms = [];
+  async function loadGlobalSearchIndex() {
+    const [{ data: clients }, { data: users }, { data: programs }] = await Promise.all([
+      sb.from("clients").select("id, name, project_status"),
+      sb.from("users").select("id, full_name").eq("hidden_from_roster", false),
+      sb.from("econ_dev_companies").select("id, name, code"),
+    ]);
+    gsClients = clients || []; gsUsers = users || []; gsPrograms = programs || [];
+  }
+  const GS_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+  function renderGlobalSearchResults(query) {
+    const box = $("global-search-results");
+    const q = query.trim().toLowerCase();
+    if (!q) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+    const engMatches = gsClients.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 5);
+    const specMatches = gsUsers.filter((u) => u.full_name && u.full_name.toLowerCase().includes(q)).slice(0, 5);
+    const progMatches = gsPrograms.filter((p) => (p.name || "").toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q)).slice(0, 5);
+    let html = "";
+    if (engMatches.length) {
+      html += `<div class="gsr-group-label">Engagements</div>` + engMatches.map((c) => `
+        <div class="gsr-item" data-gsr-nav="client_control_center.html?client=${c.id}">
+          <span class="gsr-name">${escapeHtml(c.name)}</span>
+          <span class="gsr-meta">${escapeHtml(GS_STATUS_LABELS[c.project_status] || c.project_status)}</span>
+        </div>
+      `).join("");
+    }
+    if (specMatches.length) {
+      html += `<div class="gsr-group-label">Specialists</div>` + specMatches.map((u) => `
+        <div class="gsr-item" data-gsr-nav="team_directory.html"><span class="gsr-name">${escapeHtml(u.full_name)}</span></div>
+      `).join("");
+    }
+    if (progMatches.length) {
+      html += `<div class="gsr-group-label">Programs</div>` + progMatches.map((p) => `
+        <div class="gsr-item" data-gsr-nav="econ_dev_partners_admin.html?program=${p.id}">
+          <span class="gsr-name">${escapeHtml(p.name)}</span>
+          <span class="gsr-meta">${escapeHtml(p.code || "")}</span>
+        </div>
+      `).join("");
+    }
+    if (!html) html = `<div class="gsr-item" style="cursor:default;"><span class="gsr-name" style="color:var(--muted); font-weight:400;">No matches.</span></div>`;
+    box.innerHTML = html;
+    box.classList.remove("hidden");
+    box.querySelectorAll("[data-gsr-nav]").forEach((el) => {
+      el.addEventListener("click", () => { window.location.href = el.dataset.gsrNav; });
+    });
+  }
+  $("global-search-input").addEventListener("input", () => renderGlobalSearchResults($("global-search-input").value));
+  $("global-search-input").addEventListener("focus", () => {
+    if ($("global-search-input").value.trim()) renderGlobalSearchResults($("global-search-input").value);
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".global-search-wrap")) $("global-search-results").classList.add("hidden");
+  });
+  $("std-print-btn").addEventListener("click", () => window.print());
+
+  async function loadData() {
+    const [assignmentsRes, entriesRes, usersRes, clientsRes] = await Promise.all([
+      sb.from("client_assignments")
+        .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name, bill_admin_qc_upfront))")
+        .not("user_id", "is", null),
+      sb.from("time_entries").select("assignment_id, hours, entry_date, note"),
+      // Attribution lookup, not a picker -- no hidden_from_roster filter.
+      // A hidden account can still hold an assignment (Greg's Admin account
+      // does, and the NCEG Admin house account owns every engagement's
+      // Admin/QC rows as of 121), and filtering them out here renders those
+      // rows as "Unknown". The global search index above is a picker and
+      // keeps its filter.
+      sb.from("users").select("id, full_name, role"),
+      // Address/Opened/Closed/Setup Fee for the merged per-engagement detail
+      // view -- not needed by the flat Time Sheets table, but cheap enough
+      // to just load alongside everything else (Greg's org is small).
+      sb.from("clients").select("id, name, address, created_at, date_closed, setup_fee"),
+    ]);
+
+    if (assignmentsRes.error) { showBanner("Couldn't load assignments: " + assignmentsRes.error.message, "error"); return; }
+    if (entriesRes.error) { showBanner("Couldn't load time entries: " + entriesRes.error.message, "error"); return; }
+    if (usersRes.error) { showBanner("Couldn't load specialists: " + usersRes.error.message, "error"); return; }
+    if (clientsRes.error) { showBanner("Couldn't load engagements: " + clientsRes.error.message, "error"); return; }
+
+    const usersById = {};
+    for (const u of usersRes.data) usersById[u.id] = u;
+
+    clientsById = {};
+    for (const c of clientsRes.data) clientsById[c.id] = c;
+
+    // Group every logged entry by assignment, split into "this calendar
+    // month" buckets so re-rendering for a different month doesn't need
+    // another round trip.
+    const entriesByAssignment = {};
+    for (const e of entriesRes.data) {
+      (entriesByAssignment[e.assignment_id] ||= []).push(e);
+    }
+
+    // No longer filtered out at fetch time (see SUNK_COST_SPECIALTIES note
+    // above) -- Admin/Quality Control rows are kept and flagged isSunk so
+    // the merged per-engagement detail view can show them; the flat
+    // Time Sheets table and payroll summaries filter them back out below.
+    reportRows = assignmentsRes.data.map((a) => {
+        const person = usersById[a.user_id];
+        const entries = entriesByAssignment[a.id] || [];
+        return {
+          assignmentId: a.id,
+          clientId: a.client_id,
+          specialistName: person ? person.full_name : "Unknown",
+          specialistRoleLabel: person ? roleLabel(person.role) : "",
+          program: (a.clients && a.clients.econ_dev_companies && a.clients.econ_dev_companies.name) || "—",
+          client: (a.clients && a.clients.name) || "—",
+          // Matches the same "Role N" convention used on the Client Workspace
+          // Assignments table — only append the slot number when there's more
+          // than one of that specialty (e.g. "Digital Marketing 1", "GIS 2"),
+          // so Rita can tell which slot an invoice line refers to.
+          role: (SPECIALTY_LABELS[a.specialty_type] || a.specialty_type) + (a.slot_number > 1 ? " " + a.slot_number : ""),
+          hoursAllotted: Number(a.hours_allotted) || 0,
+          isSunk: isSunkCostSpecialty(a.specialty_type, a.clients && a.clients.econ_dev_companies),
+          entries, // [{ hours, entry_date }]
+        };
+      });
+
+    populateEngagementFilter();
+    render();
+    applyDeepLinkEngagement();
+  }
+
+  // Lets other pages (e.g. the Engagements list) link straight into a single
+  // engagement's Cumulative Hours/Value detail via
+  // invoicing_report.html?engagement=<clientId>, instead of landing on the
+  // flat all-engagements table and making the person hunt it down. Only runs
+  // once per load -- re-running on every loadData() call (e.g. after a
+  // month-nav re-fetch) would re-force the filter even after the person
+  // clears it back to "All Engagements".
+  let deepLinkApplied = false;
+  function applyDeepLinkEngagement() {
+    if (deepLinkApplied) return;
+    deepLinkApplied = true;
+    const engagementId = new URLSearchParams(window.location.search).get("engagement");
+    if (!engagementId) return;
+    const select = $("eng-filter");
+    if (![...select.options].some((o) => o.value === engagementId)) return;
+    select.value = engagementId;
+    applyEngagementFilter();
+  }
+
+  function monthBounds(monthValue) {
+    const [y, m] = monthValue.split("-").map(Number);
+    const start = `${monthValue}-01`;
+    const lastDay = new Date(y, m, 0).getDate();
+    const end = `${monthValue}-${String(lastDay).padStart(2, "0")}`;
+    return { start, end };
+  }
+
+  function render() {
+    const monthValue = $("report-month").value;
+    if (!monthValue) return;
+    const { start, end } = monthBounds(monthValue);
+    const year = monthValue.slice(0, 4);
+    const yearStart = `${year}-01-01`;
+
+    const rowsWithTotals = reportRows.map((r) => {
+      let hoursThisMonth = 0;
+      let cumulativeThroughMonth = 0;
+      let hoursYtd = 0;
+      for (const e of r.entries) {
+        if (e.entry_date >= start && e.entry_date <= end) hoursThisMonth += Number(e.hours);
+        if (e.entry_date <= end) cumulativeThroughMonth += Number(e.hours);
+        if (e.entry_date >= yearStart && e.entry_date <= end) hoursYtd += Number(e.hours);
+      }
+      return {
+        ...r,
+        hoursThisMonth: round2(hoursThisMonth),
+        cumulativeThroughMonth: round2(cumulativeThroughMonth),
+        hoursYtd: round2(hoursYtd),
+        isOver: cumulativeThroughMonth > r.hoursAllotted,
+      };
+    });
+
+    const monthDate = new Date(monthValue + "-02"); // avoid TZ edge cases landing on prior day
+    const monthLabel = monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    const monthShortLabel = monthDate.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+    $("month-label-hint").textContent = "Showing " + monthLabel + ". Click an engagement name below for its full combined report, or a specialist's name for their billing history.";
+    $("ytd-label-hint").textContent =
+      `Cumulative pay by team member, January 1 – ${monthLabel} — handy for 1099 prep at year end.`;
+    $("payroll-mtd-title").textContent = "Payroll — " + monthLabel;
+    $("payroll-ytd-title").textContent = `YTD Payroll — Jan 1 – ${monthShortLabel}`;
+
+    renderSpecialistSetup(rowsWithTotals.filter((r) => r.hoursThisMonth > 0 && !r.isSunk));
+    renderSpecialistTable();
+    const payrollRows = renderPayrollSummary(rowsWithTotals.filter((r) => r.hoursThisMonth > 0 && !r.isSunk));
+    const ytdPayrollRows = renderYtdPayrollSummary(rowsWithTotals.filter((r) => r.hoursYtd > 0 && !r.isSunk));
+
+    $("ytd-total-figure").innerHTML =
+      money(ytdPayrollRows.reduce((sum, p) => sum + p.pay, 0)) + '<span class="ytd-total-label">YTD Payroll</span>';
+
+    window._invoicingReportRows = rowsWithTotals; // for CSV export
+    window._invoicingPayrollRows = payrollRows; // for payroll CSV export
+    window._invoicingYtdPayrollRows = ytdPayrollRows; // for YTD payroll CSV export
+    window._invoicingYtdYear = year;
+  }
+
+  function round2(n) { return Math.round(n * 100) / 100; }
+
+  // ---------- Billing history drill-down ----------
+  // Every assignment's full entries array is already sitting in reportRows
+  // (loaded once for the whole org) -- grouping into months here is just
+  // reshaping data already in memory, no extra round trip to Supabase.
+  function groupEntriesByMonth(entries) {
+    const sorted = [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+    const months = {};
+    for (const e of sorted) {
+      const key = e.entry_date.slice(0, 7);
+      (months[key] ||= { total: 0, entries: [] });
+      months[key].total += Number(e.hours);
+      months[key].entries.push(e);
+    }
+    let cumulative = 0;
+    return Object.keys(months).sort().map((key) => {
+      cumulative += months[key].total;
+      return { monthKey: key, total: round2(months[key].total), cumulative: round2(cumulative), entries: months[key].entries };
+    });
+  }
+
+  function monthKeyLabel(key) {
+    const d = new Date(key + "-02"); // avoid TZ edge cases landing on prior day
+    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+
+  function openHistory(assignmentId) {
+    const r = reportRows.find((x) => x.assignmentId === assignmentId);
+    if (!r) return;
+    $("history-title").textContent = `Billing History — ${r.role} · ${r.client} (${r.program})`;
+
+    const allotted = r.hoursAllotted;
+    const totalBilled = round2((r.entries || []).reduce((sum, e) => sum + Number(e.hours), 0));
+    const remaining = round2(allotted - totalBilled);
+    $("history-summary").innerHTML = `
+      <div><strong>${allotted}</strong><span>Budget (hrs)</span></div>
+      <div><strong>${totalBilled}</strong><span>Billed to date</span></div>
+      <div><strong>${remaining}</strong><span>Remaining</span></div>
+    `;
+
+    if (!r.entries || !r.entries.length) {
+      $("history-list").innerHTML = `<div class="history-empty">No hours logged yet.</div>`;
+    } else {
+      const months = groupEntriesByMonth(r.entries).reverse(); // most recent month first
+      $("history-list").innerHTML = months.map((m) => `
+        <div class="history-month">
+          <div class="history-month-row">
+            <span>${monthKeyLabel(m.monthKey)} — ${m.total} hrs</span>
+            <span class="history-month-meta">Cumulative ${m.cumulative} / ${allotted} · Remaining ${round2(allotted - m.cumulative)}</span>
+          </div>
+          ${m.entries.slice().sort((a, b) => b.entry_date.localeCompare(a.entry_date)).map((e) => `
+            <div class="history-entry">
+              <span>${e.entry_date} — ${e.hours} hrs</span>
+              <span class="history-entry-note">${e.note ? escapeHtml(e.note) : ""}</span>
+            </div>
+          `).join("")}
+        </div>
+      `).join("");
+    }
+    $("history-overlay").classList.add("open");
+  }
+  $("history-close").addEventListener("click", () => { $("history-overlay").classList.remove("open"); });
+
+  // Each specialist gets one accent color, reused for their avatar initials
+  // and every usage bar on their row(s) -- makes a long roster scannable by
+  // eye (a color you recognize) rather than by reading every number.
+  const AVATAR_PALETTE = ["#1f4a75", "#0f7c86", "#6b4c9a", "#5c7248", "#a9740f", "#b3403a"];
+  function colorForIndex(i) { return AVATAR_PALETTE[i % AVATAR_PALETTE.length]; }
+  function initialsFor(name) {
+    const parts = String(name).trim().split(/\s+/);
+    return ((parts[0]?.[0] || "") + (parts[parts.length - 1]?.[0] || "")).toUpperCase();
+  }
+
+  // ---------- Time Sheets: search/filter/sort/paginate/collapse ----------
+  // currentMonthRows holds the full, unfiltered set of this-month rows so
+  // filters/search/pagination can all operate client-side without another
+  // round trip; specialistColorByName is keyed off that same full set so a
+  // person's color stays put even as filters narrow what's on screen.
+  //
+  // Grouped by Engagement (not Specialist) per Chris's "organize by program
+  // and engagement" / "use invoicing format for above" note (8/22/26) -- one
+  // specialist can still appear under several engagements, they just show up
+  // as separate detail rows now instead of anchoring the group.
+  let currentMonthRows = [];
+  let specialistColorByName = {};
+  let spSearch = "";
+  let spSortDir = "asc";
+  let spPage = 1;
+  let spPageSize = 15;
+  const collapsedEngagements = new Set();
+
+  function renderSpecialistSetup(rows) {
+    currentMonthRows = rows;
+
+    const allNames = [...new Set(rows.map((r) => r.specialistName))].sort((a, b) => a.localeCompare(b));
+    specialistColorByName = {};
+    allNames.forEach((name, i) => { specialistColorByName[name] = colorForIndex(i); });
+  }
+
+  function wireSpecialistControls() {
+    $("sp-search").addEventListener("input", () => {
+      spSearch = $("sp-search").value.trim().toLowerCase();
+      spPage = 1;
+      renderSpecialistTable();
+    });
+    $("sp-sort-name").addEventListener("click", () => {
+      spSortDir = spSortDir === "asc" ? "desc" : "asc";
+      renderSpecialistTable();
+    });
+    $("sp-page-size").addEventListener("change", () => {
+      spPageSize = Number($("sp-page-size").value);
+      spPage = 1;
+      renderSpecialistTable();
+    });
+    $("sp-page-prev").addEventListener("click", () => {
+      spPage = Math.max(1, spPage - 1);
+      renderSpecialistTable();
+    });
+    $("sp-page-next").addEventListener("click", () => {
+      spPage += 1;
+      renderSpecialistTable();
+    });
+    // Delegated so newly-rendered rows' toggle buttons work without rewiring.
+    $("monthly-groups").addEventListener("click", (e) => {
+      const openBtn = e.target.closest("[data-open-engagement]");
+      if (openBtn) {
+        $("eng-filter").value = openBtn.dataset.openEngagement;
+        applyEngagementFilter();
+        return;
+      }
+      const btn = e.target.closest("[data-toggle-engagement]");
+      if (!btn) return;
+      const key = btn.dataset.toggleEngagement;
+      if (collapsedEngagements.has(key)) collapsedEngagements.delete(key); else collapsedEngagements.add(key);
+      renderSpecialistTable();
+    });
+
+    $("eng-filter").addEventListener("change", applyEngagementFilter);
+    $("eng-detail-back").addEventListener("click", () => {
+      $("eng-filter").value = "";
+      applyEngagementFilter();
+    });
+    $("ts-print-btn").addEventListener("click", () => window.print());
+  }
+
+  // ---------- Engagement dropdown + merged per-engagement detail view ----------
+  // Greg (8/22/26): fold client_cumulative_hours.html's per-engagement report
+  // (header + two specialty tables) into this Time Sheets tab, behind an
+  // Engagement picker, instead of a separate page/button. Picking a single
+  // engagement here shows its FULL history (every month ever logged), same
+  // as the standalone page did -- independent of the Month picker above,
+  // which only governs the flat "All Engagements" table.
+  function populateEngagementFilter() {
+    const seen = new Map();
+    for (const r of reportRows) {
+      if (!seen.has(r.clientId)) seen.set(r.clientId, { clientId: r.clientId, client: r.client, program: r.program });
+    }
+    const list = [...seen.values()].sort((a, b) => a.client.localeCompare(b.client));
+    const select = $("eng-filter");
+    const prevValue = select.value;
+    select.innerHTML = `<option value="">All Engagements</option>` +
+      list.map((e) => `<option value="${escapeHtml(e.clientId)}">${escapeHtml(e.client)} (${escapeHtml(e.program)})</option>`).join("");
+    if (prevValue && seen.has(prevValue)) select.value = prevValue;
+  }
+
+  function applyEngagementFilter() {
+    const clientId = $("eng-filter").value;
+    const isDetail = !!clientId;
+    $("flat-view-wrap").classList.toggle("hidden", isDetail);
+    $("sp-search-wrap").classList.toggle("hidden", isDetail);
+    $("engagement-detail-wrap").classList.toggle("hidden", !isDetail);
+    if (isDetail) renderEngagementDetail(clientId);
+    updateStickyToolbarVisibility();
+  }
+
+  function monthKeyOf(dateStr) { return String(dateStr).slice(0, 7); }
+  function monthLabelFor(key) {
+    const [y, m] = key.split("-").map(Number);
+    return new Date(y, m - 1, 2).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  }
+
+  function renderEngagementDetail(clientId) {
+    const client = clientsById[clientId];
+    const rows = reportRows.filter((r) => r.clientId === clientId);
+    if (!client) return;
+
+    $("ed-name").textContent = client.name || "Untitled Engagement";
+    $("ed-address").textContent = client.address || "";
+    $("ed-opened").textContent = client.created_at
+      ? new Date(client.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+      : "—";
+    if (client.date_closed) {
+      $("ed-closed-wrap").style.display = "";
+      $("ed-closed").textContent = new Date(client.date_closed).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    } else {
+      $("ed-closed-wrap").style.display = "none";
+    }
+    $("ed-rate").textContent = money(hourlyRate) + "/hr";
+
+    // Union of every calendar month with real logged hours anywhere in this
+    // engagement -- same rule client_cumulative_hours.html used: empty
+    // months just aren't columns at all.
+    const monthSet = new Set();
+    for (const r of rows) {
+      for (const e of r.entries) {
+        if (Number(e.hours) > 0) monthSet.add(monthKeyOf(e.entry_date));
+      }
+    }
+    const activeMonths = [...monthSet].sort();
+
+    const detailRows = rows.map((r) => {
+      const byMonth = {};
+      activeMonths.forEach((m) => { byMonth[m] = 0; });
+      let realLoggedTotal = 0;
+      for (const e of r.entries) {
+        const hrs = Number(e.hours) || 0;
+        realLoggedTotal += hrs;
+        const m = monthKeyOf(e.entry_date);
+        if (m in byMonth) byMonth[m] += hrs;
+      }
+      // Sunk-cost rows (Admin/Quality Control) with no real logged entries
+      // yet get their full allotment placed visually in the earliest active
+      // month, matching the standalone Cumulative Hours page's convention.
+      if (r.isSunk && realLoggedTotal === 0 && activeMonths.length > 0) {
+        byMonth[activeMonths[0]] += r.hoursAllotted;
+      }
+      const total = r.isSunk ? r.hoursAllotted : realLoggedTotal;
+      const remaining = round2(r.hoursAllotted - total);
+      return { ...r, byMonth, total: round2(total), remaining };
+    });
+
+    renderEdHoursTable(detailRows, activeMonths);
+    renderEdDollarsTable(detailRows, activeMonths);
+  }
+
+  function renderEdHoursTable(rows, activeMonths) {
+    const theadRow = $("ed-hours-thead");
+    const tbody = $("ed-hours-tbody");
+    const tfootRow = $("ed-hours-tfoot");
+
+    if (!rows.length) {
+      $("ed-hours-table").classList.add("hidden");
+      $("ed-hours-empty").classList.remove("hidden");
+      $("ed-dollars-table").classList.add("hidden");
+      return;
+    }
+    $("ed-hours-table").classList.remove("hidden");
+    $("ed-hours-empty").classList.add("hidden");
+
+    theadRow.innerHTML = `
+      <th>Specialty</th>
+      <th>Budget</th>
+      ${activeMonths.map((m) => `<th>${escapeHtml(monthLabelFor(m))}</th>`).join("")}
+      <th>Total</th>
+      <th>Remaining</th>
+    `;
+
+    tbody.innerHTML = rows.map((r) => `
+      <tr>
+        <td>
+          <div class="ed-specialty-name">${escapeHtml(r.role)}</div>
+          <div class="ed-person-name">${escapeHtml(r.specialistName || "Unassigned")}</div>
+        </td>
+        <td>${r.hoursAllotted}</td>
+        ${activeMonths.map((m) => {
+          const v = r.byMonth[m];
+          return v ? `<td>${v}</td>` : `<td class="blank-cell">—</td>`;
+        }).join("")}
+        <td>${r.total}</td>
+        <td${r.remaining < 0 ? ' class="remaining-negative"' : ""}>${r.remaining}</td>
+      </tr>
+    `).join("");
+
+    const totalsByMonth = {};
+    activeMonths.forEach((m) => { totalsByMonth[m] = round2(rows.reduce((s, r) => s + (r.byMonth[m] || 0), 0)); });
+    const grandAllotted = round2(rows.reduce((s, r) => s + r.hoursAllotted, 0));
+    const grandTotal = round2(rows.reduce((s, r) => s + r.total, 0));
+    const grandRemaining = round2(grandAllotted - grandTotal);
+
+    tfootRow.innerHTML = `
+      <td>Totals</td>
+      <td>${grandAllotted}</td>
+      ${activeMonths.map((m) => `<td>${totalsByMonth[m]}</td>`).join("")}
+      <td>${grandTotal}</td>
+      <td${grandRemaining < 0 ? ' class="remaining-negative"' : ""}>${grandRemaining}</td>
+    `;
+  }
+
+  function renderEdDollarsTable(rows, activeMonths) {
+    if (!rows.length) return;
+    $("ed-dollars-table").classList.remove("hidden");
+    const theadRow = $("ed-dollars-thead");
+    const tbody = $("ed-dollars-tbody");
+    const tfootRow = $("ed-dollars-tfoot");
+
+    theadRow.innerHTML = `
+      <th>Specialty</th>
+      <th>Budget</th>
+      ${activeMonths.map((m) => `<th>${escapeHtml(monthLabelFor(m))}</th>`).join("")}
+      <th>Total</th>
+      <th>Remaining</th>
+    `;
+
+    tbody.innerHTML = rows.map((r) => `
+      <tr>
+        <td>
+          <div class="ed-specialty-name">${escapeHtml(r.role)}</div>
+          <div class="ed-person-name">${escapeHtml(r.specialistName || "Unassigned")}</div>
+        </td>
+        <td>${money(r.hoursAllotted * hourlyRate)}</td>
+        ${activeMonths.map((m) => {
+          const v = r.byMonth[m];
+          return v ? `<td>${money(v * hourlyRate)}</td>` : `<td class="blank-cell">—</td>`;
+        }).join("")}
+        <td>${money(r.total * hourlyRate)}</td>
+        <td${r.remaining < 0 ? ' class="remaining-negative"' : ""}>${money(r.remaining * hourlyRate)}</td>
+      </tr>
+    `).join("");
+
+    const totalsByMonth = {};
+    activeMonths.forEach((m) => { totalsByMonth[m] = round2(rows.reduce((s, r) => s + (r.byMonth[m] || 0), 0)) * hourlyRate; });
+    const grandAllotted = round2(rows.reduce((s, r) => s + r.hoursAllotted, 0)) * hourlyRate;
+    const grandTotal = round2(rows.reduce((s, r) => s + r.total, 0)) * hourlyRate;
+    const grandRemaining = grandAllotted - grandTotal;
+
+    tfootRow.innerHTML = `
+      <td>Grand Total</td>
+      <td>${money(grandAllotted)}</td>
+      ${activeMonths.map((m) => `<td>${money(totalsByMonth[m])}</td>`).join("")}
+      <td>${money(grandTotal)}</td>
+      <td${grandRemaining < 0 ? ' class="remaining-negative"' : ""}>${money(grandRemaining)}</td>
+    `;
+  }
+
+  function renderSpecialistTable() {
+    let rows = currentMonthRows;
+    if (spSearch) {
+      rows = rows.filter((r) =>
+        r.client.toLowerCase().includes(spSearch) ||
+        r.specialistName.toLowerCase().includes(spSearch) ||
+        r.program.toLowerCase().includes(spSearch)
+      );
+    }
+
+    const noDataAtAll = currentMonthRows.length === 0;
+    $("monthly-empty").classList.toggle("hidden", !noDataAtAll);
+    $("specialist-filtered-empty").classList.toggle("hidden", noDataAtAll || rows.length !== 0);
+    $("specialist-scroll").classList.toggle("hidden", rows.length === 0);
+    $("sp-pagination").classList.toggle("hidden", rows.length === 0);
+
+    // Key by program+client (not just client) so two different Programs
+    // that happen to share an engagement name never merge into one group.
+    const engagementKey = (r) => `${r.program} :: ${r.client}`;
+    const byEngagement = {};
+    for (const r of rows) (byEngagement[engagementKey(r)] ||= []).push(r);
+    let keys = Object.keys(byEngagement).sort((a, b) => {
+      const ra = byEngagement[a][0], rb = byEngagement[b][0];
+      return ra.client.localeCompare(rb.client);
+    });
+    if (spSortDir === "desc") keys.reverse();
+    $("sp-sort-icon").innerHTML = spSortDir === "asc" ? "&#9650;" : "&#9660;";
+
+    const totalGroups = keys.length;
+    const totalPages = Math.max(1, Math.ceil(totalGroups / spPageSize));
+    if (spPage > totalPages) spPage = totalPages;
+    if (spPage < 1) spPage = 1;
+    const startIdx = (spPage - 1) * spPageSize;
+    const pageKeys = keys.slice(startIdx, startIdx + spPageSize);
+
+    let html = "";
+    pageKeys.forEach((key) => {
+      const group = byEngagement[key];
+      const collapsed = collapsedEngagements.has(key);
+      const totalHrs = round2(group.reduce((sum, r) => sum + r.hoursThisMonth, 0));
+      const hasOver = group.some((r) => r.isOver);
+      const first = group[0];
+
+      const chevron = `
+        <button type="button" class="sp-toggle${collapsed ? " collapsed" : ""}" data-toggle-engagement="${escapeHtml(key)}" title="${collapsed ? "Expand" : "Collapse"}" aria-label="${collapsed ? "Expand" : "Collapse"}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>`;
+
+      const engagementCell = `
+        <td rowspan="${collapsed ? 1 : group.length}">
+          <div class="sp-cell">
+            ${chevron}
+            <button type="button" class="eng-open-btn" data-open-engagement="${escapeHtml(first.clientId)}" title="View full engagement report">
+              <div class="sp-name">${escapeHtml(first.client)}</div>
+              <div class="sp-role">${escapeHtml(first.program)}</div>
+            </button>
+          </div>
+        </td>
+      `;
+
+      if (collapsed) {
+        html += `
+        <tr class="group-start">
+          ${engagementCell}
+          <td colspan="4">
+            <div class="sp-collapsed-summary">
+              <strong>${totalHrs} hrs</strong> this month across ${group.length} specialist${group.length === 1 ? "" : "s"}${hasOver ? '<span class="over-flag">Over</span>' : ""}
+            </div>
+          </td>
+        </tr>`;
+        return;
+      }
+
+      group.forEach((r, j) => {
+        const remaining = round2(r.hoursAllotted - r.cumulativeThroughMonth);
+        const color = specialistColorByName[r.specialistName] || colorForIndex(0);
+        html += `
+        <tr class="${j === 0 ? "group-start" : ""}">
+          ${j === 0 ? engagementCell : ""}
+          <td>
+            <button type="button" class="eng-name-btn" data-history="${r.assignmentId}" title="View billing history">
+              <div class="eng-name">${escapeHtml(r.specialistName)}</div>
+              <div class="eng-role">${escapeHtml(r.role)}</div>
+            </button>
+          </td>
+          <td>
+            <div class="hours-month">${r.hoursThisMonth} hrs${r.isOver ? '<span class="over-flag">Over</span>' : ""}</div>
+          </td>
+          <td>
+            <div class="ub-text">${r.cumulativeThroughMonth} / ${r.hoursAllotted} hrs</div>
+          </td>
+          <td class="remaining-cell">
+            <div class="remaining-value${remaining < 0 ? " negative" : ""}" style="${remaining < 0 ? "" : `color:${color};`}">${remaining < 0 ? Math.abs(remaining) + " hrs over" : remaining + " hrs"}</div>
+          </td>
+        </tr>
+      `;
+      });
+    });
+
+    $("monthly-groups").innerHTML = html;
+    $("monthly-groups").querySelectorAll("[data-history]").forEach((btn) => {
+      btn.addEventListener("click", () => openHistory(btn.dataset.history));
+    });
+
+    const shownFrom = totalGroups === 0 ? 0 : startIdx + 1;
+    const shownTo = Math.min(startIdx + spPageSize, totalGroups);
+    $("sp-pagination-info").textContent = `Showing ${shownFrom} to ${shownTo} of ${totalGroups} engagement${totalGroups === 1 ? "" : "s"}`;
+    $("sp-page-current").textContent = spPage;
+    $("sp-page-prev").disabled = spPage <= 1;
+    $("sp-page-next").disabled = spPage >= totalPages;
+  }
+
+  // One line per team member, hours from every assignment they logged time
+  // against this month added together -- someone working across three
+  // clients still gets a single paycheck line, not three. Returns the
+  // computed rows so render() can total them for the summary box and the
+  // payroll CSV export can reuse the exact same numbers shown on screen.
+  function renderPayrollSummary(rows) {
+    const bySpecialist = {};
+    for (const r of rows) (bySpecialist[r.specialistName] ||= 0);
+    for (const r of rows) bySpecialist[r.specialistName] += r.hoursThisMonth;
+
+    const payrollRows = Object.keys(bySpecialist)
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => {
+        const hours = round2(bySpecialist[name]);
+        return { name, hours, rate: hourlyRate, pay: round2(hours * hourlyRate) };
+      });
+
+    const tbody = $("payroll-tbody");
+    const tfoot = $("payroll-tfoot");
+    $("payroll-empty").classList.toggle("hidden", payrollRows.length !== 0);
+
+    tbody.innerHTML = payrollRows.map((p) => `
+      <tr>
+        <td>${escapeHtml(p.name)}</td>
+        <td class="money">${p.hours}</td>
+        <td class="money">${money(p.rate)}</td>
+        <td class="money">${money(p.pay)}</td>
+      </tr>
+    `).join("");
+
+    if (payrollRows.length) {
+      const totalHours = round2(payrollRows.reduce((sum, p) => sum + p.hours, 0));
+      const totalPay = round2(payrollRows.reduce((sum, p) => sum + p.pay, 0));
+      tfoot.innerHTML = `
+        <tr>
+          <td>Total</td>
+          <td class="money">${totalHours}</td>
+          <td class="money"></td>
+          <td class="money">${money(totalPay)}</td>
+        </tr>
+      `;
+    } else {
+      tfoot.innerHTML = "";
+    }
+
+    return payrollRows;
+  }
+
+  // Same shape as renderPayrollSummary, but totals hours from January 1 of
+  // the selected month's year through the end of that month rather than
+  // just the one month -- so selecting December gives the full calendar
+  // year in one line per person, ready to hand off for 1099 prep. Rate is
+  // applied at today's org-wide hourly_rate for the whole year since the
+  // app only stores one current rate, not a history of past rates.
+  function renderYtdPayrollSummary(rows) {
+    const bySpecialist = {};
+    for (const r of rows) (bySpecialist[r.specialistName] ||= 0);
+    for (const r of rows) bySpecialist[r.specialistName] += r.hoursYtd;
+
+    const ytdPayrollRows = Object.keys(bySpecialist)
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => {
+        const hours = round2(bySpecialist[name]);
+        return { name, hours, rate: hourlyRate, pay: round2(hours * hourlyRate) };
+      });
+
+    const tbody = $("ytd-payroll-tbody");
+    const tfoot = $("ytd-payroll-tfoot");
+    $("ytd-payroll-empty").classList.toggle("hidden", ytdPayrollRows.length !== 0);
+
+    tbody.innerHTML = ytdPayrollRows.map((p) => `
+      <tr>
+        <td>${escapeHtml(p.name)}</td>
+        <td class="money">${p.hours}</td>
+        <td class="money">${money(p.rate)}</td>
+        <td class="money">${money(p.pay)}</td>
+      </tr>
+    `).join("");
+
+    if (ytdPayrollRows.length) {
+      const totalHours = round2(ytdPayrollRows.reduce((sum, p) => sum + p.hours, 0));
+      const totalPay = round2(ytdPayrollRows.reduce((sum, p) => sum + p.pay, 0));
+      tfoot.innerHTML = `
+        <tr>
+          <td>Total</td>
+          <td class="money">${totalHours}</td>
+          <td class="money"></td>
+          <td class="money">${money(totalPay)}</td>
+        </tr>
+      `;
+    } else {
+      tfoot.innerHTML = "";
+    }
+
+    return ytdPayrollRows;
+  }
+
+  function csvField(value) {
+    const s = String(value == null ? "" : value);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
+  $("export-csv-btn").addEventListener("click", () => {
+    const rows = (window._invoicingReportRows || []).filter((r) => r.hoursThisMonth > 0 && !r.isSunk);
+    if (!rows.length) { showBanner("Nothing to export for this month.", "error"); return; }
+    rows.sort((a, b) => a.specialistName.localeCompare(b.specialistName));
+    const header = ["Specialist", "Program", "Engagement Name", "Role", "Hours This Month", "Cumulative Hours", "Hours Allotted", "Status"];
+    const lines = [header.map(csvField).join(",")];
+    for (const r of rows) {
+      lines.push([
+        r.specialistName, r.program, r.client, r.role,
+        r.hoursThisMonth, r.cumulativeThroughMonth, r.hoursAllotted,
+        r.isOver ? "OVER BUDGET" : "",
+      ].map(csvField).join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `invoicing-report-${$("report-month").value}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  function downloadCsv(lines, filename) {
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  $("export-payroll-csv-btn").addEventListener("click", () => {
+    const rows = window._invoicingPayrollRows || [];
+    if (!rows.length) { showBanner("Nothing to export for this month.", "error"); return; }
+    const header = ["Team Member", "Hours", "Rate", "Total Pay"];
+    const lines = [header.map(csvField).join(",")];
+    for (const p of rows) {
+      lines.push([p.name, p.hours, p.rate.toFixed(2), p.pay.toFixed(2)].map(csvField).join(","));
+    }
+    const totalHours = round2(rows.reduce((sum, p) => sum + p.hours, 0));
+    const totalPay = round2(rows.reduce((sum, p) => sum + p.pay, 0));
+    lines.push(["Total", totalHours, "", totalPay.toFixed(2)].map(csvField).join(","));
+    downloadCsv(lines, `payroll-summary-${$("report-month").value}.csv`);
+  });
+
+  $("export-ytd-payroll-csv-btn").addEventListener("click", () => {
+    const rows = window._invoicingYtdPayrollRows || [];
+    if (!rows.length) { showBanner("Nothing to export for this year yet.", "error"); return; }
+    const header = ["Team Member", "Hours (YTD)", "Rate", "Total Pay (YTD)"];
+    const lines = [header.map(csvField).join(",")];
+    for (const p of rows) {
+      lines.push([p.name, p.hours, p.rate.toFixed(2), p.pay.toFixed(2)].map(csvField).join(","));
+    }
+    const totalHours = round2(rows.reduce((sum, p) => sum + p.hours, 0));
+    const totalPay = round2(rows.reduce((sum, p) => sum + p.pay, 0));
+    lines.push(["Total", totalHours, "", totalPay.toFixed(2)].map(csvField).join(","));
+    downloadCsv(lines, `payroll-ytd-${window._invoicingYtdYear || $("report-month").value.slice(0, 4)}.csv`);
+  });
+</script>
+<script>
+  // Mobile nav toggle (Greg, 8/29/26) -- header .site-nav is display:none
+  // below 980px with nothing else to reach it, so this wires up the
+  // .nav-toggle button (added right after each </nav>) to flip a .open
+  // class the @media (max-width: 980px) CSS above turns into a dropdown
+  // panel. Class-based/generic on purpose: some pages render two
+  // <header>s (a skeleton one while auth/role resolves, then the real
+  // one), so this wires whichever ones exist rather than assuming one.
+  document.querySelectorAll(".nav-toggle").forEach((btn) => {
+    const nav = btn.closest("header")?.querySelector(".site-nav");
+    if (!nav) return;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = nav.classList.toggle("open");
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  });
+  document.addEventListener("click", (e) => {
+    document.querySelectorAll(".site-nav.open").forEach((nav) => {
+      if (!nav.contains(e.target) && !nav.nextElementSibling?.contains(e.target)) {
+        nav.classList.remove("open");
+      }
+    });
+  });
+
+  // Nav dropdown (Chris, 9/4/26) -- click-to-toggle submenu under a
+  // top-nav item, piloted on Invoicing. Generic/class-based like the
+  // mobile nav toggle above: highlights the parent button and the
+  // matching child link based on the current page, wires open/close, and
+  // works for however many .nav-item-dropdown elements exist on a page
+  // (some pages render a skeleton header + a real one).
+  (function () {
+    const here = location.pathname.split("/").pop();
+    document.querySelectorAll(".nav-item-dropdown").forEach((dd) => {
+      const btn = dd.querySelector(".nav-link-dropdown-btn");
+      const menu = dd.querySelector(".nav-submenu");
+      if (!btn || !menu) return;
+      let matched = false;
+      menu.querySelectorAll("a").forEach((a) => {
+        const [navHrefPath, navHrefQuery] = (a.getAttribute("href") || "").split("?");
+        const navPathMatches = navHrefPath === here;
+        // A submenu link with a query string (e.g. "?action=add") is an
+        // action shortcut on the current page, not a distinct destination --
+        // it should count toward lighting up the parent dropdown button, but
+        // shouldn't itself look like "the page you're on" (Greg, 9/6/26, for
+        // the new Programs dropdown's "Add Program" item).
+        a.classList.toggle("active", navPathMatches && !navHrefQuery);
+        if (navPathMatches) matched = true;
+      });
+      btn.classList.toggle("active", matched);
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        document.querySelectorAll(".nav-item-dropdown.open").forEach((open) => {
+          if (open !== dd) open.classList.remove("open");
+        });
+        dd.classList.toggle("open");
+      });
+      // Hover is what opens these now (CSS above); this only clears the
+      // clicked-open state so a click-then-move-away doesn't leave it open.
+      dd.addEventListener("mouseleave", () => dd.classList.remove("open"));
+    });
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".nav-item-dropdown")) {
+        document.querySelectorAll(".nav-item-dropdown.open").forEach((open) => open.classList.remove("open"));
+      }
+    });
+  })();
+
+  // Applications nav dropdown (Chris, 9/4/26; refined same day) -- admin-
+  // only, left of Engagements, listing applications submitted but not yet
+  // assigned a Team Lead (still status = 'pending' -- assigning a TL is
+  // the accept action that moves one to In Progress, see
+  // 110_accept_straight_to_in_progress.sql). Self-contained on purpose:
+  // does its own session/role check rather than depending on each page's
+  // differently-named/timed admin-check variable, so it works identically
+  // everywhere. Each row deep-links straight to that one application's
+  // review pane (?application=ID on client_applications.html) -- nothing
+  // in this dropdown links anywhere else, including the empty state.
+  (async function () {
+    const dd = document.querySelectorAll("#nav-applications-dropdown");
+    if (!dd.length) return;
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+      const { data: profile } = await sb.from("users").select("role").eq("id", session.user.id).maybeSingle();
+      if (!profile || profile.role !== "super_admin") return;
+
+      const { data: apps } = await sb
+        .from("client_applications")
+        .select("id, company_name, submitted_at, econ_dev_companies(name, code)")
+        .eq("status", "pending")
+        .order("submitted_at", { ascending: false })
+        .limit(8);
+
+      const fmt = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+      const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
+      const rowsHtml = (apps || []).map((a) => {
+        const program = a.econ_dev_companies ? (a.econ_dev_companies.name || a.econ_dev_companies.code) : "";
+        return `
+        <a href="client_applications.html?application=${a.id}">
+          ${esc(a.company_name || "Untitled")}
+          <span class="nav-submenu-meta">${[esc(program), "Submitted " + fmt(a.submitted_at)].filter(Boolean).join(" &middot; ")}</span>
+        </a>
+      `;
+      }).join("");
+      const bodyHtml = apps && apps.length ? rowsHtml : '<div class="nav-submenu-empty">No new applications.</div>';
+
+      dd.forEach((el) => {
+        el.classList.remove("hidden");
+        const menu = el.querySelector("#nav-applications-submenu") || el.querySelector(".nav-submenu");
+        if (menu) menu.innerHTML = bodyHtml;
+      });
+    } catch (e) {
+      console.error("Couldn't load the Applications nav dropdown:", e);
+    }
+  })();
+
+  // Notification bell (Chris, 9/4/26) -- "make sure the bell is
+  // prominently displayed on every page," not just the Engagements home.
+  // Self-contained on purpose, same pattern as the Applications nav
+  // dropdown: does its own session/role check and its own notification
+  // fetch/render rather than depending on each page's own auth flow, so
+  // it behaves identically everywhere.
+  (function () {
+    const wrap = document.getElementById("notif-wrap");
+    if (!wrap) return;
+    const escNotif = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
+    const timeAgoNotif = (iso) => {
+      const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+      if (mins < 1) return "just now";
+      if (mins < 60) return `${mins}m ago`;
+      const hrs = Math.round(mins / 60);
+      if (hrs < 24) return `${hrs}h ago`;
+      return `${Math.round(hrs / 24)}d ago`;
+    };
+    let unread = [];
+
+    function renderBell() {
+      const count = unread.length;
+      document.getElementById("notif-count").textContent = count > 9 ? "9+" : String(count);
+      document.getElementById("notif-count").classList.toggle("hidden", count === 0);
+      document.getElementById("notif-list").innerHTML = count
+        ? unread.map((n) => `
+            <div class="notif-item">
+              <div class="notif-msg">${escNotif(n.message)}</div>
+              <div class="notif-meta">
+                <span>${timeAgoNotif(n.created_at)}</span>
+                <span>
+                  ${n.client_id ? `<a href="client_workspace.html?client=${n.client_id}">View client</a> &middot;` : ""}
+                  <a href="#" class="notif-dismiss" data-id="${n.recipientId}">Dismiss</a>
+                </span>
+              </div>
+            </div>
+          `).join("")
+        : `<div class="notif-empty">You're all caught up.</div>`;
+      document.querySelectorAll("#notif-list .notif-dismiss").forEach((el) => {
+        el.addEventListener("click", async (e) => {
+          e.preventDefault();
+          const id = el.dataset.id;
+          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id);
+          unread = unread.filter((n) => n.recipientId !== id);
+          renderBell();
+        });
+      });
+    }
+
+    (async function () {
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) return;
+        const { data: profile } = await sb.from("users").select("role").eq("id", session.user.id).maybeSingle();
+        if (!profile || profile.role !== "super_admin") return;
+
+        wrap.classList.remove("hidden");
+        const { data } = await sb
+          .from("notification_recipients")
+          .select("id, created_at, notifications(client_id, message, created_at)")
+          .eq("user_id", session.user.id)
+          .is("read_at", null)
+          .order("created_at", { ascending: false })
+          .limit(20);
+        unread = (data || [])
+          .filter((r) => r.notifications)
+          .map((r) => ({ recipientId: r.id, client_id: r.notifications.client_id, message: r.notifications.message, created_at: r.notifications.created_at }));
+        renderBell();
+
+        document.getElementById("notif-bell").addEventListener("click", (e) => {
+          e.stopPropagation();
+          document.getElementById("notif-dropdown").classList.toggle("hidden");
+        });
+        document.getElementById("notif-mark-all").addEventListener("click", async () => {
+          if (!unread.length) return;
+          const ids = unread.map((n) => n.recipientId);
+          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids);
+          unread = [];
+          renderBell();
+        });
+        document.addEventListener("click", (e) => {
+          if (!wrap.contains(e.target)) document.getElementById("notif-dropdown").classList.add("hidden");
+        });
+      } catch (e) {
+        console.error("Couldn't load notifications:", e);
+      }
+    })();
+  })();
+</script>
+</body>
+</html>
