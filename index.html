@@ -2520,43 +2520,88 @@
   // everywhere. Each row deep-links straight to that one application's
   // review pane (?application=ID on client_applications.html) -- nothing
   // in this dropdown links anywhere else, including the empty state.
-  (async function () {
+  //
+  // Greg (9/16/26): "i am signed in as a specialist. i should not be able
+  // to see the applications top menu button." Reproduced. This used to run
+  // once, at page load, and only ever REMOVED .hidden -- it had no path
+  // back to hidden. Signing out does not reload the page (#signout-btn
+  // just swaps #app-view for #login-view), so Admin -> sign out -> sign in
+  // as Specialist left this menu standing from the admin's page load, with
+  // the admin's pending-application list -- company names and all -- still
+  // in the DOM. Every other admin-only nav item re-hid correctly, because
+  // those go through the [data-super-admin-only] toggle that re-runs on
+  // every profile load; this one was outside it, which is exactly why it
+  // was the only one that survived the switch.
+  //
+  // So: hide is now a real state, not just the absence of show; the render
+  // re-runs on every auth change; and the submenu is emptied on the way
+  // down so nothing from the previous account is left in the markup. A
+  // failed role check fails closed rather than leaving the menu up.
+  (function () {
     const dd = document.querySelectorAll("#nav-applications-dropdown");
     if (!dd.length) return;
-    try {
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) return;
-      const { data: profile } = await sb.from("users").select("role").eq("id", session.user.id).maybeSingle();
-      if (!profile || profile.role !== "super_admin") return;
 
-      const { data: apps } = await sb
-        .from("client_applications")
-        .select("id, company_name, submitted_at, econ_dev_companies(name, code)")
-        .eq("status", "pending")
-        .order("submitted_at", { ascending: false })
-        .limit(8);
+    const submenuOf = (el) =>
+      el.querySelector("#nav-applications-submenu") || el.querySelector(".nav-submenu");
 
-      const fmt = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
-      const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
-      const rowsHtml = (apps || []).map((a) => {
-        const program = a.econ_dev_companies ? (a.econ_dev_companies.name || a.econ_dev_companies.code) : "";
-        return `
+    function hideApplicationsNav() {
+      dd.forEach((el) => {
+        el.classList.add("hidden");
+        el.classList.remove("open");
+        const menu = submenuOf(el);
+        if (menu) menu.innerHTML = "";
+      });
+    }
+
+    async function renderApplicationsNav() {
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) return hideApplicationsNav();
+        const { data: profile } = await sb.from("users").select("role").eq("id", session.user.id).maybeSingle();
+        if (!profile || profile.role !== "super_admin") return hideApplicationsNav();
+
+        const { data: apps } = await sb
+          .from("client_applications")
+          .select("id, company_name, submitted_at, econ_dev_companies(name, code)")
+          .eq("status", "pending")
+          .order("submitted_at", { ascending: false })
+          .limit(8);
+
+        const fmt = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+        const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
+        const rowsHtml = (apps || []).map((a) => {
+          const program = a.econ_dev_companies ? (a.econ_dev_companies.name || a.econ_dev_companies.code) : "";
+          return `
         <a href="client_applications.html?application=${a.id}">
           ${esc(a.company_name || "Untitled")}
           <span class="nav-submenu-meta">${[esc(program), "Submitted " + fmt(a.submitted_at)].filter(Boolean).join(" &middot; ")}</span>
         </a>
       `;
-      }).join("");
-      const bodyHtml = apps && apps.length ? rowsHtml : '<div class="nav-submenu-empty">No new applications.</div>';
+        }).join("");
+        const bodyHtml = apps && apps.length ? rowsHtml : '<div class="nav-submenu-empty">No new applications.</div>';
 
-      dd.forEach((el) => {
-        el.classList.remove("hidden");
-        const menu = el.querySelector("#nav-applications-submenu") || el.querySelector(".nav-submenu");
-        if (menu) menu.innerHTML = bodyHtml;
-      });
-    } catch (e) {
-      console.error("Couldn't load the Applications nav dropdown:", e);
+        dd.forEach((el) => {
+          el.classList.remove("hidden");
+          const menu = submenuOf(el);
+          if (menu) menu.innerHTML = bodyHtml;
+        });
+      } catch (e) {
+        hideApplicationsNav();
+        console.error("Couldn't load the Applications nav dropdown:", e);
+      }
     }
+
+    renderApplicationsNav();
+
+    // Re-render whenever the account changes. INITIAL_SESSION is skipped
+    // because the direct call above already covers page load, and
+    // TOKEN_REFRESHED because the hourly refresh doesn't change who you
+    // are. Deferred with setTimeout because supabase-js serialises auth
+    // work -- awaiting another sb call inside this handler can deadlock it.
+    sb.auth.onAuthStateChange((event) => {
+      if (event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") return;
+      setTimeout(renderApplicationsNav, 0);
+    });
   })();
 </script>
 </body>
