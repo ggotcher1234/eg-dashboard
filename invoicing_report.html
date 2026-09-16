@@ -1565,10 +1565,21 @@
 
   async function loadData() {
     const [assignmentsRes, entriesRes, usersRes, clientsRes] = await Promise.all([
+      // No .not("user_id","is",null) here any more (Greg, 9/16/26).
+      // That filter dropped the whole assignment -- and every hour logged
+      // against it -- the moment somebody used the Unassign button, which
+      // promises "Logged hours stay on record". They did stay on record;
+      // they just stopped being billable. Measured against live data: 8 of
+      // 59 logged hours never reached the invoice, all of them Amjad's GIS
+      // hours on Clippard, with nothing on screen to say so.
       sb.from("client_assignments")
-        .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name, bill_admin_qc_upfront))")
-        .not("user_id", "is", null),
-      sb.from("time_entries").select("assignment_id, hours, entry_date, note"),
+        .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name, bill_admin_qc_upfront))"),
+      // consultant_id is who actually did the work. It was never read here --
+      // attribution ran off the assignment's CURRENT holder -- so reassigning
+      // a row retroactively moved someone else's hours onto the new person's
+      // pay. Arlene logged 3h of Market Research on Clippard; the invoice and
+      // the pay statement both credited Kelly Berry.
+      sb.from("time_entries").select("assignment_id, consultant_id, hours, entry_date, note"),
       // Attribution lookup, not a picker -- no hidden_from_roster filter.
       // A hidden account can still hold an assignment (Greg's Admin account
       // does, and the NCEG Admin house account owns every engagement's
@@ -1605,10 +1616,46 @@
     // above) -- Admin/Quality Control rows are kept and flagged isSunk so
     // the merged per-engagement detail view can show them; the flat
     // Time Sheets table and payroll summaries filter them back out below.
-    reportRows = assignmentsRes.data.map((a) => {
-        const person = usersById[a.user_id];
-        const entries = entriesByAssignment[a.id] || [];
-        return {
+    //
+    // A row is now one assignment PER PERSON WHO LOGGED AGAINST IT, not one
+    // assignment. Usually that is the same thing -- one work area, one
+    // specialist -- but when a row has changed hands, each person keeps their
+    // own hours instead of the current holder inheriting all of them.
+    reportRows = [];
+    for (const a of assignmentsRes.data) {
+      const entries = entriesByAssignment[a.id] || [];
+
+      const byConsultant = new Map();
+      for (const e of entries) {
+        // consultant_id should always be set; fall back to the row's holder
+        // rather than silently dropping an hour somebody worked.
+        const key = e.consultant_id || a.user_id || "__nobody__";
+        if (!byConsultant.has(key)) byConsultant.set(key, []);
+        byConsultant.get(key).push(e);
+      }
+
+      if (byConsultant.size === 0) {
+        // Nothing logged yet. Keep one row for the current holder so budget
+        // vs. used still shows. An unassigned row with no hours has nothing
+        // to report and is skipped, exactly as before.
+        if (!a.user_id) continue;
+        byConsultant.set(a.user_id, []);
+      }
+
+      // The allotment belongs to the ASSIGNMENT, not to a person. Put it on
+      // exactly one row, or a work area that changed hands would count its
+      // budget twice against the engagement.
+      const keys = [...byConsultant.keys()];
+      const allotmentKey = keys.includes(a.user_id) ? a.user_id : keys[0];
+      const holder = a.user_id ? usersById[a.user_id] : null;
+
+      for (const key of keys) {
+        const person = key === "__nobody__" ? null : usersById[key];
+        const carriesAllotment = key === allotmentKey;
+        reportRows.push({
+          // Rows are no longer one-per-assignment, so the billing-history
+          // drill-down keys off this instead of assignmentId.
+          rowKey: a.id + ":" + key,
           assignmentId: a.id,
           clientId: a.client_id,
           specialistName: person ? person.full_name : "Unknown",
@@ -1620,11 +1667,27 @@
           // than one of that specialty (e.g. "Digital Marketing 1", "GIS 2"),
           // so Rita can tell which slot an invoice line refers to.
           role: (SPECIALTY_LABELS[a.specialty_type] || a.specialty_type) + (a.slot_number > 1 ? " " + a.slot_number : ""),
-          hoursAllotted: Number(a.hours_allotted) || 0,
+          hoursAllotted: carriesAllotment ? (Number(a.hours_allotted) || 0) : 0,
+          carriesAllotment,
+          // Set when these hours belong to someone who no longer holds the
+          // row -- so a figure that looks odd next to the engagement team can
+          // be explained instead of just looking wrong.
+          //
+          // Compared by NAME, not by id, deliberately. Greg has more than one
+          // login, and hours logged under the old one sit on rows held by the
+          // new one; "held by Greg Gotcher" on Greg's own row is noise, not
+          // information. Same person, nothing to explain.
+          heldByOther: (() => {
+            if (!a.user_id) return person ? "nobody — row is unassigned" : null;
+            if (!person || a.user_id === key) return null;
+            const holderName = holder ? holder.full_name : "Unknown";
+            return holderName === person.full_name ? null : holderName;
+          })(),
           isSunk: isSunkCostSpecialty(a.specialty_type, a.clients && a.clients.econ_dev_companies),
-          entries, // [{ hours, entry_date }]
-        };
-      });
+          entries: byConsultant.get(key), // [{ hours, entry_date, consultant_id }]
+        });
+      }
+    }
 
     populateEngagementFilter();
     render();
@@ -1679,7 +1742,10 @@
         hoursThisMonth: round2(hoursThisMonth),
         cumulativeThroughMonth: round2(cumulativeThroughMonth),
         hoursYtd: round2(hoursYtd),
-        isOver: cumulativeThroughMonth > r.hoursAllotted,
+        // Only the row carrying the assignment's allotment can be "over" it.
+        // A second person's hours on a shared work area have an allotment of
+        // 0 and would otherwise flag as over-budget on their first hour.
+        isOver: r.carriesAllotment && cumulativeThroughMonth > r.hoursAllotted,
       };
     });
 
@@ -1733,8 +1799,10 @@
     return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   }
 
-  function openHistory(assignmentId) {
-    const r = reportRows.find((x) => x.assignmentId === assignmentId);
+  function openHistory(rowKey) {
+    // Keyed by rowKey, not assignmentId: a work area that changed hands now
+    // produces one row per person, and assignmentId no longer identifies one.
+    const r = reportRows.find((x) => x.rowKey === rowKey);
     if (!r) return;
     $("history-title").textContent = `Billing History — ${r.role} · ${r.client} (${r.program})`;
 
@@ -2121,7 +2189,7 @@
         <tr class="${j === 0 ? "group-start" : ""}">
           ${j === 0 ? engagementCell : ""}
           <td>
-            <button type="button" class="eng-name-btn" data-history="${r.assignmentId}" title="View billing history">
+            <button type="button" class="eng-name-btn" data-history="${r.rowKey}" title="View billing history">
               <div class="eng-name">${escapeHtml(r.specialistName)}</div>
               <div class="eng-role">${escapeHtml(r.role)}</div>
             </button>

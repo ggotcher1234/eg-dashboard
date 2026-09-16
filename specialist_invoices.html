@@ -794,10 +794,16 @@
   // ---------- Data ----------
   async function loadData() {
     const [assignmentsRes, entriesRes, usersRes] = await Promise.all([
+      // No .not("user_id","is",null) (Greg, 9/16/26). Dropping unassigned
+      // rows also dropped every hour logged against them -- somebody who
+      // worked a work area that was later unassigned simply vanished from
+      // payroll. This is a pay statement; that cannot happen quietly.
       sb.from("client_assignments")
-        .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name, bill_admin_qc_upfront))")
-        .not("user_id", "is", null),
-      sb.from("time_entries").select("assignment_id, hours, entry_date"),
+        .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name, bill_admin_qc_upfront))"),
+      // consultant_id -- who actually did the work. Pay follows this now,
+      // not the assignment's current holder, so reassigning a work area no
+      // longer moves someone else's earnings onto the new person.
+      sb.from("time_entries").select("assignment_id, consultant_id, hours, entry_date"),
       // No hidden_from_roster filter here on purpose. This list is an
       // ATTRIBUTION lookup -- it answers "whose hours are these" -- and a
       // hidden person can still hold an assignment. Filtering them out left
@@ -821,21 +827,36 @@
       (entriesByAssignment[e.assignment_id] ||= []).push(e);
     }
 
-    reportRows = assignmentsRes.data
-      .filter((a) => !isExcludedSpecialty(a.specialty_type, a.clients && a.clients.econ_dev_companies))
-      .map((a) => {
-        const person = usersById[a.user_id];
-        return {
-          userId: a.user_id,
+    // One row per PERSON WHO LOGGED against a work area, not one per work
+    // area. A pay statement only ever needs people who logged something, so
+    // an assignment with no entries produces no row at all -- render()
+    // filtered those out anyway.
+    reportRows = [];
+    for (const a of assignmentsRes.data) {
+      if (isExcludedSpecialty(a.specialty_type, a.clients && a.clients.econ_dev_companies)) continue;
+
+      const byConsultant = new Map();
+      for (const e of entriesByAssignment[a.id] || []) {
+        const key = e.consultant_id || a.user_id;
+        if (!key) continue; // no consultant and no holder: nobody to pay
+        if (!byConsultant.has(key)) byConsultant.set(key, []);
+        byConsultant.get(key).push(e);
+      }
+
+      for (const [userId, entries] of byConsultant) {
+        const person = usersById[userId];
+        reportRows.push({
+          userId,
           specialistName: person ? person.full_name : "Unknown",
           specialistEmail: person ? person.email : "",
           specialistRoleLabel: person ? roleLabel(person.role) : "",
           program: (a.clients && a.clients.econ_dev_companies && a.clients.econ_dev_companies.name) || "—",
           client: (a.clients && a.clients.name) || "—",
           role: (SPECIALTY_LABELS[a.specialty_type] || a.specialty_type) + (a.slot_number > 1 ? " " + a.slot_number : ""),
-          entries: entriesByAssignment[a.id] || [],
-        };
-      });
+          entries,
+        });
+      }
+    }
 
     render();
   }
