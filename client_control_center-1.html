@@ -1,0 +1,2666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Engagement Workspace</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #eaeff4;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  /* Greg (8/31/26): "the scroll bar is shaking back and forth" on Resource
+     Vault -- root cause is a feedback loop, not that page specifically.
+     fitIframeToContent() below measures the embedded page's real height
+     and resizes #cc-iframe to match. Whenever that resize pushes this
+     OUTER page's own total height across the browser viewport's height,
+     the browser toggles ITS OWN scrollbar on/off -- which changes this
+     page's available width by the scrollbar's ~15px, which reflows
+     everything inside #cc-iframe (including width-sensitive content like
+     the Resource Vault table's column headers), which changes the
+     embedded page's height again, which resizes the iframe again, which
+     re-toggles the outer scrollbar again... forever. scrollbar-gutter
+     permanently reserves that space whether or not a scrollbar is
+     actually needed, so the outer scrollbar can never again change this
+     page's width and the loop can't start. */
+  /* Greg (8/31/26, round 6): "not shaking but now blinking on and off" --
+     the debounce fix above stopped the iframe from chasing a moving
+     target, but that only stops the height value itself from thrashing.
+     It doesn't stop the browser's OWN decision to show or hide its
+     scrollbar, which is a separate yes/no flip that happens whenever this
+     page's total height sits within a hair of the viewport's height --
+     any tiny, legitimate re-measurement (a font finishing its load, a
+     cursor blinking in a focused field, anything) can tip it over that
+     line and back, and each flip is visible as the scrollbar blinking in
+     and out even though nothing is actually still fighting itself.
+     scrollbar-gutter:stable only reserves the WIDTH so a real toggle
+     doesn't reflow content -- it doesn't stop the toggle from happening.
+     overflow-y:scroll below removes the yes/no decision entirely by
+     always showing the scrollbar, so there's nothing left to blink. */
+  html { scrollbar-gutter: stable; overflow-y: scroll; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+
+  header { background: var(--navy); color: #fff; padding: 15px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 16.5px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 12px; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  header .brand-row { display: flex; align-items: center; gap: 12px; }
+  /* Chris (9/4/26): logo same size everywhere as the Home page. */
+  .brand-badge { background: #fff; border-radius: 8px; padding: 8px 14px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 36px; display: block; }
+  /* Greg (9/11/26): "remove all title text to the right of the logo." The
+     brand row is the NCEG logo alone now -- .brand-tagline and .brand-subline
+     are gone rather than hidden, so nothing is left to un-hide by accident. */
+  #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  #userbox .user-email { color: #c9d6e3; font-size: 11px; opacity: 0.7; margin-left: 2px; white-space: nowrap; }
+  @media (max-width: 900px) { #userbox .user-email { display: none; } }
+
+  button, a.btn { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 9px 16px; font-weight: 600; transition: background 0.15s ease; text-decoration: none; display: inline-block; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: var(--danger-dark); }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  button:disabled { opacity: 0.55; cursor: default; }
+
+  /* Standardized Search/Print/Export/Import toolbar (Greg, 8/27/26) -- same
+     four controls, same order, on every internal page. Print/Export/Import
+     are tucked into a "More" menu on this page only (Greg, 8/30/26 redesign:
+     they're administrative, not primary activities, so they don't deserve
+     the same visual weight as the work itself). */
+  .btn-sm { padding: 8px 12px; font-size: 13px; height: 36px; border-radius: 8px; font-weight: 600; }
+  /* Greg (8/30/26 GPT reference): plain row on the page background --
+     Print/More as bordered white pill buttons on the right. No full-bleed
+     dark bar; that read badly against the masthead above it, per Greg's
+     feedback. Greg (8/30/26, round 5): dropped the global search box
+     entirely -- this page doesn't need it -- and right-aligned the row so
+     Print/More stay exactly where they were instead of drifting left into
+     the space search used to occupy. */
+  .std-toolbar-row {
+    display: flex; gap: 10px; align-items: center; justify-content: flex-end;
+    margin-bottom: 24px;
+  }
+  .toolbar-pill-btn {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap;
+    background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 999px;
+    height: 36px; padding: 0 16px; font-size: 13.5px; font-weight: 600; font-family: inherit; cursor: pointer;
+    box-shadow: 0 1px 2px rgba(20,48,77,0.06);
+  }
+  .toolbar-pill-btn:hover { background: #f4f6f8; }
+  .cc-more-wrap { position: relative; flex-shrink: 0; }
+  .cc-more-menu {
+    position: absolute; top: calc(100% + 6px); right: 0; width: 160px; background: #fff; padding: 6px;
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); z-index: 60;
+  }
+  .cc-more-menu button { width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--text); }
+  .cc-more-menu button:hover:not(:disabled) { background: #f4f6f8; }
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #fff; }
+    main { max-width: none; margin: 0; padding: 0; }
+    .cc-shell { display: block !important; }
+    .cc-nav { display: none !important; }
+    .cc-pane-inner.hidden { display: block !important; }
+  }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+
+  /* Account menu -- Change Password + Sign out tucked into one dropdown
+     instead of sitting in the top bar as separate buttons, per Chris's
+     "slim it down" request (8/18/26). */
+  #profile-wrap { position: relative; }
+  #profile-btn { display: flex; align-items: center; gap: 4px; padding: 4px 6px; }
+  #profile-btn .avatar-icon {
+    width: 24px; height: 24px; border-radius: 999px; background: rgba(255,255,255,0.14);
+    display: flex; align-items: center; justify-content: center; color: #c9d6e3;
+  }
+  #profile-btn .avatar-icon svg { width: 14px; height: 14px; }
+  #profile-btn .chevron { font-size: 9px; color: #c9d6e3; }
+  .profile-dropdown {
+    position: absolute; top: 40px; right: 0; width: 150px; padding: 6px; background: #fff; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60;
+  }
+  .profile-dropdown button, header .profile-dropdown button {
+    width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--text);
+  }
+  .profile-dropdown button:hover, header .profile-dropdown button:hover { background: #eef1f4; color: var(--text); }
+
+  /* Notification bell (Chris, 9/4/26): same styling as the Home page,
+     added everywhere so it's "prominently displayed on every page." */
+  #notif-wrap { position: relative; }
+  #notif-bell { position: relative; font-size: 15px; line-height: 1; }
+  .notif-count { position: absolute; top: -3px; right: -3px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; min-width: 16px; height: 16px; border-radius: 999px; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
+  .notif-dropdown { position: absolute; top: 40px; right: 0; width: min(320px, calc(100vw - 24px)); max-height: 420px; overflow-y: auto; background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60; }
+  .notif-dropdown-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; font-weight: 700; }
+  .notif-item { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .notif-item:last-child { border-bottom: none; }
+  .notif-item .notif-msg { margin-bottom: 5px; line-height: 1.4; }
+  .notif-item .notif-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--muted); gap: 8px; }
+  .notif-item .notif-meta a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
+  .notif-item .notif-meta a:hover { text-decoration: underline; }
+  .notif-empty { padding: 22px 14px; text-align: center; color: var(--muted); font-size: 13px; }
+
+  main { max-width: 980px; margin: 0 auto; padding: 28px 20px 80px; }
+  .hidden { display: none !important; }
+  /* Greg (9/6/26): "hide the dropdowns on Programs and Roster for Specialists
+     and Team Members." Everything in those two submenus is an Admin action
+     (Add Program, Application Links, Add Roster Member), so for everyone else
+     the caret opens an empty menu -- the label stays a plain link instead.
+     This needs its own rule rather than leaning on .hidden: the <=900px nav
+     sets `.nav-submenu { display: block !important }` further down the sheet,
+     which beats a bare .hidden at equal specificity and would pop the menu
+     back open on a phone. Two classes outrank one. */
+  [data-super-admin-only].hidden { display: none !important; }
+  /* Chris/Greg (9/2/26): retire the header Ask AI drawer, and drop the name/role chip (the account menu stays). */
+  .ask-ai-wrap, .ai-drawer, .ai-drawer-overlay, .ai-nudge { display: none !important; }
+  #user-name, #user-role { display: none !important; }
+  /* Chris (9/4/26): breadcrumb moved out of the dark header (where it sat
+     jammed against the logo) into its own light bar below, matching
+     Podio's own breadcrumb strip -- centered, colors flipped for a light
+     background. */
+  .breadcrumb-bar { background: #fff; border-bottom: 1px solid var(--border); padding: 10px 20px; }
+  .breadcrumb { font-size: 13px; color: var(--muted); margin: 0; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; justify-content: center; line-height: 1.4; }
+  .breadcrumb a { color: var(--navy-light); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb .sep { opacity: 0.5; }
+  .breadcrumb .current { color: var(--navy); font-weight: 700; }
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+
+
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 20px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+
+  .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+  .empty-note a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
+  .empty-note a:hover { text-decoration: underline; }
+
+  .badge { font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; padding: 3px 9px; border-radius: 999px; }
+  .badge-active { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-finalized { background: #e7eef7; color: var(--navy-light); }
+  .badge-archived { background: #eef1f4; color: var(--muted); }
+  .badge-accepted { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-in_progress { background: #e7eef7; color: var(--navy-light); }
+  .badge-on_hold { background: #fdf1dc; color: var(--amber); }
+  .badge-closed { background: #eef1f4; color: var(--muted); }
+
+  /* Client summary -- sits directly on the page background (no boxed
+     border). Greg (8/30/26): re-added a stacked header -- Client Name,
+     then Program Name, then Team Leader, each on their own line -- next
+     to the status toggle. */
+  /* Greg (8/30/26): now lives inside .cc-pane (right column) instead of
+     spanning full width above both columns -- a bottom border + margin
+     separates it from the table/wizard content sharing the same card. */
+  /* Greg (9/6/26): "make the overdue note a little smaller and put it up in
+     the header. make the header a more defined box." The header was an
+     underlined strip and the delay note hung below it full-width, which made
+     a 69-day overdue engagement read as a page-level alarm rather than a
+     fact about this engagement. Now the header is a real card and the note
+     sits inside it, in a right-hand column beside the name -- which is also
+     what makes it smaller, since it no longer spans the pane. */
+  .ccc-summary {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+    padding: 16px 18px; margin-bottom: 18px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(20,48,77,0.05);
+  }
+  .ccc-summary-main { flex: 1 1 200px; min-width: 0; }
+  /* Below ~760px the two columns stack; the note keeps its own box so it
+     still reads as attached to the header rather than floating loose. */
+  @media (max-width: 760px) { .ccc-summary { gap: 12px; } }
+  .ccc-breadcrumb { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--muted); text-decoration: none; margin-bottom: 6px; }
+  .ccc-breadcrumb:hover { color: var(--navy); text-decoration: underline; }
+  /* Greg (8/30/26): stack top-to-bottom -- name, then Partner, then the
+     status toggle directly underneath -- instead of the toggle floating
+     over on the right of the name row. */
+  #cm-name { margin: 0; font-size: 21px; font-weight: 700; color: var(--navy); }
+  #cm-program { font-size: 13.5px; color: var(--muted); margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+  #cm-program svg { color: var(--muted); flex-shrink: 0; }
+  #cm-team-lead { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+  /* What THIS login is on THIS engagement (Greg, 9/11/26). The account role
+     pill in the header says "Specialist"; this says whether you are the Team
+     Lead here, which is what decides whether you can change anything. */
+  #cm-my-role { font-size: 12.5px; margin-top: 4px; display: inline-flex; align-items: center; gap: 6px;
+                padding: 2px 9px; border-radius: 999px; background: #eef2f7; color: var(--navy); font-weight: 600; }
+  #cm-my-role.is-off-team { background: #f4f5f7; color: var(--muted); font-weight: 500; }
+  .tw-manage-note { margin-top: 12px; padding: 9px 12px; border-radius: 8px; background: var(--bg);
+                    border: 1px solid var(--border); font-size: 12.5px; color: var(--muted); }
+
+  /* Status-age dot -- green under 30 days in the current status, yellow
+     under 60, red 60+. Only ever shown for In Progress, since that's the
+     status "overdue" actually means anything for (Accepted/On Hold/Closed
+     don't have a "should be moving faster" expectation the same way). */
+  .status-badge-wrap { display: flex; align-items: center; gap: 7px; margin-top: 12px; }
+  .status-dot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; }
+  .status-dot-green { background: var(--accent); }
+  .status-dot-yellow { background: var(--amber); }
+  .status-dot-red { background: var(--danger); }
+
+  /* Editable status control (Team Lead / Admin only) -- lets you change an
+     engagement's status right here on its hub page. */
+  .segmented-control {
+    display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden;
+    background: #f6f8fa;
+  }
+  .segmented-control .status-pill {
+    border: none; border-right: 1px solid var(--border); border-radius: 0; padding: 6px 13px;
+    font-size: 11.5px; font-weight: 700; background: transparent; color: var(--muted);
+    cursor: pointer; font-family: inherit; transition: background 0.15s ease, color 0.15s ease;
+  }
+  .segmented-control .status-pill:last-child { border-right: none; }
+  .segmented-control .status-pill:disabled { cursor: default; }
+  /* Each status pill carries its own color (same palette as the .badge-*
+     classes above), so the toggle reads at a glance instead of everything
+     being gray-until-active. The active pill gets the bolder/solid variant
+     of its own color; inactive pills stay in the pale variant. */
+  .segmented-control .status-pill-accepted { background: #e9f5ee; color: var(--accent-dark); }
+  .segmented-control .status-pill-in_progress { background: #e7eef7; color: var(--navy-light); }
+  .segmented-control .status-pill-on_hold { background: #fdf1dc; color: var(--amber); }
+  .segmented-control .status-pill-closed { background: #eef1f4; color: var(--muted); }
+  .segmented-control .status-pill:hover:not(:disabled):not(.active) { filter: brightness(0.96); }
+  .segmented-control .status-pill-accepted.active { background: var(--accent-dark); color: #fff; }
+  .segmented-control .status-pill-in_progress.active { background: var(--navy); color: #fff; }
+  .segmented-control .status-pill-on_hold.active { background: var(--amber); color: #fff; }
+  .segmented-control .status-pill-closed.active { background: var(--muted); color: #fff; }
+
+  /* ---------- Header notes (Greg, 9/6/26, to his mockup) ----------
+     One panel design for all three notes that can appear in the client
+     header -- Info Wizard hint, Add Research hint, and the overdue delay
+     note. Icon tile, small eyebrow label, bold title, optional body; the
+     delay note adds a textarea and a Save row. They share a slot so only one
+     is on screen at a time, and they're all the same width. */
+  .ccc-summary-notes {
+    /* Basis kept low deliberately: flex-wrap drops this column below the
+       client name before it will shrink it, so 340 + the 200 name column +
+       the 20px gap has to fit even a narrow pane. max-width lets it grow to
+       the mockup's proportions on a full-width workspace. */
+    flex: 1 1 340px; min-width: 0; max-width: 660px;
+    border-left: 1px solid var(--border); padding-left: 24px;
+  }
+  .ccc-summary-notes.is-empty { display: none; }
+
+  /* Sized to finish level with the client name block beside it (Greg,
+     9/6/26 -- "the height is too much"). The copy below was cut to match;
+     padding, icon tile and leading all came down a step with it. */
+  /* Greg (9/6/26): "the add research notes box is perfect. make all other
+     header note boxes that exact size." That box lands at ~116px, so it's the
+     floor for all three -- the shorter Info Wizard hint pads out to match,
+     and the overdue note was restructured to fit inside it (its question
+     became the textarea placeholder, and Save sits beside the field instead
+     of on a row of its own). min-height rather than height: the Super-Admin
+     "Edit date" row is a transient extra row and must still be able to push
+     the box taller when it opens. */
+  .hdr-note {
+    border-radius: 12px; padding: 13px 15px; border: 1px solid var(--border);
+    background: var(--bg); display: flex; flex-direction: column; gap: 10px;
+    min-height: 116px; box-sizing: border-box;
+  }
+  .hdr-note-top { display: flex; align-items: flex-start; gap: 11px; }
+  .hdr-note-icon {
+    width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #e8eef4; color: var(--navy-light);
+  }
+  .hdr-note-icon svg { width: 18px; height: 18px; }
+  .hdr-note-head { flex: 1; min-width: 0; }
+  .hdr-note-title { font-size: 14px; font-weight: 700; color: var(--navy); line-height: 1.3; }
+  /* The overdue note's question, back as visible text rather than the
+     textarea placeholder it briefly became -- a placeholder disappears the
+     moment someone types, taking the prompt with it (Greg, 9/6/26). This
+     note drops the "Header note" eyebrow to pay for the line, so the box
+     still measures the same as the other two. */
+  .hdr-note-sub { font-size: 12px; font-weight: 400; color: var(--text); line-height: 1.35; margin-top: 2px; }
+  /* No eyebrow above these any more (Greg, 9/6/26: "remove Header Note as
+     that is obvious"), so nothing to offset from. */
+  .hdr-note-body { font-size: 12px; color: var(--muted); line-height: 1.45; }
+  .hdr-note-body strong { color: var(--text); }
+  .hdr-note textarea {
+    width: 100%; min-height: 34px; height: 34px; padding: 7px 10px; border: 1px solid var(--border);
+    border-radius: 8px; font-size: 12.5px; font-family: inherit; resize: vertical;
+    box-sizing: border-box; background: #fff; color: var(--text);
+  }
+  .hdr-note textarea:focus { outline: none; border-color: var(--navy-light); }
+  /* Textarea and Save on one line -- a separate button row is what made this
+     box taller than the others. */
+  .hdr-note-foot { display: flex; align-items: flex-start; gap: 8px; margin-top: auto; }
+  .hdr-note-foot > textarea { flex: 1; min-width: 0; }
+  .hdr-note-hint { font-size: 11.5px; color: var(--muted); }
+  .hdr-note-save {
+    background: var(--navy); color: #fff; border: none; border-radius: 9px;
+    padding: 0 14px; height: 34px; font-size: 12.5px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+  }
+  .hdr-note-save:hover { background: var(--navy-light); }
+
+  /* Tiers -- the delay note only. Red and amber wash the whole panel and
+     recolour the icon tile; on-schedule stays the neutral grey the two
+     informational hints use. */
+  .hdr-note.tier-red { background: linear-gradient(180deg, #fdf0ef 0%, #fbe9e9 100%); border-color: #f0c2c0; }
+  .hdr-note.tier-red .hdr-note-icon { background: #f9dcda; color: var(--danger); }
+  .hdr-note.tier-amber { background: linear-gradient(180deg, #fdf9f0 0%, #fdf7ec 100%); border-color: #f0dca6; }
+  .hdr-note.tier-amber .hdr-note-icon { background: #f7e9c8; color: var(--amber); }
+  .delay-note-saved { font-size: 12px; color: var(--accent-dark); display: none; }
+
+
+  /* ---------- Left nav + content pane shell ----------
+     Grid instead of flex so the right-hand workspace can claim literally
+     all remaining width -- minmax(0, 1fr) (plus min-width:0 on .cc-pane)
+     is what lets tables/iframes inside it actually shrink instead of
+     forcing the column wider than the viewport (Greg, 8/30/26). The
+     "wide-workspace" modifier narrows the nav further for data-heavy
+     panes (Update Dashboard / Add Research) so those get a little extra
+     room without the user having to do anything.
+     Greg (8/30/26): moved the client-name/status header (.ccc-summary)
+     inside .cc-pane so it's part of the right column instead of a
+     full-width banner above both columns -- which frees the nav to start
+     right at the top of the row instead of waiting below that banner.
+     Greg (8/30/26 GPT reference): nav is a plain top-aligned list again
+     (not stretched/spread to fill the pane's height) -- items keep their
+     natural spacing, and the active item gets a navy left-edge accent bar
+     instead of relying on background tint alone. */
+  .cc-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
+  .cc-shell.wide-workspace { grid-template-columns: 180px minmax(0, 1fr); }
+  .cc-nav {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .cc-nav-btn {
+    display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px 14px;
+    border: none; border-left: 3px solid transparent; border-radius: 8px; background: transparent;
+    font-size: 14px; font-weight: 600; color: var(--text);
+  }
+  .cc-nav-btn:hover:not(.active) { background: #f4f6f8; }
+  .cc-nav-btn.active { background: #e7eef7; color: var(--navy); border-left-color: var(--navy-light); }
+  .cc-nav-btn svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--muted); }
+  .cc-nav-btn.active svg { color: var(--navy-light); }
+  .cc-nav-btn:disabled { cursor: default; }
+  /* Greg (9/5/26): section labels restyled to match Chris's reference
+     mockup -- small uppercase muted-gray caption instead of navy title
+     case. Applies to both "Workflow" (new, see .cc-nav-sub below) and
+     "Setup & Sharing". The old "Engagement Workspace" label above Team &
+     Hours / View Application is gone per that same mockup (crossed out
+     there) -- that top group is unlabeled now. */
+  .cc-nav-section { width: 100%; padding: 12px 14px 5px; font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; }
+  .cc-nav-section:first-child { padding-top: 4px; }
+  .cc-nav-section:not(:first-child) { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
+  /* Greg (9/5/26): small badge + "Engagement Workspace" / client-name
+     header, sitting above the nav list inside the same card -- from
+     Chris's reference mockup. Text-only (no imported logo mark). */
+  .cc-nav-header { display: flex; align-items: center; gap: 8px; padding: 8px 10px 14px; margin-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .cc-nav-header-badge { width: 30px; height: 32px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .cc-nav-header-badge img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  /* Greg (9/5/26): the nav column is only 220px wide, so there isn't room
+     for "Engagement Workspace" and a longer client name to each wrap onto
+     one line at the original 14.5px/11px sizes -- both wrapped to 2 lines
+     and turned this into a 4-line block. min-width:0 on the text column
+     plus nowrap+ellipsis keeps each row to exactly one line: the title
+     (fixed, short, always fits at this size) effectively never truncates,
+     while a long client name ellipsizes instead of wrapping. */
+  .cc-nav-header-text { min-width: 0; flex: 1; }
+  /* Greg (9/5/26): client name subtitle removed -- it's redundant with the
+     client name already shown at the top of the workspace pane itself.
+     "Engagement Workspace" now just wraps to its natural 2 lines
+     ("Engagement" / "Workspace"), left-justified, at a size that was
+     always going to be tight fitting on one line in a 220px column. */
+  .cc-nav-header-title { font-size: 14px; font-weight: 700; color: var(--navy); line-height: 1.25; text-align: left; }
+  /* The 4 document names (Discovery/Controlling/Research Review/Close-Out),
+     "Add Research", and "View Application" render as their own rows in the
+     nav. History: Greg (8/31/26) grouped them under a collapsible
+     "Documents" item to keep the menu short; (9/4/26) "just show the
+     documents" dropped the collapse step; (9/5/26) "remove Documents. it
+     adds no value" dropped the group label entirely; (9/5/26, per Chris's
+     mockup) a plain "Workflow" caption was added back above just the
+     document rows (View Application stays unlabeled above it, grouped
+     with Team & Hours instead) and every row got an icon to match. */
+  .cc-nav-sub { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 6px; }
+  /* View Application (Greg, 9/4/26): moved here from a breadcrumb link up
+     top -- "top of the documents list" is exactly what it is, the source
+     application this engagement came from. */
+  .cc-nav-sublink { color: var(--navy-light) !important; text-decoration: none; }
+  .cc-nav-sublink-chevron { margin-left: auto; }
+  .cc-nav-subbtn {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 12px;
+    border: none; border-left: 3px solid transparent; border-radius: 8px; background: transparent;
+    font-size: 13px; font-weight: 600; color: var(--muted);
+  }
+  .cc-nav-subbtn:hover:not(.active) { background: #f4f6f8; color: var(--text); }
+  .cc-nav-subbtn.active { background: #e7eef7; color: var(--navy); border-left-color: var(--navy-light); }
+  .cc-nav-subbtn svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--muted); }
+  .cc-nav-subbtn.active svg { color: var(--navy-light); }
+  .cc-pane { min-width: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px; }
+  @media (max-width: 760px) {
+    .cc-shell, .cc-shell.wide-workspace { grid-template-columns: 1fr; align-items: start; }
+    .cc-nav { width: 100%; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: 4px; height: auto; padding: 8px; }
+    .cc-nav-btn { width: auto; flex: 1 1 auto; padding: 10px 11px; font-size: 13.5px; }
+    .cc-nav-btn svg { width: 17px; height: 17px; }
+    .cc-nav-group { width: 100%; }
+  }
+
+
+  /* ---------- Team & Hours table (ported from client_workspace.html) ---------- */
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+  @media (max-width: 640px) { .table-scroll table { min-width: 560px; } }
+  thead th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); background: #eef2f6; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tfoot td { padding: 11px 14px; font-size: 13.5px; border-top: 2px solid var(--border); }
+  .spent-cell { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+  .spent-action { width: 26px; display: inline-flex; justify-content: flex-end; flex-shrink: 0; }
+  td.actions, .row-actions { text-align: right; white-space: nowrap; }
+  .row-input { width: 100%; padding: 5px 0 5px 7px; border: 1px solid transparent; border-radius: 5px; font-size: 13.5px; font-family: inherit; background: transparent; text-align: right; }
+  .row-input:hover, .row-input:focus { border-color: var(--border); background: #fff; }
+  .row-select { width: 100%; padding: 5px 7px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; font-family: inherit; background: #fff; }
+  .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+  .icon-btn { padding: 4px 8px; font-size: 13px; line-height: 1; }
+  input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+  .spent-link { background: none; border: none; padding: 0; font: inherit; font-weight: 700; color: var(--navy-light); cursor: pointer; text-decoration: underline; }
+  .spent-link:hover { color: var(--navy); }
+  .field-error { color: var(--danger); font-size: 12.5px; margin-top: 8px; display: none; }
+
+  /* ---------- Modals (Unassign confirm / Log hours / Billing history) ---------- */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+  .overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 10px; width: 400px; max-width: 92vw; padding: 26px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); max-height: 88vh; overflow-y: auto; }
+  .modal h3 { margin: 0 0 10px; font-size: 16.5px; color: var(--navy); }
+  .modal p { font-size: 13.5px; color: var(--muted); }
+  .modal .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
+  .field input[type="text"], .field input[type="number"], .field input[type="date"], .field select, .field textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; box-sizing: border-box;
+  }
+  .field textarea { resize: vertical; line-height: 1.5; }
+  .field input[readonly] { background: #eef2f6; color: var(--muted); }
+  .required-star { color: var(--danger); }
+  .history-summary { display: flex; gap: 18px; flex-wrap: wrap; background: #f4f6f8; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
+  .history-summary strong { display: block; font-size: 15px; color: var(--text); }
+  .history-summary span { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .history-list { max-height: 380px; overflow-y: auto; }
+  .history-month { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .history-month:last-child { border-bottom: none; }
+  .history-month-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13.5px; font-weight: 700; }
+  .history-month-meta { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .history-entry { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); padding: 4px 0 0 4px; }
+  .history-entry-note { color: var(--muted); font-style: italic; }
+  .history-empty { text-align: center; color: var(--muted); font-size: 13.5px; padding: 20px 0; }
+
+  /* ---------- Top nav + Ask AI ---------- */
+  header { position: relative; }
+  header .site-nav { display: flex; align-items: center; gap: 4px; }
+  header .nav-link { color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 8px 12px; border-radius: 6px; position: relative; }
+  header .nav-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  header .nav-link.active { color: #fff; }
+  header .nav-link.active::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -14px; height: 2px; background: #fff; }
+  .nav-toggle {
+    display: none; align-items: center; justify-content: center; width: 34px; height: 34px;
+    background: rgba(255,255,255,0.1); border: none; border-radius: 6px; color: #fff; cursor: pointer; flex-shrink: 0;
+  }
+  .nav-toggle:hover { background: rgba(255,255,255,0.18); }
+  /* Chris (9/4/26): dropdown top-nav submenu, piloted on Invoicing --
+     Time Sheets / Program Invoices / Pay Statements. Click-to-toggle
+     (not hover-only) so it matches the account-menu pattern already used
+     elsewhere and stays usable on touch. Active state (parent + child) is
+     set by JS below based on the current page, not hardcoded per file. */
+  .nav-item-dropdown { position: relative; }
+  .nav-link-dropdown-btn { display: inline-flex; align-items: center; gap: 4px; font: inherit; background: none; border: none; cursor: pointer; }
+  .nav-link-dropdown-btn .nav-caret { font-size: 9px; opacity: 0.7; }
+  .nav-submenu {
+    position: absolute; top: 100%; left: 0; margin-top: 8px; min-width: 230px; max-width: 320px; background: var(--navy);
+    border-radius: 10px; padding: 6px; box-shadow: 0 10px 24px rgba(0,0,0,0.28); display: none; z-index: 97;
+  }
+  .nav-item-dropdown.open .nav-submenu { display: block; }
+  /* Greg (9/6/26): the top-nav dropdowns open on hover, not click-only.
+     .nav-submenu sits 8px below its nav item (margin-top), and that gap is
+     dead space the pointer would cross on the way down -- the ::before
+     bridge covers it so the menu doesn't blink shut mid-travel. Click still
+     works for touch and keyboard; the nav script clears the clicked-open
+     state on mouseleave so it can't stay stuck open. */
+  @media (hover: hover) {
+    .nav-item-dropdown:hover .nav-submenu { display: block; }
+    .nav-submenu::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
+  }
+  .nav-submenu a { display: block; padding: 9px 12px; border-radius: 6px; color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; white-space: normal; }
+  .nav-submenu a:hover, .nav-submenu a.active { background: rgba(255,255,255,0.14); color: #fff; }
+  /* Applications nav dropdown content (Chris, 9/4/26) -- dynamic, unlike
+     Invoicing's fixed 3 links, so it needs a meta line, an empty state,
+     and a "View All" footer row the static dropdown didn't. */
+  .nav-submenu .nav-submenu-meta { display: block; font-size: 11px; font-weight: 400; color: #9fb3c8; margin-top: 1px; }
+  .nav-submenu .nav-submenu-empty { padding: 9px 12px; font-size: 12.5px; color: #9fb3c8; font-weight: 400; }
+  .nav-submenu .nav-submenu-viewall { font-weight: 700; border-top: 1px solid rgba(255,255,255,0.14); margin-top: 4px; padding-top: 10px; }
+  @media (max-width: 980px) {
+    .nav-item-dropdown { position: static; }
+    .nav-submenu { position: static; display: block !important; box-shadow: none; background: transparent; padding: 0 0 4px 26px; margin-top: 0; }
+    .nav-submenu::before { display: none; }
+    .nav-link-dropdown-btn .nav-caret { display: none; }
+    .nav-caret-only { display: none; }
+  }
+  /* "Programs" needs to stay a real link to the Programs list (Greg,
+     9/6/26 -- a plain dropdown-toggle button with no href broke direct
+     navigation there from every other page), while still offering "Add
+     Program" / "Application Links" as a dropdown -- so unlike Invoicing
+     (one button does both), Programs splits into a normal nav-link plus a
+     small separate caret button that only toggles the submenu. */
+  .nav-split-item { display: flex; align-items: center; }
+  .nav-split-item .nav-link { padding-right: 4px; }
+  .nav-caret-only {
+    display: inline-flex; align-items: center; font: inherit; background: none; border: none; cursor: pointer;
+    color: #c9d6e3; padding: 8px 10px 8px 2px; border-radius: 6px;
+  }
+  .nav-caret-only:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  .nav-caret-only .nav-caret { font-size: 9px; opacity: 0.7; }
+  .nav-toggle svg { width: 20px; height: 20px; display: block; }
+  @media (max-width: 980px) {
+    .nav-toggle { display: inline-flex; }
+    header .site-nav {
+      display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; gap: 2px;
+      background: var(--navy); padding: 8px; box-shadow: 0 10px 24px rgba(0,0,0,0.28); z-index: 96;
+      border-radius: 0 0 10px 10px;
+    }
+    header .site-nav.open { display: flex; }
+    header .nav-link { padding: 12px 14px; border-radius: 6px; }
+    header .nav-link.active { background: rgba(255,255,255,0.14); }
+    header .nav-link.active::after { display: none; }
+  }
+
+  .ask-ai-btn {
+    display: inline-flex; align-items: center; gap: 6px; background: rgba(124,63,196,0.18); color: #d9c8f5;
+    border: 1px solid rgba(124,63,196,0.5); padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  }
+  .ask-ai-btn:hover { background: rgba(124,63,196,0.3); color: #fff; }
+  .ask-ai-btn svg { width: 14px; height: 14px; }
+  .ask-ai-wrap { position: relative; }
+  .ai-nudge { position: absolute; top: calc(100% + 12px); right: 0; width: 220px; background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.22); padding: 12px 26px 12px 14px; font-size: 12.5px; line-height: 1.45; z-index: 95; }
+  .ai-nudge.hidden { display: none; }
+  .ai-nudge::before { content: ""; position: absolute; top: -6px; right: 22px; width: 11px; height: 11px; background: #fff; border-left: 1px solid var(--border); border-top: 1px solid var(--border); transform: rotate(45deg); }
+  .ai-nudge-close { position: absolute; top: 6px; right: 8px; background: transparent; border: none; color: var(--muted); font-size: 15px; line-height: 1; padding: 2px; cursor: pointer; }
+
+  .ai-drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.25); z-index: 90; }
+  .ai-drawer-overlay.open { display: block; }
+  .ai-drawer {
+    position: fixed; top: 0; right: -460px; width: 440px; max-width: 92vw; height: 100vh; background: #fff;
+    box-shadow: -8px 0 28px rgba(20,48,77,0.18); z-index: 91; display: flex; flex-direction: column; transition: right 0.22s ease;
+  }
+  .ai-drawer.open { right: 0; }
+  .ai-drawer-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 20px 22px 14px; border-bottom: 1px solid var(--border); }
+  .ai-drawer-header h3 { margin: 0; font-size: 18px; color: var(--navy); display: flex; align-items: center; gap: 8px; }
+  .ai-drawer-header h3 svg { color: #7c3fc4; width: 19px; height: 19px; }
+  .ai-drawer-header .card-hint { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+  .ai-drawer-close { background: transparent; border: none; color: var(--muted); font-size: 20px; padding: 4px; cursor: pointer; line-height: 1; }
+  .ai-drawer-close:hover { color: var(--text); }
+  .ai-drawer-body { flex: 1; overflow-y: auto; padding: 18px 22px; }
+  .ai-context-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; }
+  .ai-context-chip { display: flex; align-items: center; gap: 8px; background: #f4f6f8; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--text); margin-bottom: 18px; }
+  .ai-context-chip svg { color: var(--navy-light); flex-shrink: 0; width: 15px; height: 15px; }
+  .ai-greeting-bubble { background: #f4f0fb; color: var(--text); border: 1px solid #e3d5f7; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.5; margin-bottom: 18px; }
+  .ai-ask-label { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+  .ai-ask-row { display: flex; gap: 8px; margin-bottom: 18px; }
+  .ai-ask-row input { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13.5px; font-family: inherit; }
+  .ai-ask-row input:focus { outline: none; border-color: #7c3fc4; }
+  .ai-ask-send { width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #7c3fc4; color: #fff; border-radius: 8px; }
+  .ai-ask-send:hover { background: #6528a3; }
+  .ai-ask-send svg { width: 17px; height: 17px; }
+  .ai-suggested-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 8px; }
+  .ai-suggested-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 20px; }
+  .ai-suggested-chip { text-align: left; background: #f4f0fb; color: #5a2494; border: 1px solid #e3d5f7; border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; width: 100%; }
+  .ai-suggested-chip:hover { background: #ecdffa; }
+  .ai-suggested-chip svg { width: 13px; height: 13px; flex-shrink: 0; color: #7c3fc4; }
+  .ai-answer-block { border-top: 1px solid var(--border); padding-top: 16px; }
+  .ai-answer-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .ai-answer-meta .ai-answer-title { font-size: 13px; font-weight: 700; color: var(--navy); }
+  .ai-answer-meta .ai-answer-time { font-size: 11.5px; color: var(--muted); }
+  .ai-answer-card { background: #f4f0fb; border-radius: 10px; padding: 14px 16px; font-size: 13.5px; line-height: 1.55; color: var(--text); }
+  .ai-answer-card ul { margin: 8px 0; padding-left: 18px; }
+  .ai-answer-card li { margin-bottom: 3px; }
+  .ai-answer-card strong { color: var(--navy); }
+  .ai-answer-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .ai-answer-actions button { background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; color: var(--muted); font-size: 12px; }
+  .ai-answer-actions button:hover { color: var(--text); background: #f4f6f8; }
+  .ai-drawer-footer { padding: 12px 22px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="app-view" class="hidden">
+  <header class="no-print">
+    <div class="brand-row">
+      <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
+    </div>
+    <nav class="site-nav">
+      <div class="nav-item-dropdown hidden" id="nav-applications-dropdown">
+        <button type="button" class="nav-link nav-link-dropdown-btn">Applications <span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" id="nav-applications-submenu"></div>
+      </div>
+      <div class="nav-item-dropdown nav-split-item">
+        <a class="nav-link active" href="index.html">Engagements</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Engagements menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
+          <a href="index.html?status=closed">Closed Engagements</a>
+        </div>
+      </div>
+      <div class="nav-item-dropdown nav-split-item">
+        <a href="econ_dev_partners_admin.html" class="nav-link">Programs</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Programs menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
+          <a href="econ_dev_partners_admin.html?action=add">Add Program</a>
+          <a href="program_application_links.html" data-super-admin-only>Application Links</a>
+        </div>
+      </div>
+      <div class="nav-item-dropdown nav-split-item">
+        <a href="team_directory.html" class="nav-link">Roster</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Roster menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
+          <a href="team_directory.html?action=add">Add Roster Member</a>
+        </div>
+      </div>
+      <div class="nav-item-dropdown" data-super-admin-only>
+        <button type="button" class="nav-link nav-link-dropdown-btn">Invoicing <span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu">
+          <a href="invoicing_report.html">Time Sheets</a>
+          <a href="program_invoicing.html">Program Invoices</a>
+          <a href="specialist_invoices.html">Pay Statements</a>
+        </div>
+      </div>
+    </nav>
+    <button type="button" class="nav-toggle" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div id="userbox">
+      <div class="ask-ai-wrap">
+        <button class="ask-ai-btn" id="ask-ai-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6L12 2z"/><path d="M19 15l.9 2.6L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.4L19 15z"/></svg>
+          Ask AI
+        </button>
+        <div class="ai-nudge hidden" id="ai-nudge">
+          <button type="button" class="ai-nudge-close" id="ai-nudge-close" aria-label="Dismiss">&times;</button>
+          I'm here if you have any questions — just click <strong>Ask AI</strong> any time.
+        </div>
+      </div>
+      <!-- Notification bell (Chris, 9/4/26): "make sure the bell is
+           prominently displayed on every page" -- was Home-page only.
+           Wired by a self-contained script (see end of file) that does
+           its own admin check, same pattern as the Applications nav
+           dropdown. -->
+      <div id="notif-wrap" class="hidden">
+        <button class="btn-ghost" id="notif-bell" title="Notifications">
+          &#128276;
+          <span id="notif-count" class="notif-count hidden">0</span>
+        </button>
+        <div id="notif-dropdown" class="notif-dropdown hidden">
+          <div class="notif-dropdown-header">
+            <span>Notifications</span>
+            <button class="btn-ghost btn-sm" id="notif-mark-all">Mark all read</button>
+          </div>
+          <div id="notif-list"></div>
+        </div>
+      </div>
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span><span class="user-email" id="user-email" title="The account you are signed in as"></span>
+      <div id="profile-wrap">
+        <button class="btn-ghost" id="profile-btn" title="Account menu">
+          <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="chevron">&#9662;</span>
+        </button>
+        <div id="profile-dropdown" class="profile-dropdown hidden">
+          <button class="btn-ghost" id="change-password-btn">Change Password</button>
+          <button class="btn-ghost" id="signout-btn">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="breadcrumb-bar no-print">
+    <div class="breadcrumb"><span id="bc-program"></span><span class="sep hidden" id="bc-program-sep">›</span><a href="index.html">Engagements</a><span class="sep">›</span><span>Engagement Workspace</span><span class="sep">›</span><span class="current" id="bc-client">Engagement</span></div>
+  </nav>
+
+  <div class="ai-drawer-overlay no-print" id="ai-drawer-overlay"></div>
+  <aside class="ai-drawer no-print" id="ai-drawer">
+    <div class="ai-drawer-header">
+      <div>
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6L12 2z"/><path d="M19 15l.9 2.6L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.4L19 15z"/></svg>
+          Ask AI
+        </h3>
+        <div class="card-hint">Ask about this page or anything across EG Group.</div>
+      </div>
+      <button class="ai-drawer-close" id="ai-drawer-close">&times;</button>
+    </div>
+    <div class="ai-drawer-body">
+      <div class="ai-context-label">Context</div>
+      <div class="ai-context-chip" id="ai-context-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span id="ai-context-text">Engagement Workspace</span>
+      </div>
+      <div class="ai-greeting-bubble">Hi! I'm your EG Group assistant. Ask me anything about this engagement, or about applications, hours, and team data across the app.</div>
+      <div class="ai-ask-label">Ask a question</div>
+      <div class="ai-ask-row">
+        <input type="text" id="ai-question-input" placeholder="e.g. What's the status of this engagement?" />
+        <button class="ai-ask-send" id="ai-ask-send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div class="ai-suggested-label">Suggested questions</div>
+      <div class="ai-suggested-list" id="ai-suggested-list"></div>
+      <div class="ai-answer-block hidden" id="ai-answer-block">
+        <div class="ai-answer-meta">
+          <span class="ai-answer-title">Answer</span>
+          <span class="ai-answer-time" id="ai-answer-time"></span>
+        </div>
+        <div class="ai-answer-card" id="ai-answer-card"></div>
+        <div class="ai-answer-actions">
+          <button id="ai-copy-answer">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="ai-drawer-footer">Answers are AI-generated from EG Group data and may not always be accurate.</div>
+  </aside>
+
+  <main>
+    <div id="banner"></div>
+
+    <div class="std-toolbar-row no-print">
+      <a class="toolbar-pill-btn hidden" id="cc-open-browser-btn" href="#" target="_blank" rel="noopener" title="Open the client-facing dashboard in its own browser tab">&#8599; View Live Page</a>
+      <button type="button" class="toolbar-pill-btn" id="std-print-btn" title="Print this engagement overview">&#128424; Print</button>
+      <div class="cc-more-wrap">
+        <button type="button" class="toolbar-pill-btn" id="cc-more-btn">&#8943; More &#9662;</button>
+        <div class="cc-more-menu hidden" id="cc-more-menu">
+          <button type="button" class="btn-ghost" id="std-export-btn" title="Download this engagement's team &amp; hours as CSV">&#8595; Download CSV</button>
+          <button type="button" class="btn-ghost" id="std-import-btn" title="This page manages one engagement -- nothing to bulk import here" disabled>Import</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="no-client-note" class="empty-note hidden">
+      No client was specified. <a href="index.html">Go back home</a> and pick one from the client list.
+    </div>
+
+    <div id="ccc-content" class="hidden">
+      <div class="cc-shell">
+        <nav class="cc-nav" id="cc-nav"></nav>
+        <div class="cc-pane">
+
+          <div class="ccc-summary">
+            <div class="ccc-summary-main">
+            <h2 id="cm-name"></h2>
+            <div id="cm-program"></div>
+            <div id="cm-team-lead"></div>
+            <div id="cm-my-role"></div>
+            <span class="status-badge-wrap">
+              <span class="status-dot hidden" id="cm-status-dot" title=""></span>
+              <span class="badge hidden" id="cm-status-badge"></span>
+              <div class="segmented-control hidden" id="cm-status-toggle"></div>
+            </span>
+            </div>
+
+            <!-- Greg (9/6/26): "make all note boxes in the header the same
+                 size." The three pane notes -- Info Wizard, Add Research and
+                 the overdue delay box -- were three different widths in two
+                 different places. They're siblings in the same right-hand
+                 slot now and share one set of sizing rules, so whichever pane
+                 you're on the note lands in the same spot at the same size.
+                 They're mutually exclusive by pane, so they never collide. -->
+            <div class="ccc-summary-notes is-empty" id="cm-notes-col">
+              <div class="hdr-note hidden" id="cm-wizard-hint">
+                <div class="hdr-note-top">
+                  <div class="hdr-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M15 9h0M17.8 6.2L19 5M3 21l9-9M12.2 6.2L11 5"/></svg></div>
+                  <div class="hdr-note-head">
+                    <div class="hdr-note-body">Most of this fills in automatically from the application. Add the client's Competitors and Customer lists here.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="hdr-note hidden" id="cm-research-hint">
+                <div class="hdr-note-top">
+                  <div class="hdr-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg></div>
+                  <div class="hdr-note-head">
+                    <div class="hdr-note-body">Research questions flow into each topic automatically from the <strong>Controlling Document</strong>, and are what the CEO's close-out survey asks about. <strong>Add your research file(s) below.</strong></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="hdr-note hidden" id="cm-delay-note">
+                <div class="hdr-note-top">
+                  <div class="hdr-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M18.5 5.5l1.5-1.5"/></svg></div>
+                  <div class="hdr-note-head">
+                    <div class="hdr-note-title" id="cm-delay-note-label">Why is this taking longer than expected?</div>
+                    <div class="hdr-note-sub hidden" id="cm-delay-note-sub">Why is it taking longer than expected?</div>
+                  </div>
+                  <button type="button" class="btn-ghost hidden" id="cm-fix-date-btn" style="padding:2px 6px; font-size:11px; color:var(--navy-light); flex-shrink:0;" title="Correct the date this engagement actually went In Progress">Edit date</button>
+                </div>
+                <div class="hidden" id="cm-fix-date-row" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <input type="date" id="cm-fix-date-input" style="padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12.5px;" />
+                  <button type="button" class="btn-secondary" id="cm-fix-date-save" style="padding:5px 12px; font-size:12px;">Save date</button>
+                  <button type="button" class="btn-ghost" id="cm-fix-date-cancel" style="padding:5px 8px; font-size:12px;">Cancel</button>
+                </div>
+                <div class="hdr-note-foot hidden" id="cm-delay-actions">
+                  <textarea id="cm-delay-reason" maxlength="300" placeholder="Add a note for the team&hellip;" title="This note is visible to your engagement team."></textarea>
+                  <span class="delay-note-saved" id="cm-delay-saved">Saved</span>
+                  <button type="button" class="hdr-note-save" id="cm-delay-save">Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="cc-pane-team" class="cc-pane-inner">
+            <div class="field-error" id="tw-summary-error"></div>
+
+            <div class="table-scroll">
+              <table style="table-layout:fixed;">
+                <colgroup>
+                  <col style="width:17%;">
+                  <col style="width:40%;">
+                  <col style="width:13%;">
+                  <col style="width:12%;">
+                  <col style="width:18%;">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>Work Area</th>
+                    <th>Person</th>
+                    <th style="text-align:right;">Budget Hours</th>
+                    <th>Hours Used</th>
+                    <th id="tw-actions-header" class="hidden"></th>
+                  </tr>
+                </thead>
+                <tbody id="tw-tbody"></tbody>
+                <tfoot>
+                  <tr>
+                    <td colspan="2" style="font-weight:700;">Totals</td>
+                    <td style="text-align:right; font-weight:700;" id="tw-total-planned">0</td>
+                    <td style="font-weight:700;" id="tw-total-used">0</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <button class="btn-secondary btn-sm hidden" id="tw-add-row-btn" style="margin-top:12px;">+ Add work area</button>
+          </div>
+
+          <div id="cc-pane-iframe" class="cc-pane-inner hidden">
+            <iframe id="cc-iframe" title="Engagement content" style="width:100%; height:200px; min-height:120px; border:none; border-radius:8px; background:#fff; display:block;"></iframe>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Unassign / remove confirm -->
+<div class="overlay" id="tw-remove-overlay">
+  <div class="modal" style="width:360px;">
+    <h3 id="tw-remove-title">Unassign this work area?</h3>
+    <p id="tw-remove-text"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="tw-remove-cancel">Cancel</button>
+      <button type="button" class="btn-danger" id="tw-remove-confirm">Unassign</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log hours -->
+<div class="overlay" id="tw-log-hours-overlay">
+  <div class="modal" style="width:360px;">
+    <h3>Log hours</h3>
+    <p id="tw-log-hours-text"></p>
+    <form id="tw-log-hours-form">
+      <div class="field">
+        <label>Hours <span class="required-star">*</span></label>
+        <input type="number" id="tw-log-hours-amount" min="0.25" step="0.25" required />
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="tw-log-hours-date" required />
+      </div>
+      <div class="field">
+        <label>Note <span class="hint">(optional)</span></label>
+        <input type="text" id="tw-log-hours-note" maxlength="200" />
+      </div>
+      <div class="field-error" id="tw-log-hours-error"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="tw-log-hours-cancel">Cancel</button>
+        <button type="submit" class="btn-primary" id="tw-log-hours-submit">Log hours</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Billing history -->
+<div class="overlay" id="tw-history-overlay">
+  <div class="modal" style="width:460px;">
+    <h3 id="tw-history-title">Billing History</h3>
+    <div class="history-summary" id="tw-history-summary"></div>
+    <div class="history-list" id="tw-history-list"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="tw-history-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // Always build client-facing links against the real hosted site, never
+  // against wherever this internal tool happens to be opened from.
+  const PUBLIC_SITE_BASE = "https://egdb.netlify.app/";
+  const RECENTS_KEY = "eg_recent_clients"; // shared with index.html
+
+  let currentUser = null;
+  let activeClient = null;
+  let isSuperAdmin = false;
+  let isTeamLeadHere = false; // is currentUser the Team Lead on activeClient?
+  let allUsers = [];
+  let allUsersIncludingHidden = [];
+  let userSpecialties = {}; // user_id -> array of specialty keys
+  let nameCounts = {};      // full_name -> how many accounts carry it, hidden included
+  let currentAssignments = [];
+  let activePane = "team"; // the one native pane that swaps in place (the rest are iframed)
+  // Greg (8/30/26): the overdue delay-reason box is Team & Hours-specific
+  // context (it's about the assignments/hours work being late), not
+  // something that belongs floating above every other pane -- Add
+  // Research, Documents, Update Dashboard, Client Dashboard. Tracked
+  // separately from the tier-based hidden state below so a pane switch
+  // can re-check visibility without re-running the whole day-count calc.
+  let delayNoteApplicable = false;
+  function refreshDelayNoteVisibility() {
+    $("cm-delay-note").classList.toggle("hidden", !delayNoteApplicable || activePane !== "team");
+    syncNotesColumn();
+  }
+
+  // The notes column carries the vertical rule that separates it from the
+  // client name, so it has to collapse entirely when no note is showing --
+  // otherwise a pane with no note leaves a divider hanging in empty space
+  // (Greg, 9/6/26).
+  function syncNotesColumn() {
+    const col = $("cm-notes-col");
+    if (!col) return;
+    const anyVisible = ["cm-wizard-hint", "cm-research-hint", "cm-delay-note"]
+      .some((id) => $(id) && !$(id).classList.contains("hidden"));
+    col.classList.toggle("is-empty", !anyVisible);
+  }
+
+  const $ = (id) => document.getElementById(id);
+  // Chris asked (8/11/26 call) that role names shown to users match current
+  // EG terminology: Consultant -> Specialist, Super Admin -> Admin.
+  // Which account am I signed in as? (Greg, 9/11/26 -- he holds three logins
+  // with the same name: Super Admin, Team Lead and Specialist. The role pill
+  // said "Specialist" but nothing said WHICH Specialist, and an assignment
+  // made under one login is invisible from another.)
+  //
+  // Read from the auth session rather than the users row, because the profile
+  // query on each page selects a different set of columns and most don't ask
+  // for email. The session always has it.
+  async function showSignedInEmail() {
+    const el = document.getElementById("user-email");
+    if (!el) return;
+    try {
+      const { data } = await sb.auth.getUser();
+      const email = data && data.user && data.user.email;
+      if (email) el.textContent = email;
+    } catch (e) { /* non-essential -- the name and role pill still show */ }
+  }
+
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
+  function redirectToLogin() {
+    const dest = location.pathname.split("/").pop() + location.search;
+    location.href = "index.html?return=" + encodeURIComponent(dest);
+  }
+  const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
+  const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
+  // Greg (9/4/26), per Chris: applications go straight to In Progress once
+  // a Team Lead is assigned -- no more Accepted-waiting-stage or On Hold.
+  const PROJECT_STATUSES = ["in_progress", "closed"];
+  const SPECIALTY_LABELS = {
+    team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
+    gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
+  };
+  // LOOKUP, not picker -- so it has to cover hidden accounts (Greg, 9/16/26).
+  // Every caller uses this to NAME whoever is already on a row, and one of
+  // them decides whether the Log Hours button exists:
+  //   canLogHours = !isSunkCost && !!person && (isSuperAdmin || person.id === currentUser.id)
+  // Built from the visible roster, the NCEG Admin house account resolves to
+  // undefined, the Person column reads "Not assigned", and Rita still cannot
+  // log GRE's Admin/QC hours -- which was the whole point of 121.
+  // Choosing is still restricted: see consultantOptionsHtml.
+  const usersById = () => Object.fromEntries(allUsersIncludingHidden.map((u) => [u.id, u]));
+  function specialtyDescriptor(u) {
+    const specs = (userSpecialties[u.id] || []).map((s) => SPECIALTY_LABELS[s] || s);
+    return specs.length ? specs.join(", ") : roleLabel(u.role);
+  }
+  function userLabel(u) {
+    if (!u) return "";
+    const collides = (nameCounts[(u.full_name || "").trim()] || 0) > 1;
+    if (!collides) return u.full_name;
+    const descriptor = specialtyDescriptor(u);
+    const label = `${u.full_name} — ${descriptor}`;
+    // nameCounts above counts every account, hidden included, so the tie-break
+    // has to look at the same population or it disagrees with itself.
+    const stillCollides = allUsersIncludingHidden.filter((x) => x.full_name === u.full_name && specialtyDescriptor(x) === descriptor).length > 1;
+    return stillCollides && u.email ? `${label} (${u.email})` : label;
+  }
+
+  /* ---------- Ask AI ----------
+     Browser -> eg-dashboard-ai Supabase Edge Function -> Claude API. */
+  let AI_CONTEXT_LABEL = "Engagement Workspace";
+  const AI_PAGE_KEY = "workspace";
+  const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/eg-dashboard-ai`;
+  let aiHistory = [];
+
+  function aiSuggestedQuestions() {
+    const name = activeClient ? activeClient.name : "this engagement";
+    return [
+      `What's the status of ${name}?`,
+      "Who's on the team for this engagement?",
+      "How many hours have been used?",
+      "When was this engagement last updated?",
+    ];
+  }
+
+  function initAskAi() {
+    const btn = $("ask-ai-btn");
+    if (!btn) return;
+    renderAiSuggested();
+    btn.addEventListener("click", openAiDrawer);
+    $("ai-drawer-close").addEventListener("click", closeAiDrawer);
+    $("ai-drawer-overlay").addEventListener("click", closeAiDrawer);
+    $("ai-ask-send").addEventListener("click", submitAiQuestion);
+    $("ai-question-input").addEventListener("keydown", (e) => { if (e.key === "Enter") submitAiQuestion(); });
+    $("ai-copy-answer").addEventListener("click", () => {
+      const text = $("ai-answer-card").innerText;
+      navigator.clipboard?.writeText(text);
+    });
+  }
+
+  function renderAiSuggested() {
+    const list = $("ai-suggested-list");
+    const questions = aiSuggestedQuestions();
+    list.innerHTML = questions.map((q, i) => `
+      <button class="ai-suggested-chip" data-idx="${i}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"/><path d="M12 17h.01"/></svg>
+        ${escapeHtml(q)}
+      </button>
+    `).join("");
+    list.querySelectorAll(".ai-suggested-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const q = questions[Number(chip.dataset.idx)];
+        $("ai-question-input").value = q;
+        askAi(q);
+      });
+    });
+  }
+
+  function openAiDrawer() {
+    $("ai-context-text").textContent = AI_CONTEXT_LABEL;
+    renderAiSuggested();
+    $("ai-drawer-overlay").classList.add("open");
+    $("ai-drawer").classList.add("open");
+  }
+
+  function closeAiDrawer() {
+    $("ai-drawer-overlay").classList.remove("open");
+    $("ai-drawer").classList.remove("open");
+  }
+
+  function submitAiQuestion() {
+    const q = $("ai-question-input").value.trim();
+    if (!q) return;
+    askAi(q);
+  }
+
+  function renderAiMarkup(text) {
+    const escaped = escapeHtml(text || "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    return escaped.split(/\n\n+/).map((block) => {
+      const lines = block.split("\n").filter((l) => l.trim());
+      if (lines.length && lines.every((l) => /^\s*-\s+/.test(l))) {
+        return `<ul>${lines.map((l) => `<li>${l.replace(/^\s*-\s+/, "")}</li>`).join("")}</ul>`;
+      }
+      return `<p>${lines.join("<br>")}</p>`;
+    }).join("");
+  }
+
+  async function askAi(question) {
+    $("ai-answer-block").classList.remove("hidden");
+    $("ai-answer-card").innerHTML = `<p style="color:var(--muted);">Thinking…</p>`;
+    $("ai-answer-time").textContent = "";
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error("No active session");
+      const res = await fetch(AI_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": SUPABASE_ANON_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question,
+          pageKey: AI_PAGE_KEY,
+          pageContext: AI_CONTEXT_LABEL,
+          clientId: activeClient ? activeClient.id : undefined,
+          history: aiHistory,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || `Request failed (${res.status})`);
+      showAiAnswer(renderAiMarkup(data.answer));
+      aiHistory.push({ role: "user", content: question }, { role: "assistant", content: data.answer });
+      aiHistory = aiHistory.slice(-6);
+    } catch (err) {
+      console.error("Ask AI error:", err);
+      showAiAnswer(`<p>Sorry, I couldn't reach the AI service just now. Try again in a moment.</p>`);
+    }
+  }
+
+  function showAiAnswer(html) {
+    $("ai-answer-card").innerHTML = html;
+    $("ai-answer-block").classList.remove("hidden");
+    $("ai-answer-time").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  initAskAi();
+
+  function maybeShowAiNudge() {
+    if (localStorage.getItem("eg_ai_nudge_seen")) return;
+    localStorage.setItem("eg_ai_nudge_seen", "1");
+    setTimeout(() => {
+      const nudge = $("ai-nudge");
+      if (!nudge) return;
+      nudge.classList.remove("hidden");
+      const hide = () => nudge.classList.add("hidden");
+      $("ai-nudge-close").addEventListener("click", hide);
+      $("ask-ai-btn").addEventListener("click", hide, { once: true });
+      setTimeout(hide, 10000);
+    }, 900);
+  }
+
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 4000);
+  }
+
+  function recordRecent(client) {
+    let recents = [];
+    try { recents = JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]"); } catch { recents = []; }
+    recents = recents.filter((r) => r.id !== client.id);
+    recents.unshift({ id: client.id, name: client.name, slug: client.slug, viewedAt: Date.now() });
+    localStorage.setItem(RECENTS_KEY, JSON.stringify(recents.slice(0, 8)));
+  }
+
+  // ---------- Auth ----------
+  $("change-password-btn").addEventListener("click", () => {
+    location.href = "reset_password.html";
+  });
+
+  $("signout-btn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    redirectToLogin();
+  });
+
+  $("profile-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("profile-dropdown").classList.toggle("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!$("profile-wrap").contains(e.target)) $("profile-dropdown").classList.add("hidden");
+    if (!e.target.closest(".cc-more-wrap")) $("cc-more-menu").classList.add("hidden");
+  });
+
+  $("cc-more-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("cc-more-menu").classList.toggle("hidden");
+  });
+
+  async function afterSignIn(user) {
+    if (!user) return;
+
+    const clientId = new URLSearchParams(location.search).get("client");
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users").select("id, full_name, role, organization_id, email, phone").eq("id", user.id).single();
+
+    if (profileErr || !profile) {
+      await sb.auth.signOut();
+      redirectToLogin();
+      return;
+    }
+
+    currentUser = profile;
+    isSuperAdmin = profile.role === "super_admin";
+    $("loading-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+    maybeShowAiNudge();
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = roleLabel(profile.role);
+    showSignedInEmail();
+    // Application Links and the whole Invoicing menu are Admin-only
+    // (Greg, 9/6/26). Marked in the markup with data-super-admin-only so
+    // this one line covers every nav copy on the page, including the
+    // second header some pages render inside #not-admin-view.
+    document.querySelectorAll("[data-super-admin-only]").forEach((el) => el.classList.toggle("hidden", profile.role !== "super_admin"));
+
+    await Promise.all([
+      clientId ? loadClient(clientId) : Promise.resolve(),
+      loadUsers(),
+    ]);
+
+    if (!clientId) {
+      $("no-client-note").classList.remove("hidden");
+    }
+  }
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      afterSignIn(session.user);
+    } else {
+      redirectToLogin();
+    }
+  });
+
+  async function loadUsers() {
+    const [{ data, error }, { data: specialtyRows, error: specErr }, { data: nameRows }] = await Promise.all([
+      sb.from("users").select("id, full_name, role, email").eq("hidden_from_roster", false).order("full_name"),
+      sb.from("user_specialties").select("user_id, specialty"),
+      // Every account's name, hidden ones included. A duplicated name has to
+      // show its email even when only ONE of the duplicates is on the visible
+      // roster -- otherwise the picker offers a bare "Greg Gotcher" that is
+      // silently one of three logins, which is exactly how JLR ended up
+      // assigned to an account Greg never signs into (9/11/26).
+      // full_name only would not let us NAME a hidden assignee in the Person
+      // dropdown, so take id/role/email too (Greg, 9/16/26 -- the NCEG Admin
+      // house account is hidden and owns every Admin/QC row, and a select
+      // whose value matches no option silently displays "Not assigned").
+      sb.from("users").select("id, full_name, role, email"),
+    ]);
+    if (error) return;
+    allUsers = data;
+    // Choices stay filtered to the visible roster; DISPLAY has to cover
+    // everyone, which is the distinction this pair encodes.
+    allUsersIncludingHidden = nameRows || data;
+    nameCounts = {};
+    (nameRows || data).forEach((u) => {
+      const n = (u.full_name || "").trim();
+      if (n) nameCounts[n] = (nameCounts[n] || 0) + 1;
+    });
+    userSpecialties = {};
+    if (!specErr) {
+      (specialtyRows || []).forEach((r) => {
+        (userSpecialties[r.user_id] = userSpecialties[r.user_id] || []).push(r.specialty);
+      });
+    }
+    // Team & Hours may have already rendered with a stale/empty roster if
+    // this resolved after loadClient() -- re-render once names are in.
+    if (currentAssignments.length) renderTeamPane();
+  }
+
+  // ---------- Client ----------
+  async function loadClient(clientId) {
+    const { data: client, error } = await sb
+      .from("clients")
+      .select("*, econ_dev_companies(code, name, bill_admin_qc_upfront)")
+      .eq("id", clientId)
+      .single();
+
+    if (error || !client) {
+      showBanner("Couldn't load that client.", "error");
+      $("no-client-note").classList.remove("hidden");
+      return;
+    }
+
+    activeClient = client;
+    recordRecent(client);
+    document.title = `EG Dashboard — ${client.name}`;
+    $("ccc-content").classList.remove("hidden");
+
+    AI_CONTEXT_LABEL = `${client.name} — Engagement Workspace`;
+    renderStatusAge(client);
+
+    const partner = client.econ_dev_companies;
+    $("cm-name").textContent = client.name;
+    const _bcC = document.getElementById("bc-client"); if (_bcC) _bcC.textContent = client.name;
+    // Podio-style breadcrumb (Chris, 9/4/26): Program (workspace) ›
+    // Engagements (app) › Engagement Workspace (this page) › Client (item).
+    // (Greg, 9/5/26: added the "Engagement Workspace" crumb so the trail
+    // names which page/section this is, not just which app + client.)
+    const _bcP = document.getElementById("bc-program");
+    if (_bcP && partner) {
+      _bcP.textContent = partner.name;
+      document.getElementById("bc-program-sep")?.classList.remove("hidden");
+    }
+    // Greg (8/30/26): swapped the 🏢 emoji (renders differently -- and
+    // more colorfully -- across platforms) for a plain-line SVG icon that
+    // matches the nav's icon style, per the reference screenshot.
+    $("cm-program").innerHTML = `
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="4" y="3" width="10" height="18"></rect>
+        <rect x="14" y="9" width="6" height="12"></rect>
+        <line x1="7" y1="7" x2="7" y2="7.01"></line>
+        <line x1="11" y1="7" x2="11" y2="7.01"></line>
+        <line x1="7" y1="11" x2="7" y2="11.01"></line>
+        <line x1="11" y1="11" x2="11" y2="11.01"></line>
+        <line x1="7" y1="15" x2="7" y2="15.01"></line>
+        <line x1="11" y1="15" x2="11" y2="15.01"></line>
+      </svg>
+    `;
+    const programText = document.createElement("span");
+    programText.textContent = `Partner: ${partner ? partner.name : "—"}`;
+    $("cm-program").append(programText);
+
+    const { data: assignRows } = await sb
+      .from("client_assignments")
+      .select("is_team_lead, user_id, specialty_type, users(full_name, email)")
+      .eq("client_id", client.id)
+      .not("user_id", "is", null);
+    let teamLead = null;
+    teamLeadContact = null;
+    for (const r of assignRows || []) {
+      if (r.is_team_lead && r.users && r.users.full_name) {
+        teamLead = r.users.full_name;
+        teamLeadContact = { name: r.users.full_name, email: r.users.email || "" };
+        break;
+      }
+    }
+    $("cm-team-lead").textContent = `Team Lead: ${teamLead || "—"}`;
+    isTeamLeadHere = (assignRows || []).some((r) => r.is_team_lead && r.user_id === currentUser.id);
+    renderMyRoleHere(assignRows || []);
+    renderStatusToggle(client);
+
+    renderNav(client);
+
+    await loadAssignments();
+    renderTeamPane();
+  }
+
+  // ---------- Left nav ----------
+  // Every item swaps in place inside this one page now (Greg, 8/30/26 --
+  // "make each left column topic display in the right column instead of
+  // opening a new page"). Team & Hours is the one native pane built into
+  // this file. Add Research, Client Info (client_profile.html), and Client
+  // Dashboard reuse the existing pages wholesale via a single shared
+  // iframe pane (?embed=1 hides that page's own masthead so it doesn't
+  // show two navy headers stacked on top of each other) -- this avoids
+  // re-implementing three large, already-working pages just to get the
+  // "never leaves this screen" feel. Resource Vault (TL) used to be its
+  // own pane here too, until it moved onto Client Info as its Info Wizard
+  // step 6, "Resources" (Greg, 9/5/26).
+  const IFRAME_PANE_KEYS = ["research", "setup", "workflow", "dashboard", "application"];
+  // Tracks which pane key's page is currently sitting in the one shared
+  // iframe -- NOT "has this pane ever been loaded". Bug (Greg, 8/31/26):
+  // this used to be a per-key "loaded once" flag, so after visiting e.g.
+  // Client Dashboard and then clicking back to Add Research, the code saw
+  // "research" was already marked loaded (from earlier in the session) and
+  // skipped setting a new src -- leaving the Client Dashboard's markup
+  // sitting in the shared iframe under the Add Research tab. Since all
+  // four panes reuse the same <iframe>, every switch between two different
+  // iframe panes has to re-point src; only re-visiting the SAME pane twice
+  // in a row (without leaving it) can skip the reload.
+  let ccIframeCurrentKey = null;
+  // Which of the 4 Documents sub-items is currently loaded in the shared
+  // iframe (Greg, 8/31/26). The group itself is always expanded now
+  // (Greg, 9/4/26: "just show the documents", no collapse step first).
+  let activeDocKey = null;
+  const DOC_GROUP_ITEMS = [
+    { key: "discovery", label: "Discovery Document" },
+    { key: "controlling", label: "Controlling Document" },
+    { key: "review", label: "Research Review" },
+    { key: "eval", label: "Close-Out Document" },
+  ];
+
+  function navIconSvg(key) {
+    const icons = {
+      team: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+      research: '<circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>',
+      setup: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+      dashboard: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/>',
+      // Added 9/5/26 for the document/workflow rows, per Chris's reference
+      // mockup (every nav row gets an icon, not just the top-level ones).
+      application: '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>',
+      discovery: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+      controlling: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+      review: '<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>',
+      eval: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 17.01"/>',
+    };
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[key] || ""}</svg>`;
+  }
+
+  let navItems = [];
+  function renderNav(client) {
+    const dashboardHref = client.slug ? new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href : null;
+    navItems = [
+      // Greg (9/5/26), per Chris's reference mockup: dropped the
+      // "Engagement Workspace" section label that used to sit above Team &
+      // Hours -- that top group (Team & Hours + View Application) is
+      // unlabeled now, same as the mockup shows.
+      { key: "team", label: "Team & Hours" },
+      // Greg (9/5/26), per Chris's notes: "Add Research" moved out of its
+      // own top-level row and into the flat Application/Documents list,
+      // between Controlling Document and Research Review -- it's a "key
+      // item" of the engagement workspace same as those, not a separate
+      // section. Kept here (hidden: true, no section) purely so
+      // setActivePane can still find its src by key; renderNav below
+      // injects its actual row inline inside the "workflow" group's list.
+      { key: "research", label: "Add Research", src: `client_research.html?client=${client.id}&embed=1`, hidden: true },
+      // Greg (9/6/26): "make view application fit into the right column
+      // instead of opening another window." Same hidden-pane trick as Add
+      // Research above -- listed here only so setActivePane can resolve the
+      // src; renderNav injects the row itself up in the top group.
+      { key: "application", label: "View Application", src: `client_applications.html?client=${client.id}&embed=1`, hidden: true },
+      {
+        key: "workflow", label: "Documents", group: true,
+        docs: DOC_GROUP_ITEMS.map((d) => ({ ...d, src: `client_workflow_files.html?client=${client.id}&embed=1&doc=${d.key}` })),
+      },
+      { key: "setup", label: "Client Info", section: "Setup & Sharing", src: `client_profile.html?client=${client.id}&embed=1` },
+      { key: "dashboard", label: "Client Dashboard", section: "Setup & Sharing", src: dashboardHref, disabled: !dashboardHref },
+    ];
+    // Greg (9/5/26), per Chris's reference mockup: small badge + "Engagement
+    // Workspace" / client-name header above the nav list itself (text only,
+    // no logo image asset -- see .cc-nav-header CSS above).
+    const navHeaderHtml = `
+      <div class="cc-nav-header">
+        <div class="cc-nav-header-badge"><img src="eg-workspace-logo.png" alt=""></div>
+        <div class="cc-nav-header-text">
+          <div class="cc-nav-header-title">Engagement<br>Workspace</div>
+        </div>
+      </div>
+    `;
+    let _navSection = null;
+    $("cc-nav").innerHTML = navHeaderHtml + navItems.map((item) => {
+      if (item.hidden) return ""; // rendered inline elsewhere (see "workflow" group below)
+      let secHtml = "";
+      if (item.section && item.section !== _navSection) {
+        _navSection = item.section;
+        secHtml = `<div class="cc-nav-section">${item.section}</div>`;
+      }
+      if (item.group) {
+        // Greg (9/4/26): "remove the documents dropdown and just show the
+        // documents" -- the 4 names are always visible now, no
+        // expand/collapse click needed first. "View Application" (was a
+        // separate breadcrumb link up top) is the first row here, since
+        // "top of the documents list" is exactly what it is: the source
+        // application this engagement was created from.
+        // Greg (9/5/26): "remove Documents. it adds no value." -- the
+        // group's own label row is gone; the rows just sit directly under
+        // the section like the other nav items.
+        // Greg (9/5/26), per Chris's mockup: a plain "Workflow" caption is
+        // back, but only above the document rows -- View Application stays
+        // grouped with Team & Hours above it, unlabeled. "Add Research"
+        // (the hidden navItems entry above) is spliced in right after
+        // Controlling Document, ahead of Research Review -- order is now
+        // Application, Discovery, Controlling, Add Research, Research
+        // Review, Close-Out. Every row now gets an icon too.
+        const researchRow = `<button type="button" class="cc-nav-subbtn" data-pane="research">${navIconSvg("research")}<span>Add Research</span></button>`;
+        // Was an <a> out to client_applications.html with a chevron marking
+        // it as a trip off-page; it's a pane now, so it's a button like every
+        // other nav row and the chevron went with the new window (Greg,
+        // 9/6/26).
+        const subHtml = `<button type="button" class="cc-nav-subbtn" data-pane="application">${navIconSvg("application")}<span>View Application</span></button>` +
+          `<div class="cc-nav-section">Workflow</div>` +
+          item.docs.map((d) => `
+            <button type="button" class="cc-nav-subbtn" data-pane="${item.key}" data-doc="${d.key}">${navIconSvg(d.key)}<span>${d.label}</span></button>
+          ` + (d.key === "controlling" ? researchRow : "")).join("");
+        return secHtml + `
+          <div class="cc-nav-group">
+            <div class="cc-nav-sub" id="cc-nav-sub-${item.key}">${subHtml}</div>
+          </div>
+        `;
+      }
+      return secHtml + `<button type="button" class="cc-nav-btn" data-pane="${item.key}" ${item.disabled ? 'style="opacity:0.5;" disabled' : ""}>${navIconSvg(item.key)}<span>${item.label}</span></button>`;
+    }).join("");
+    $("cc-nav").querySelectorAll(".cc-nav-btn").forEach((btn) => {
+      btn.addEventListener("click", () => setActivePane(btn.dataset.pane));
+    });
+    $("cc-nav").querySelectorAll(".cc-nav-subbtn[data-pane]").forEach((btn) => {
+      btn.addEventListener("click", () => setActivePane(btn.dataset.pane, btn.dataset.doc));
+    });
+    ccIframeCurrentKey = null;
+    setActivePane(activePane, activeDocKey);
+  }
+
+  // Data-heavy panes get a few extra pixels back from the nav column --
+  // right now that's just Client Info, whose Info Wizard has CSV
+  // tables/forms that were designed assuming full browser width (Greg,
+  // 8/30/26).
+  const WIDE_WORKSPACE_PANE_KEYS = ["setup"];
+
+  function setActivePane(key, docKey) {
+    activePane = key;
+    activeDocKey = key === "workflow" ? (docKey || activeDocKey || "discovery") : activeDocKey;
+    $("cc-nav").querySelectorAll(".cc-nav-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.pane === key);
+    });
+    $("cc-nav").querySelectorAll(".cc-nav-subbtn[data-pane]").forEach((btn) => {
+      // Two kinds of subbtn live in this list. The document rows rotate a
+      // single "workflow" pane and identify themselves by data-doc, so they
+      // match on the doc key. "Add Research" and "View Application" are
+      // ordinary panes that just happen to be rendered as sub-rows, so they
+      // match on the pane key alone -- keyed off the absence of data-doc
+      // rather than a growing list of names (Greg, 9/6/26).
+      btn.classList.toggle("active", btn.dataset.doc
+        ? (key === "workflow" && btn.dataset.doc === activeDocKey)
+        : btn.dataset.pane === key);
+    });
+    $("cc-pane-team").classList.toggle("hidden", key !== "team");
+    document.querySelector(".cc-shell").classList.toggle("wide-workspace", WIDE_WORKSPACE_PANE_KEYS.includes(key));
+    $("cm-wizard-hint").classList.toggle("hidden", key !== "setup");
+    $("cm-research-hint").classList.toggle("hidden", key !== "research");
+    syncNotesColumn();
+    refreshDelayNoteVisibility();
+
+    // Client Dashboard is the one nav item that's a real, client-facing
+    // page (the same URL a client would be sent) rather than an internal
+    // tool -- so on that tab only, offer a link to open it in its own
+    // browser tab instead of the embedded iframe here (Greg, 8/31/26).
+    const openBrowserBtn = $("cc-open-browser-btn");
+    const dashboardItem = navItems.find((n) => n.key === "dashboard");
+    if (key === "dashboard" && dashboardItem && dashboardItem.src) {
+      openBrowserBtn.href = dashboardItem.src;
+      openBrowserBtn.classList.remove("hidden");
+    } else {
+      openBrowserBtn.classList.add("hidden");
+    }
+
+    const isIframePane = IFRAME_PANE_KEYS.includes(key);
+    $("cc-pane-iframe").classList.toggle("hidden", !isIframePane);
+    if (isIframePane) {
+      const item = navItems.find((n) => n.key === key);
+      // The "Documents" group has 4 srcs (one per doc, each landing on a
+      // different row of the same page) instead of one -- everything else
+      // still has a single src. Its reload-identity includes the doc key
+      // too, so switching between Discovery/Controlling/etc. always
+      // re-points the iframe even though the pane key ("workflow") itself
+      // hasn't changed.
+      const src = item && item.group ? (item.docs.find((d) => d.key === activeDocKey) || item.docs[0]).src : item && item.src;
+      const iframeIdentity = item && item.group ? `workflow:${activeDocKey}` : key;
+      if (src) {
+        if (ccIframeCurrentKey !== iframeIdentity) {
+          $("cc-iframe").src = src;
+          ccIframeCurrentKey = iframeIdentity;
+        }
+      } else {
+        $("cc-iframe").removeAttribute("src");
+        ccIframeCurrentKey = null;
+      }
+    }
+  }
+
+  // ---------- Iframe auto-height (single scrollbar, not two) ----------
+  // The embedded pages used to sit in a fixed-height (74vh) iframe, so
+  // whenever their content ran taller than that, the iframe grew its own
+  // internal scrollbar *in addition to* the outer page's scrollbar --
+  // exactly the "which box am I scrolling" confusion Greg called out.
+  // Since these are same-origin embeds (?embed=1, not a different site),
+  // we can read the embedded document's real height and grow the iframe
+  // to match, so there's only ever the one, familiar browser scrollbar.
+  // Greg (8/30/26, round 4): a table wider than its container can trigger
+  // a horizontal scrollbar that appears/disappears by a pixel or two as
+  // the browser reflows -- each toggle nudges scrollHeight, which fired
+  // this same ResizeObserver again, which measured again, which could
+  // toggle it back -- a visible "shaking" loop on the outer page's own
+  // scrollbar. Two guards against that: only ever apply a height change
+  // bigger than 2px (so sub-pixel reflow noise doesn't round-trip), and
+  // debounce every observer tick through one animation frame so a burst
+  // of rapid-fire mutations collapses into a single measurement instead
+  // of chasing each other.
+  // Greg (8/31/26): "still there, maybe longer than ever" -- two attempted
+  // fixes so far (the wizard-bottom-bar margin, then collapsing the iframe
+  // to 0px before measuring) didn't fix it and the second one made it
+  // worse. Root cause, precisely: `documentElement.scrollHeight` (the
+  // iframe's own <html> element) is special-cased by every browser to
+  // never read shorter than the iframe's OWN current rendered height --
+  // the root element's scrolling area is defined as *the greater of* the
+  // viewport size and the content size, not just the content size. Once a
+  // tall step (a big table) pushed the iframe to e.g. 1400px, that floor
+  // meant `documentElement.scrollHeight` reported >= 1400px forever after,
+  // no matter how short a later step's real content was -- and because
+  // the old code took Math.max(documentElement.scrollHeight, ...), that
+  // floor always won. The collapse-to-0px attempt tried to defeat the
+  // floor by zeroing the viewport first, but forcing a 0-height iframe
+  // triggers its own layout quirks with position:sticky descendants (the
+  // wizard-bottom-bar), which is what made things worse.
+  // The actual fix needs no trick: `<body>` (unlike `<html>`) is a normal
+  // block box with no such viewport-floor special case, so measuring only
+  // body's own rendered height -- and dropping documentElement.scrollHeight
+  // from the calculation entirely -- reports the page's true content
+  // height and shrinks correctly on every step.
+  // Greg (8/31/26, round 5): scrollbar-gutter:stable (see the html rule
+  // near the top of this file) and a bigger >4px threshold still didn't
+  // stop it on Resource Vault specifically -- confirmed live that the real
+  // problem is a genuine feedback loop, not sub-pixel noise: resizing the
+  // iframe can itself change what the NEXT measurement reads (e.g. a table
+  // a few pixels too wide for its pane toggles its own horizontal
+  // scrollbar, which changes body's height, which resizes the iframe,
+  // which can flip the table's available width back), and a single
+  // rAF-per-tick can chase that indefinitely, repainting a visibly
+  // different height every cycle. Rather than reason about that specific
+  // trigger again, this is now debounce-and-confirm instead of measure-
+  // and-apply: every trigger waits 140ms of quiet, then takes ONE
+  // measurement and holds it without touching the iframe; only if the
+  // *next* measurement, another 140ms later, agrees with the held one
+  // (within 4px) does it actually get applied. A real content change
+  // (switching wizard steps, adding a row) settles instantly and clears
+  // this in one extra beat. A genuine oscillation between two heights, by
+  // definition, never reads the same value twice in a row -- so it can
+  // never produce the "confirmed" reading this requires, and the iframe
+  // simply holds still at its last good height instead of visibly
+  // chasing the loop.
+  // Greg (8/31/26, round 8): "that stopped it on step 5, now it's doing it
+  // on step 4???" -- round 7's fix (round every reading to a fixed 32px
+  // bucket, only apply when two readings land in the SAME bucket) didn't
+  // actually remove the failure mode, it just relocated it: that logic
+  // still compares each new reading to the PREVIOUS reading, so a value
+  // that happens to hover right at a bucket boundary for a GIVEN step's
+  // particular content height can still alternate between two adjacent
+  // buckets forever on that step, while a step whose content sits further
+  // from any boundary looks perfectly stable. Fixing step 5 just meant its
+  // real height didn't happen to sit near an edge; step 4's did.
+  // Real fix: stop comparing reading-to-reading (a moving, transient
+  // target) and compare instead to the height ALREADY ON SCREEN (a fixed,
+  // stable anchor that only moves when we deliberately move it). Any new
+  // reading within CC_IFRAME_HEIGHT_DEADBAND px of the current anchor is
+  // ignored completely, full stop -- it's never even stored as a
+  // "candidate," so there's no edge for it to hover near or alternate
+  // across, no matter how many times it repeats or which two values land
+  // next to each other. The anchor only moves for a genuinely large change
+  // (>28px), and even then only once confirmed by a second reading within
+  // 28px of that first candidate, 200ms later.
+  const CC_IFRAME_HEIGHT_DEADBAND = 28;
+  let ccIframeResizeObserver = null;
+  let ccIframeSettleTimer = null;
+  let ccIframeLastHeight = 0;
+  let ccIframePendingHeight = null;
+  function ccMeasureAndMaybeApplyHeight() {
+    ccIframeSettleTimer = null;
+    const iframe = $("cc-iframe");
+    try {
+      const doc = iframe.contentDocument;
+      if (!doc || !doc.body) return;
+      // 120px floor: just enough to avoid a zero-height flash while a
+      // pane's real content is still loading, not a "typical page" floor
+      // (Greg, 8/31/26: "remove this unneeded box below each of the
+      // document sections" -- short panes should actually get short).
+      const h = Math.round(Math.max(doc.body.scrollHeight, doc.body.getBoundingClientRect().height, 120));
+
+      // Anything within the deadband of what's already showing is ignored
+      // outright -- no pending candidate, no scheduled recheck, nothing
+      // for a future tick to compare against. This is what actually stops
+      // the whack-a-mole: the reference point is fixed, not the last
+      // transient reading.
+      if (Math.abs(h - ccIframeLastHeight) <= CC_IFRAME_HEIGHT_DEADBAND) {
+        ccIframePendingHeight = null;
+      } else if (ccIframePendingHeight !== null && Math.abs(h - ccIframePendingHeight) <= CC_IFRAME_HEIGHT_DEADBAND) {
+        ccIframeLastHeight = h;
+        iframe.style.height = `${h}px`;
+        ccIframePendingHeight = null;
+      } else {
+        ccIframePendingHeight = h;
+        ccIframeSettleTimer = setTimeout(ccMeasureAndMaybeApplyHeight, 200);
+      }
+
+      if (!ccIframeResizeObserver && window.ResizeObserver) {
+        ccIframeResizeObserver = new ResizeObserver(() => fitIframeToContent());
+        ccIframeResizeObserver.observe(doc.body);
+      }
+    } catch (e) {
+      // Cross-origin or not-yet-loaded -- fall back to the CSS min-height.
+    }
+  }
+  function fitIframeToContent() {
+    if (ccIframeSettleTimer) clearTimeout(ccIframeSettleTimer);
+    ccIframeSettleTimer = setTimeout(ccMeasureAndMaybeApplyHeight, 200);
+  }
+  $("cc-iframe").addEventListener("load", () => {
+    if (ccIframeResizeObserver) { ccIframeResizeObserver.disconnect(); ccIframeResizeObserver = null; }
+    ccIframeLastHeight = 0;
+    ccIframePendingHeight = null;
+    fitIframeToContent();
+  });
+  // Belt-and-suspenders (Greg, 8/31/26): the ResizeObserver above watches
+  // the embedded page's own body, which covers content changes (switching
+  // wizard steps, adding a row). It should also cover the outer browser
+  // window being resized -- that changes #cc-iframe's own width, which
+  // reflows the embedded body too -- but iframe-driven width changes
+  // triggered from outside don't always fire that observer promptly.
+  // Listening for the outer window's own resize directly is a second,
+  // independent path to the same fitIframeToContent() call, so a real
+  // window resize always gets picked up even if the observer doesn't fire.
+  window.addEventListener("resize", () => fitIframeToContent());
+
+  // ---------- Status control (Admin / Team Lead can change it here) ----------
+  function renderStatusToggle(client) {
+    const canEdit = isSuperAdmin || isTeamLeadHere;
+    if (!canEdit) {
+      $("cm-status-toggle").classList.add("hidden");
+      // Greg (9/6/26): "remove in progress it is redundant." The read-only
+      // badge stays hidden -- the status dot beside it already carries the
+      // state (and spells it out on hover), and for anyone who can change
+      // the status the segmented control below shows it anyway. The element
+      // and its className/textContent wiring are left in place so this is a
+      // one-line revert rather than a re-build.
+      $("cm-status-badge").classList.add("hidden");
+      $("cm-status-badge").className = `badge badge-${client.project_status}`;
+      $("cm-status-badge").textContent = PROJECT_STATUS_LABELS[client.project_status] || client.project_status;
+      return;
+    }
+    $("cm-status-badge").classList.add("hidden");
+    const toggle = $("cm-status-toggle");
+    toggle.classList.remove("hidden");
+    toggle.innerHTML = PROJECT_STATUSES.map((s) => `
+      <button type="button" data-pstatus="${s}" class="status-pill status-pill-${s} ${s === client.project_status ? "active" : ""}">${PROJECT_STATUS_LABELS[s]}</button>
+    `).join("");
+    toggle.querySelectorAll("button").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const newStatus = btn.dataset.pstatus;
+        if (newStatus === activeClient.project_status) return;
+        toggle.querySelectorAll("button").forEach((b) => (b.disabled = true));
+        const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", activeClient.id);
+        if (error) {
+          showBanner("Couldn't update status: " + error.message, "error");
+          toggle.querySelectorAll("button").forEach((b) => (b.disabled = false));
+          return;
+        }
+        activeClient.project_status = newStatus;
+        showBanner("Status updated.", "success");
+        renderStatusToggle(activeClient);
+        renderStatusAge(activeClient);
+      });
+    });
+  }
+
+  function daysSince(iso) {
+    if (!iso) return 0;
+    return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24)));
+  }
+  function statusAgeTier(days) {
+    if (days >= 60) return "red";
+    if (days >= 30) return "yellow";
+    return "green";
+  }
+
+  // Greg (8/30/26): show this box the whole time an engagement is In
+  // Progress, not just once it's overdue -- it replaces the Next Step
+  // banner in that spot on the page. The reason field and Save button stay
+  // available from day one; only the label and tint change once it tips
+  // into the 60+ day "Overdue" tier. (This box was briefly dropped in
+  // favor of just the status dot's tooltip, then restored 8/30/26 -- Greg
+  // still wants the always-visible label plus the delay-reason note and
+  // the Super Admin date-correction control.)
+  function renderStatusAge(client) {
+    const dot = $("cm-status-dot");
+    const note = $("cm-delay-note");
+    if (client.project_status !== "in_progress") {
+      dot.classList.add("hidden");
+      delayNoteApplicable = false;
+      refreshDelayNoteVisibility();
+      return;
+    }
+    const anchor = client.first_in_progress_at || client.status_since;
+    const days = daysSince(anchor);
+    const tier = statusAgeTier(days);
+    // Greg (8/30/26): simple day count + a plain-language status word --
+    // "On schedule" through day 59, "Overdue" from day 60 on (the same
+    // 60-day line statusAgeTier() already draws for the red tier).
+    const dayWord = `${days} day${days === 1 ? "" : "s"}`;
+    dot.classList.remove("hidden");
+    dot.className = `status-dot status-dot-${tier}`;
+    // The dot is shown for every role again (Greg, 9/6/26: "put the In
+    // Progress dot back in the header"). It was briefly hidden for read-only
+    // viewers when the "In Progress" badge was removed, on the grounds that
+    // an unlabelled circle says little -- its title attribute spells out the
+    // status and day count on hover.
+    delayNoteApplicable = true;
+    refreshDelayNoteVisibility();
+    // Greg (8/30/26): the reason textarea + Save button only make sense
+    // once something's actually gone wrong -- On Schedule just shows the
+    // day-count label, and the box to explain the delay only appears once
+    // the engagement tips into the 60+ day "Overdue" tier.
+    // The textarea lives inside #cm-delay-actions now (same row as Save), so
+    // the row is the only thing that needs toggling -- hiding the textarea
+    // separately would leave an empty row with a lone Save button in it.
+    $("cm-delay-actions").classList.toggle("hidden", tier !== "red");
+    // Greg (9/6/26): "move On Schedule to the second line under In Progress
+    // for 26 days." The status word wrapped mid-phrase at this column width
+    // ("... for 26 days: On" / "Schedule"), so it gets the sub line of its
+    // own instead -- the same line the Overdue tier uses for its question.
+    // Shown on both tiers now, not just Overdue.
+    $("cm-delay-note-sub").classList.remove("hidden");
+    if (tier !== "red") {
+      dot.title = `In Progress for ${dayWord} — On Schedule`;
+      note.classList.remove("tier-amber", "tier-red");
+      $("cm-delay-note-label").textContent = `In Progress for ${dayWord}`;
+      $("cm-delay-note-sub").textContent = "On Schedule";
+    } else {
+      dot.title = `In Progress for ${dayWord} — Overdue`;
+      note.classList.remove("tier-amber");
+      note.classList.add("tier-red");
+      $("cm-delay-note-label").textContent = `In Progress for ${dayWord}: Overdue`;
+      $("cm-delay-note-sub").textContent = "Why is it taking longer than expected?";
+    }
+    $("cm-delay-reason").value = client.delay_reason || "";
+    $("cm-delay-saved").style.display = "none";
+
+    // Super Admin only -- lets Greg correct first_in_progress_at by hand
+    // when it's been wrong (e.g. a seeded/test client whose original entry
+    // date was never captured, or a data gap from before 096_fix_first_in_
+    // progress_at_on_insert.sql closed the insert-path hole). The trigger
+    // fix stops this from happening to NEW rows going forward; this is the
+    // manual escape hatch for rows already affected.
+    $("cm-fix-date-btn").classList.toggle("hidden", !isSuperAdmin);
+    $("cm-fix-date-row").classList.add("hidden");
+  }
+
+  $("cm-fix-date-btn").addEventListener("click", () => {
+    if (!activeClient) return;
+    const current = activeClient.first_in_progress_at || activeClient.status_since;
+    $("cm-fix-date-input").value = current ? new Date(current).toISOString().slice(0, 10) : "";
+    $("cm-fix-date-row").classList.remove("hidden");
+  });
+  $("cm-fix-date-cancel").addEventListener("click", () => {
+    $("cm-fix-date-row").classList.add("hidden");
+  });
+  $("cm-fix-date-save").addEventListener("click", async () => {
+    if (!activeClient) return;
+    const val = $("cm-fix-date-input").value;
+    if (!val) { showBanner("Pick a date first.", "error"); return; }
+    const btn = $("cm-fix-date-save");
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    const { error } = await sb.from("clients").update({ first_in_progress_at: val }).eq("id", activeClient.id);
+    btn.disabled = false;
+    btn.textContent = "Save date";
+    if (error) {
+      showBanner("Couldn't save that date: " + error.message, "error");
+      return;
+    }
+    activeClient.first_in_progress_at = val;
+    $("cm-fix-date-row").classList.add("hidden");
+    showBanner("In Progress date corrected.", "success");
+    renderStatusAge(activeClient);
+  });
+
+  // ---------- Standardized Print/Export toolbar ----------
+  // Greg (8/30/26, round 5): the global search box that used to live here
+  // is gone -- this page doesn't need it -- so the global-search-index
+  // load and the search-results dropdown it drove are gone too.
+  function csvField(value) {
+    const v = value == null ? "" : String(value);
+    return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  }
+  function downloadCsv(filename, rows) {
+    const csv = rows.map((r) => r.map(csvField).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  $("std-print-btn").addEventListener("click", () => { window.print(); });
+  $("std-export-btn").addEventListener("click", () => {
+    $("cc-more-menu").classList.add("hidden");
+    if (!activeClient || !currentAssignments.length) {
+      showBanner("Open an engagement first to export its team & hours.", "error");
+      return;
+    }
+    const rows = [["Work Area", "Person", "Budget Hours", "Hours Used"]];
+    for (const r of currentAssignments) {
+      const person = usersById()[r.user_id];
+      rows.push([SPECIALTY_LABELS[r.specialty_type] || r.specialty_type, person ? person.full_name : "Not assigned", r.hours_allotted, r.hoursSpent]);
+    }
+    downloadCsv(`${activeClient.name.replace(/[^a-z0-9]+/gi, "-")}-team-hours-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  });
+
+  $("cm-delay-save").addEventListener("click", async () => {
+    if (!activeClient) return;
+    const reason = $("cm-delay-reason").value.trim();
+    const btn = $("cm-delay-save");
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    const { error } = await sb.from("clients").update({ delay_reason: reason || null }).eq("id", activeClient.id);
+    btn.disabled = false;
+    btn.textContent = "Save";
+    if (error) {
+      showBanner("Couldn't save that note: " + error.message, "error");
+      return;
+    }
+    activeClient.delay_reason = reason || null;
+    $("cm-delay-saved").style.display = "inline";
+  });
+
+  // ---------- Team & Hours (ported from client_workspace.html's
+  // Assignments & Hours page, Greg 8/30/26 redesign) ----------
+  const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+  function isSunkCostSpecialty(specialtyType, client) {
+    if (!SUNK_COST_SPECIALTIES.includes(specialtyType)) return false;
+    const partner = client && client.econ_dev_companies;
+    return !partner || partner.bill_admin_qc_upfront !== false;
+  }
+
+  const FIXED_SLOTS = [
+    ["team_lead", 1], ["market_research", 1], ["digital_marketing", 1],
+    ["gis", 1], ["watering_holes", 1], ["admin", 1], ["quality_control", 1],
+  ];
+  function fixedSlotIndex(specialty, slot) {
+    return FIXED_SLOTS.findIndex(([s, n]) => s === specialty && n === slot);
+  }
+  function sortedAssignments() {
+    return [...currentAssignments].sort((a, b) => {
+      const ia = fixedSlotIndex(a.specialty_type, a.slot_number);
+      const ib = fixedSlotIndex(b.specialty_type, b.slot_number);
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+      return a.specialty_type.localeCompare(b.specialty_type) || a.slot_number - b.slot_number;
+    });
+  }
+  function specialtyOptionsHtml() {
+    const opts = [
+      ["team_lead", "Team Lead"], ["market_research", "Market Research"], ["digital_marketing", "Digital Marketing"], ["gis", "GIS"],
+      ["watering_holes", "Watering Holes"], ["admin", "Admin"], ["quality_control", "Quality Control"],
+    ];
+    return '<option value="">Select…</option>' + opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+  }
+  // A shorter label just for the Person dropdown in the Team & Hours table
+  // -- the row's own Work Area column already says "Team Lead"/"Digital
+  // Marketing"/etc., so repeating the person's full specialty list here
+  // (as userLabel() does everywhere else) just eats width for no new
+  // information (Greg, 8/30/26). Name collisions fall back to email
+  // instead, since every option in this one dropdown shares the same work
+  // area anyway and specialty text wouldn't disambiguate them.
+  function consultantOptionLabel(u) {
+    if (!u) return "";
+    const collides = (nameCounts[(u.full_name || "").trim()] || 0) > 1;
+    if (!collides) return u.full_name;
+    return u.email ? `${u.full_name} (${u.email})` : `${u.full_name} — ${specialtyDescriptor(u)}`;
+  }
+  function consultantOptionsHtml(selectedId) {
+    // The pick list is the visible roster. But if this row is already held by
+    // somebody hidden -- the NCEG Admin house account on Admin/QC, or one of
+    // the hidden admins -- that person has to appear too, or the select falls
+    // back to its first option and the row reads "Not assigned" while the
+    // database says otherwise. Offer them, but only because they are already
+    // on the row: nobody can PICK a hidden account from here.
+    let options = allUsers;
+    if (selectedId && !allUsers.some((u) => u.id === selectedId)) {
+      const held = allUsersIncludingHidden.find((u) => u.id === selectedId);
+      if (held) options = [...allUsers, held];
+    }
+    return '<option value="">Not assigned</option>' + options.map((u) => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${escapeHtml(consultantOptionLabel(u))}</option>`).join("");
+  }
+
+  async function loadAssignments() {
+    const { data: rows, error } = await sb
+      .from("client_assignments")
+      .select("*")
+      .eq("client_id", activeClient.id)
+      .order("specialty_type")
+      .order("slot_number");
+    if (error) { showBanner("Couldn't load team & hours: " + error.message, "error"); return; }
+
+    let hoursByAssignment = {};
+    const ids = rows.map((r) => r.id);
+    if (ids.length) {
+      const { data: entries, error: tErr } = await sb.from("time_entries").select("assignment_id, hours").in("assignment_id", ids);
+      if (!tErr) for (const e of entries) hoursByAssignment[e.assignment_id] = (hoursByAssignment[e.assignment_id] || 0) + Number(e.hours);
+    }
+    currentAssignments = rows.map((r) => ({
+      ...r,
+      hoursSpent: isSunkCostSpecialty(r.specialty_type, activeClient) ? Number(r.hours_allotted) : (hoursByAssignment[r.id] || 0),
+    }));
+    isTeamLeadHere = isTeamLeadHere || currentAssignments.some((r) => r.user_id === currentUser.id && r.is_team_lead);
+  }
+
+  // "Your role here" -- the single line that would have saved Greg an hour on
+  // 9/11/26. He has three logins sharing one name; the header role pill named
+  // the account type but nothing said whether THIS login was on THIS
+  // engagement's team, which is what governs the edit controls below.
+  let teamLeadContact = null;
+  function renderMyRoleHere(assignRows) {
+    const el = $("cm-my-role");
+    if (!el) return;
+    const mine = assignRows.filter((r) => r.user_id === currentUser.id);
+    const labels = mine.map((r) => SPECIALTY_LABELS[r.specialty_type] || r.specialty_type);
+    el.classList.remove("is-off-team", "hidden");
+
+    if (mine.length) {
+      // The case this was built for: which hat am I wearing HERE.
+      el.textContent = `You here: ${[...new Set(labels)].join(", ")}`;
+      return;
+    }
+
+    if (isSuperAdmin) {
+      // Greg (9/14/26): "this seems like a very strange statement. do we
+      // really need anything in the highlighted area?" No. It used to read
+      // "You here: Super Admin (not on this team)", which announces a
+      // limitation that does not exist -- an Admin can already do everything
+      // on every engagement, so nothing about the page changes because of it.
+      // The chip earns its space when you hold a real role here (above) or
+      // when missing controls need explaining (below); for an Admin passing
+      // through it is noise, so it is not rendered at all.
+      el.textContent = "";
+      el.classList.add("hidden");
+      return;
+    }
+
+    // Worth saying: this is the line that explains why the edit controls
+    // below are missing for a specialist who isn't on this engagement.
+    el.textContent = "You here: not on this engagement's team";
+    el.classList.add("is-off-team");
+  }
+
+  function renderTeamPane() {
+    const c = activeClient;
+    if (!c) return;
+    const editable = c.project_status !== "on_hold" && c.project_status !== "closed";
+    const canManage = isSuperAdmin || (isTeamLeadHere && editable);
+
+    $("tw-summary-error").style.display = "none";
+    $("tw-add-row-btn").classList.toggle("hidden", !canManage);
+    $("tw-actions-header").classList.toggle("hidden", !canManage);
+    renderManageNote(canManage, editable);
+
+    renderTeamTable(canManage);
+    recalcTeamStats();
+  }
+
+  // When the assignment controls aren't there, say who they belong to. Before
+  // this the table just went quiet, which reads as a bug rather than a
+  // permission (Greg, 9/11/26: "i can't add a resource on the hours page").
+  function renderManageNote(canManage, editable) {
+    let el = document.getElementById("tw-manage-note");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "tw-manage-note";
+      el.className = "tw-manage-note";
+      const btn = $("tw-add-row-btn");
+      btn.parentNode.insertBefore(el, btn);
+    }
+    if (canManage) { el.classList.add("hidden"); return; }
+    el.classList.remove("hidden");
+
+    if (!editable) {
+      const why = activeClient && activeClient.project_status === "closed" ? "closed" : "On Hold";
+      el.textContent = `This engagement is ${why}, so its team and hours are locked. A Super Admin can still make changes.`;
+      return;
+    }
+    const tl = teamLeadContact
+      ? `${teamLeadContact.name}${teamLeadContact.email ? ` (${teamLeadContact.email})` : ""}`
+      : "this engagement's Team Lead";
+    el.textContent = `Only ${tl} or a Super Admin can change who's assigned here. You can still log your own hours.`;
+  }
+
+  function renderTeamTable(canManage) {
+    const tbody = $("tw-tbody");
+    tbody.innerHTML = "";
+    for (const r of sortedAssignments()) {
+      const person = usersById()[r.user_id];
+      const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
+      const tr = document.createElement("tr");
+      tr.dataset.assignmentId = r.id;
+      const personCell = canManage
+        ? `<select class="row-select row-consultant-select">${consultantOptionsHtml(r.user_id)}</select>`
+        : `${person ? escapeHtml(userLabel(person)) : `<span style="color:var(--muted);">Not assigned</span>`}`;
+      const isFixed = fixedSlotIndex(r.specialty_type, r.slot_number) !== -1;
+      const actionBtn = isFixed
+        ? `<button class="btn-secondary icon-btn" data-clear="${r.id}">Unassign</button>`
+        : `<button class="btn-danger icon-btn" data-remove="${r.id}">Remove</button>`;
+      const isSunkCost = isSunkCostSpecialty(r.specialty_type, activeClient);
+      const canLogHours = !isSunkCost && !!person && (isSuperAdmin || person.id === currentUser.id);
+      const canViewHistory = !isSunkCost && !!person;
+      const usedDisplay = canViewHistory
+        ? `<button type="button" class="spent-link" data-history="${r.id}" title="View billing history">${r.hoursSpent}</button>`
+        : `<span>${r.hoursSpent}</span>`;
+      const usedCell = `<div class="spent-cell">${usedDisplay}<span class="spent-action">${canLogHours ? `<button class="btn-secondary icon-btn" data-log="${r.id}" title="Log hours">+</button>` : ""}</span></div>`;
+      tr.innerHTML = `
+        <td>${escapeHtml(label)}</td>
+        <td>${personCell}</td>
+        <td style="text-align:right;"><input type="number" class="row-input row-hours-input" min="0" step="0.5" value="${Number(r.hours_allotted)}" ${canManage ? "" : "disabled"} /></td>
+        <td style="white-space:nowrap;">${usedCell}</td>
+        ${canManage ? `<td class="row-actions">${actionBtn}</td>` : ""}
+      `;
+      tbody.appendChild(tr);
+    }
+
+    document.querySelectorAll(".row-consultant-select").forEach((select) => {
+      select.addEventListener("change", async () => {
+        const tr = select.closest("tr");
+        const assignmentId = tr.dataset.assignmentId;
+        const row = currentAssignments.find((x) => x.id === assignmentId);
+        select.disabled = true;
+        const payload = { user_id: select.value || null };
+        if (row && row.specialty_type === "team_lead") payload.is_team_lead = true;
+        const { error } = await sb.from("client_assignments").update(payload).eq("id", assignmentId);
+        select.disabled = false;
+        if (error) {
+          showBanner("Couldn't update person: " + error.message, "error");
+          return;
+        }
+        showBanner(select.value ? "Person assigned." : "Work area unassigned.", "success");
+        await reloadTeam();
+      });
+    });
+
+    document.querySelectorAll(".row-hours-input").forEach((input) => {
+      input.addEventListener("input", recalcTeamStats);
+      input.addEventListener("change", async () => {
+        const tr = input.closest("tr");
+        const assignmentId = tr.dataset.assignmentId;
+        const { error } = await sb.from("client_assignments").update({ hours_allotted: Number(input.value) }).eq("id", assignmentId);
+        if (error) {
+          showBanner(error.message.includes("exceed Budget") ? "That would exceed the client's Total Hours." : "Couldn't save: " + error.message, "error");
+          await reloadTeam();
+          return;
+        }
+        showBanner("Hours updated.", "success");
+        await reloadTeam();
+      });
+    });
+    document.querySelectorAll("[data-remove]").forEach((btn) => {
+      btn.addEventListener("click", () => openRemove(btn.dataset.remove, "delete"));
+    });
+    document.querySelectorAll("[data-clear]").forEach((btn) => {
+      btn.addEventListener("click", () => openRemove(btn.dataset.clear, "clear"));
+    });
+    document.querySelectorAll("[data-log]").forEach((btn) => {
+      btn.addEventListener("click", () => openLogHours(btn.dataset.log));
+    });
+    document.querySelectorAll("[data-history]").forEach((btn) => {
+      btn.addEventListener("click", () => openHistory(btn.dataset.history));
+    });
+
+    const totalPlanned = currentAssignments.reduce((sum, r) => sum + Number(r.hours_allotted), 0);
+    $("tw-total-planned").textContent = totalPlanned;
+    const totalUsed = currentAssignments.reduce((sum, r) => sum + Number(r.hoursSpent), 0);
+    $("tw-total-used").textContent = totalUsed;
+  }
+
+  async function reloadTeam() {
+    await loadAssignments();
+    renderTeamPane();
+  }
+
+  $("tw-add-row-btn").addEventListener("click", () => {
+    const tbody = $("tw-tbody");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><select class="row-select new-specialty">${specialtyOptionsHtml()}</select></td>
+      <td><select class="row-select new-consultant">${consultantOptionsHtml()}</select></td>
+      <td style="text-align:right;"><input type="number" class="row-input row-hours-input new-hours" min="0" step="0.5" value="0" /></td>
+      <td style="text-align:right; color:var(--muted);">—</td>
+      <td class="row-actions">
+        <button type="button" class="btn-primary icon-btn" data-save-row>&check;</button>
+        <button type="button" class="btn-secondary icon-btn" data-cancel-row>&times;</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+
+    tr.querySelector(".new-hours").addEventListener("input", recalcTeamStats);
+    tr.querySelector("[data-cancel-row]").addEventListener("click", () => { tr.remove(); recalcTeamStats(); });
+    tr.querySelector("[data-save-row]").addEventListener("click", async () => {
+      const specialty = tr.querySelector(".new-specialty").value;
+      const userId = tr.querySelector(".new-consultant").value;
+      const hours = Number(tr.querySelector(".new-hours").value);
+      if (!specialty) {
+        showBanner("Pick a work area before adding the row.", "error");
+        return;
+      }
+      const existing = currentAssignments.filter((r) => r.specialty_type === specialty);
+      const nextSlot = existing.length ? Math.max(...existing.map((r) => r.slot_number)) + 1 : 1;
+      const { error } = await sb.from("client_assignments").insert({
+        client_id: activeClient.id, user_id: userId || null, specialty_type: specialty, slot_number: nextSlot, hours_allotted: hours,
+        is_team_lead: specialty === "team_lead",
+      });
+      if (error) {
+        showBanner(error.message.includes("exceed Budget") ? "That would exceed the client's Total Hours." : "Couldn't add: " + error.message, "error");
+        return;
+      }
+      showBanner("Work area added.", "success");
+      await reloadTeam();
+    });
+
+    recalcTeamStats();
+  });
+
+  function recalcTeamStats() {
+    const total = Number(activeClient && activeClient.budget_hours_available) || 0;
+    let rowsSum = 0;
+    document.querySelectorAll(".row-hours-input").forEach((input) => { rowsSum += Number(input.value) || 0; });
+    const notAssigned = total - rowsSum;
+    $("tw-summary-error").style.display = notAssigned < 0 ? "block" : "none";
+    if (notAssigned < 0) $("tw-summary-error").textContent = "Budget hours add up to more than Total Hours.";
+    const totalEl = $("tw-total-planned");
+    if (totalEl) totalEl.textContent = rowsSum;
+  }
+
+  // ---------- Unassign / remove ----------
+  let pendingRemoveId = null;
+  let pendingRemoveMode = "delete";
+  function openRemove(assignmentId, mode) {
+    const r = currentAssignments.find((x) => x.id === assignmentId);
+    if (!r) return;
+    const person = usersById()[r.user_id];
+    pendingRemoveId = assignmentId;
+    pendingRemoveMode = mode;
+    const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
+    if (mode === "clear") {
+      $("tw-remove-title").textContent = "Unassign this work area?";
+      $("tw-remove-confirm").textContent = "Unassign";
+      $("tw-remove-text").textContent = `Reset ${label} back to not assigned with 0 hours? Logged hours stay on record.`;
+    } else {
+      $("tw-remove-title").textContent = "Remove this row?";
+      $("tw-remove-confirm").textContent = "Remove";
+      $("tw-remove-text").textContent = `Remove ${person ? userLabel(person) : "this person"} from ${label}? Their logged hours stay on record.`;
+    }
+    $("tw-remove-overlay").classList.add("open");
+  }
+  $("tw-remove-cancel").addEventListener("click", () => { $("tw-remove-overlay").classList.remove("open"); pendingRemoveId = null; });
+  $("tw-remove-confirm").addEventListener("click", async () => {
+    if (!pendingRemoveId) return;
+    const { error } = pendingRemoveMode === "clear"
+      ? await sb.from("client_assignments").update({ user_id: null, hours_allotted: 0 }).eq("id", pendingRemoveId)
+      : await sb.from("client_assignments").delete().eq("id", pendingRemoveId);
+    $("tw-remove-overlay").classList.remove("open");
+    pendingRemoveId = null;
+    if (error) {
+      showBanner((pendingRemoveMode === "clear" ? "Couldn't unassign: " : "Couldn't remove: ") + error.message, "error");
+      return;
+    }
+    showBanner(pendingRemoveMode === "clear" ? "Work area unassigned." : "Row removed.", "success");
+    await reloadTeam();
+  });
+
+  // ---------- Log hours ----------
+  let pendingLogAssignmentId = null;
+  function openLogHours(assignmentId) {
+    const r = currentAssignments.find((x) => x.id === assignmentId);
+    if (!r) return;
+    const person = usersById()[r.user_id];
+    if (!person) return;
+    const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
+    pendingLogAssignmentId = assignmentId;
+    $("tw-log-hours-form").reset();
+    $("tw-log-hours-error").style.display = "none";
+    $("tw-log-hours-text").textContent = isSuperAdmin && person.id !== currentUser.id
+      ? `Logging hours for ${userLabel(person)} on ${label}.`
+      : `Logging your hours on ${label}.`;
+    $("tw-log-hours-date").value = new Date().toISOString().slice(0, 10);
+    $("tw-log-hours-overlay").classList.add("open");
+  }
+  $("tw-log-hours-cancel").addEventListener("click", () => { $("tw-log-hours-overlay").classList.remove("open"); pendingLogAssignmentId = null; });
+  $("tw-log-hours-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!pendingLogAssignmentId) return;
+    const r = currentAssignments.find((x) => x.id === pendingLogAssignmentId);
+    if (!r) return;
+    $("tw-log-hours-error").style.display = "none";
+    const btn = $("tw-log-hours-submit");
+    btn.disabled = true;
+    btn.textContent = "Logging…";
+    const { error } = await sb.from("time_entries").insert({
+      assignment_id: pendingLogAssignmentId,
+      consultant_id: r.user_id,
+      hours: Number($("tw-log-hours-amount").value),
+      entry_date: $("tw-log-hours-date").value,
+      note: $("tw-log-hours-note").value.trim() || null,
+    });
+    btn.disabled = false;
+    btn.textContent = "Log hours";
+    if (error) {
+      $("tw-log-hours-error").textContent = error.message;
+      $("tw-log-hours-error").style.display = "block";
+      return;
+    }
+    $("tw-log-hours-overlay").classList.remove("open");
+    pendingLogAssignmentId = null;
+    showBanner("Hours logged.", "success");
+    await reloadTeam();
+  });
+
+  // ---------- Billing history ----------
+  function round2(n) { return Math.round(n * 100) / 100; }
+  function groupEntriesByMonth(entries) {
+    const sorted = [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+    const months = {};
+    for (const e of sorted) {
+      const key = e.entry_date.slice(0, 7);
+      (months[key] ||= { total: 0, entries: [] });
+      months[key].total += Number(e.hours);
+      months[key].entries.push(e);
+    }
+    let cumulative = 0;
+    return Object.keys(months).sort().map((key) => {
+      cumulative += months[key].total;
+      return { monthKey: key, total: round2(months[key].total), cumulative: round2(cumulative), entries: months[key].entries };
+    });
+  }
+  function monthKeyLabel(key) {
+    const d = new Date(key + "-02");
+    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+  async function openHistory(assignmentId) {
+    const r = currentAssignments.find((x) => x.id === assignmentId);
+    if (!r) return;
+    const person = usersById()[r.user_id];
+    const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
+    $("tw-history-title").textContent = `Billing History — ${label}${person ? " · " + userLabel(person) : ""}`;
+    $("tw-history-summary").innerHTML = "";
+    $("tw-history-list").innerHTML = `<div class="history-empty">Loading…</div>`;
+    $("tw-history-overlay").classList.add("open");
+
+    const { data: entries, error } = await sb.from("time_entries").select("hours, entry_date, note").eq("assignment_id", assignmentId);
+    if (error) {
+      $("tw-history-list").innerHTML = `<div class="history-empty">Couldn't load billing history: ${escapeHtml(error.message)}</div>`;
+      return;
+    }
+    const allotted = Number(r.hours_allotted) || 0;
+    const totalBilled = round2((entries || []).reduce((sum, e) => sum + Number(e.hours), 0));
+    const remaining = round2(allotted - totalBilled);
+    $("tw-history-summary").innerHTML = `
+      <div><strong>${allotted}</strong><span>Budget (hrs)</span></div>
+      <div><strong>${totalBilled}</strong><span>Used to date</span></div>
+      <div><strong>${remaining}</strong><span>Remaining</span></div>
+    `;
+    if (!entries || !entries.length) {
+      $("tw-history-list").innerHTML = `<div class="history-empty">No hours logged yet.</div>`;
+      return;
+    }
+    const months = groupEntriesByMonth(entries).reverse();
+    $("tw-history-list").innerHTML = months.map((m) => `
+      <div class="history-month">
+        <div class="history-month-row">
+          <span>${monthKeyLabel(m.monthKey)} — ${m.total} hrs</span>
+          <span class="history-month-meta">Cumulative ${m.cumulative} / ${allotted} · Remaining ${round2(allotted - m.cumulative)}</span>
+        </div>
+        ${m.entries.slice().sort((a, b) => b.entry_date.localeCompare(a.entry_date)).map((e) => `
+          <div class="history-entry">
+            <span>${e.entry_date} — ${e.hours} hrs</span>
+            <span class="history-entry-note">${e.note ? escapeHtml(e.note) : ""}</span>
+          </div>
+        `).join("")}
+      </div>
+    `).join("");
+  }
+  $("tw-history-close").addEventListener("click", () => { $("tw-history-overlay").classList.remove("open"); });
+
+  document.querySelectorAll(".overlay").forEach((ov) => {
+    ov.addEventListener("click", (e) => { if (e.target === ov) ov.classList.remove("open"); });
+  });
+</script>
+<script>
+  // Mobile nav toggle (Greg, 8/29/26) -- header .site-nav is display:none
+  // below 980px with nothing else to reach it, so this wires up the
+  // .nav-toggle button (added right after each </nav>) to flip a .open
+  // class the @media (max-width: 980px) CSS above turns into a dropdown
+  // panel.
+  document.querySelectorAll(".nav-toggle").forEach((btn) => {
+    const nav = btn.closest("header")?.querySelector(".site-nav");
+    if (!nav) return;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = nav.classList.toggle("open");
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  });
+  document.addEventListener("click", (e) => {
+    document.querySelectorAll(".site-nav.open").forEach((nav) => {
+      if (!nav.contains(e.target) && !nav.nextElementSibling?.contains(e.target)) {
+        nav.classList.remove("open");
+      }
+    });
+  });
+
+  // Nav dropdown (Chris, 9/4/26) -- click-to-toggle submenu under a
+  // top-nav item, piloted on Invoicing. Generic/class-based like the
+  // mobile nav toggle above: highlights the parent button and the
+  // matching child link based on the current page, wires open/close, and
+  // works for however many .nav-item-dropdown elements exist on a page
+  // (some pages render a skeleton header + a real one).
+  (function () {
+    const here = location.pathname.split("/").pop();
+    document.querySelectorAll(".nav-item-dropdown").forEach((dd) => {
+      const btn = dd.querySelector(".nav-link-dropdown-btn");
+      const menu = dd.querySelector(".nav-submenu");
+      if (!btn || !menu) return;
+      let matched = false;
+      menu.querySelectorAll("a").forEach((a) => {
+        const [navHrefPath, navHrefQuery] = (a.getAttribute("href") || "").split("?");
+        const navPathMatches = navHrefPath === here;
+        // A submenu link with a query string (e.g. "?action=add") is an
+        // action shortcut on the current page, not a distinct destination --
+        // it should count toward lighting up the parent dropdown button, but
+        // shouldn't itself look like "the page you're on" (Greg, 9/6/26, for
+        // the new Programs dropdown's "Add Program" item).
+        a.classList.toggle("active", navPathMatches && !navHrefQuery);
+        if (navPathMatches) matched = true;
+      });
+      btn.classList.toggle("active", matched);
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        document.querySelectorAll(".nav-item-dropdown.open").forEach((open) => {
+          if (open !== dd) open.classList.remove("open");
+        });
+        dd.classList.toggle("open");
+      });
+      // Hover is what opens these now (CSS above); this only clears the
+      // clicked-open state so a click-then-move-away doesn't leave it open.
+      dd.addEventListener("mouseleave", () => dd.classList.remove("open"));
+    });
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".nav-item-dropdown")) {
+        document.querySelectorAll(".nav-item-dropdown.open").forEach((open) => open.classList.remove("open"));
+      }
+    });
+  })();
+
+  // Applications nav dropdown (Chris, 9/4/26; refined same day) -- admin-
+  // only, left of Engagements, listing applications submitted but not yet
+  // assigned a Team Lead (still status = 'pending' -- assigning a TL is
+  // the accept action that moves one to In Progress, see
+  // 110_accept_straight_to_in_progress.sql). Self-contained on purpose:
+  // does its own session/role check rather than depending on each page's
+  // differently-named/timed admin-check variable, so it works identically
+  // everywhere. Each row deep-links straight to that one application's
+  // review pane (?application=ID on client_applications.html) -- nothing
+  // in this dropdown links anywhere else, including the empty state.
+  //
+  // Greg (9/16/26): "i am signed in as a specialist. i should not be able
+  // to see the applications top menu button." Reproduced. This used to run
+  // once, at page load, and only ever REMOVED .hidden -- it had no path
+  // back to hidden. Signing out does not reload the page (#signout-btn
+  // just swaps #app-view for #login-view), so Admin -> sign out -> sign in
+  // as Specialist left this menu standing from the admin's page load, with
+  // the admin's pending-application list -- company names and all -- still
+  // in the DOM. Every other admin-only nav item re-hid correctly, because
+  // those go through the [data-super-admin-only] toggle that re-runs on
+  // every profile load; this one was outside it, which is exactly why it
+  // was the only one that survived the switch.
+  //
+  // So: hide is now a real state, not just the absence of show; the render
+  // re-runs on every auth change; and the submenu is emptied on the way
+  // down so nothing from the previous account is left in the markup. A
+  // failed role check fails closed rather than leaving the menu up.
+  (function () {
+    const dd = document.querySelectorAll("#nav-applications-dropdown");
+    if (!dd.length) return;
+
+    const submenuOf = (el) =>
+      el.querySelector("#nav-applications-submenu") || el.querySelector(".nav-submenu");
+
+    function hideApplicationsNav() {
+      dd.forEach((el) => {
+        el.classList.add("hidden");
+        el.classList.remove("open");
+        const menu = submenuOf(el);
+        if (menu) menu.innerHTML = "";
+      });
+    }
+
+    async function renderApplicationsNav() {
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) return hideApplicationsNav();
+        const { data: profile } = await sb.from("users").select("role").eq("id", session.user.id).maybeSingle();
+        if (!profile || profile.role !== "super_admin") return hideApplicationsNav();
+
+        const { data: apps } = await sb
+          .from("client_applications")
+          .select("id, company_name, submitted_at, econ_dev_companies(name, code)")
+          .eq("status", "pending")
+          .order("submitted_at", { ascending: false })
+          .limit(8);
+
+        const fmt = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+        const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
+        const rowsHtml = (apps || []).map((a) => {
+          const program = a.econ_dev_companies ? (a.econ_dev_companies.name || a.econ_dev_companies.code) : "";
+          return `
+        <a href="client_applications.html?application=${a.id}">
+          ${esc(a.company_name || "Untitled")}
+          <span class="nav-submenu-meta">${[esc(program), "Submitted " + fmt(a.submitted_at)].filter(Boolean).join(" &middot; ")}</span>
+        </a>
+      `;
+        }).join("");
+        const bodyHtml = apps && apps.length ? rowsHtml : '<div class="nav-submenu-empty">No new applications.</div>';
+
+        dd.forEach((el) => {
+          el.classList.remove("hidden");
+          const menu = submenuOf(el);
+          if (menu) menu.innerHTML = bodyHtml;
+        });
+      } catch (e) {
+        hideApplicationsNav();
+        console.error("Couldn't load the Applications nav dropdown:", e);
+      }
+    }
+
+    renderApplicationsNav();
+
+    // Re-render whenever the account changes. INITIAL_SESSION is skipped
+    // because the direct call above already covers page load, and
+    // TOKEN_REFRESHED because the hourly refresh doesn't change who you
+    // are. Deferred with setTimeout because supabase-js serialises auth
+    // work -- awaiting another sb call inside this handler can deadlock it.
+    sb.auth.onAuthStateChange((event) => {
+      if (event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") return;
+      setTimeout(renderApplicationsNav, 0);
+    });
+  })();
+
+  // Notification bell (Chris, 9/4/26) -- "make sure the bell is
+  // prominently displayed on every page," not just the Engagements home.
+  // Self-contained on purpose, same pattern as the Applications nav
+  // dropdown: does its own session/role check and its own notification
+  // fetch/render rather than depending on each page's own auth flow, so
+  // it behaves identically everywhere.
+  (function () {
+    const wrap = document.getElementById("notif-wrap");
+    if (!wrap) return;
+    const escNotif = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
+    const timeAgoNotif = (iso) => {
+      const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+      if (mins < 1) return "just now";
+      if (mins < 60) return `${mins}m ago`;
+      const hrs = Math.round(mins / 60);
+      if (hrs < 24) return `${hrs}h ago`;
+      return `${Math.round(hrs / 24)}d ago`;
+    };
+    let unread = [];
+
+    function renderBell() {
+      const count = unread.length;
+      document.getElementById("notif-count").textContent = count > 9 ? "9+" : String(count);
+      document.getElementById("notif-count").classList.toggle("hidden", count === 0);
+      document.getElementById("notif-list").innerHTML = count
+        ? unread.map((n) => `
+            <div class="notif-item">
+              <div class="notif-msg">${escNotif(n.message)}</div>
+              <div class="notif-meta">
+                <span>${timeAgoNotif(n.created_at)}</span>
+                <span>
+                  ${n.client_id ? `<a href="client_workspace.html?client=${n.client_id}">View client</a> &middot;` : ""}
+                  <a href="#" class="notif-dismiss" data-id="${n.recipientId}">Dismiss</a>
+                </span>
+              </div>
+            </div>
+          `).join("")
+        : `<div class="notif-empty">You're all caught up.</div>`;
+      document.querySelectorAll("#notif-list .notif-dismiss").forEach((el) => {
+        el.addEventListener("click", async (e) => {
+          e.preventDefault();
+          const id = el.dataset.id;
+          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id);
+          unread = unread.filter((n) => n.recipientId !== id);
+          renderBell();
+        });
+      });
+    }
+
+    (async function () {
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) return;
+        const { data: profile } = await sb.from("users").select("role").eq("id", session.user.id).maybeSingle();
+        if (!profile || profile.role !== "super_admin") return;
+
+        wrap.classList.remove("hidden");
+        const { data } = await sb
+          .from("notification_recipients")
+          .select("id, created_at, notifications(client_id, message, created_at)")
+          .eq("user_id", session.user.id)
+          .is("read_at", null)
+          .order("created_at", { ascending: false })
+          .limit(20);
+        unread = (data || [])
+          .filter((r) => r.notifications)
+          .map((r) => ({ recipientId: r.id, client_id: r.notifications.client_id, message: r.notifications.message, created_at: r.notifications.created_at }));
+        renderBell();
+
+        document.getElementById("notif-bell").addEventListener("click", (e) => {
+          e.stopPropagation();
+          document.getElementById("notif-dropdown").classList.toggle("hidden");
+        });
+        document.getElementById("notif-mark-all").addEventListener("click", async () => {
+          if (!unread.length) return;
+          const ids = unread.map((n) => n.recipientId);
+          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids);
+          unread = [];
+          renderBell();
+        });
+        document.addEventListener("click", (e) => {
+          if (!wrap.contains(e.target)) document.getElementById("notif-dropdown").classList.add("hidden");
+        });
+      } catch (e) {
+        console.error("Couldn't load notifications:", e);
+      }
+    })();
+  })();
+</script>
+</body>
+</html>
