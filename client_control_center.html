@@ -973,6 +973,7 @@
   let isSuperAdmin = false;
   let isTeamLeadHere = false; // is currentUser the Team Lead on activeClient?
   let allUsers = [];
+  let allUsersIncludingHidden = [];
   let userSpecialties = {}; // user_id -> array of specialty keys
   let nameCounts = {};      // full_name -> how many accounts carry it, hidden included
   let currentAssignments = [];
@@ -1038,7 +1039,15 @@
     team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
     gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
   };
-  const usersById = () => Object.fromEntries(allUsers.map((u) => [u.id, u]));
+  // LOOKUP, not picker -- so it has to cover hidden accounts (Greg, 9/16/26).
+  // Every caller uses this to NAME whoever is already on a row, and one of
+  // them decides whether the Log Hours button exists:
+  //   canLogHours = !isSunkCost && !!person && (isSuperAdmin || person.id === currentUser.id)
+  // Built from the visible roster, the NCEG Admin house account resolves to
+  // undefined, the Person column reads "Not assigned", and Rita still cannot
+  // log GRE's Admin/QC hours -- which was the whole point of 121.
+  // Choosing is still restricted: see consultantOptionsHtml.
+  const usersById = () => Object.fromEntries(allUsersIncludingHidden.map((u) => [u.id, u]));
   function specialtyDescriptor(u) {
     const specs = (userSpecialties[u.id] || []).map((s) => SPECIALTY_LABELS[s] || s);
     return specs.length ? specs.join(", ") : roleLabel(u.role);
@@ -1049,7 +1058,9 @@
     if (!collides) return u.full_name;
     const descriptor = specialtyDescriptor(u);
     const label = `${u.full_name} — ${descriptor}`;
-    const stillCollides = allUsers.filter((x) => x.full_name === u.full_name && specialtyDescriptor(x) === descriptor).length > 1;
+    // nameCounts above counts every account, hidden included, so the tie-break
+    // has to look at the same population or it disagrees with itself.
+    const stillCollides = allUsersIncludingHidden.filter((x) => x.full_name === u.full_name && specialtyDescriptor(x) === descriptor).length > 1;
     return stillCollides && u.email ? `${label} (${u.email})` : label;
   }
 
@@ -1283,10 +1294,17 @@
       // roster -- otherwise the picker offers a bare "Greg Gotcher" that is
       // silently one of three logins, which is exactly how JLR ended up
       // assigned to an account Greg never signs into (9/11/26).
-      sb.from("users").select("full_name"),
+      // full_name only would not let us NAME a hidden assignee in the Person
+      // dropdown, so take id/role/email too (Greg, 9/16/26 -- the NCEG Admin
+      // house account is hidden and owns every Admin/QC row, and a select
+      // whose value matches no option silently displays "Not assigned").
+      sb.from("users").select("id, full_name, role, email"),
     ]);
     if (error) return;
     allUsers = data;
+    // Choices stay filtered to the visible roster; DISPLAY has to cover
+    // everyone, which is the distinction this pair encodes.
+    allUsersIncludingHidden = nameRows || data;
     nameCounts = {};
     (nameRows || data).forEach((u) => {
       const n = (u.full_name || "").trim();
@@ -1983,7 +2001,18 @@
     return u.email ? `${u.full_name} (${u.email})` : `${u.full_name} — ${specialtyDescriptor(u)}`;
   }
   function consultantOptionsHtml(selectedId) {
-    return '<option value="">Not assigned</option>' + allUsers.map((u) => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${escapeHtml(consultantOptionLabel(u))}</option>`).join("");
+    // The pick list is the visible roster. But if this row is already held by
+    // somebody hidden -- the NCEG Admin house account on Admin/QC, or one of
+    // the hidden admins -- that person has to appear too, or the select falls
+    // back to its first option and the row reads "Not assigned" while the
+    // database says otherwise. Offer them, but only because they are already
+    // on the row: nobody can PICK a hidden account from here.
+    let options = allUsers;
+    if (selectedId && !allUsers.some((u) => u.id === selectedId)) {
+      const held = allUsersIncludingHidden.find((u) => u.id === selectedId);
+      if (held) options = [...allUsers, held];
+    }
+    return '<option value="">Not assigned</option>' + options.map((u) => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${escapeHtml(consultantOptionLabel(u))}</option>`).join("");
   }
 
   async function loadAssignments() {

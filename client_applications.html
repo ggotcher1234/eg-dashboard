@@ -1306,7 +1306,18 @@
 
 
   async function loadUsers() {
-    const { data, error } = await sb.from("users").select("id, full_name, role").order("full_name");
+    // hidden_from_roster (108) is how a person stays a working account while
+    // being kept out of every staff-facing pick list -- the Roster table, the
+    // Team & Hours person picker, invoicing. This page was the one that never
+    // honoured it, so a hidden account could still be handed an engagement
+    // from the Accept form. Greg (9/16/26) is using the flag to retire the
+    // duplicate Chris and Rita logins without deleting them, which only works
+    // if every list respects it.
+    const { data, error } = await sb
+      .from("users")
+      .select("id, full_name, role")
+      .eq("hidden_from_roster", false)
+      .order("full_name");
     if (error) { showBanner("Couldn't load the staff directory: " + error.message, "error"); return; }
     allUsers = data;
   }
@@ -1795,11 +1806,21 @@
 
     if (a.status === "pending" && isSuperAdmin) {
       const suggestedSlug = slugify(a.company_name);
-      const sortedUsers = [...allUsers].sort((x, y) => {
-        const rank = { team_lead: 0, super_admin: 1, consultant: 2 };
-        const r = (rank[x.role] ?? 3) - (rank[y.role] ?? 3);
-        return r !== 0 ? r : x.full_name.localeCompare(y.full_name);
-      });
+      // Greg (9/16/26): "this list should not show admins. admins cannot be a
+      // team lead." Nor can a specialist -- a specialist is promoted first, by
+      // an Admin changing their Role on the Roster profile (pf-role), and only
+      // then do they belong here. So this is approved Team Leads only, which
+      // also drops the role suffix from the labels: every row says the same
+      // thing now, and a list of names reads faster than a list of
+      // "Name (Team Lead)".
+      //
+      // This used to be every user in the system, sorted with team leads
+      // first -- which meant the default landed on whoever was signed in,
+      // usually an Admin, so the form looked pre-answered with an invalid
+      // choice.
+      const teamLeads = allUsers
+        .filter((u) => u.role === "team_lead")
+        .sort((x, y) => x.full_name.localeCompare(y.full_name));
       html += `
         <div class="accept-box">
           <h3>Accept this application</h3>
@@ -1816,7 +1837,9 @@
               <label>Team Lead <span class="required-star">*</span></label>
               <select id="accept-tl" required>
                 <option value="">Select…</option>
-                ${sortedUsers.map((u) => `<option value="${u.id}">${escapeHtml(u.full_name)} (${roleLabel(u.role)})</option>`).join("")}
+                ${teamLeads.length
+                  ? teamLeads.map((u) => `<option value="${u.id}">${escapeHtml(u.full_name)}</option>`).join("")
+                  : `<option value="" disabled>No Team Leads on the roster — set someone's Role to Team Lead first</option>`}
               </select>
             </div>
             <div class="field">

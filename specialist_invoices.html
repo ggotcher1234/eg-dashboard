@@ -798,7 +798,15 @@
         .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name, bill_admin_qc_upfront))")
         .not("user_id", "is", null),
       sb.from("time_entries").select("assignment_id, hours, entry_date"),
-      sb.from("users").select("id, full_name, role, email").eq("hidden_from_roster", false),
+      // No hidden_from_roster filter here on purpose. This list is an
+      // ATTRIBUTION lookup -- it answers "whose hours are these" -- and a
+      // hidden person can still hold an assignment. Filtering them out left
+      // their rows rendering as "Unknown" (see specialistName below), which
+      // already affects Greg's own hidden Admin account and would affect the
+      // NCEG Admin house account the moment it owns Admin/QC hours
+      // (121_house_admin_account.sql). hidden_from_roster belongs on PICKERS
+      // -- see loadGlobalSearchIndex above, where the filter is correct.
+      sb.from("users").select("id, full_name, role, email"),
     ]);
 
     if (assignmentsRes.error) { showBanner("Couldn't load assignments: " + assignmentsRes.error.message, "error"); return; }

@@ -439,11 +439,41 @@
   // number by construction, so "must not be blank" is the only rule left for
   // the browser to enforce. No `pattern` -- a blurred field reads "$35,030,501"
   // and would fail a numeric one.
+  // Greg (9/16/26): typing "6,000,000" used to make the commas vanish one
+  // keystroke at a time -- correct in the end, but it reads as the field
+  // rejecting what you typed, and a CEO filling this in reacts the same way.
+  // So group the digits live instead of only on blur.
+  //
+  // The caret is the fiddly part: rewriting el.value moves it to the end, so
+  // a correction mid-number would throw you to the far right on every
+  // keystroke. Count the digits before the caret, then put it back after
+  // that same digit once the separators have shifted around it.
   function sanitizeMoneyInput(el) {
+    const digitsBeforeCaret = el.value.slice(0, el.selectionStart ?? el.value.length)
+      .replace(/[^0-9.]/g, "").length;
+
     const cleaned = el.value.replace(/[^0-9.]/g, "");
     const firstDot = cleaned.indexOf(".");
     const noExtraDots = firstDot === -1 ? cleaned : cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
-    if (noExtraDots !== el.value) el.value = noExtraDots;
+
+    // Group the whole-number part; leave anything after the decimal point
+    // alone so a half-typed "1234." or "1234.5" still behaves.
+    const dot = noExtraDots.indexOf(".");
+    const whole = dot === -1 ? noExtraDots : noExtraDots.slice(0, dot);
+    const rest = dot === -1 ? "" : noExtraDots.slice(dot);
+    const grouped = whole === "" ? "" : Number(whole).toLocaleString("en-US");
+    const next = grouped + rest;
+
+    if (next === el.value) return;
+    el.value = next;
+
+    // Walk forward past `digitsBeforeCaret` digits to find the new caret spot.
+    let seen = 0, pos = 0;
+    while (pos < next.length && seen < digitsBeforeCaret) {
+      if (/[0-9.]/.test(next[pos])) seen++;
+      pos++;
+    }
+    try { el.setSelectionRange(pos, pos); } catch (e) { /* not all inputs allow it */ }
   }
   function formatMoneyDisplay(el) {
     const raw = el.value.replace(/[^0-9.]/g, "");
@@ -451,9 +481,10 @@
     const rounded = Math.round(Number(raw));
     el.value = isNaN(rounded) ? "" : "$" + rounded.toLocaleString("en-US");
   }
+  // Only the "$" comes off when you click back in -- the grouping stays, so
+  // the number does not visibly change shape just because you focused it.
   function unformatMoneyDisplay(el) {
-    const raw = el.value.replace(/[^0-9.]/g, "");
-    el.value = raw;
+    el.value = el.value.replace(/[$\s]/g, "");
   }
   document.querySelectorAll(".money-input").forEach((el) => {
     el.addEventListener("input", () => sanitizeMoneyInput(el));
