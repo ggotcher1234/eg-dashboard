@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Economic Gardening Program Application</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
+    --danger: #b3403a;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
+  #loading-view, #invalid-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; text-align: center; padding: 20px; }
+  .hidden { display: none !important; }
+
+  .app-header {
+    background: var(--navy); color: #fff; padding: 36px 24px 30px; text-align: center;
+  }
+  .app-header .program-logo { max-height: 64px; max-width: 260px; margin-bottom: 16px; background: #fff; border-radius: 8px; padding: 8px 14px; }
+  .app-header .program-name { font-size: 13px; letter-spacing: 0.5px; text-transform: uppercase; color: #a9bdd2; margin-bottom: 8px; font-weight: 700; }
+  .app-header h1 { margin: 0 0 8px; font-size: 26px; font-weight: 700; }
+  .app-header .app-sub { font-size: 14.5px; color: #c9d6e3; max-width: 560px; margin: 0 auto; line-height: 1.5; }
+
+  /* Was margin-top:-24px, which floated the card up over the navy header --
+     and dragged the "* Required field" legend up with it, rendering muted
+     grey on dark blue. The internal view this now mirrors has a plain gap
+     between its header and its first card, so: no overlap (Greg, 9/6/26). */
+  main { max-width: 860px; margin: 0 auto 60px; padding: 22px 20px 0; }
+
+  /* ---------- Row layout ----------
+     Greg (9/6/26): "the Company App Headed for the Border is the correct
+     layout ... all other Program Applications should match." That internal
+     view (client_applications.html) is a flat label-left / value-right table
+     with a divider between every row and no section headings, so this form
+     is now built the same way -- same label wording, same order -- instead
+     of stacked cards of two- and three-column field grids. Reading the blank
+     form and reading a submitted one are now the same shape.
+
+     Below 680px the two columns collapse to label-above-field. The row form
+     is a desktop idea; a 260px label column next to an input on a phone
+     leaves the input about forty characters wide, and these get filled in
+     on phones. */
+  .arow-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    margin-bottom: 20px; box-shadow: 0 2px 10px rgba(20,48,77,0.06); overflow: hidden;
+  }
+  .arow { display: grid; grid-template-columns: 260px 1fr; border-bottom: 1px solid var(--border); }
+  .arow:last-child { border-bottom: none; }
+  .arow-label {
+    padding: 15px 16px 15px 20px; text-align: right; font-size: 13px;
+    font-weight: 600; color: var(--text); line-height: 1.4; align-self: start;
+  }
+  .arow-label .req { color: var(--danger); margin-right: 3px; }
+  .arow-label .opt { font-weight: 400; color: var(--muted); }
+  .arow-field { padding: 11px 20px 12px 8px; min-width: 0; }
+
+  /* Grouped values (Physical Address, Social Media) mirror the internal
+     view, which nests its own small labelled lines inside one row. */
+  .subrow { display: grid; grid-template-columns: 104px 1fr; align-items: center; gap: 10px; margin-bottom: 7px; }
+  .subrow:last-child { margin-bottom: 0; }
+  .subrow-label { font-size: 12.5px; color: var(--muted); }
+
+  .required-legend { font-size: 12px; color: var(--muted); margin: -6px 4px 16px; }
+  .required-legend .req { color: var(--danger); font-weight: 700; }
+
+  .arow-field input[type="text"], .arow-field input[type="url"], .arow-field input[type="email"],
+  .arow-field input[type="number"], .arow-field input[type="text"], .arow-field select, .arow-field textarea {
+    width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 7px;
+    font-size: 14px; font-family: inherit; background: #fff; color: var(--text);
+  }
+  .arow-field textarea { resize: vertical; min-height: 84px; }
+  .arow-field input:focus, .arow-field select:focus, .arow-field textarea:focus { outline: none; border-color: var(--navy-light); }
+  .field-hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+
+  @media (max-width: 680px) {
+    .arow { grid-template-columns: 1fr; }
+    .arow-label { text-align: left; padding: 14px 16px 0; }
+    .arow-field { padding: 8px 16px 14px; }
+    .subrow { grid-template-columns: 1fr; gap: 3px; margin-bottom: 10px; }
+  }
+  /* Missing/invalid field highlight (Greg, 9/4/26) -- set by the submit
+     handler on every field that fails validation at once, not just the
+     one the browser's native tooltip would have pointed at. */
+  .field-invalid { border: 2px solid var(--danger) !important; background: #fef4f4; }
+  .field-invalid:focus { border-color: var(--danger) !important; }
+  .field-error-text { color: var(--danger); font-size: 12px; font-weight: 600; margin-top: 4px; }
+
+  /* .officer-block / .card / .field-row went with the row rebuild (9/6/26) --
+     officers are plain rows now, same as they are in the internal view. */
+
+  .attach-remove:hover { color: var(--danger); }
+
+  #banner { display: none; padding: 12px 16px; border-radius: 8px; font-size: 13.5px; margin-bottom: 18px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+
+  .submit-row { text-align: center; margin-top: 8px; }
+  #submit-error {
+    display: block; margin: 14px auto 0; max-width: 460px; padding: 12px 16px; border-radius: 8px;
+    font-size: 13.5px; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0;
+  }
+  button {
+    font-family: inherit; cursor: pointer; border: none; border-radius: 8px; font-size: 15px; padding: 13px 34px; font-weight: 700;
+  }
+  .btn-primary { background: #2563eb; color: #fff; }
+  .btn-primary:hover { background: #1d4fbf; }
+  .btn-primary:disabled { background: #9db4e0; cursor: not-allowed; }
+  .submit-note { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
+
+  #success-view { max-width: 560px; margin: 90px auto; text-align: center; padding: 0 20px; }
+  #success-view .success-icon { width: 56px; height: 56px; border-radius: 999px; background: #e9f5ee; color: var(--accent-dark); display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; }
+  #success-view .success-icon svg { width: 28px; height: 28px; }
+  #success-view h2 { color: var(--navy); margin-bottom: 10px; }
+  #success-view p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+
+  footer { text-align: center; font-size: 11.5px; color: var(--muted); padding: 20px; }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="invalid-view" class="hidden">
+  <div>
+    <h2 style="color:var(--navy);">This application link isn't valid</h2>
+    <p>Please double-check the URL your Program contact gave you, or reach out to them for a new link.</p>
+  </div>
+</div>
+
+<div id="app-view" class="hidden">
+  <div class="app-header">
+    <img id="program-logo" class="program-logo hidden" alt="" />
+    <div class="program-name" id="program-name"></div>
+    <h1>Economic Gardening Program Application</h1>
+    <div class="app-sub">Please share a little information about you and your company.</div>
+  </div>
+
+  <main>
+    <div id="banner"></div>
+    <div class="required-legend"><span class="req">*</span> Required field</div>
+
+    <!-- novalidate (Greg, 9/4/26): the browser's native one-at-a-time
+         "Please fill out this field" tooltip only ever points at a single
+         missing field and blocks the submit handler from running at all,
+         so nothing else on the page reflects that submission failed. This
+         hands validation to the submit handler below, which highlights
+         every missing/invalid field at once and shows one message right
+         under the Submit button. -->
+    <form id="app-form" novalidate>
+      <div class="arow-card">
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>Company Name</div>
+          <div class="arow-field"><input type="text" id="f-company-name" required /></div>
+        </div>
+
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>Physical Address</div>
+          <div class="arow-field">
+            <div class="subrow"><div class="subrow-label">Address</div><input type="text" id="f-street" placeholder="Street address or P.O. Box" required /></div>
+            <div class="subrow"><div class="subrow-label">City</div><input type="text" id="f-city" required /></div>
+            <div class="subrow"><div class="subrow-label">State</div><input type="text" id="f-state" maxlength="2" required /></div>
+            <div class="subrow"><div class="subrow-label">Postal code</div><input type="text" id="f-postal" required /></div>
+            <div class="subrow"><div class="subrow-label">Country</div><input type="text" id="f-country" value="United States" /></div>
+          </div>
+        </div>
+
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>County</div>
+          <div class="arow-field"><input type="text" id="f-county" required /></div>
+        </div>
+
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>Phone</div>
+          <div class="arow-field"><input type="text" id="f-phone" required /><div class="field-hint">Main company line, if different from an officer's.</div></div>
+        </div>
+
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>Year Founded</div>
+          <div class="arow-field"><input type="number" id="f-year-founded" min="1800" max="2100" required /></div>
+        </div>
+
+        <!-- "Private or Public?" removed (Chris/Rita review, 9/11/26 -- Greg
+             marked it "Delete this"). Nothing downstream reads it: it never
+             appeared on a report or drove any rule. The clients.is_private
+             column and the internal view's row stay, so the answers already
+             collected aren't lost; new applications simply arrive with it
+             null. -->
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>Website Address</div>
+          <div class="arow-field"><input type="url" id="f-website" placeholder="https://www.example.com" required /></div>
+        </div>
+
+        <div class="arow">
+          <div class="arow-label">Social Media Accounts</div>
+          <div class="arow-field">
+            <div class="subrow"><div class="subrow-label">Facebook</div><input type="text" id="f-social-facebook" placeholder="https://facebook.com/&hellip;" /></div>
+            <div class="subrow"><div class="subrow-label">LinkedIn</div><input type="text" id="f-social-linkedin" placeholder="https://linkedin.com/&hellip;" /></div>
+            <div class="subrow"><div class="subrow-label">X / Twitter</div><input type="text" id="f-social-twitter" placeholder="https://x.com/&hellip;" /></div>
+            <div class="subrow"><div class="subrow-label">Instagram</div><input type="text" id="f-social-instagram" placeholder="https://instagram.com/&hellip;" /></div>
+            <div class="subrow"><div class="subrow-label">YouTube</div><input type="text" id="f-social-youtube" placeholder="https://youtube.com/&hellip;" /></div>
+            <div class="subrow"><div class="subrow-label">Other</div><input type="text" id="f-social-other" placeholder="https://&hellip;" /></div>
+          </div>
+        </div>
+
+        <div class="arow">
+          <div class="arow-label">Link to Recent News Stories?</div>
+          <div class="arow-field"><input type="text" id="f-news-links" placeholder="https://&hellip;" /></div>
+        </div>
+
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>Company Officer Name (Primary)</div>
+          <div class="arow-field"><input type="text" id="f-p-name" required /></div>
+        </div>
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>Company Officer (Primary) Title</div>
+          <div class="arow-field"><input type="text" id="f-p-title" required /></div>
+        </div>
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>Email</div>
+          <div class="arow-field"><input type="email" id="f-p-email" required /></div>
+        </div>
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>Phone</div>
+          <div class="arow-field"><input type="text" id="f-p-phone" required /></div>
+        </div>
+
+        <div class="arow">
+          <div class="arow-label">2nd Company Officer Name <span class="opt">(optional)</span></div>
+          <div class="arow-field"><input type="text" id="f-s-name" /></div>
+        </div>
+        <div class="arow">
+          <div class="arow-label">2nd Company Officer Title</div>
+          <div class="arow-field"><input type="text" id="f-s-title" /></div>
+        </div>
+        <div class="arow">
+          <div class="arow-label">Email</div>
+          <div class="arow-field"><input type="email" id="f-s-email" /></div>
+        </div>
+        <div class="arow">
+          <div class="arow-label">Phone</div>
+          <div class="arow-field"><input type="text" id="f-s-phone" /></div>
+        </div>
+
+        <div class="arow">
+          <div class="arow-label">3rd Company Officer Name <span class="opt">(optional)</span></div>
+          <div class="arow-field"><input type="text" id="f-t-name" /></div>
+        </div>
+        <div class="arow">
+          <div class="arow-label">3rd Company Officer Title</div>
+          <div class="arow-field"><input type="text" id="f-t-title" /></div>
+        </div>
+        <div class="arow">
+          <div class="arow-label">Email</div>
+          <div class="arow-field"><input type="email" id="f-t-email" /></div>
+        </div>
+        <div class="arow">
+          <div class="arow-label">Phone</div>
+          <div class="arow-field"><input type="text" id="f-t-phone" /></div>
+        </div>
+
+        <div class="arow">
+          <div class="arow-label">Others on Email CC List</div>
+          <div class="arow-field">
+            <input type="text" id="f-cc-emails" placeholder="name@example.com, name2@example.com" />
+            <div class="field-hint">Separate multiple addresses with commas.</div>
+          </div>
+        </div>
+
+        <div class="arow">
+          <div class="arow-label">Primary Business and NAICS Code <span class="opt">(if known)</span></div>
+          <div class="arow-field"><input type="text" id="f-naics" /></div>
+        </div>
+
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>Do you have between 10&ndash;100 FTE employees?</div>
+          <div class="arow-field">
+            <select id="f-fte-range" required>
+              <option value="">Please select an option</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+        </div>
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>2025 FTE Employee Count</div>
+          <div class="arow-field"><input type="number" id="f-fte-2025" required /></div>
+        </div>
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>2024 FTE Employee Count</div>
+          <div class="arow-field"><input type="number" id="f-fte-2024" required /></div>
+        </div>
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>2023 FTE Employee Count</div>
+          <div class="arow-field"><input type="number" id="f-fte-2023" required /></div>
+        </div>
+
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>Do you have between $1&ndash;50 million in annual gross income?</div>
+          <div class="arow-field">
+            <select id="f-sales-range" required>
+              <option value="">Please select an option</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+        </div>
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>2025 Annual Gross Income (USD)</div>
+          <div class="arow-field"><input type="text" inputmode="decimal" class="money-input" id="f-rev-2025" required /></div>
+        </div>
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>2024 Annual Gross Income (USD)</div>
+          <div class="arow-field"><input type="text" inputmode="decimal" class="money-input" id="f-rev-2024" required /></div>
+        </div>
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>2023 Annual Gross Income (USD)</div>
+          <div class="arow-field"><input type="text" inputmode="decimal" class="money-input" id="f-rev-2023" required /></div>
+        </div>
+
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>Sales to External Markets (outside city)?</div>
+          <div class="arow-field">
+            <select id="f-sales-external" required>
+              <option value="">Please select an option</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+        </div>
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>Percent of Employees Located In State</div>
+          <div class="arow-field"><input type="number" id="f-pct-instate" min="0" max="100" required /></div>
+        </div>
+        <div class="arow">
+          <div class="arow-label"><span class="req">*</span>Top Three Business Issues</div>
+          <div class="arow-field"><textarea id="f-top-issues" placeholder="What is this company trying to solve?" required></textarea></div>
+        </div>
+      </div>
+
+      <div class="submit-row">
+        <button type="submit" class="btn-primary" id="submit-btn">Submit Application</button>
+        <div id="submit-error" class="hidden"></div>
+      </div>
+    </form>
+  </main>
+</div>
+
+<div id="success-view" class="hidden">
+  <div class="success-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <h2>Application Received</h2>
+  <p>Thank you for applying to the Economic Gardening Program. Your Program contact and the EG Group team have been notified and will be in touch.</p>
+</div>
+
+<footer>Economic Gardening Program &middot; National Center for Economic Gardening</footer>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const SUBMIT_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/public-submit-application`;
+
+  const $ = (id) => document.getElementById(id);
+  let program = null;
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  function showBanner(message) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = "error";
+  }
+  function clearBanner() {
+    $("banner").className = "";
+    $("banner").textContent = "";
+  }
+
+  // Which Program is this application for? Mirrors resolveSlug() in
+  // client_public.html, for the same reason.
+  function resolveProgramCode() {
+    // ?program= always wins when present -- every link generated before the
+    // short form existed looks like this, and they are permanent, printed
+    // and forwarded. They must keep working forever.
+    const qs = new URLSearchParams(location.search).get("program");
+    if (qs) return qs;
+
+    // The short /apply/<code> link (netlify.toml rewrites /apply/:code to
+    // /client_application_public.html?program=:code) is a server-side
+    // rewrite: Netlify serves this page's bytes for that request, but the
+    // browser's address bar -- and so location.search -- still shows
+    // /apply/<code> and never the rewritten query string. So the page has to
+    // recognise its own short-link path directly.
+    const m = location.pathname.match(/^\/apply\/([^/]+)\/?$/);
+    if (m) return decodeURIComponent(m[1]);
+
+    return null;
+  }
+
+  // ---------- Revenue fields (Greg, 9/14/26) ----------
+  // "allow comma's in the revenue fields of the applications."
+  //
+  // These were type="number", which silently refuses a value carrying a $ or
+  // a comma -- a CEO pasting "$35,030,501.00" off their own P&L gets an empty
+  // box and no explanation. Same bug, same fix as the internal review screen
+  // (client_applications.html, Greg 8/29/26 "cut and paste revenue numbers
+  // and those fields are acting wonky"): type="text" with a live sanitizer.
+  //
+  // While the field has focus it holds a plain sanitized number, so typing
+  // and pasting never fight the formatter. On blur it shows "$35,030,501";
+  // on focus it goes back to plain digits so it's easy to re-edit. Same
+  // three functions and the same .money-input hook as the internal screen,
+  // deliberately -- one behaviour for revenue everywhere in the app.
+  //
+  // `required` still works: the sanitizer means anything non-empty is a
+  // number by construction, so "must not be blank" is the only rule left for
+  // the browser to enforce. No `pattern` -- a blurred field reads "$35,030,501"
+  // and would fail a numeric one.
+  // Greg (9/16/26): typing "6,000,000" used to make the commas vanish one
+  // keystroke at a time -- correct in the end, but it reads as the field
+  // rejecting what you typed, and a CEO filling this in reacts the same way.
+  // So group the digits live instead of only on blur.
+  //
+  // The caret is the fiddly part: rewriting el.value moves it to the end, so
+  // a correction mid-number would throw you to the far right on every
+  // keystroke. Count the digits before the caret, then put it back after
+  // that same digit once the separators have shifted around it.
+  function sanitizeMoneyInput(el) {
+    const digitsBeforeCaret = el.value.slice(0, el.selectionStart ?? el.value.length)
+      .replace(/[^0-9.]/g, "").length;
+
+    const cleaned = el.value.replace(/[^0-9.]/g, "");
+    const firstDot = cleaned.indexOf(".");
+    const noExtraDots = firstDot === -1 ? cleaned : cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
+
+    // Group the whole-number part; leave anything after the decimal point
+    // alone so a half-typed "1234." or "1234.5" still behaves.
+    const dot = noExtraDots.indexOf(".");
+    const whole = dot === -1 ? noExtraDots : noExtraDots.slice(0, dot);
+    const rest = dot === -1 ? "" : noExtraDots.slice(dot);
+    const grouped = whole === "" ? "" : Number(whole).toLocaleString("en-US");
+    const next = grouped + rest;
+
+    if (next === el.value) return;
+    el.value = next;
+
+    // Walk forward past `digitsBeforeCaret` digits to find the new caret spot.
+    let seen = 0, pos = 0;
+    while (pos < next.length && seen < digitsBeforeCaret) {
+      if (/[0-9.]/.test(next[pos])) seen++;
+      pos++;
+    }
+    try { el.setSelectionRange(pos, pos); } catch (e) { /* not all inputs allow it */ }
+  }
+  function formatMoneyDisplay(el) {
+    const raw = el.value.replace(/[^0-9.]/g, "");
+    if (raw === "" || raw === ".") { el.value = ""; return; }
+    const rounded = Math.round(Number(raw));
+    el.value = isNaN(rounded) ? "" : "$" + rounded.toLocaleString("en-US");
+  }
+  // Only the "$" comes off when you click back in -- the grouping stays, so
+  // the number does not visibly change shape just because you focused it.
+  function unformatMoneyDisplay(el) {
+    el.value = el.value.replace(/[$\s]/g, "");
+  }
+  document.querySelectorAll(".money-input").forEach((el) => {
+    el.addEventListener("input", () => sanitizeMoneyInput(el));
+    el.addEventListener("focus", () => unformatMoneyDisplay(el));
+    el.addEventListener("blur", () => formatMoneyDisplay(el));
+  });
+
+  // What goes in the payload. The submitted value may be sitting in its
+  // blurred "$35,030,501" form, so strip back to digits before sending. The
+  // Edge Function strips too, but a clean payload is worth more than one
+  // that only survives because something downstream tidies it.
+  const moneyValue = (id) => $(id).value.replace(/[^0-9.]/g, "");
+
+  async function init() {
+    const programCode = resolveProgramCode();
+    if (!programCode) {
+      $("loading-view").classList.add("hidden");
+      $("invalid-view").classList.remove("hidden");
+      return;
+    }
+    const { data, error } = await sb.rpc("get_public_program_by_code", { p_code: programCode });
+    const row = Array.isArray(data) ? data[0] : data;
+    if (error || !row) {
+      $("loading-view").classList.add("hidden");
+      $("invalid-view").classList.remove("hidden");
+      return;
+    }
+    program = row;
+    $("program-name").textContent = program.name;
+    if (program.logo_url) {
+      $("program-logo").src = program.logo_url;
+      $("program-logo").alt = program.name;
+      $("program-logo").classList.remove("hidden");
+    }
+    $("loading-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+  }
+
+  // ---------- Submit ----------
+  // Missing/invalid-field highlighting (Greg, 9/4/26) -- clears whatever
+  // the previous submit attempt flagged, so a fixed field's highlight
+  // doesn't linger once it's valid again. Each flagged field gets its own
+  // small red note right under it (not just a border, which is too easy
+  // to miss/mistake for styling) -- inserted/removed alongside the
+  // .field-invalid class rather than living in the markup, since which
+  // fields need it depends on what was actually left blank.
+  const form = $("app-form");
+  function markFieldInvalid(el) {
+    el.classList.add("field-invalid");
+    if (el.nextElementSibling?.classList.contains("field-error-text")) return;
+    const hint = document.createElement("div");
+    hint.className = "field-error-text";
+    hint.textContent = el.validity.valueMissing ? "This field is required." : "Please check this field.";
+    el.insertAdjacentElement("afterend", hint);
+  }
+  function clearFieldInvalid(el) {
+    el.classList.remove("field-invalid");
+    if (el.nextElementSibling?.classList.contains("field-error-text")) el.nextElementSibling.remove();
+  }
+  function clearFieldErrors() {
+    form.querySelectorAll(".field-invalid").forEach(clearFieldInvalid);
+    $("submit-error").classList.add("hidden");
+  }
+  // Un-highlight a field the moment it's fixed, rather than making someone
+  // hit Submit again just to see the red border go away.
+  form.addEventListener("input", (e) => {
+    if (e.target.classList.contains("field-invalid") && e.target.checkValidity()) {
+      clearFieldInvalid(e.target);
+    }
+  });
+
+  $("app-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearBanner();
+    clearFieldErrors();
+
+    if (!form.checkValidity()) {
+      const invalidFields = [...form.querySelectorAll(":invalid")];
+      invalidFields.forEach(markFieldInvalid);
+      if (invalidFields[0]) invalidFields[0].scrollIntoView({ behavior: "smooth", block: "center" });
+      // Greg (9/4/26): the message sits at the bottom of the form, so every
+      // flagged field is physically above it, not below -- said "above"
+      // now instead of the wrong direction.
+      const submitError = $("submit-error");
+      submitError.textContent = "Your application wasn't submitted — please fill in the highlighted field(s) above.";
+      submitError.classList.remove("hidden");
+      return;
+    }
+
+    const yesNo = (id) => {
+      const v = $(id).value;
+      return v === "yes" ? true : v === "no" ? false : undefined;
+    };
+
+    const data = {
+      "f-company-name": $("f-company-name").value.trim(),
+      "f-website": $("f-website").value.trim(),
+      "f-year-founded": $("f-year-founded").value,
+      // Ownership was pulled from the form on 9/2/26 and is back as of
+      // 9/6/26, because the internal application view still has a "Private
+      // or Public?" row and nothing was filling it. Program Contact stays
+      // removed -- it isn't a row in that view.
+      "f-program-contact": "",
+      "f-street": $("f-street").value.trim(),
+      "f-city": $("f-city").value.trim(),
+      "f-state": $("f-state").value.trim(),
+      "f-postal": $("f-postal").value.trim(),
+      "f-county": $("f-county").value.trim(),
+      // New on the form 9/6/26 -- the internal view has had rows for all of
+      // these all along, but the Edge Function was writing null/"United
+      // States" into them because nothing on the public side asked.
+      "f-country": $("f-country").value.trim(),
+      "f-phone": $("f-phone").value.trim(),
+      "f-cc-emails": $("f-cc-emails").value.trim(),
+      "f-t-name": $("f-t-name").value.trim(),
+      "f-t-title": $("f-t-title").value.trim(),
+      "f-t-email": $("f-t-email").value.trim(),
+      "f-t-phone": $("f-t-phone").value.trim(),
+      "f-p-name": $("f-p-name").value.trim(),
+      "f-p-title": $("f-p-title").value.trim(),
+      "f-p-email": $("f-p-email").value.trim(),
+      "f-p-phone": $("f-p-phone").value.trim(),
+      "f-s-name": $("f-s-name").value.trim(),
+      "f-s-title": $("f-s-title").value.trim(),
+      "f-s-email": $("f-s-email").value.trim(),
+      "f-s-phone": $("f-s-phone").value.trim(),
+      "f-naics": $("f-naics").value.trim(),
+      "f-fte-range": yesNo("f-fte-range"),
+      "f-fte-2025": $("f-fte-2025").value,
+      "f-fte-2024": $("f-fte-2024").value,
+      "f-fte-2023": $("f-fte-2023").value,
+      "f-sales-range": yesNo("f-sales-range"),
+      "f-rev-2025": moneyValue("f-rev-2025"),
+      "f-rev-2024": moneyValue("f-rev-2024"),
+      "f-rev-2023": moneyValue("f-rev-2023"),
+      "f-sales-external": yesNo("f-sales-external"),
+      "f-pct-instate": $("f-pct-instate").value,
+      "f-top-issues": $("f-top-issues").value.trim(),
+      "f-news-links": $("f-news-links").value.trim(),
+      // Sent as 6 distinct per-platform keys -- the SAME field ids the
+      // internal wizard's own structured Social fields use
+      // (client_applications.html, 095_application_structured_social_
+      // links.sql) -- so a submitted application opens up in that wizard
+      // with these already filled in per-platform, AND (more importantly,
+      // Greg 8/29/26: "i want the client to give them to us on the
+      // application... we don't have to guess what they are") they carry
+      // straight through to the client's Company page automatically once
+      // the application is accepted, no re-typing or re-Googling needed.
+      "f-social-facebook": $("f-social-facebook").value.trim(),
+      "f-social-linkedin": $("f-social-linkedin").value.trim(),
+      "f-social-twitter": $("f-social-twitter").value.trim(),
+      "f-social-instagram": $("f-social-instagram").value.trim(),
+      "f-social-youtube": $("f-social-youtube").value.trim(),
+      "f-social-other": $("f-social-other").value.trim(),
+      "_secondaryOpen": !!($("f-s-name").value.trim()),
+    };
+
+    if (data["f-fte-range"] === undefined || data["f-sales-range"] === undefined || data["f-sales-external"] === undefined) {
+      showBanner("Please answer all of the Yes/No questions before submitting.");
+      return;
+    }
+
+    const submitBtn = $("submit-btn");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Submitting…";
+
+    try {
+      // Attachments removed from the form (Greg, 9/2/26) -- still sent as an
+      // empty array so the Edge Function payload shape is unchanged.
+      const attachments = [];
+
+      const res = await fetch(SUBMIT_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ programCode: program.code, data, attachments }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok || result.error) throw new Error(result.error || `Request failed (${res.status})`);
+      if (result.warning) console.warn("Application submitted with a warning:", result.warning);
+
+      $("app-view").classList.add("hidden");
+      $("success-view").classList.remove("hidden");
+    } catch (err) {
+      showBanner("Couldn't submit your application: " + err.message + " Please try again.");
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Submit Application";
+    }
+  });
+
+  init();
+</script>
+</body>
+</html>
