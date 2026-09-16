@@ -1,0 +1,2570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EG Dashboard — Engagement Applications</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #eaeff4;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  /* Hide the up/down spinner controls on number inputs everywhere — they get in the way, just type the number. */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
+  header { background: var(--navy); color: #fff; padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 12.5px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12.5px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  #userbox { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  #userbox .user-email { color: #c9d6e3; font-size: 11px; opacity: 0.7; margin-left: 2px; white-space: nowrap; }
+  @media (max-width: 900px) { #userbox .user-email { display: none; } }
+
+  button { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: var(--danger-dark); }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12.5px; }
+
+  /* Account menu -- Change Password + Sign out tucked into one dropdown
+     instead of sitting in the top bar as separate buttons, per Chris's
+     "slim it down" request (8/18/26). */
+  #profile-wrap { position: relative; }
+  #profile-btn { display: flex; align-items: center; gap: 4px; padding: 4px 6px; }
+  #profile-btn .avatar-icon {
+    width: 24px; height: 24px; border-radius: 999px; background: rgba(255,255,255,0.14);
+    display: flex; align-items: center; justify-content: center; color: #c9d6e3;
+  }
+  #profile-btn .avatar-icon svg { width: 14px; height: 14px; }
+  #profile-btn .chevron { font-size: 9px; color: #c9d6e3; }
+  .profile-dropdown {
+    position: absolute; top: 40px; right: 0; width: 150px; padding: 6px; background: #fff; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60;
+  }
+  .profile-dropdown button, header .profile-dropdown button {
+    width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--text);
+  }
+  .profile-dropdown button:hover, header .profile-dropdown button:hover { background: #eef1f4; color: var(--text); }
+
+  /* Notification bell (Chris, 9/4/26): same styling as the Home page,
+     added everywhere so it's "prominently displayed on every page." */
+  #notif-wrap { position: relative; }
+  #notif-bell { position: relative; font-size: 15px; line-height: 1; }
+  .notif-count { position: absolute; top: -3px; right: -3px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; min-width: 16px; height: 16px; border-radius: 999px; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
+  .notif-dropdown { position: absolute; top: 40px; right: 0; width: min(320px, calc(100vw - 24px)); max-height: 420px; overflow-y: auto; background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60; }
+  .notif-dropdown-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; font-weight: 700; }
+  .notif-item { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .notif-item:last-child { border-bottom: none; }
+  .notif-item .notif-msg { margin-bottom: 5px; line-height: 1.4; }
+  .notif-item .notif-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--muted); gap: 8px; }
+  .notif-item .notif-meta a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
+  .notif-item .notif-meta a:hover { text-decoration: underline; }
+  .notif-empty { padding: 22px 14px; text-align: center; color: var(--muted); font-size: 13px; }
+  .icon-btn { padding: 4px 8px; font-size: 13px; line-height: 1; }
+  button:disabled { opacity: 0.6; cursor: default; }
+
+  main { max-width: 900px; margin: 28px auto; padding: 0 20px 70px; }
+
+  /* Embed mode (Greg, 9/6/26: "make view application fit into the right
+     column instead of opening another window"). Same contract the other
+     pane pages use: ?embed=1 puts this inside client_control_center.html's
+     iframe pane, where the masthead, breadcrumb and Ask AI drawer are all
+     duplicates of the workspace's own one level up. #review-back goes too --
+     "Back to applications" would navigate the iframe to a list that has no
+     business appearing inside the workspace; the left nav is the way out. */
+  body.embed-mode header,
+  body.embed-mode .breadcrumb-bar,
+  body.embed-mode .ai-drawer,
+  body.embed-mode .ai-drawer-overlay,
+  body.embed-mode .ai-nudge,
+  body.embed-mode .std-toolbar-row,
+  body.embed-mode #review-back { display: none !important; }
+  body.embed-mode main { max-width: none; margin: 0; padding: 0 0 24px; }
+
+
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+
+  /* Standardized Search/Print/Export/Import toolbar (Greg, 8/27/26) -- same
+     four controls, same order, on every internal page. */
+  .std-toolbar-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+  .global-search-wrap { position: relative; flex: 1; max-width: 480px; }
+  .global-search-wrap .search-box { position: relative; }
+  .global-search-wrap .search-box input {
+    width: 100%; height: 38px; padding: 0 14px 0 38px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13.5px; background: #fff;
+  }
+  .global-search-wrap .search-box input:focus { outline: none; border-color: var(--navy-light); }
+  .global-search-wrap .search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
+  .global-search-results {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #fff;
+    border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(20,48,77,0.15);
+    z-index: 70; max-height: 420px; overflow-y: auto;
+  }
+  .gsr-group-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; padding: 10px 14px 4px; }
+  .gsr-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; cursor: pointer; font-size: 13.5px; }
+  .gsr-item:hover { background: #f4f6f8; }
+  .gsr-item .gsr-name { font-weight: 600; color: var(--text); }
+  .gsr-item .gsr-meta { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .gsr-ask-ai { color: #6528a3; font-weight: 700; border-top: 1px solid var(--border); }
+  .std-toolbar-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .std-toolbar-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #fff; }
+    main { max-width: none; margin: 0; padding: 0; }
+  }
+  .drafts-wrap { position: relative; }
+  .drafts-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--navy-light); color: #fff; font-size: 11px; font-weight: 700; margin-left: 4px; }
+  .drafts-dropdown { position: absolute; top: calc(100% + 8px); right: 0; width: min(320px, calc(100vw - 24px)); max-height: 380px; overflow-y: auto; background: #fff; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.18); z-index: 60; }
+  .drafts-dropdown.hidden { display: none; }
+  .drafts-dropdown-header { padding: 12px 14px; font-size: 12.5px; font-weight: 700; color: var(--navy); border-bottom: 1px solid var(--border); }
+  .draft-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .draft-row:last-child { border-bottom: none; }
+  .draft-row:hover { background: #f4f6f8; }
+  .draft-row-name { font-weight: 600; font-size: 13px; color: var(--text); }
+  .draft-row-time { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .draft-row-badge { background: #e9f5ee; color: var(--accent-dark); border: 1px solid #bfe3cf; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; padding: 2px 7px; border-radius: 999px; margin-left: 6px; }
+  .draft-row-delete { background: transparent; border: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 4px 6px; cursor: pointer; flex-shrink: 0; }
+  .draft-row-delete:hover { color: var(--danger); }
+  .drafts-empty { padding: 16px 14px; font-size: 12.5px; color: var(--muted); text-align: center; }
+  .drafts-empty.hidden { display: none; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tab {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    padding: 6px 14px; border-radius: 12px; font-size: 12.5px; font-weight: 600;
+    background: #eef1f4; color: var(--muted); cursor: pointer; line-height: 1.2;
+  }
+  .tab.active { background: var(--navy); color: #fff; }
+  .tab-count { font-size: 11px; font-weight: 700; opacity: 0.65; }
+  .tab.active .tab-count { opacity: 0.85; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+  @media (max-width: 640px) {
+    .table-scroll table { min-width: 640px; }
+    .grid-2, .grid-3, .review-grid { grid-template-columns: 1fr; }
+  }
+  thead th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); background: #eef2f6; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.clickable:hover { background: #fafbfc; cursor: pointer; }
+  .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; }
+
+  .badge { font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; padding: 3px 9px; border-radius: 999px; }
+  .badge-pending { background: #fdf1dc; color: var(--amber); }
+  .badge-accepted { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-rejected { background: #fbe9e9; color: var(--danger-dark); }
+  .badge-active { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-finalized { background: #e7eef7; color: var(--navy-light); }
+  .badge-archived { background: #eef1f4; color: var(--muted); }
+  .badge-in_progress { background: #e7eef7; color: var(--navy-light); }
+  .badge-on_hold { background: #fdf1dc; color: var(--amber); }
+  .badge-closed { background: #eef1f4; color: var(--muted); }
+
+  .status-pill-bar { display: flex; gap: 8px; margin: 6px 0 22px; flex-wrap: wrap; }
+  .status-pill { border: 2px solid transparent; border-radius: 999px; padding: 7px 16px; font-size: 11.5px; opacity: 0.45; transition: opacity .15s ease, box-shadow .15s ease; }
+  .status-pill:hover:not(:disabled) { opacity: 0.8; }
+  .status-pill.active { opacity: 1; border-color: currentColor; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+  .status-pill:disabled { cursor: default; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 24px 28px; }
+  .card h2 { margin-top: 0; font-size: 17px; }
+
+  fieldset { border: 1px solid var(--border); border-radius: 8px; margin: 0 0 16px; padding: 16px 18px 18px; }
+  legend { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--navy-light); padding: 0 6px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 16px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
+  .field .hint { font-weight: 400; text-transform: none; color: #9aa4b0; }
+  .field-hint { font-size: 12px; color: var(--muted); }
+  .field input[type="text"], .field input[type="number"], .field input[type="email"], .field input[type="url"], .field select, .field textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit;
+  }
+  .field textarea { resize: vertical; min-height: 60px; }
+  .checkrow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .checkrow input { width: auto; }
+  .checkrow label { margin: 0; font-weight: 500; text-transform: none; color: var(--text); font-size: 13.5px; }
+  details summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--navy-light); margin-bottom: 10px; }
+  .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+  .required-star { color: var(--danger); }
+
+  .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-bottom: 4px; }
+  .review-item { padding: 8px 0; border-bottom: 1px solid #f0f2f4; }
+  .review-item .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); font-weight: 600; }
+  .review-item .value { font-size: 14px; margin-top: 2px; }
+  .review-item .value a.link-action { display: inline-flex; align-items: center; gap: 4px; color: var(--navy-light); text-decoration: none; }
+  .review-item .value a.link-action:hover { text-decoration: underline; }
+  .review-empty { color: var(--muted); font-style: italic; }
+  .review-section-title { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--navy-light); margin: 22px 0 8px; }
+  .review-section-title:first-child { margin-top: 0; }
+
+  /* ---------- Application review: header card + section cards ---------- */
+  .app-header-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 16px; }
+  .app-header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .app-id-row { display: flex; align-items: center; gap: 14px; }
+  .app-title-block h2 { margin: 0; font-size: 21px; }
+  .app-title-block .app-subline { font-size: 13px; color: var(--muted); margin-top: 3px; }
+  .app-title-block .app-subline .sep { margin: 0 6px; opacity: 0.5; }
+  .app-status-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .app-status-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+
+  .app-meta-row {
+    display: flex; align-items: center; gap: 24px; flex-wrap: wrap; margin-top: 16px; padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .app-meta-item { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--text); }
+  .app-meta-item .meta-icon {
+    width: 30px; height: 30px; border-radius: 8px; background: #f4f6f8; display: flex; align-items: center;
+    justify-content: center; color: var(--navy-light); flex-shrink: 0;
+  }
+  .app-meta-item .meta-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .app-meta-item .meta-value { font-weight: 600; margin-top: 1px; }
+  .section-card-icon {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  }
+  .section-card-icon svg { width: 16px; height: 16px; }
+  .section-card-empty { color: var(--muted); font-size: 13px; padding: 2px 0 4px; }
+
+  .icon-blue { background: #e7eef7; color: var(--navy-light); }
+  .icon-green { background: #e9f5ee; color: var(--accent-dark); }
+  .icon-purple { background: #efe9f7; color: #6b4c9a; }
+  .icon-amber { background: #fdf3e1; color: var(--amber); }
+
+  /* Podio-style flat field list for the View Application screen -- a
+     continuous label/value row list (gray right-aligned label rail, white
+     value column) instead of the old icon-headed section cards, matching
+     the Podio "Company Profile" app reference the user provided. */
+  .podio-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 14px;
+  }
+  .podio-row {
+    display: flex; align-items: flex-start; padding: 13px 20px; border-bottom: 1px solid #f0f2f4; gap: 24px;
+  }
+  .podio-row:last-child { border-bottom: none; }
+  .podio-label {
+    width: 240px; flex-shrink: 0; text-align: right; font-size: 12.5px; color: var(--muted); padding-top: 2px; line-height: 1.4;
+  }
+  .podio-label .req { color: var(--danger); margin-right: 4px; }
+  .podio-value { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text); line-height: 1.5; }
+  .podio-subrow { display: flex; align-items: baseline; gap: 10px; padding: 3px 0; font-size: 13px; }
+  .podio-subrow:first-child { padding-top: 0; }
+  .podio-sublabel { width: 90px; flex-shrink: 0; color: var(--muted); font-size: 12px; }
+  .podio-pill-group { display: inline-flex; gap: 8px; }
+  .podio-pill {
+    display: inline-block; padding: 4px 14px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    background: #eef1f4; color: var(--muted);
+  }
+  .podio-pill.selected { background: #e7eef7; color: var(--navy-light); }
+  .podio-site-card {
+    display: flex; align-items: center; gap: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px;
+    background: #fafbfc; text-decoration: none; max-width: 360px;
+  }
+  .podio-site-card:hover { background: #f4f6f8; border-color: #c7d0d9; }
+  .podio-site-icon {
+    width: 30px; height: 30px; border-radius: 6px; background: #e7eef7; color: var(--navy-light); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .podio-site-text { min-width: 0; }
+  .podio-site-title { font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .podio-site-domain { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+  .podio-workline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .podio-work-tag {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted);
+    background: #eef1f4; border-radius: 4px; padding: 2px 6px;
+  }
+  .podio-work-action {
+    display: inline-flex; align-items: center; gap: 5px; color: var(--navy-light); text-decoration: none; font-size: 12px;
+    font-weight: 600; margin-left: auto;
+  }
+  .podio-work-action:hover { text-decoration: underline; }
+  .placeholder {
+    background: transparent; border: none; color: var(--navy-light); font-size: 13.5px; font-weight: 600; padding: 0;
+    cursor: pointer; text-align: left;
+  }
+  .placeholder:hover { text-decoration: underline; }
+  .placeholder-static { color: var(--muted); }
+  @media (max-width: 640px) {
+    .podio-row { flex-direction: column; gap: 4px; padding: 12px 16px; }
+    .podio-label { width: auto; text-align: left; }
+  }
+
+  /* Collapsible accordion cards for the lower, less-frequently-needed sections */
+  .accordion-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
+  .accordion-card summary {
+    list-style: none; cursor: pointer; padding: 16px 20px; display: flex; align-items: center; gap: 12px;
+    font-size: 15px; font-weight: 700; color: var(--text); margin: 0;
+  }
+  .accordion-card summary::-webkit-details-marker { display: none; }
+  .accordion-card summary .accordion-sub { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 2px; }
+  .accordion-card summary .accordion-chevron { margin-left: auto; color: var(--muted); transition: transform 0.15s ease; }
+  .accordion-card[open] summary .accordion-chevron { transform: rotate(180deg); }
+  .accordion-card .accordion-body { padding: 0 20px 18px; }
+
+  .confidential-note {
+    display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 12px;
+    margin-top: 18px; padding-top: 4px;
+  }
+
+  /* ---------- New Application wizard ---------- */
+  .wizard-topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  .wizard-topbar h2 { margin: 0; font-size: 24px; }
+  .wizard-progress-text { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  /* Greg (8/29/26): "we don't need save draft if it autosaves. a short
+     popup every now and again that says autosaved would be nice." Replaced
+     the always-on save-indicator text (and the manual Save Draft button)
+     with this fixed-position toast that briefly appears after each
+     successful autosave, wherever you're scrolled to in the form, then
+     fades on its own -- see showAutosaveToast(). */
+  .autosave-toast {
+    position: fixed; bottom: 24px; right: 24px; z-index: 200;
+    background: var(--navy); color: #fff; font-size: 13px; font-weight: 600;
+    padding: 10px 18px; border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    opacity: 0; transform: translateY(6px); pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+  }
+  .autosave-toast.show { opacity: 1; transform: translateY(0); }
+
+  .wizard-progress-bar { height: 6px; border-radius: 999px; background: #e7ecf1; overflow: hidden; margin-bottom: 20px; }
+  .wizard-progress-fill { height: 100%; border-radius: 999px; background: var(--navy-light); transition: width 0.25s ease; }
+
+  .wizard-steps-track { display: flex; align-items: center; margin-bottom: 22px; }
+  .wizard-step-pill { display: flex; align-items: center; gap: 9px; flex-shrink: 0; cursor: pointer; }
+  .wizard-step-pill .circle {
+    width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; border: 2px solid var(--border); color: var(--muted); background: #fff; flex-shrink: 0;
+  }
+  .wizard-step-pill .label { font-size: 13.5px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+  .wizard-step-pill.active .circle { background: var(--navy-light); border-color: var(--navy-light); color: #fff; }
+  .wizard-step-pill.active .label { color: var(--navy); }
+  .wizard-step-pill.complete .circle { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .wizard-step-pill.complete .label { color: var(--text); }
+  .wizard-step-connector { flex: 1; height: 2px; background: var(--border); margin: 0 10px; min-width: 20px; }
+  @media (max-width: 900px) { .wizard-step-pill .label { display: none; } }
+
+  .wizard-body { display: grid; grid-template-columns: 220px 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 800px) { .wizard-body { grid-template-columns: 1fr; } .wizard-sidebar { order: 2; } }
+  .wizard-sidebar { display: flex; flex-direction: column; gap: 14px; }
+  .wizard-progress-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .wizard-progress-card-title { font-size: 13.5px; font-weight: 700; color: var(--navy); margin-bottom: 2px; }
+  .wizard-progress-card-sub { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .wizard-ai-note { display: flex; align-items: flex-start; gap: 10px; background: #f4f0fb; border: 1px solid #e3d5f7; border-radius: 10px; padding: 12px 14px; cursor: pointer; }
+  .wizard-ai-note:hover { background: #ecdffa; }
+  .wizard-ai-note svg { width: 16px; height: 16px; color: #7c3fc4; flex-shrink: 0; margin-top: 1px; }
+  .wizard-ai-note-title { font-weight: 700; font-size: 12.5px; color: #5a2494; margin-bottom: 2px; }
+  .wizard-ai-note-text { font-size: 12px; color: var(--text); }
+  .wizard-side-steps { display: flex; flex-direction: column; gap: 2px; }
+  .wizard-side-step {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px; border-radius: 7px;
+    cursor: pointer; font-size: 13px;
+  }
+  .wizard-side-step:hover { background: #f4f6f8; }
+  .wizard-side-step.active { background: #e7eef7; }
+  .wizard-side-step-left { display: flex; align-items: center; gap: 10px; }
+  .wizard-side-step .circle {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--muted); background: #fff; flex-shrink: 0;
+  }
+  .wizard-side-step.active .circle { background: var(--navy-light); border-color: var(--navy-light); color: #fff; }
+  .wizard-side-step.complete .circle { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .wizard-side-step-name { font-weight: 600; color: var(--text); }
+  .wizard-side-step-status { font-size: 11.5px; color: var(--muted); }
+  .wizard-side-step.active .wizard-side-step-name { color: var(--navy-light); }
+
+  .wizard-panel-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; }
+  .wizard-panel-card h3 { margin: 0 0 3px; font-size: 18px; }
+  .wizard-panel-hint { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+  .wizard-required-note { font-size: 12px; color: var(--muted); margin-top: 14px; }
+
+  .add-contact-btn {
+    display: flex; align-items: center; gap: 8px; background: transparent; border: 1px dashed var(--border); border-radius: 8px;
+    padding: 12px 16px; color: var(--navy-light); font-size: 13.5px; font-weight: 600; width: 100%; justify-content: center;
+  }
+  .add-contact-btn:hover { background: #f4f6f8; border-color: #c7d0d9; }
+  .contact-form-card { border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; margin-bottom: 14px; position: relative; }
+  .contact-form-card .contact-form-title { font-weight: 700; font-size: 13.5px; margin-bottom: 10px; }
+  .contact-remove-btn { position: absolute; top: 12px; right: 14px; background: transparent; color: var(--muted); font-size: 12px; padding: 3px 8px; }
+  .contact-remove-btn:hover { background: #fbe9e9; color: var(--danger-dark); }
+
+  .wizard-bottom-bar {
+    position: sticky; bottom: 0; background: #fff; border-top: 1px solid var(--border); margin: 22px -20px -70px;
+    padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+  .wizard-bottom-right { display: flex; align-items: center; gap: 10px; }
+
+  .accept-box { background: #eef2f6; border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; margin-top: 22px; }
+  .accept-box h3 { margin: 0 0 4px; font-size: 15px; }
+  .cc-picker { margin: 16px 0 4px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .cc-picker-head { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+  .cc-picker-head .hint { font-weight: 400; color: var(--muted); }
+  .cc-list { display: flex; flex-direction: column; gap: 2px; }
+  .cc-row {
+    display: grid; grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1.4fr);
+    align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; cursor: pointer;
+  }
+  .cc-row:hover { background: #fff; }
+  .cc-row input { margin: 0; width: auto; accent-color: var(--navy); }
+  .cc-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .cc-meta { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cc-empty { font-size: 12.5px; color: var(--muted); }
+  @media (max-width: 640px) {
+    .cc-row { grid-template-columns: 18px minmax(0, 1fr); }
+    .cc-meta { grid-column: 2; }
+  }
+  .accept-box .desc { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+  .slug-preview { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .slug-preview strong { color: var(--navy); font-family: "SF Mono", Menlo, monospace; }
+  .field-error { color: var(--danger); font-size: 12px; margin-top: 6px; display: none; }
+
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 50; }
+  .overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 10px; width: 380px; max-width: 92vw; padding: 26px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
+  .modal h3 { margin: 0 0 10px; font-size: 16.5px; }
+  .modal p { font-size: 13.5px; color: var(--muted); }
+  .modal .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .hidden { display: none !important; }
+  /* Greg (9/6/26): "hide the dropdowns on Programs and Roster for Specialists
+     and Team Members." Everything in those two submenus is an Admin action
+     (Add Program, Application Links, Add Roster Member), so for everyone else
+     the caret opens an empty menu -- the label stays a plain link instead.
+     This needs its own rule rather than leaning on .hidden: the <=900px nav
+     sets `.nav-submenu { display: block !important }` further down the sheet,
+     which beats a bare .hidden at equal specificity and would pop the menu
+     back open on a phone. Two classes outrank one. */
+  [data-super-admin-only].hidden { display: none !important; }
+  /* Chris/Greg (9/2/26): retire the header Ask AI drawer, and drop the name/role chip (the account menu stays). */
+  .ask-ai-wrap, .ai-drawer, .ai-drawer-overlay, .ai-nudge { display: none !important; }
+  #user-name, #user-role { display: none !important; }
+  /* Chris (9/4/26): breadcrumb moved out of the dark header (where it sat
+     jammed against the logo) into its own light bar below, matching
+     Podio's own breadcrumb strip -- centered, colors flipped for a light
+     background. */
+  .breadcrumb-bar { background: #fff; border-bottom: 1px solid var(--border); padding: 10px 20px; }
+  .breadcrumb { font-size: 13px; color: var(--muted); margin: 0; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; justify-content: center; line-height: 1.4; }
+  .breadcrumb a { color: var(--navy-light); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb .sep { opacity: 0.5; }
+  .breadcrumb .current { color: var(--navy); font-weight: 700; }
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+  header .brand-row { display: flex; align-items: center; gap: 14px; }
+  /* Chris (9/4/26): logo same size everywhere as the Home page. */
+  .brand-badge { background: #fff; border-radius: 8px; padding: 8px 14px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 36px; display: block; }
+  /* Greg (9/11/26): "remove all title text to the right of the logo." The
+     brand row is the NCEG logo alone now -- .brand-tagline and .brand-subline
+     are gone rather than hidden, so nothing is left to un-hide by accident. */
+
+  /* ---------- Top nav + Ask AI ---------- */
+  header { position: relative; }
+  header .site-nav { display: flex; align-items: center; gap: 4px; }
+  header .nav-link { color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 8px 12px; border-radius: 6px; position: relative; }
+  header .nav-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  header .nav-link.active { color: #fff; }
+  header .nav-link.active::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -14px; height: 2px; background: #fff; }
+  .nav-toggle {
+    display: none; align-items: center; justify-content: center; width: 34px; height: 34px;
+    background: rgba(255,255,255,0.1); border: none; border-radius: 6px; color: #fff; cursor: pointer; flex-shrink: 0;
+  }
+  .nav-toggle:hover { background: rgba(255,255,255,0.18); }
+  /* Chris (9/4/26): dropdown top-nav submenu, piloted on Invoicing --
+     Time Sheets / Program Invoices / Pay Statements. Click-to-toggle
+     (not hover-only) so it matches the account-menu pattern already used
+     elsewhere and stays usable on touch. Active state (parent + child) is
+     set by JS below based on the current page, not hardcoded per file. */
+  .nav-item-dropdown { position: relative; }
+  .nav-link-dropdown-btn { display: inline-flex; align-items: center; gap: 4px; font: inherit; background: none; border: none; cursor: pointer; }
+  .nav-link-dropdown-btn .nav-caret { font-size: 9px; opacity: 0.7; }
+  .nav-submenu {
+    position: absolute; top: 100%; left: 0; margin-top: 8px; min-width: 230px; max-width: 320px; background: var(--navy);
+    border-radius: 10px; padding: 6px; box-shadow: 0 10px 24px rgba(0,0,0,0.28); display: none; z-index: 97;
+  }
+  .nav-item-dropdown.open .nav-submenu { display: block; }
+  /* Greg (9/6/26): the top-nav dropdowns open on hover, not click-only.
+     .nav-submenu sits 8px below its nav item (margin-top), and that gap is
+     dead space the pointer would cross on the way down -- the ::before
+     bridge covers it so the menu doesn't blink shut mid-travel. Click still
+     works for touch and keyboard; the nav script clears the clicked-open
+     state on mouseleave so it can't stay stuck open. */
+  @media (hover: hover) {
+    .nav-item-dropdown:hover .nav-submenu { display: block; }
+    .nav-submenu::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
+  }
+  .nav-submenu a { display: block; padding: 9px 12px; border-radius: 6px; color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; white-space: normal; }
+  .nav-submenu a:hover, .nav-submenu a.active { background: rgba(255,255,255,0.14); color: #fff; }
+  /* Applications nav dropdown content (Chris, 9/4/26) -- dynamic, unlike
+     Invoicing's fixed 3 links, so it needs a meta line, an empty state,
+     and a "View All" footer row the static dropdown didn't. */
+  .nav-submenu .nav-submenu-meta { display: block; font-size: 11px; font-weight: 400; color: #9fb3c8; margin-top: 1px; }
+  .nav-submenu .nav-submenu-empty { padding: 9px 12px; font-size: 12.5px; color: #9fb3c8; font-weight: 400; }
+  .nav-submenu .nav-submenu-viewall { font-weight: 700; border-top: 1px solid rgba(255,255,255,0.14); margin-top: 4px; padding-top: 10px; }
+  @media (max-width: 980px) {
+    .nav-item-dropdown { position: static; }
+    .nav-submenu { position: static; display: block !important; box-shadow: none; background: transparent; padding: 0 0 4px 26px; margin-top: 0; }
+    .nav-submenu::before { display: none; }
+    .nav-link-dropdown-btn .nav-caret { display: none; }
+    .nav-caret-only { display: none; }
+  }
+  /* "Programs" needs to stay a real link to the Programs list (Greg,
+     9/6/26 -- a plain dropdown-toggle button with no href broke direct
+     navigation there from every other page), while still offering "Add
+     Program" / "Application Links" as a dropdown -- so unlike Invoicing
+     (one button does both), Programs splits into a normal nav-link plus a
+     small separate caret button that only toggles the submenu. */
+  .nav-split-item { display: flex; align-items: center; }
+  .nav-split-item .nav-link { padding-right: 4px; }
+  .nav-caret-only {
+    display: inline-flex; align-items: center; font: inherit; background: none; border: none; cursor: pointer;
+    color: #c9d6e3; padding: 8px 10px 8px 2px; border-radius: 6px;
+  }
+  .nav-caret-only:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  .nav-caret-only .nav-caret { font-size: 9px; opacity: 0.7; }
+  .nav-toggle svg { width: 20px; height: 20px; display: block; }
+  @media (max-width: 980px) {
+    .nav-toggle { display: inline-flex; }
+    header .site-nav {
+      display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; gap: 2px;
+      background: var(--navy); padding: 8px; box-shadow: 0 10px 24px rgba(0,0,0,0.28); z-index: 96;
+      border-radius: 0 0 10px 10px;
+    }
+    header .site-nav.open { display: flex; }
+    header .nav-link { padding: 12px 14px; border-radius: 6px; }
+    header .nav-link.active { background: rgba(255,255,255,0.14); }
+    header .nav-link.active::after { display: none; }
+  }
+
+  .ask-ai-btn {
+    display: inline-flex; align-items: center; gap: 6px; background: rgba(124,63,196,0.18); color: #d9c8f5;
+    border: 1px solid rgba(124,63,196,0.5); padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  }
+  .ask-ai-btn:hover { background: rgba(124,63,196,0.3); color: #fff; }
+  .ask-ai-btn svg { width: 14px; height: 14px; }
+  .ask-ai-wrap { position: relative; }
+  .ai-nudge { position: absolute; top: calc(100% + 12px); right: 0; width: 220px; background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.22); padding: 12px 26px 12px 14px; font-size: 12.5px; line-height: 1.45; z-index: 95; }
+  .ai-nudge.hidden { display: none; }
+  .ai-nudge::before { content: ""; position: absolute; top: -6px; right: 22px; width: 11px; height: 11px; background: #fff; border-left: 1px solid var(--border); border-top: 1px solid var(--border); transform: rotate(45deg); }
+  .ai-nudge-close { position: absolute; top: 6px; right: 8px; background: transparent; border: none; color: var(--muted); font-size: 15px; line-height: 1; padding: 2px; cursor: pointer; }
+
+  .ai-drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.25); z-index: 90; }
+  .ai-drawer-overlay.open { display: block; }
+  .ai-drawer {
+    position: fixed; top: 0; right: -460px; width: 440px; max-width: 92vw; height: 100vh; background: #fff;
+    box-shadow: -8px 0 28px rgba(20,48,77,0.18); z-index: 91; display: flex; flex-direction: column; transition: right 0.22s ease;
+  }
+  .ai-drawer.open { right: 0; }
+  .ai-drawer-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 20px 22px 14px; border-bottom: 1px solid var(--border); }
+  .ai-drawer-header h3 { margin: 0; font-size: 18px; color: var(--navy); display: flex; align-items: center; gap: 8px; }
+  .ai-drawer-header h3 svg { color: #7c3fc4; width: 19px; height: 19px; }
+  .ai-drawer-header .card-hint { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+  .ai-drawer-close { background: transparent; border: none; color: var(--muted); font-size: 20px; padding: 4px; cursor: pointer; line-height: 1; }
+  .ai-drawer-close:hover { color: var(--text); }
+  .ai-drawer-body { flex: 1; overflow-y: auto; padding: 18px 22px; }
+  .ai-context-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; }
+  .ai-context-chip { display: flex; align-items: center; gap: 8px; background: #f4f6f8; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--text); margin-bottom: 18px; }
+  .ai-context-chip svg { color: var(--navy-light); flex-shrink: 0; width: 15px; height: 15px; }
+  .ai-greeting-bubble { background: #f4f0fb; color: var(--text); border: 1px solid #e3d5f7; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.5; margin-bottom: 18px; }
+  .ai-ask-label { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+  .ai-ask-row { display: flex; gap: 8px; margin-bottom: 18px; }
+  .ai-ask-row input { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13.5px; font-family: inherit; }
+  .ai-ask-row input:focus { outline: none; border-color: #7c3fc4; }
+  .ai-ask-send { width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #7c3fc4; color: #fff; border-radius: 8px; }
+  .ai-ask-send:hover { background: #6528a3; }
+  .ai-ask-send svg { width: 17px; height: 17px; }
+  .ai-suggested-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 8px; }
+  .ai-suggested-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 20px; }
+  .ai-suggested-chip { text-align: left; background: #f4f0fb; color: #5a2494; border: 1px solid #e3d5f7; border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; width: 100%; }
+  .ai-suggested-chip:hover { background: #ecdffa; }
+  .ai-suggested-chip svg { width: 13px; height: 13px; flex-shrink: 0; color: #7c3fc4; }
+  .ai-answer-block { border-top: 1px solid var(--border); padding-top: 16px; }
+  .ai-answer-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .ai-answer-meta .ai-answer-title { font-size: 13px; font-weight: 700; color: var(--navy); }
+  .ai-answer-meta .ai-answer-time { font-size: 11.5px; color: var(--muted); }
+  .ai-answer-card { background: #f4f0fb; border-radius: 10px; padding: 14px 16px; font-size: 13.5px; line-height: 1.55; color: var(--text); }
+  .ai-answer-card ul { margin: 8px 0; padding-left: 18px; }
+  .ai-answer-card li { margin-bottom: 3px; }
+  .ai-answer-card strong { color: var(--navy); }
+  .ai-answer-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .ai-answer-actions button { background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; color: var(--muted); font-size: 12px; }
+  .ai-answer-actions button:hover { color: var(--text); background: #f4f6f8; }
+  .ai-drawer-footer { padding: 12px 22px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+
+<script>
+  if (new URLSearchParams(location.search).get("embed") === "1") {
+    document.body.classList.add("embed-mode");
+    // Inside the workspace pane, an ordinary internal link would load a whole
+    // second copy of the app inside the iframe -- masthead, nav and all --
+    // with no way back out. "Edit hours & consultants" and the empty-state
+    // "Back to Engagements" both do exactly that. Delegated rather than a
+    // pass over the anchors, because most of this page's links are rendered
+    // after load (Greg, 9/6/26).
+    document.addEventListener("click", (e) => {
+      const a = e.target.closest("a[href]");
+      if (!a || a.target) return;
+      const href = a.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) return;
+      if (!/\.html(\?|$|#)/.test(href)) return;
+      e.preventDefault();
+      window.top.location.href = a.href;
+    });
+  }
+</script>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="app-view" class="hidden">
+  <header class="no-print">
+    <div class="brand-row">
+      <a class="brand-badge" href="index.html"><img src="NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></a>
+    </div>
+    <nav class="site-nav">
+      <div class="nav-item-dropdown hidden" id="nav-applications-dropdown">
+        <button type="button" class="nav-link nav-link-dropdown-btn">Applications <span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" id="nav-applications-submenu"></div>
+      </div>
+      <div class="nav-item-dropdown nav-split-item">
+        <a href="index.html" class="nav-link active">Engagements</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Engagements menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
+          <a href="index.html?status=closed">Closed Engagements</a>
+        </div>
+      </div>
+      <div class="nav-item-dropdown nav-split-item">
+        <a href="econ_dev_partners_admin.html" class="nav-link">Programs</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Programs menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
+          <a href="econ_dev_partners_admin.html?action=add">Add Program</a>
+          <a href="program_application_links.html" data-super-admin-only>Application Links</a>
+        </div>
+      </div>
+      <div class="nav-item-dropdown nav-split-item">
+        <a href="team_directory.html" class="nav-link">Roster</a>
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Roster menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
+          <a href="team_directory.html?action=add">Add Roster Member</a>
+        </div>
+      </div>
+      <div class="nav-item-dropdown" data-super-admin-only>
+        <button type="button" class="nav-link nav-link-dropdown-btn">Invoicing <span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu">
+          <a href="invoicing_report.html">Time Sheets</a>
+          <a href="program_invoicing.html">Program Invoices</a>
+          <a href="specialist_invoices.html">Pay Statements</a>
+        </div>
+      </div>
+    </nav>
+    <button type="button" class="nav-toggle" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div id="userbox">
+      <div class="ask-ai-wrap">
+        <button type="button" class="ask-ai-btn" id="ask-ai-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z"/><path d="M19 14l.9 2.6L22 17.5l-2.1.9L19 21l-.9-2.6L16 17.5l2.1-.9L19 14z"/></svg>
+          Ask AI
+        </button>
+        <div class="ai-nudge hidden" id="ai-nudge">
+          <button type="button" class="ai-nudge-close" id="ai-nudge-close" aria-label="Dismiss">&times;</button>
+          I'm here if you have any questions — just click <strong>Ask AI</strong> any time.
+        </div>
+      </div>
+      <!-- Notification bell (Chris, 9/4/26): "make sure the bell is
+           prominently displayed on every page" -- was Home-page only.
+           Wired by a self-contained script (see end of file) that does
+           its own admin check, same pattern as the Applications nav
+           dropdown. -->
+      <div id="notif-wrap" class="hidden">
+        <button class="btn-ghost" id="notif-bell" title="Notifications">
+          &#128276;
+          <span id="notif-count" class="notif-count hidden">0</span>
+        </button>
+        <div id="notif-dropdown" class="notif-dropdown hidden">
+          <div class="notif-dropdown-header">
+            <span>Notifications</span>
+            <button class="btn-ghost btn-sm" id="notif-mark-all">Mark all read</button>
+          </div>
+          <div id="notif-list"></div>
+        </div>
+      </div>
+      <span id="user-name"></span>
+      <span class="role-pill" id="user-role"></span><span class="user-email" id="user-email" title="The account you are signed in as"></span>
+      <div id="profile-wrap">
+        <button class="btn-ghost" id="profile-btn" title="Account menu">
+          <span class="avatar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="chevron">&#9662;</span>
+        </button>
+        <div id="profile-dropdown" class="profile-dropdown hidden">
+          <button class="btn-ghost" id="change-password-btn">Change Password</button>
+          <button class="btn-ghost" id="signout-btn">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="breadcrumb-bar no-print">
+    <div class="breadcrumb" id="breadcrumb-trail"><a href="index.html">Engagements</a><span class="sep">›</span><span class="current">Application</span></div>
+  </nav>
+
+  <div class="ai-drawer-overlay no-print" id="ai-drawer-overlay"></div>
+  <div class="ai-drawer no-print" id="ai-drawer">
+    <div class="ai-drawer-header">
+      <div>
+        <h3><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z"/></svg>Ask AI</h3>
+        <div class="card-hint">Ask about applications, engagements, programs, and specialists.</div>
+      </div>
+      <button type="button" class="ai-drawer-close" id="ai-drawer-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="ai-drawer-body">
+      <div class="ai-context-label">Current context</div>
+      <div class="ai-context-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+        <span id="ai-context-text">Engagement Applications</span>
+      </div>
+      <div class="ai-greeting-bubble">Hi! I'm your EG Group assistant. Ask me anything about applications, or about engagements, hours, programs, and team data across the app.</div>
+      <div class="ai-ask-label">What would you like to know?</div>
+      <div class="ai-ask-row">
+        <input type="text" id="ai-ask-input" placeholder="Ask a question…" autocomplete="off" />
+        <button type="button" class="ai-ask-send" id="ai-ask-send" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+      </div>
+      <div class="ai-suggested-label">Suggested</div>
+      <div class="ai-suggested-list" id="ai-suggested-list"></div>
+      <div class="ai-answer-block hidden" id="ai-answer-block">
+        <div class="ai-answer-meta">
+          <span class="ai-answer-title">Answer</span>
+          <span class="ai-answer-time" id="ai-answer-time">Just now</span>
+        </div>
+        <div class="ai-answer-card" id="ai-answer-card"></div>
+        <div class="ai-answer-actions">
+          <button type="button" title="Copy" id="ai-answer-copy">&#10697;</button>
+        </div>
+      </div>
+    </div>
+    <div class="ai-drawer-footer">AI responses may be inaccurate. Verify important information.</div>
+  </div>
+
+  <main>
+    <div id="banner"></div>
+    <div class="autosave-toast" id="autosave-toast">Autosaved</div>
+
+    <!-- ===== NOTHING SELECTED ===== -->
+    <!-- Greg (9/4/26): this page is deep-link-only now -- "the
+         applications button either opens a specific application or it
+         goes nowhere else." The browsable list and the internal "+ New
+         Application" wizard (including Drafts) are gone -- the
+         Applications nav dropdown is the only way in, and every item in
+         it links straight to one specific application (?application=ID)
+         or an accepted one's record (?client=ID, from Engagement
+         Workspace). Landing here with neither just means there's nothing
+         to show. -->
+    <div id="view-none">
+      <div class="card" style="text-align:center; padding:48px 24px;">
+        <p style="color:var(--muted); font-size:14px; margin:0 0 14px;">No application selected.</p>
+        <p style="color:var(--muted); font-size:13px; margin:0 0 18px;">Open one from the <strong>Applications</strong> menu above.</p>
+        <a class="btn-secondary" href="index.html">&larr; Back to Engagements</a>
+      </div>
+    </div>
+
+    <!-- ===== REVIEW VIEW ===== -->
+    <div id="view-review" class="hidden">
+      <button class="btn-ghost" id="review-back" style="margin-bottom:12px; padding-left:0;">&larr; Back to applications</button>
+      <div id="review-content"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Edit Application modal -->
+<div class="overlay" id="edit-app-overlay">
+  <div class="modal" style="width:560px; max-height:88vh; overflow-y:auto;">
+    <h3 style="margin:0 0 4px;">Edit Application</h3>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:6px;">Changes save to this application's record — company profile pages (for accepted clients) are edited separately from Client Profile.</div>
+    <form id="edit-app-form">
+      <fieldset>
+        <legend>Engagement basics</legend>
+        <div class="grid-2">
+          <div class="field"><label>Website</label><input type="url" id="e-website" placeholder="https://…" /></div>
+          <div class="field"><label>Phone</label><input type="text" id="e-phone" /></div>
+          <div class="field"><label>Year founded</label><input type="number" id="e-year-founded" min="1800" max="2100" /></div>
+          <div class="field">
+            <label>Ownership</label>
+            <select id="e-is-private">
+              <option value="">Unspecified</option>
+              <option value="true">Private</option>
+              <option value="false">Public</option>
+            </select>
+          </div>
+          <!-- Social fields live next to Website, matching the New
+               Application wizard's Step 1 (Greg, 8/29/26: moved out of the
+               later "Links & tags" fieldset where they went unnoticed). -->
+          <div class="field"><label>Facebook</label><input type="text" id="e-social-facebook" placeholder="https://facebook.com/…" /></div>
+          <div class="field"><label>LinkedIn</label><input type="text" id="e-social-linkedin" placeholder="https://linkedin.com/…" /></div>
+          <div class="field"><label>X / Twitter</label><input type="text" id="e-social-twitter" placeholder="https://x.com/…" /></div>
+          <div class="field"><label>Instagram</label><input type="text" id="e-social-instagram" placeholder="https://instagram.com/…" /></div>
+          <div class="field"><label>YouTube</label><input type="text" id="e-social-youtube" placeholder="https://youtube.com/…" /></div>
+          <div class="field"><label>Other</label><input type="text" id="e-social-other" placeholder="https://…" /></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Address</legend>
+        <div class="grid-2">
+          <div class="field" style="grid-column: 1 / -1;"><label>Street</label><input type="text" id="e-street" /></div>
+          <div class="field"><label>City</label><input type="text" id="e-city" /></div>
+          <div class="field"><label>State</label><input type="text" id="e-state" maxlength="2" /></div>
+          <div class="field"><label>Postal code</label><input type="text" id="e-postal" /></div>
+          <div class="field"><label>Country</label><input type="text" id="e-country" /></div>
+          <div class="field"><label>County</label><input type="text" id="e-county" /></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Primary contact</legend>
+        <div class="grid-2">
+          <div class="field"><label>Name</label><input type="text" id="e-p-name" /></div>
+          <div class="field"><label>Title</label><input type="text" id="e-p-title" /></div>
+          <div class="field"><label>Email</label><input type="email" id="e-p-email" /></div>
+          <div class="field"><label>Phone</label><input type="text" id="e-p-phone" /></div>
+          <div class="field">
+            <label>Temperament</label>
+            <select id="e-p-temperament">
+              <option value="">Unspecified</option>
+              <option>Guardian</option>
+              <option>Artisan</option>
+              <option>Rational</option>
+              <option>Idealist</option>
+            </select>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Secondary contact</legend>
+        <div class="grid-2">
+          <div class="field"><label>Name</label><input type="text" id="e-s-name" /></div>
+          <div class="field"><label>Title</label><input type="text" id="e-s-title" /></div>
+          <div class="field"><label>Email</label><input type="email" id="e-s-email" /></div>
+          <div class="field"><label>Phone</label><input type="text" id="e-s-phone" /></div>
+          <div class="field">
+            <label>Temperament</label>
+            <select id="e-s-temperament">
+              <option value="">Unspecified</option>
+              <option>Guardian</option>
+              <option>Artisan</option>
+              <option>Rational</option>
+              <option>Idealist</option>
+            </select>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Others to include on email CC list</legend>
+        <div class="field"><label>Emails <span class="hint">(one per line)</span></label><textarea id="e-cc-emails"></textarea></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>3rd contact</legend>
+        <div class="grid-2">
+          <div class="field"><label>Name</label><input type="text" id="e-t-name" /></div>
+          <div class="field"><label>Title</label><input type="text" id="e-t-title" /></div>
+          <div class="field"><label>Email</label><input type="email" id="e-t-email" /></div>
+          <div class="field"><label>Phone</label><input type="text" id="e-t-phone" /></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Company size &amp; financials</legend>
+        <div class="field"><label>Primary business &amp; NAICS code</label><input type="text" id="e-naics" /></div>
+        <div class="checkrow"><input type="checkbox" id="e-fte-range" /><label for="e-fte-range">Has 10–100 FTE employees</label></div>
+        <!-- Paired by year (Greg, 8/29/26): Revenue and FTEs for the same
+             year on the same row, newest year first, instead of an all-FTEs
+             block followed by an all-Revenue block. -->
+        <div class="grid-2">
+          <div class="field"><label>Revenue (2025)</label><input type="text" inputmode="decimal" class="money-input" id="e-rev-2025" /></div>
+          <div class="field"><label>FTEs (2025)</label><input type="number" id="e-fte-2025" /></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Revenue (2024)</label><input type="text" inputmode="decimal" class="money-input" id="e-rev-2024" /></div>
+          <div class="field"><label>FTEs (2024)</label><input type="number" id="e-fte-2024" /></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Revenue (2023)</label><input type="text" inputmode="decimal" class="money-input" id="e-rev-2023" /></div>
+          <div class="field"><label>FTEs (2023)</label><input type="number" id="e-fte-2023" /></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Revenue (2022)</label><input type="text" inputmode="decimal" class="money-input" id="e-rev-2022" /></div>
+          <div class="field"><label>FTEs (2022)</label><input type="number" id="e-fte-2022" /></div>
+        </div>
+        <div class="field" style="width:50%;"><label>% employees in-state</label><input type="number" id="e-pct-instate" min="0" max="100" /></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Business profile</legend>
+        <div class="checkrow"><input type="checkbox" id="e-sales-range" /><label for="e-sales-range">Sales $1M–$50M</label></div>
+        <div class="checkrow"><input type="checkbox" id="e-sales-external" /><label for="e-sales-external">Sales primarily external to region</label></div>
+        <div class="checkrow"><input type="checkbox" id="e-woman" /><label for="e-woman">Woman-owned</label></div>
+        <div class="checkrow"><input type="checkbox" id="e-minority" /><label for="e-minority">Minority-owned</label></div>
+        <div class="checkrow"><input type="checkbox" id="e-veteran" /><label for="e-veteran">Veteran-owned</label></div>
+        <div class="checkrow"><input type="checkbox" id="e-disabled" /><label for="e-disabled">Disabled-owned</label></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Links &amp; tags</legend>
+        <!-- Social fields moved up to "Engagement basics" next to Website
+             (Greg, 8/29/26: kept getting missed down here). -->
+        <div class="field"><label>News links <span class="hint">(one per line)</span></label><textarea id="e-news-links"></textarea></div>
+        <div class="field"><label>Tags <span class="hint">(comma-separated)</span></label><input type="text" id="e-tags" /></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Top business issues</legend>
+        <div class="field"><textarea id="e-top-issues"></textarea></div>
+      </fieldset>
+
+      <div class="field-error" id="edit-app-error" style="display:none;"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="edit-app-cancel">Cancel</button>
+        <button type="submit" class="btn-primary" id="edit-app-save">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Archive confirm modal -->
+<div class="overlay" id="reject-overlay">
+  <div class="modal">
+    <h3>Archive this engagement?</h3>
+    <p>It moves to the Archived tab. Nothing is deleted — you can bring it back by changing its status again.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="reject-cancel">Cancel</button>
+      <button type="button" class="btn-danger" id="reject-confirm">Archive</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="delete-client-overlay">
+  <div class="modal">
+    <h3>Delete this client?</h3>
+    <p id="delete-client-text"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="delete-client-cancel">Cancel</button>
+      <button type="button" class="btn-danger" id="delete-client-confirm">Delete permanently</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentUser = null;
+  let isSuperAdmin = false;
+  let allApplications = [];
+  let allPartners = [];
+  let allUsers = [];
+  let allPartnerContacts = [];
+  let clientsByApp = {};   // application id -> { id, status, project_status } for accepted applications
+  let activeTab = "pending"; // default filter when this page opens — Applications, since "All" is gone (Greg, 9/4/26)
+  let reviewingAppId = null;
+  let reviewBackClientId = null; // set when reached via Engagement Workspace's "Application Info" deep link
+  let pendingRejectId = null;
+  let pendingDeleteAppId = null;
+
+  const $ = (id) => document.getElementById(id);
+  // Chris asked (8/11/26 call) that role names shown to users match current
+  // EG terminology: Consultant -> Specialist, Super Admin -> Admin.
+  // The underlying role VALUES in the database ("consultant", "super_admin", etc.)
+  // are unchanged -- only what is displayed on screen is remapped here.
+  // Which account am I signed in as? (Greg, 9/11/26 -- he holds three logins
+  // with the same name: Super Admin, Team Lead and Specialist. The role pill
+  // said "Specialist" but nothing said WHICH Specialist, and an assignment
+  // made under one login is invisible from another.)
+  //
+  // Read from the auth session rather than the users row, because the profile
+  // query on each page selects a different set of columns and most don't ask
+  // for email. The session always has it.
+  async function showSignedInEmail() {
+    const el = document.getElementById("user-email");
+    if (!el) return;
+    try {
+      const { data } = await sb.auth.getUser();
+      const email = data && data.user && data.user.email;
+      if (email) el.textContent = email;
+    } catch (e) { /* non-essential -- the name and role pill still show */ }
+  }
+
+  function roleLabel(role) {
+    return { consultant: "Specialist", team_lead: "Team Lead", super_admin: "Admin" }[role] || role;
+  }
+  function redirectToLogin() {
+    const dest = location.pathname.split("/").pop() + location.search;
+    location.href = "index.html?return=" + encodeURIComponent(dest);
+  }
+  const usersById = () => Object.fromEntries(allUsers.map((u) => [u.id, u]));
+  const partnersById = () => Object.fromEntries(allPartners.map((p) => [p.id, p]));
+
+  function showBanner(message, type) {
+    const el = $("banner");
+    el.textContent = message;
+    el.className = type;
+    if (type === "success") setTimeout(() => { el.className = ""; }, 4000);
+  }
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  // Revenue fields (Greg, 8/29/26: "cut and paste revenue numbers and those
+  // fields are acting wonky") -- these were plain type="number" inputs,
+  // which silently reject a pasted value like "$35,030,501.00" ($ and commas
+  // aren't valid number-input characters, so the paste just does nothing or
+  // clears the field). Switched to type="text" with a live sanitizer instead:
+  // strips everything but digits and a single decimal point as you type or
+  // paste, so a copied currency figure lands cleanly. numOrNull() (used when
+  // saving) also strips defensively in case this ever fires after the value
+  // is already read.
+  function sanitizeMoneyInput(el) {
+    const cleaned = el.value.replace(/[^0-9.]/g, "");
+    const firstDot = cleaned.indexOf(".");
+    const noExtraDots = firstDot === -1 ? cleaned : cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
+    if (noExtraDots !== el.value) el.value = noExtraDots;
+  }
+  // Greg (8/29/26): "format the field as a dollar amount, with commas and
+  // no cents, even if the one i paste in is just a number." Formatting
+  // happens on blur (not on every keystroke) so it never fights with typing
+  // or pasting mid-edit -- while the field has focus it's always a plain
+  // sanitized number (see sanitizeMoneyInput above); the "$12,345" look only
+  // appears once you've moved on. focus reverses it back to a plain number
+  // so the field is easy to edit/re-paste into.
+  function formatMoneyDisplay(el) {
+    const raw = el.value.replace(/[^0-9.]/g, "");
+    if (raw === "" || raw === ".") { el.value = ""; return; }
+    const rounded = Math.round(Number(raw));
+    el.value = isNaN(rounded) ? "" : "$" + rounded.toLocaleString("en-US");
+  }
+  function unformatMoneyDisplay(el) {
+    const raw = el.value.replace(/[^0-9.]/g, "");
+    el.value = raw;
+  }
+  document.querySelectorAll(".money-input").forEach((el) => {
+    el.addEventListener("input", () => sanitizeMoneyInput(el));
+    el.addEventListener("focus", () => unformatMoneyDisplay(el));
+    el.addEventListener("blur", () => formatMoneyDisplay(el));
+  });
+
+  // ---------- Ask AI ----------
+  // Browser -> eg-dashboard-ai Supabase Edge Function -> Claude API. The
+  // Claude key lives only as a secret on that function; this page just
+  // forwards the signed-in user's own session token so the function can
+  // tell who's asking (and, for Admins only, answer from live data).
+  const AI_CONTEXT_LABEL = "Engagement Applications";
+  const AI_PAGE_KEY = "applications";
+  const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/eg-dashboard-ai`;
+  // Short-term memory for this drawer session only (not persisted) -- lets
+  // natural follow-ups like "what about her hours" work without the user
+  // having to restate context every time.
+  let aiHistory = [];
+  const AI_SUGGESTED = [
+    "What applications are still pending?",
+    "Which programs submitted the most applications?",
+    "Summarize the most recent application",
+    "Who reviewed the last accepted application?",
+  ];
+  function initAskAi() {
+    $("ai-context-text").textContent = AI_CONTEXT_LABEL;
+    $("ai-suggested-list").innerHTML = AI_SUGGESTED.map((q, i) => `
+      <button type="button" class="ai-suggested-chip" data-ai-suggested="${i}">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z"/></svg>
+        ${escapeHtml(q)}
+      </button>
+    `).join("");
+
+    $("ask-ai-btn").addEventListener("click", openAiDrawer);
+    $("ai-drawer-close").addEventListener("click", closeAiDrawer);
+    $("ai-drawer-overlay").addEventListener("click", closeAiDrawer);
+    $("ai-suggested-list").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-ai-suggested]");
+      if (!btn) return;
+      const q = AI_SUGGESTED[Number(btn.dataset.aiSuggested)];
+      $("ai-ask-input").value = q;
+      askAi(q);
+    });
+    $("ai-ask-send").addEventListener("click", submitAiQuestion);
+    $("ai-ask-input").addEventListener("keydown", (e) => { if (e.key === "Enter") submitAiQuestion(); });
+    $("ai-answer-copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText($("ai-answer-card").textContent.trim()); } catch (e) {}
+    });
+  }
+  function submitAiQuestion() {
+    const q = $("ai-ask-input").value.trim();
+    if (!q) return;
+    askAi(q);
+  }
+  // Turns Claude's plain-text answer (occasional **bold**, blank-line
+  // paragraphs, "- " list items) into safe HTML -- text is escaped first,
+  // so nothing the model returns is ever interpreted as markup.
+  function renderAiMarkup(text) {
+    const escaped = escapeHtml(text || "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    return escaped.split(/\n\n+/).map((block) => {
+      const lines = block.split("\n").filter((l) => l.trim());
+      if (lines.length && lines.every((l) => /^\s*-\s+/.test(l))) {
+        return `<ul>${lines.map((l) => `<li>${l.replace(/^\s*-\s+/, "")}</li>`).join("")}</ul>`;
+      }
+      return `<p>${lines.join("<br>")}</p>`;
+    }).join("");
+  }
+  async function askAi(question) {
+    $("ai-answer-block").classList.remove("hidden");
+    $("ai-answer-card").innerHTML = `<p style="color:var(--muted);">Thinking…</p>`;
+    $("ai-answer-time").textContent = "";
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error("No active session");
+      const res = await fetch(AI_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": SUPABASE_ANON_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ question, pageKey: AI_PAGE_KEY, pageContext: AI_CONTEXT_LABEL, history: aiHistory }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || `Request failed (${res.status})`);
+      showAiAnswer(renderAiMarkup(data.answer));
+      aiHistory.push({ role: "user", content: question }, { role: "assistant", content: data.answer });
+      aiHistory = aiHistory.slice(-6);
+    } catch (err) {
+      console.error("Ask AI error:", err);
+      showAiAnswer(`<p>Sorry, I couldn't reach the AI service just now. Try again in a moment.</p>`);
+    }
+  }
+  function showAiAnswer(html) {
+    $("ai-answer-card").innerHTML = html;
+    $("ai-answer-time").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    $("ai-answer-block").classList.remove("hidden");
+  }
+  function openAiDrawer() { $("ai-drawer").classList.add("open"); $("ai-drawer-overlay").classList.add("open"); }
+  function closeAiDrawer() { $("ai-drawer").classList.remove("open"); $("ai-drawer-overlay").classList.remove("open"); }
+  initAskAi();
+
+  // One-time "I'm here if you have questions" popup pointing at the Ask AI
+  // button, shown once ever across the whole app (localStorage-gated), the
+  // first time someone lands on any page after signing in.
+  function maybeShowAiNudge() {
+    if (localStorage.getItem("eg_ai_nudge_seen")) return;
+    localStorage.setItem("eg_ai_nudge_seen", "1");
+    setTimeout(() => {
+      const nudge = $("ai-nudge");
+      if (!nudge) return;
+      nudge.classList.remove("hidden");
+      const hide = () => nudge.classList.add("hidden");
+      $("ai-nudge-close").addEventListener("click", hide);
+      $("ask-ai-btn").addEventListener("click", hide, { once: true });
+      setTimeout(hide, 10000);
+    }, 900);
+  }
+
+  function fmtDate(d) {
+    if (!d) return "—";
+    return new Date(d).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  }
+  function fmtMoney(n) {
+    if (n == null || n === "") return "—";
+    return "$" + Number(n).toLocaleString();
+  }
+  function slugify(str) {
+    return (str || "").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 28);
+  }
+
+  // ---------- Auth ----------
+  $("change-password-btn").addEventListener("click", () => {
+    location.href = "reset_password.html";
+  });
+
+  $("signout-btn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    currentUser = null;
+    $("app-view").classList.add("hidden");
+    redirectToLogin();
+  });
+
+  $("profile-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("profile-dropdown").classList.toggle("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!$("profile-wrap").contains(e.target)) $("profile-dropdown").classList.add("hidden");
+  });
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error: profileErr } = await sb
+      .from("users")
+      .select("id, full_name, role, organization_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      await sb.auth.signOut();
+      redirectToLogin();
+      return;
+    }
+
+    currentUser = profile;
+    isSuperAdmin = profile.role === "super_admin";
+
+    $("loading-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+    maybeShowAiNudge();
+    $("user-name").textContent = profile.full_name;
+    $("user-role").textContent = roleLabel(profile.role);
+    showSignedInEmail();
+    // Application Links and the whole Invoicing menu are Admin-only
+    // (Greg, 9/6/26). Marked in the markup with data-super-admin-only so
+    // this one line covers every nav copy on the page, including the
+    // second header some pages render inside #not-admin-view.
+    document.querySelectorAll("[data-super-admin-only]").forEach((el) => el.classList.toggle("hidden", profile.role !== "super_admin"));
+
+    await Promise.all([loadPartners(), loadUsers(), loadPartnerContacts()]);
+    await loadApplications();
+
+    // Greg (9/4/26): this page is deep-link-only now -- "the applications
+    // button either opens a specific application or it goes nowhere
+    // else." No more browsable list, no more internal "+ New Application"
+    // wizard/Drafts -- the Applications nav dropdown (and Client
+    // Workspace's "View Application Info" link) are the only ways in, and
+    // both always name one specific application. Landing here with
+    // neither just leaves the default "No application selected" state
+    // (#view-none) showing, exactly as it renders in the markup.
+    const deepLinkClientId = new URLSearchParams(location.search).get("client");
+    const deepLinkApp = deepLinkClientId ? allApplications.find((a) => a.client_id === deepLinkClientId) : null;
+    const deepLinkAppId = new URLSearchParams(location.search).get("application");
+    const deepLinkAppById = deepLinkAppId ? allApplications.find((a) => a.id === deepLinkAppId) : null;
+    if (deepLinkApp) {
+      reviewBackClientId = deepLinkClientId;
+      showReviewView(deepLinkApp.id);
+    } else if (deepLinkAppById) {
+      showReviewView(deepLinkAppById.id);
+    }
+  }
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      afterSignIn();
+    } else {
+      redirectToLogin();
+    }
+  });
+
+  // ---------- Data loading ----------
+  async function loadPartners() {
+    const { data, error } = await sb.from("econ_dev_companies").select("*").eq("active", true).order("name");
+    if (error) { showBanner("Couldn't load Econ Dev partners: " + error.message, "error"); return; }
+    allPartners = data;
+  }
+
+  async function loadPartnerContacts() {
+    const { data, error } = await sb.from("econ_dev_partner_contacts").select("*").eq("active", true).order("sort_order");
+    if (error) { showBanner("Couldn't load program contacts: " + error.message, "error"); return; }
+    allPartnerContacts = data;
+  }
+
+
+  async function loadUsers() {
+    // hidden_from_roster (108) is how a person stays a working account while
+    // being kept out of every staff-facing pick list -- the Roster table, the
+    // Team & Hours person picker, invoicing. This page was the one that never
+    // honoured it, so a hidden account could still be handed an engagement
+    // from the Accept form. Greg (9/16/26) is using the flag to retire the
+    // duplicate Chris and Rita logins without deleting them, which only works
+    // if every list respects it.
+    const { data, error } = await sb
+      .from("users")
+      .select("id, full_name, role")
+      .eq("hidden_from_roster", false)
+      .order("full_name");
+    if (error) { showBanner("Couldn't load the staff directory: " + error.message, "error"); return; }
+    allUsers = data;
+  }
+
+  async function loadApplications() {
+    const { data, error } = await sb.from("client_applications").select("*").order("submitted_at", { ascending: false });
+    if (error) { showBanner("Couldn't load applications: " + error.message, "error"); return; }
+    allApplications = data;
+    await loadClientsForAcceptedApps();
+  }
+
+  // Bulk-loads project_status for every accepted application's client, so the
+  // list can show/filter by it without a query per row. (The review panel
+  // does its own fresh single-row fetch when opened, so reassignments show
+  // up immediately there even if this cached copy is a little stale.)
+  async function loadClientsForAcceptedApps() {
+    const clientIds = [...new Set(allApplications.filter((a) => a.status === "accepted" && a.client_id).map((a) => a.client_id))];
+    clientsByApp = {};
+    if (clientIds.length === 0) return;
+    const { data, error } = await sb.from("clients").select("id, status, project_status").in("id", clientIds);
+    if (error) { showBanner("Couldn't load client project status: " + error.message, "error"); return; }
+    const byClientId = Object.fromEntries(data.map((c) => [c.id, c]));
+    for (const a of allApplications) {
+      if (a.client_id && byClientId[a.client_id]) clientsByApp[a.id] = byClientId[a.client_id];
+    }
+  }
+
+
+  // In Progress / Closed are the only live project_status values an
+  // accepted application's engagement can be in now (Greg, 9/4/26, per
+  // Chris) -- no more Accepted-waiting-stage or On Hold. Also doubles as
+  // the toggle control's option list wherever one exists (Client Control
+  // Center, Engagement Workspace, the review pane below).
+  const PROJECT_STATUSES = ["in_progress", "closed"];
+
+  // ---------- Review view ----------
+  // Greg (9/4/26): no more applications list to go "back" to -- Engagement
+  // Workspace's deep link still returns there; otherwise back just means
+  // this page's own "No application selected" state.
+  $("review-back").addEventListener("click", () => {
+    if (reviewBackClientId) {
+      location.href = `client_control_center.html?client=${reviewBackClientId}`;
+    } else {
+      showNothingSelected();
+    }
+  });
+
+  function showNothingSelected() {
+    $("view-review").classList.add("hidden");
+    $("view-none").classList.remove("hidden");
+  }
+
+  function showReviewView(appId) {
+    reviewingAppId = appId;
+    $("view-none").classList.add("hidden");
+    $("view-review").classList.remove("hidden");
+    // Reached via Engagement Workspace's "Application Info" link — send
+    // the breadcrumb back there instead of the generic applications list.
+    $("review-back").textContent = reviewBackClientId ? "← Back to Engagement Workspace" : "← Back";
+    $("breadcrumb-trail").innerHTML = reviewBackClientId
+      ? `<a href="index.html">Engagements</a><span class="sep">›</span><a href="client_control_center.html?client=${reviewBackClientId}">Engagement Workspace</a><span class="sep">›</span><span class="current">Application</span>`
+      : `<a href="index.html">Engagements</a><span class="sep">›</span><span class="current">Application</span>`;
+    renderReview();
+  }
+
+  // Looked up fresh each time an accepted application is opened, so the
+  // Team Lead shown always reflects who's assigned right now (not who was
+  // assigned at accept time — Super Admins can reassign later).
+  async function fetchClientAndTeamLead(clientId) {
+    const { data: client } = await sb.from("clients").select("id, name, slug, status, project_status, budget_hours_available").eq("id", clientId).single();
+    const { data: assignment } = await sb
+      .from("client_assignments")
+      .select("user_id")
+      .eq("client_id", clientId)
+      .eq("is_team_lead", true)
+      .maybeSingle();
+    return { client: client || null, teamLead: assignment ? usersById()[assignment.user_id] : null };
+  }
+
+  function sanitizeFilename(name) {
+    return name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  }
+
+  const SPECIALTY_LABELS = {
+    team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
+    gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
+  };
+  // Admin and QC are sunk costs — spent always equals allotted, automatically.
+  // Kept in sync with the same rule in client_workspace.html. A Program can
+  // opt out via econ_dev_companies.bill_admin_qc_upfront (Greg, 8/23/26).
+  const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+  function isSunkCostSpecialty(specialtyType, partner) {
+    if (!SUNK_COST_SPECIALTIES.includes(specialtyType)) return false;
+    return !partner || partner.bill_admin_qc_upfront !== false;
+  }
+
+  // Shared hours visibility (Section 4.3/5.3): every assigned consultant —
+  // not just the Team Lead — sees everyone's allotted and spent hours once
+  // they're on the client. RLS already enforces this (client_assignments_select
+  // / time_entries_select both key off is_assigned_to_client), this just
+  // renders what the database already allows the current viewer to see.
+  async function fetchAssignmentsAndHours(clientId, partner) {
+    const { data: rows, error } = await sb
+      .from("client_assignments")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("specialty_type")
+      .order("slot_number");
+    if (error) { showBanner("Couldn't load assignments: " + error.message, "error"); return []; }
+
+    let hoursByAssignment = {};
+    const ids = rows.map((r) => r.id);
+    if (ids.length) {
+      const { data: entries, error: tErr } = await sb.from("time_entries").select("assignment_id, hours").in("assignment_id", ids);
+      if (!tErr) {
+        for (const e of entries) hoursByAssignment[e.assignment_id] = (hoursByAssignment[e.assignment_id] || 0) + Number(e.hours);
+      }
+    }
+    return rows.map((r) => ({
+      ...r,
+      hoursSpent: isSunkCostSpecialty(r.specialty_type, partner) ? Number(r.hours_allotted) : (hoursByAssignment[r.id] || 0),
+    }));
+  }
+
+  // Fetches every document attached to this application, plus (once
+  // accepted) anything attached directly to the resulting client — a
+  // promoted row satisfies both, so it's returned once, not twice.
+  async function fetchDocuments(a, clientId) {
+    let query = sb.from("documents").select("*").order("uploaded_at", { ascending: false });
+    query = clientId ? query.or(`application_id.eq.${a.id},client_id.eq.${clientId}`) : query.eq("application_id", a.id);
+    const { data, error } = await query;
+    if (error) { showBanner("Couldn't load documents: " + error.message, "error"); return []; }
+    return data;
+  }
+
+  // Uploads each file to the private client-documents bucket and inserts a
+  // matching `documents` row. Pass applicationId before acceptance, or
+  // clientId once a client exists — the storage path prefix and the RLS
+  // policy on storage.objects both key off which one you pass.
+  async function uploadDocuments(fileList, { applicationId, clientId }) {
+    const prefix = clientId ? `clients/${clientId}` : `applications/${applicationId}`;
+    const errors = [];
+    for (const file of Array.from(fileList)) {
+      const path = `${prefix}/${Date.now()}-${sanitizeFilename(file.name)}`;
+      const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+      if (uploadErr) { errors.push(`${file.name}: ${uploadErr.message}`); continue; }
+      const { error: rowErr } = await sb.from("documents").insert({
+        application_id: applicationId || null,
+        client_id: clientId || null,
+        file_name: file.name,
+        storage_path: path,
+        visibility: "internal",
+        uploaded_by: currentUser.id,
+      });
+      if (rowErr) errors.push(`${file.name}: ${rowErr.message}`);
+    }
+    return errors;
+  }
+
+  // Small inline icon set shared by the review view's section-card headers
+  // and meta row -- plain stroke icons, no external icon library needed.
+  const REVIEW_ICONS = {
+    building: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="1"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/></svg>`,
+    pin: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
+    users: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+    dollar: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`,
+    briefcase: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`,
+    link: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
+    file: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>`,
+    calendar: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
+    tag: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L3 3v6.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.82 0l4.6-4.6a2 2 0 0 0 0-2.82z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>`,
+    external: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/></svg>`,
+    chevron: `<svg class="accordion-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`,
+    addPerson: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>`,
+    mail: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/></svg>`,
+    phoneCall: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`,
+  };
+
+  async function renderReview() {
+    const a = allApplications.find((x) => x.id === reviewingAppId);
+    if (!a) { showNothingSelected(); return; }
+    const partner = partnersById()[a.econ_dev_company_id];
+    const submitter = usersById()[a.submitted_by];
+    const reviewer = a.reviewed_by ? usersById()[a.reviewed_by] : null;
+
+    let client = null, teamLead = null;
+    if (a.status === "accepted" && a.client_id) {
+      ({ client, teamLead } = await fetchClientAndTeamLead(a.client_id));
+    }
+    const documents = await fetchDocuments(a, client ? client.id : null);
+    const assignments = client ? await fetchAssignmentsAndHours(client.id, partner) : [];
+
+    const projectStatuses = PROJECT_STATUSES;
+    const projectStatusLabels = { in_progress: "In Progress", closed: "Closed" };
+    const canEditProjectStatus = client && (isSuperAdmin || (teamLead && teamLead.id === currentUser.id));
+
+    // Every visible field row can be individually empty; when "Show empty
+    // fields" is off (the default), a row that has nothing on file just
+    // doesn't render at all rather than showing a "—". Completeness itself
+    // is always computed from the raw data, independent of that toggle.
+    const item = (label, value, isEmpty) => `<div class="review-item"><div class="label">${label}</div><div class="value">${isEmpty ? '<span style="color:var(--muted);">Not provided</span>' : value}</div></div>`;
+    const reviewGrid = (itemsHtml) => {
+      const filled = itemsHtml.filter(Boolean);
+      return filled.length
+        ? `<div class="review-grid">${filled.join("")}</div>`
+        : `<div class="section-card-empty">Nothing on file for this section yet.</div>`;
+    };
+    const linkAction = (url) => `<a class="link-action" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)} ${REVIEW_ICONS.external}</a>`;
+
+    // ---------- Application completeness ----------
+    // A fixed, curated list of the optional fields worth tracking (not
+    // every column -- the Yes/No business-profile flags are never "empty",
+    // they're always true or false, so they're excluded here).
+    // Greg (9/5/26): the completeness ring + "view missing fields" toggle
+    // are gone -- per Chris's Podio reference, every field just always
+    // shows now (with an inline "Add ___..." placeholder when empty), so
+    // there's no separate "hidden until you ask" state left to measure.
+
+    // ---------- Header card ----------
+    let html = `
+      <div class="app-header-card">
+        <div class="app-header-top">
+          <div class="app-id-row">
+            <div class="app-title-block">
+              <h2>${escapeHtml(a.company_name)}</h2>
+              <div class="app-subline">
+                ${partner ? escapeHtml(partner.name) : "No Econ Dev partner on file"}<span class="sep">&middot;</span>Team Lead:
+                ${
+                  teamLead
+                    ? escapeHtml(teamLead.full_name)
+                    : a.status === "pending" ? "Not yet assigned" : a.status === "archived" ? "—" : "Unassigned"
+                }
+              </div>
+              <div class="app-subline">Submitted ${fmtDate(a.submitted_at)} by ${submitter ? escapeHtml(submitter.full_name) : "—"}</div>
+            </div>
+          </div>
+          <div class="app-status-badges">
+            <!-- Greg (9/4/26): "no more Pending status -- it's either an
+                 application or an engagement." A pending one gets no badge
+                 at all here (being open on this pane IS the "it's an
+                 application" state); Accepted/Rejected/Archived still show
+                 since those are real decisions worth flagging. -->
+            ${a.status !== "pending" ? `<span class="badge badge-${a.status}">${a.status}</span>` : ""}
+            ${client ? `<span class="badge badge-${client.project_status}">${projectStatusLabels[client.project_status] || client.project_status}</span>` : ""}
+          </div>
+        </div>
+
+        <div class="app-meta-row">
+          <div class="app-meta-item">
+            <div class="meta-icon">${REVIEW_ICONS.calendar}</div>
+            <div><div class="meta-label">Submitted</div><div class="meta-value">${fmtDate(a.submitted_at)}</div></div>
+          </div>
+          <div class="app-meta-item">
+            <div class="meta-icon">${REVIEW_ICONS.users}</div>
+            <div><div class="meta-label">Team Lead</div><div class="meta-value">${teamLead ? escapeHtml(teamLead.full_name) : "—"}</div></div>
+          </div>
+          <div class="app-meta-item">
+            <div class="meta-icon">${REVIEW_ICONS.tag}</div>
+            <div><div class="meta-label">Partner</div><div class="meta-value">${partner ? escapeHtml(partner.code) : "—"}</div></div>
+          </div>
+        </div>
+
+        ${
+          client
+            ? `<div class="app-meta-row" style="margin-top:12px; padding-top:12px;">
+                <div style="flex:1;">
+                  <div class="meta-label" style="margin-bottom:7px;">Engagement status</div>
+                  <div class="status-pill-bar" id="project-status-toggle" style="margin:0;">
+                    ${projectStatuses.map((s) => `<button type="button" data-pstatus="${s}" class="badge badge-${s} status-pill ${s === client.project_status ? "active" : ""}" ${canEditProjectStatus ? "" : "disabled"}>${projectStatusLabels[s]}</button>`).join("")}
+                  </div>
+                </div>
+              </div>`
+            : ""
+        }
+      </div>
+    `;
+
+    // ---------- Application fields, Podio-style (Greg, 9/5/26) ----------
+    // Chris shared a screenshot of the team's old Podio app's item view: one
+    // continuous label/value list -- bold right-aligned label on a light
+    // gray rail, plain value on white -- every field always visible (an
+    // inline "Add ___..." placeholder stands in for an empty one, click to
+    // open Edit Application, same mechanism the old contact-card
+    // placeholders used) rather than a "show empty fields" toggle, plus
+    // pill-style buttons for the Yes/No and Private/Public fields. This
+    // replaces the icon-headed section cards, contact cards, and Yes/No
+    // badge grid that used to hold these fields. Required-field asterisks
+    // follow what client_application_public.html actually marks required,
+    // not the mockup's own (Podio lets any field be required, and a couple
+    // it starred -- company phone, ownership -- aren't required inputs
+    // anywhere in this app). Website doesn't get a real unfurled preview
+    // (title/description/thumbnail) since nothing here fetches or stores
+    // that -- it'd need the enrich-from-website Edge Function (already used
+    // for the client-profile "Auto-fill from website" feature) wired in as
+    // a live fetch or a stored cache, worth doing as a follow-up if wanted.
+    // Documents/Review/Client/Assignments further below are unrelated admin
+    // bookkeeping the mockup never depicted, so those keep their old look.
+    const prow = (label, valueHtml, required) => `<div class="podio-row"><div class="podio-label">${required ? '<span class="req">*</span>' : ""}${label}</div><div class="podio-value">${valueHtml}</div></div>`;
+    const addPlaceholder = (text) => isSuperAdmin
+      ? `<button type="button" class="placeholder" data-open-edit-contacts="1">Add ${text}...</button>`
+      : `<span class="placeholder-static">Not provided</span>`;
+    const pillPair = (val, trueLabel, falseLabel) => `
+      <div class="podio-pill-group">
+        <span class="podio-pill ${val === true ? "selected" : ""}">${trueLabel}</span>
+        <span class="podio-pill ${val === false ? "selected" : ""}">${falseLabel}</span>
+      </div>
+    `;
+    const ynRow = (label, val, required) => prow(label, val == null ? addPlaceholder("answer") : pillPair(val, "Yes", "No"), required);
+    const workLine = (value, href, actionLabel, icon) => `<div class="podio-workline"><span class="podio-work-tag">Work</span><span>${escapeHtml(value)}</span><a class="podio-work-action" href="${href}">${icon}${actionLabel}</a></div>`;
+    const officerRows = (nameLabel, titleLabel, name, title, email, phone, required) => `
+      ${prow(nameLabel, name ? escapeHtml(name) : addPlaceholder(nameLabel), required)}
+      ${prow(titleLabel, title ? escapeHtml(title) : addPlaceholder(titleLabel), required)}
+      ${prow("Email", email ? workLine(email, "mailto:" + escapeHtml(email), "Send email", REVIEW_ICONS.mail) : addPlaceholder("Emails"), required)}
+      ${prow("Phone", phone ? workLine(phone, "tel:" + escapeHtml(phone.replace(/[^0-9+]/g, "")), "Call", REVIEW_ICONS.phoneCall) : addPlaceholder("Phone Numbers"), required)}
+    `;
+
+    const addr = a.address || {};
+    const addressBody = (addr.street || addr.city || addr.state || addr.postal || a.country)
+      ? `
+        <div class="podio-subrow"><div class="podio-sublabel">Address</div><div>${addr.street ? escapeHtml(addr.street) : '<span class="placeholder-static">—</span>'}</div></div>
+        <div class="podio-subrow"><div class="podio-sublabel">City</div><div>${addr.city ? escapeHtml(addr.city) : '<span class="placeholder-static">—</span>'}</div></div>
+        <div class="podio-subrow"><div class="podio-sublabel">State</div><div>${addr.state ? escapeHtml(addr.state) : '<span class="placeholder-static">—</span>'}</div></div>
+        <div class="podio-subrow"><div class="podio-sublabel">Postal code</div><div>${addr.postal ? escapeHtml(addr.postal) : '<span class="placeholder-static">—</span>'}</div></div>
+        <div class="podio-subrow"><div class="podio-sublabel">Country</div><div>${a.country ? escapeHtml(a.country) : '<span class="placeholder-static">—</span>'}</div></div>
+      `
+      : addPlaceholder("Physical Address");
+
+    let siteDomain = "";
+    if (a.website) { try { siteDomain = new URL(a.website).hostname.replace(/^www\./, ""); } catch (e) { siteDomain = a.website; } }
+    const websiteBody = a.website
+      ? `<a class="podio-site-card" href="${escapeHtml(a.website)}" target="_blank" rel="noopener">
+           <div class="podio-site-icon">${REVIEW_ICONS.link}</div>
+           <div class="podio-site-text">
+             <div class="podio-site-title">${escapeHtml(a.company_name)}</div>
+             <div class="podio-site-domain">${escapeHtml(siteDomain)}</div>
+           </div>
+         </a>`
+      : addPlaceholder("Website Address");
+
+    // Structured per-platform columns (095) are what new applications
+    // populate; the old unlabeled `social_links` array (pre-dates this
+    // repo's migrations) is folded in here too, for applications submitted
+    // before that change -- previously only the collapsed Links & Tags
+    // accordion showed those, so this is a small merge, not just a reskin.
+    const socialParts = [
+      a.social_facebook_url && `Facebook: ${linkAction(a.social_facebook_url)}`,
+      a.social_linkedin_url && `LinkedIn: ${linkAction(a.social_linkedin_url)}`,
+      a.social_twitter_url && `X/Twitter: ${linkAction(a.social_twitter_url)}`,
+      a.social_instagram_url && `Instagram: ${linkAction(a.social_instagram_url)}`,
+      a.social_youtube_url && `YouTube: ${linkAction(a.social_youtube_url)}`,
+      a.social_other_url && `Other: ${linkAction(a.social_other_url)}`,
+      ...((a.social_links || []).map((l) => `Other: ${linkAction(l)}`)),
+    ].filter(Boolean);
+    const newsParts = (a.news_links || []).map((l) => linkAction(l));
+
+    html += `
+      ${isSuperAdmin ? `<div style="text-align:right; margin-bottom:10px;"><button type="button" class="btn-secondary btn-sm" id="edit-contacts-btn">Edit Application</button></div>` : ""}
+      <div class="podio-card">
+        ${prow("Company Name", escapeHtml(a.company_name), true)}
+        ${prow("Physical Address", addressBody, true)}
+        ${prow("County", addr.county ? escapeHtml(addr.county) : addPlaceholder("County"), true)}
+        ${prow("Phone", a.phone ? escapeHtml(a.phone) : addPlaceholder("Phone"), false)}
+        ${prow("Year Founded", a.year_founded != null ? escapeHtml(a.year_founded) : addPlaceholder("Year Founded"), true)}
+        ${prow("Private or Public?", a.is_private == null ? addPlaceholder("Ownership") : pillPair(a.is_private, "Private", "Public"), false)}
+        ${prow("Website Address", websiteBody, false)}
+        ${prow("Social Media Accounts", socialParts.length ? socialParts.map((s) => `<div>${s}</div>`).join("") : addPlaceholder("Social Media Accounts"), false)}
+        ${prow("Link to Recent News Stories?", newsParts.length ? newsParts.map((s) => `<div>${s}</div>`).join("") : addPlaceholder("Recent News Stories"), false)}
+        ${officerRows("Company Officer Name (Primary)", "Company Officer (Primary) Title", a.primary_officer_name, a.primary_officer_title, a.primary_officer_email, a.primary_officer_phone, true)}
+        ${officerRows("2nd Company Officer Name (optional)", "2nd Company Officer Title", a.secondary_officer_name, a.secondary_officer_title, a.secondary_officer_email, a.secondary_officer_phone, false)}
+        ${officerRows("3rd Company Officer Name (optional)", "3rd Company Officer Title", a.tertiary_officer_name, a.tertiary_officer_title, a.tertiary_officer_email, a.tertiary_officer_phone, false)}
+        ${prow("Others on Email CC List", (a.cc_emails && a.cc_emails.length) ? a.cc_emails.map(escapeHtml).join(", ") : addPlaceholder("Email CC List"), false)}
+        ${prow("Primary Business and NAICS Code (if known)", a.naics_code ? escapeHtml(a.naics_code) : addPlaceholder("NAICS Code"), false)}
+        ${ynRow("Do you have between 10-100 FTE employees?", a.fte_range_10_to_100, true)}
+        ${prow("2025 FTE Employee Count", a.fte_2025 != null ? escapeHtml(a.fte_2025) : addPlaceholder("2025 FTE Employee Count"), false)}
+        ${prow("2024 FTE Employee Count", a.fte_2024 != null ? escapeHtml(a.fte_2024) : addPlaceholder("2024 FTE Employee Count"), false)}
+        ${prow("2023 FTE Employee Count", a.fte_2023 != null ? escapeHtml(a.fte_2023) : addPlaceholder("2023 FTE Employee Count"), false)}
+        ${prow("2022 FTE Employee Count", a.fte_2022 != null ? escapeHtml(a.fte_2022) : addPlaceholder("2022 FTE Employee Count"), false)}
+        ${ynRow("Do you have between $1-50 million in annual sales?", a.sales_1_to_50m, true)}
+        ${prow("2025 Annual Gross Revenue", a.revenue_2025 != null ? fmtMoney(a.revenue_2025) : addPlaceholder("2025 Annual Gross Revenue"), false)}
+        ${prow("2024 Annual Gross Revenue", a.revenue_2024 != null ? fmtMoney(a.revenue_2024) : addPlaceholder("2024 Annual Gross Revenue"), false)}
+        ${prow("2023 Annual Gross Revenue", a.revenue_2023 != null ? fmtMoney(a.revenue_2023) : addPlaceholder("2023 Annual Gross Revenue"), false)}
+        ${prow("2022 Annual Gross Revenue", a.revenue_2022 != null ? fmtMoney(a.revenue_2022) : addPlaceholder("2022 Annual Gross Revenue"), false)}
+        ${prow("% Employees Located In-State", a.pct_employees_in_state != null ? a.pct_employees_in_state + "%" : addPlaceholder("% Employees In-State"), false)}
+        ${ynRow("Are Sales Primarily to External Markets (outside city)?", a.sales_primarily_external, true)}
+        ${ynRow("Woman-Owned", a.woman_owned, false)}
+        ${ynRow("Minority-Owned", a.minority_owned, false)}
+        ${ynRow("Veteran-Owned", a.veteran_owned, false)}
+        ${ynRow("Disabled-Owned", a.disabled_owned, false)}
+        ${prow("Tags", (a.tags && a.tags.length) ? a.tags.map(escapeHtml).join(", ") : addPlaceholder("Tags"), false)}
+        ${prow("Top Three Business Issues", a.top_business_issues ? escapeHtml(a.top_business_issues) : addPlaceholder("Top Business Issues"), true)}
+      </div>
+    `;
+
+    // ---------- Additional Application Data (collapsed by default) ----------
+    let additionalBody = `
+      <div class="review-section-title" style="margin-top:0;">Documents</div>
+      <div id="documents-list">
+        ${
+          documents.length
+            ? documents.map((d) => `
+                <div class="review-item" style="display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f0f2f4;">
+                  <div>
+                    <div class="value" style="margin:0;">${escapeHtml(d.file_name)}</div>
+                    <div style="font-size:12px; color:var(--muted); margin-top:2px;">
+                      ${usersById()[d.uploaded_by] ? escapeHtml(usersById()[d.uploaded_by].full_name) : "—"} · ${fmtDate(d.uploaded_at)}
+                      · <span class="badge badge-${d.visibility === "client_facing" ? "accepted" : "pending"}" style="text-transform:none;">${d.visibility === "client_facing" ? "Client-facing" : "Internal"}</span>
+                    </div>
+                  </div>
+                  <button type="button" class="btn-secondary btn-sm doc-download" data-path="${escapeHtml(d.storage_path)}" data-name="${escapeHtml(d.file_name)}">Download</button>
+                </div>
+              `).join("")
+            : `<div class="review-item" style="border-bottom:none; color:var(--muted); font-size:13.5px;">No documents attached yet.</div>`
+        }
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>Attach more files</label>
+        <input type="file" id="doc-upload-input" multiple />
+      </div>
+    `;
+
+    if (a.status !== "pending") {
+      additionalBody += `<div class="review-section-title">Review</div>
+        <div class="review-grid">
+          ${item("Reviewed by", reviewer ? escapeHtml(reviewer.full_name) : "", !reviewer)}
+          ${item("Reviewed on", a.reviewed_at ? fmtDate(a.reviewed_at) : "", !a.reviewed_at)}
+        </div>`;
+    }
+
+    if (a.status === "accepted") {
+      const totalAllotted = assignments.reduce((sum, r) => sum + Number(r.hours_allotted), 0);
+      const totalSpent = assignments.reduce((sum, r) => sum + r.hoursSpent, 0);
+
+      additionalBody += `<div class="review-section-title">Client</div>
+        <div class="review-grid">
+          ${item("Lifecycle status", client ? `<span class="badge badge-${client.status}">${client.status}</span>` : "", !client)}
+          ${item("Team Lead", teamLead ? escapeHtml(teamLead.full_name) : "Unassigned", false)}
+          ${item("Client address", client ? `${escapeHtml(client.slug)}.egdashboardbuilder.com` : "", !client)}
+        </div>
+
+        <div class="review-section-title">Assignments &amp; Hours</div>
+        ${
+          assignments.length
+            ? `<table style="width:100%; border-collapse:collapse; margin-bottom:4px;">
+                <thead>
+                  <tr>
+                    <th style="text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); padding:6px 8px; border-bottom:1px solid var(--border);">Specialty</th>
+                    <th style="text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); padding:6px 8px; border-bottom:1px solid var(--border);">Specialist</th>
+                    <th style="text-align:right; font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); padding:6px 8px; border-bottom:1px solid var(--border);">Allotted</th>
+                    <th style="text-align:right; font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); padding:6px 8px; border-bottom:1px solid var(--border);">Spent</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${assignments.map((r) => {
+                    const person = usersById()[r.user_id];
+                    const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
+                    return `<tr>
+                      <td style="padding:6px 8px; border-bottom:1px solid #f0f2f4; font-size:13.5px;">${escapeHtml(label)}</td>
+                      <td style="padding:6px 8px; border-bottom:1px solid #f0f2f4; font-size:13.5px; color:${person ? "inherit" : "var(--muted)"};">${person ? escapeHtml(person.full_name) : "Unassigned"}</td>
+                      <td style="padding:6px 8px; border-bottom:1px solid #f0f2f4; font-size:13.5px; text-align:right;">${Number(r.hours_allotted)}</td>
+                      <td style="padding:6px 8px; border-bottom:1px solid #f0f2f4; font-size:13.5px; text-align:right;">${r.hoursSpent}</td>
+                    </tr>`;
+                  }).join("")}
+                  <tr>
+                    <td colspan="2" style="padding:6px 8px; font-weight:700; font-size:13.5px;">Total</td>
+                    <td style="padding:6px 8px; font-weight:700; font-size:13.5px; text-align:right;">${totalAllotted} / ${client ? Number(client.budget_hours_available) : "—"}</td>
+                    <td style="padding:6px 8px; font-weight:700; font-size:13.5px; text-align:right;">${totalSpent}</td>
+                  </tr>
+                </tbody>
+              </table>`
+            : `<div class="review-item" style="border-bottom:none; color:var(--muted); font-size:13.5px;">No assignments visible.</div>`
+        }
+        ${client ? `<a href="client_workspace.html?client=${client.id}" class="btn-secondary btn-sm" style="display:inline-block; margin-top:10px; text-decoration:none;">Edit hours &amp; consultants →</a>` : ""}`;
+    }
+
+    html += `
+      <details class="accordion-card">
+        <summary>
+          <div class="section-card-icon icon-purple">${REVIEW_ICONS.file}</div>
+          Additional Application Data
+          <span class="accordion-sub">Other details and notes</span>
+          ${REVIEW_ICONS.chevron}
+        </summary>
+        <div class="accordion-body">${additionalBody}</div>
+      </details>
+    `;
+
+    if (a.status === "pending" && isSuperAdmin) {
+      const suggestedSlug = slugify(a.company_name);
+      // Greg (9/16/26): "this list should not show admins. admins cannot be a
+      // team lead." Nor can a specialist -- a specialist is promoted first, by
+      // an Admin changing their Role on the Roster profile (pf-role), and only
+      // then do they belong here. So this is approved Team Leads only, which
+      // also drops the role suffix from the labels: every row says the same
+      // thing now, and a list of names reads faster than a list of
+      // "Name (Team Lead)".
+      //
+      // This used to be every user in the system, sorted with team leads
+      // first -- which meant the default landed on whoever was signed in,
+      // usually an Admin, so the form looked pre-answered with an invalid
+      // choice.
+      const teamLeads = allUsers
+        .filter((u) => u.role === "team_lead")
+        .sort((x, y) => x.full_name.localeCompare(y.full_name));
+      html += `
+        <div class="accept-box">
+          <h3>Accept this application</h3>
+          <div class="desc">Creates the client, provisions their file, and assigns the Team Lead — Section 5.2.</div>
+          <div class="grid-2">
+            <div class="field">
+              <label>Budget hours available <span class="required-star">*</span></label>
+              <!-- Chris/Greg (9/3/26): new programs are 40 hours; older programs
+                   run 36. Default to 40 and let whoever accepts type 36 for an
+                   old-program engagement. -->
+              <input type="number" id="accept-budget" min="0" step="0.5" value="40" required />
+            </div>
+            <div class="field">
+              <label>Team Lead <span class="required-star">*</span></label>
+              <select id="accept-tl" required>
+                <option value="">Select…</option>
+                ${teamLeads.length
+                  ? teamLeads.map((u) => `<option value="${u.id}">${escapeHtml(u.full_name)}</option>`).join("")
+                  : `<option value="" disabled>No Team Leads on the roster — set someone's Role to Team Lead first</option>`}
+              </select>
+            </div>
+            <div class="field">
+              <label>Team Lead hours <span class="hint">(out of the budget above)</span></label>
+              <input type="number" id="accept-tl-hours" min="0" step="0.5" value="7" />
+            </div>
+            <div class="field">
+              <label>Admin hours <span class="hint">(out of the budget above)</span></label>
+              <input type="number" id="accept-admin-hours" min="0" step="0.5" value="2" />
+            </div>
+            <div class="field">
+              <label>QC hours <span class="hint">(out of the budget above)</span></label>
+              <input type="number" id="accept-qc-hours" min="0" step="0.5" value="3" />
+            </div>
+          </div>
+          <div class="desc" style="margin-top:-4px;">Team Lead, Admin, and QC slots are created automatically with these hours — Admin and QC start unassigned and can be given to a specific consultant later, from the Client Workspace.</div>
+          ${ccPickerHtml(a)}
+          <div class="field">
+            <label>Client web address <span class="required-star">*</span> <span class="hint">(memorable, lowercase — Section 8.1)</span></label>
+            <input type="text" id="accept-slug" value="${escapeHtml(suggestedSlug)}" />
+            <div class="slug-preview">Clients will reach their page at <strong id="slug-preview-text">${escapeHtml(suggestedSlug)}</strong>.egdashboardbuilder.com</div>
+            <div class="field-error" id="slug-error">That address is already taken — try another.</div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" id="reject-btn">Archive</button>
+            <button type="button" class="btn-primary" id="accept-btn">Accept and Create Engagement</button>
+          </div>
+        </div>
+      `;
+    } else if (a.status === "pending" && !isSuperAdmin) {
+      html += `<div class="accept-box"><div class="desc" style="margin:0;">Waiting on an Admin to review and accept this application.</div></div>`;
+    }
+
+    html += `<div class="confidential-note">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      This application is confidential and visible to authorized team members only.
+    </div>`;
+
+    $("review-content").innerHTML = html;
+
+    if (isSuperAdmin) {
+      $("edit-contacts-btn").addEventListener("click", () => openEditApp(a));
+      document.querySelectorAll("[data-open-edit-contacts]").forEach((btn) => {
+        btn.addEventListener("click", () => openEditApp(a));
+      });
+    }
+
+    if (a.status === "pending" && isSuperAdmin) {
+      const slugInput = $("accept-slug");
+      slugInput.addEventListener("input", () => {
+        $("slug-preview-text").textContent = slugify(slugInput.value);
+      });
+      $("accept-btn").addEventListener("click", () => submitAccept(a.id));
+      $("reject-btn").addEventListener("click", () => {
+        pendingRejectId = a.id;
+        $("reject-overlay").classList.add("open");
+      });
+    }
+
+    const toggle = document.getElementById("project-status-toggle");
+    if (toggle && client) {
+      toggle.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const newStatus = btn.dataset.pstatus;
+          if (newStatus === client.project_status) return;
+          toggle.querySelectorAll("button").forEach((b) => (b.disabled = true));
+          const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", client.id);
+          toggle.querySelectorAll("button").forEach((b) => (b.disabled = false));
+          if (error) {
+            showBanner("Couldn't update project status: " + error.message, "error");
+            return;
+          }
+          if (clientsByApp[a.id]) clientsByApp[a.id].project_status = newStatus;
+          showBanner("Project status updated.", "success");
+          renderReview();
+        });
+      });
+    }
+
+    document.querySelectorAll(".doc-download").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        const { data, error } = await sb.storage.from("client-documents").createSignedUrl(btn.dataset.path, 60);
+        btn.disabled = false;
+        if (error) {
+          showBanner("Couldn't open " + btn.dataset.name + ": " + error.message, "error");
+          return;
+        }
+        window.open(data.signedUrl, "_blank");
+      });
+    });
+
+    const uploadInput = $("doc-upload-input");
+    if (uploadInput) {
+      uploadInput.addEventListener("change", async () => {
+        if (!uploadInput.files.length) return;
+        uploadInput.disabled = true;
+        const uploadErrors = await uploadDocuments(uploadInput.files, {
+          applicationId: client ? null : a.id,
+          clientId: client ? client.id : null,
+        });
+        if (uploadErrors.length) {
+          showBanner("Some files didn't upload: " + uploadErrors.join("; "), "error");
+        } else {
+          showBanner("Document(s) uploaded.", "success");
+        }
+        renderReview();
+      });
+    }
+  }
+
+  // ---------- Edit Application modal ----------
+  // Edits the application record directly (client_applications) -- this is
+  // the same source data the review view above always reads from, whether
+  // the application is still pending or was already accepted into a client
+  // (see 043_company_info_from_application.sql: a client's own Company
+  // Information fields are a one-time copy made at accept time, not a live
+  // link back to this row, so editing here never silently changes a
+  // client's already-published profile).
+  function openEditApp(a) {
+    $("e-website").value = a.website || "";
+    $("e-phone").value = a.phone || "";
+    $("e-year-founded").value = a.year_founded ?? "";
+    $("e-is-private").value = a.is_private == null ? "" : String(a.is_private);
+    $("e-street").value = (a.address && a.address.street) || "";
+    $("e-city").value = (a.address && a.address.city) || "";
+    $("e-state").value = (a.address && a.address.state) || "";
+    $("e-postal").value = (a.address && a.address.postal) || "";
+    $("e-country").value = a.country || "";
+    $("e-county").value = (a.address && a.address.county) || "";
+    $("e-p-name").value = a.primary_officer_name || "";
+    $("e-p-title").value = a.primary_officer_title || "";
+    $("e-p-email").value = a.primary_officer_email || "";
+    $("e-p-phone").value = a.primary_officer_phone || "";
+    $("e-p-temperament").value = a.primary_officer_temperament || "";
+    $("e-s-name").value = a.secondary_officer_name || "";
+    $("e-s-title").value = a.secondary_officer_title || "";
+    $("e-s-email").value = a.secondary_officer_email || "";
+    $("e-s-phone").value = a.secondary_officer_phone || "";
+    $("e-s-temperament").value = a.secondary_officer_temperament || "";
+    $("e-cc-emails").value = (a.cc_emails || []).join("\n");
+    $("e-t-name").value = a.tertiary_officer_name || "";
+    $("e-t-title").value = a.tertiary_officer_title || "";
+    $("e-t-email").value = a.tertiary_officer_email || "";
+    $("e-t-phone").value = a.tertiary_officer_phone || "";
+    $("e-naics").value = a.naics_code || "";
+    $("e-fte-range").checked = !!a.fte_range_10_to_100;
+    $("e-fte-2025").value = a.fte_2025 ?? "";
+    $("e-fte-2024").value = a.fte_2024 ?? "";
+    $("e-fte-2023").value = a.fte_2023 ?? "";
+    $("e-fte-2022").value = a.fte_2022 ?? "";
+    $("e-rev-2025").value = a.revenue_2025 ?? "";
+    $("e-rev-2024").value = a.revenue_2024 ?? "";
+    $("e-rev-2023").value = a.revenue_2023 ?? "";
+    $("e-rev-2022").value = a.revenue_2022 ?? "";
+    // Show them formatted right away, same as a blurred field, rather than
+    // making Greg click into and back out of each one first.
+    document.querySelectorAll("#edit-app-form .money-input").forEach(formatMoneyDisplay);
+    $("e-pct-instate").value = a.pct_employees_in_state ?? "";
+    $("e-sales-range").checked = !!a.sales_1_to_50m;
+    $("e-sales-external").checked = !!a.sales_primarily_external;
+    $("e-woman").checked = !!a.woman_owned;
+    $("e-minority").checked = !!a.minority_owned;
+    $("e-veteran").checked = !!a.veteran_owned;
+    $("e-disabled").checked = !!a.disabled_owned;
+    $("e-social-facebook").value = a.social_facebook_url || "";
+    $("e-social-linkedin").value = a.social_linkedin_url || "";
+    $("e-social-twitter").value = a.social_twitter_url || "";
+    $("e-social-instagram").value = a.social_instagram_url || "";
+    $("e-social-youtube").value = a.social_youtube_url || "";
+    $("e-social-other").value = a.social_other_url || "";
+    $("e-news-links").value = (a.news_links || []).join("\n");
+    $("e-tags").value = (a.tags || []).join(", ");
+    $("e-top-issues").value = a.top_business_issues || "";
+    $("edit-app-error").style.display = "none";
+    $("edit-app-overlay").classList.add("open");
+  }
+
+  $("edit-app-cancel").addEventListener("click", () => $("edit-app-overlay").classList.remove("open"));
+
+  $("edit-app-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const a = allApplications.find((x) => x.id === reviewingAppId);
+    if (!a) return;
+    $("edit-app-error").style.display = "none";
+
+    // Strips $ / commas / stray whitespace before parsing -- guards against
+    // a pasted "$35,030,501.00" landing here before the money-input
+    // sanitizer (below) has had a chance to clean it up (Greg, 8/29/26:
+    // pasted revenue figures were "acting wonky").
+    const numOrNull = (id) => { const v = $(id).value.replace(/[^0-9.-]/g, ""); return v === "" ? null : Number(v); };
+    const strOrNull = (id) => { const v = $(id).value.trim(); return v === "" ? null : v; };
+    const boolOrNull = (id) => { const v = $(id).value; return v === "" ? null : v === "true"; };
+    const toLines = (id) => { const raw = $(id).value.trim(); return raw ? raw.split("\n").map((s) => s.trim()).filter(Boolean) : null; };
+    const toTags = (id) => { const raw = $(id).value.trim(); return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : null; };
+
+    const address = {
+      street: $("e-street").value.trim() || undefined,
+      city: $("e-city").value.trim() || undefined,
+      state: $("e-state").value.trim() || undefined,
+      postal: $("e-postal").value.trim() || undefined,
+      county: $("e-county").value.trim() || undefined,
+    };
+    const hasAddress = Object.values(address).some((v) => v);
+
+    const payload = {
+      website: $("e-website").value.trim() || null,
+      phone: $("e-phone").value.trim() || null,
+      year_founded: numOrNull("e-year-founded"),
+      is_private: boolOrNull("e-is-private"),
+      address: hasAddress ? address : null,
+      country: strOrNull("e-country"),
+      primary_officer_name: strOrNull("e-p-name"),
+      primary_officer_title: strOrNull("e-p-title"),
+      primary_officer_email: strOrNull("e-p-email"),
+      primary_officer_phone: strOrNull("e-p-phone"),
+      primary_officer_temperament: strOrNull("e-p-temperament"),
+      secondary_officer_name: strOrNull("e-s-name"),
+      secondary_officer_title: strOrNull("e-s-title"),
+      secondary_officer_email: strOrNull("e-s-email"),
+      secondary_officer_phone: strOrNull("e-s-phone"),
+      secondary_officer_temperament: strOrNull("e-s-temperament"),
+      cc_emails: toLines("e-cc-emails"),
+      tertiary_officer_name: strOrNull("e-t-name"),
+      tertiary_officer_title: strOrNull("e-t-title"),
+      tertiary_officer_email: strOrNull("e-t-email"),
+      tertiary_officer_phone: strOrNull("e-t-phone"),
+      naics_code: strOrNull("e-naics"),
+      fte_range_10_to_100: $("e-fte-range").checked,
+      fte_2025: numOrNull("e-fte-2025"),
+      fte_2024: numOrNull("e-fte-2024"),
+      fte_2023: numOrNull("e-fte-2023"),
+      fte_2022: numOrNull("e-fte-2022"),
+      revenue_2025: numOrNull("e-rev-2025"),
+      revenue_2024: numOrNull("e-rev-2024"),
+      revenue_2023: numOrNull("e-rev-2023"),
+      revenue_2022: numOrNull("e-rev-2022"),
+      pct_employees_in_state: numOrNull("e-pct-instate"),
+      social_facebook_url: strOrNull("e-social-facebook"),
+      social_linkedin_url: strOrNull("e-social-linkedin"),
+      social_twitter_url: strOrNull("e-social-twitter"),
+      social_instagram_url: strOrNull("e-social-instagram"),
+      social_youtube_url: strOrNull("e-social-youtube"),
+      social_other_url: strOrNull("e-social-other"),
+      sales_1_to_50m: $("e-sales-range").checked,
+      sales_primarily_external: $("e-sales-external").checked,
+      woman_owned: $("e-woman").checked,
+      minority_owned: $("e-minority").checked,
+      veteran_owned: $("e-veteran").checked,
+      disabled_owned: $("e-disabled").checked,
+      news_links: toLines("e-news-links"),
+      tags: toTags("e-tags"),
+      top_business_issues: $("e-top-issues").value.trim() || null,
+    };
+
+    const btn = $("edit-app-save");
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    const { error } = await sb.from("client_applications").update(payload).eq("id", a.id);
+    btn.disabled = false;
+    btn.textContent = "Save changes";
+
+    if (error) {
+      $("edit-app-error").textContent = error.message;
+      $("edit-app-error").style.display = "block";
+      return;
+    }
+
+    Object.assign(a, payload);
+    $("edit-app-overlay").classList.remove("open");
+    showBanner("Application updated.", "success");
+    renderReview();
+  });
+
+  // Who gets copied on correspondence for THIS engagement (Chris/Rita,
+  // 9/11/26) -- chosen here rather than carried by a flag on the Program, so a
+  // Team Lead never emails a Program about an engagement it has no part in.
+  //
+  // Greg: "list the program administrators with check boxes." That's the
+  // default list. If a Program has nobody flagged as Program Administrator --
+  // easy to happen, since the flags were backfilled from a single old
+  // category -- the picker would otherwise be empty with no way forward, so it
+  // falls back to that Program's full contact list and says why.
+  function ccPickerHtml(a) {
+    const partner = partnersById()[a.econ_dev_company_id];
+    if (!partner) {
+      return `<div class="cc-picker"><div class="cc-picker-head">Copy on correspondence</div>
+        <div class="cc-empty">This application isn't linked to a Program, so there are no contacts to choose from.</div></div>`;
+    }
+    const all = allPartnerContacts.filter((c) => c.partner_id === partner.id && (c.name || "").trim());
+    const admins = all.filter((c) => c.is_program_administrator);
+    const list = admins.length ? admins : all;
+    const fallback = !admins.length && all.length;
+
+    if (!list.length) {
+      return `<div class="cc-picker"><div class="cc-picker-head">Copy on correspondence</div>
+        <div class="cc-empty">${escapeHtml(partner.name)} has no contacts on file yet. Add them on the Programs page, or leave this and set it from the engagement later.</div></div>`;
+    }
+    return `
+      <div class="cc-picker">
+        <div class="cc-picker-head">Copy on correspondence <span class="hint">— for this engagement only</span></div>
+        <div class="desc" style="margin-bottom:10px;">${fallback
+          ? `No one at ${escapeHtml(partner.name)} is marked Program Administrator, so every contact is listed.`
+          : `Program Administrators at ${escapeHtml(partner.name)}. Tick the ones this engagement concerns.`}</div>
+        <div class="cc-list">
+          ${list.map((c) => `
+            <label class="cc-row">
+              <input type="checkbox" class="cc-check" value="${c.id}" />
+              <span class="cc-name">${escapeHtml(c.name)}</span>
+              <span class="cc-meta">${escapeHtml([c.title, c.email].filter(Boolean).join(" · ") || "No email on file")}</span>
+            </label>`).join("")}
+        </div>
+      </div>`;
+  }
+
+  async function submitAccept(appId) {
+    const budget = $("accept-budget").value;
+    const teamLeadId = $("accept-tl").value;
+    const teamLeadHours = $("accept-tl-hours").value === "" ? 0 : Number($("accept-tl-hours").value);
+    const adminHours = $("accept-admin-hours").value === "" ? 0 : Number($("accept-admin-hours").value);
+    const qcHours = $("accept-qc-hours").value === "" ? 0 : Number($("accept-qc-hours").value);
+    const slug = slugify($("accept-slug").value);
+    $("slug-error").style.display = "none";
+
+    if (!budget || !teamLeadId || !slug) {
+      showBanner("Budget hours, Team Lead, and a client address are all required to accept.", "error");
+      return;
+    }
+    if (teamLeadHours + adminHours + qcHours > Number(budget)) {
+      showBanner("Team Lead + Admin + QC hours can't exceed the total budget hours.", "error");
+      return;
+    }
+
+    const btn = $("accept-btn");
+    btn.disabled = true;
+    btn.textContent = "Creating client…";
+
+    const { data: clientId, error } = await sb.rpc("accept_client_application", {
+      p_application_id: appId,
+      p_budget_hours_available: Number(budget),
+      p_team_lead_id: teamLeadId,
+      p_slug: slug,
+      p_admin_hours: adminHours,
+      p_qc_hours: qcHours,
+    });
+
+    if (error) {
+      btn.disabled = false;
+      btn.textContent = "Accept and Create Engagement";
+      if (error.message.includes("duplicate key") || error.code === "23505") {
+        $("slug-error").style.display = "block";
+      } else {
+        showBanner("Couldn't accept: " + error.message, "error");
+      }
+      return;
+    }
+
+    // The CC picks, now that there's an engagement to hang them on. Done here
+    // rather than inside accept_client_application() so the RPC keeps its
+    // current signature -- same reasoning as the Team Lead hours below.
+    const ccIds = [...document.querySelectorAll(".cc-check:checked")].map((el) => el.value);
+    if (ccIds.length) {
+      const { error: ccErr } = await sb.from("client_cc_contacts").insert(
+        ccIds.map((contactId) => ({ client_id: clientId, partner_contact_id: contactId }))
+      );
+      // Non-fatal: the engagement exists and is usable, and the CC list can be
+      // corrected from the engagement. Losing it silently would be worse.
+      if (ccErr) showBanner(`Engagement created, but the CC list didn't save: ${ccErr.message}. Set it from the engagement instead.`, "error");
+    }
+
+    // accept_client_application() creates the Team Lead's own assignment row
+    // with hours_allotted = 0 — this is the one field it doesn't take as a
+    // parameter, so we set it here right after, same as everything else the
+    // Super Admin just specified.
+    if (teamLeadHours > 0) {
+      const { error: hoursErr } = await sb
+        .from("client_assignments")
+        .update({ hours_allotted: teamLeadHours })
+        .eq("client_id", clientId)
+        .eq("is_team_lead", true);
+      if (hoursErr) {
+        showBanner(`Client created, but couldn't set Team Lead hours: ${hoursErr.message}. Set it from the Client Workspace instead.`, "error");
+        btn.disabled = false;
+        btn.textContent = "Accept and Create Engagement";
+        // Greg (9/4/26): "accepts the Engagement and the application is
+        // removed from the application dropdown and turned into an
+        // engagement on the engagements page" -- the client exists now
+        // either way, so go see it there.
+        location.href = "index.html";
+        return;
+      }
+    }
+
+    btn.disabled = false;
+    btn.textContent = "Accept and Create Engagement";
+    showBanner(`Client created at ${slug}.egdashboardbuilder.com.`, "success");
+    location.href = "index.html";
+  }
+
+  $("reject-cancel").addEventListener("click", () => {
+    $("reject-overlay").classList.remove("open");
+    pendingRejectId = null;
+  });
+
+  $("reject-confirm").addEventListener("click", async () => {
+    if (!pendingRejectId) return;
+    const { error } = await sb.from("client_applications")
+      .update({ status: "archived", reviewed_by: currentUser.id, reviewed_at: new Date().toISOString() })
+      .eq("id", pendingRejectId);
+    $("reject-overlay").classList.remove("open");
+    pendingRejectId = null;
+    if (error) {
+      showBanner("Couldn't archive: " + error.message, "error");
+      return;
+    }
+    showBanner("Engagement archived.", "success");
+    location.href = "index.html";
+  });
+
+  // ---------- Delete client (Super Admin only) ----------
+  function openDeleteApp(appId) {
+    const a = allApplications.find((x) => x.id === appId);
+    if (!a) return;
+    pendingDeleteAppId = appId;
+    $("delete-client-text").textContent = a.client_id
+      ? `This permanently deletes ${a.company_name} — every assignment, allotted and spent hour, document, and record of history for this client. This can't be undone.`
+      : `${a.company_name} hasn't been accepted into a client yet, so there are no hours or assignments on it — this just removes the application. This can't be undone.`;
+    $("delete-client-overlay").classList.add("open");
+  }
+  $("delete-client-cancel").addEventListener("click", () => {
+    $("delete-client-overlay").classList.remove("open");
+    pendingDeleteAppId = null;
+  });
+
+  $("delete-client-confirm").addEventListener("click", async () => {
+    if (!pendingDeleteAppId) return;
+    const a = allApplications.find((x) => x.id === pendingDeleteAppId);
+    if (!a) return;
+    const btn = $("delete-client-confirm");
+    btn.disabled = true;
+    btn.textContent = "Deleting…";
+
+    // Deleting the client cascades away its assignments, hours, documents,
+    // share link, and audit history. client_applications.client_id gets set
+    // null by the FK (not cascaded) rather than deleted, so we clean up the
+    // now-orphaned application row ourselves right after.
+    if (a.client_id) {
+      const { error: clientErr } = await sb.from("clients").delete().eq("id", a.client_id);
+      if (clientErr) {
+        btn.disabled = false;
+        btn.textContent = "Delete permanently";
+        showBanner("Couldn't delete client: " + clientErr.message, "error");
+        return;
+      }
+    }
+
+    const { error: appErr } = await sb.from("client_applications").delete().eq("id", pendingDeleteAppId);
+
+    btn.disabled = false;
+    btn.textContent = "Delete permanently";
+    $("delete-client-overlay").classList.remove("open");
+    pendingDeleteAppId = null;
+
+    if (appErr) {
+      showBanner("Client deleted, but couldn't remove the application row: " + appErr.message, "error");
+    } else {
+      showBanner("Client deleted.", "success");
+    }
+    location.href = "index.html";
+  });
+
+  document.querySelectorAll(".overlay").forEach((ov) => {
+    ov.addEventListener("click", (e) => { if (e.target === ov) ov.classList.remove("open"); });
+  });
+</script>
+<script>
+  // Mobile nav toggle (Greg, 8/29/26) -- header .site-nav is display:none
+  // below 980px with nothing else to reach it, so this wires up the
+  // .nav-toggle button (added right after each </nav>) to flip a .open
+  // class the @media (max-width: 980px) CSS above turns into a dropdown
+  // panel. Class-based/generic on purpose: some pages render two
+  // <header>s (a skeleton one while auth/role resolves, then the real
+  // one), so this wires whichever ones exist rather than assuming one.
+  document.querySelectorAll(".nav-toggle").forEach((btn) => {
+    const nav = btn.closest("header")?.querySelector(".site-nav");
+    if (!nav) return;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = nav.classList.toggle("open");
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  });
+  document.addEventListener("click", (e) => {
+    document.querySelectorAll(".site-nav.open").forEach((nav) => {
+      if (!nav.contains(e.target) && !nav.nextElementSibling?.contains(e.target)) {
+        nav.classList.remove("open");
+      }
+    });
+  });
+
+  // Nav dropdown (Chris, 9/4/26) -- click-to-toggle submenu under a
+  // top-nav item, piloted on Invoicing. Generic/class-based like the
+  // mobile nav toggle above: highlights the parent button and the
+  // matching child link based on the current page, wires open/close, and
+  // works for however many .nav-item-dropdown elements exist on a page
+  // (some pages render a skeleton header + a real one).
+  (function () {
+    const here = location.pathname.split("/").pop();
+    document.querySelectorAll(".nav-item-dropdown").forEach((dd) => {
+      const btn = dd.querySelector(".nav-link-dropdown-btn");
+      const menu = dd.querySelector(".nav-submenu");
+      if (!btn || !menu) return;
+      let matched = false;
+      menu.querySelectorAll("a").forEach((a) => {
+        const [navHrefPath, navHrefQuery] = (a.getAttribute("href") || "").split("?");
+        const navPathMatches = navHrefPath === here;
+        // A submenu link with a query string (e.g. "?action=add") is an
+        // action shortcut on the current page, not a distinct destination --
+        // it should count toward lighting up the parent dropdown button, but
+        // shouldn't itself look like "the page you're on" (Greg, 9/6/26, for
+        // the new Programs dropdown's "Add Program" item).
+        a.classList.toggle("active", navPathMatches && !navHrefQuery);
+        if (navPathMatches) matched = true;
+      });
+      btn.classList.toggle("active", matched);
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        document.querySelectorAll(".nav-item-dropdown.open").forEach((open) => {
+          if (open !== dd) open.classList.remove("open");
+        });
+        dd.classList.toggle("open");
+      });
+      // Hover is what opens these now (CSS above); this only clears the
+      // clicked-open state so a click-then-move-away doesn't leave it open.
+      dd.addEventListener("mouseleave", () => dd.classList.remove("open"));
+    });
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".nav-item-dropdown")) {
+        document.querySelectorAll(".nav-item-dropdown.open").forEach((open) => open.classList.remove("open"));
+      }
+    });
+  })();
+
+  // Applications nav dropdown (Chris, 9/4/26; refined same day) -- admin-
+  // only, left of Engagements, listing applications submitted but not yet
+  // assigned a Team Lead (still status = 'pending' -- assigning a TL is
+  // the accept action that moves one to In Progress, see
+  // 110_accept_straight_to_in_progress.sql). Self-contained on purpose:
+  // does its own session/role check rather than depending on each page's
+  // differently-named/timed admin-check variable, so it works identically
+  // everywhere. Each row deep-links straight to that one application's
+  // review pane (?application=ID on client_applications.html) -- nothing
+  // in this dropdown links anywhere else, including the empty state.
+  //
+  // Greg (9/16/26): "i am signed in as a specialist. i should not be able
+  // to see the applications top menu button." Reproduced. This used to run
+  // once, at page load, and only ever REMOVED .hidden -- it had no path
+  // back to hidden. Signing out does not reload the page (#signout-btn
+  // just swaps #app-view for #login-view), so Admin -> sign out -> sign in
+  // as Specialist left this menu standing from the admin's page load, with
+  // the admin's pending-application list -- company names and all -- still
+  // in the DOM. Every other admin-only nav item re-hid correctly, because
+  // those go through the [data-super-admin-only] toggle that re-runs on
+  // every profile load; this one was outside it, which is exactly why it
+  // was the only one that survived the switch.
+  //
+  // So: hide is now a real state, not just the absence of show; the render
+  // re-runs on every auth change; and the submenu is emptied on the way
+  // down so nothing from the previous account is left in the markup. A
+  // failed role check fails closed rather than leaving the menu up.
+  (function () {
+    const dd = document.querySelectorAll("#nav-applications-dropdown");
+    if (!dd.length) return;
+
+    const submenuOf = (el) =>
+      el.querySelector("#nav-applications-submenu") || el.querySelector(".nav-submenu");
+
+    function hideApplicationsNav() {
+      dd.forEach((el) => {
+        el.classList.add("hidden");
+        el.classList.remove("open");
+        const menu = submenuOf(el);
+        if (menu) menu.innerHTML = "";
+      });
+    }
+
+    async function renderApplicationsNav() {
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) return hideApplicationsNav();
+        const { data: profile } = await sb.from("users").select("role").eq("id", session.user.id).maybeSingle();
+        if (!profile || profile.role !== "super_admin") return hideApplicationsNav();
+
+        const { data: apps } = await sb
+          .from("client_applications")
+          .select("id, company_name, submitted_at, econ_dev_companies(name, code)")
+          .eq("status", "pending")
+          .order("submitted_at", { ascending: false })
+          .limit(8);
+
+        const fmt = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+        const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
+        const rowsHtml = (apps || []).map((a) => {
+          const program = a.econ_dev_companies ? (a.econ_dev_companies.name || a.econ_dev_companies.code) : "";
+          return `
+        <a href="client_applications.html?application=${a.id}">
+          ${esc(a.company_name || "Untitled")}
+          <span class="nav-submenu-meta">${[esc(program), "Submitted " + fmt(a.submitted_at)].filter(Boolean).join(" &middot; ")}</span>
+        </a>
+      `;
+        }).join("");
+        const bodyHtml = apps && apps.length ? rowsHtml : '<div class="nav-submenu-empty">No new applications.</div>';
+
+        dd.forEach((el) => {
+          el.classList.remove("hidden");
+          const menu = submenuOf(el);
+          if (menu) menu.innerHTML = bodyHtml;
+        });
+      } catch (e) {
+        hideApplicationsNav();
+        console.error("Couldn't load the Applications nav dropdown:", e);
+      }
+    }
+
+    renderApplicationsNav();
+
+    // Re-render whenever the account changes. INITIAL_SESSION is skipped
+    // because the direct call above already covers page load, and
+    // TOKEN_REFRESHED because the hourly refresh doesn't change who you
+    // are. Deferred with setTimeout because supabase-js serialises auth
+    // work -- awaiting another sb call inside this handler can deadlock it.
+    sb.auth.onAuthStateChange((event) => {
+      if (event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") return;
+      setTimeout(renderApplicationsNav, 0);
+    });
+  })();
+
+  // Notification bell (Chris, 9/4/26) -- "make sure the bell is
+  // prominently displayed on every page," not just the Engagements home.
+  // Self-contained on purpose, same pattern as the Applications nav
+  // dropdown: does its own session/role check and its own notification
+  // fetch/render rather than depending on each page's own auth flow, so
+  // it behaves identically everywhere.
+  (function () {
+    const wrap = document.getElementById("notif-wrap");
+    if (!wrap) return;
+    const escNotif = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
+    const timeAgoNotif = (iso) => {
+      const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+      if (mins < 1) return "just now";
+      if (mins < 60) return `${mins}m ago`;
+      const hrs = Math.round(mins / 60);
+      if (hrs < 24) return `${hrs}h ago`;
+      return `${Math.round(hrs / 24)}d ago`;
+    };
+    let unread = [];
+
+    function renderBell() {
+      const count = unread.length;
+      document.getElementById("notif-count").textContent = count > 9 ? "9+" : String(count);
+      document.getElementById("notif-count").classList.toggle("hidden", count === 0);
+      document.getElementById("notif-list").innerHTML = count
+        ? unread.map((n) => `
+            <div class="notif-item">
+              <div class="notif-msg">${escNotif(n.message)}</div>
+              <div class="notif-meta">
+                <span>${timeAgoNotif(n.created_at)}</span>
+                <span>
+                  ${n.client_id ? `<a href="client_workspace.html?client=${n.client_id}">View client</a> &middot;` : ""}
+                  <a href="#" class="notif-dismiss" data-id="${n.recipientId}">Dismiss</a>
+                </span>
+              </div>
+            </div>
+          `).join("")
+        : `<div class="notif-empty">You're all caught up.</div>`;
+      document.querySelectorAll("#notif-list .notif-dismiss").forEach((el) => {
+        el.addEventListener("click", async (e) => {
+          e.preventDefault();
+          const id = el.dataset.id;
+          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id);
+          unread = unread.filter((n) => n.recipientId !== id);
+          renderBell();
+        });
+      });
+    }
+
+    (async function () {
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) return;
+        const { data: profile } = await sb.from("users").select("role").eq("id", session.user.id).maybeSingle();
+        if (!profile || profile.role !== "super_admin") return;
+
+        wrap.classList.remove("hidden");
+        const { data } = await sb
+          .from("notification_recipients")
+          .select("id, created_at, notifications(client_id, message, created_at)")
+          .eq("user_id", session.user.id)
+          .is("read_at", null)
+          .order("created_at", { ascending: false })
+          .limit(20);
+        unread = (data || [])
+          .filter((r) => r.notifications)
+          .map((r) => ({ recipientId: r.id, client_id: r.notifications.client_id, message: r.notifications.message, created_at: r.notifications.created_at }));
+        renderBell();
+
+        document.getElementById("notif-bell").addEventListener("click", (e) => {
+          e.stopPropagation();
+          document.getElementById("notif-dropdown").classList.toggle("hidden");
+        });
+        document.getElementById("notif-mark-all").addEventListener("click", async () => {
+          if (!unread.length) return;
+          const ids = unread.map((n) => n.recipientId);
+          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids);
+          unread = [];
+          renderBell();
+        });
+        document.addEventListener("click", (e) => {
+          if (!wrap.contains(e.target)) document.getElementById("notif-dropdown").classList.add("hidden");
+        });
+      } catch (e) {
+        console.error("Couldn't load notifications:", e);
+      }
+    })();
+  })();
+</script>
+</body>
+</html>
