@@ -1,183 +1,105 @@
--- 120_remove_test_engagements.sql
+-- 120_remove_test_engagements.sql  (revised 9/16/26)
 --
--- Greg (9/16/26): "we are getting close to switching over to make this the
--- live system for EG. remove the test companies and their teams and hours
--- from the database and for now we'll just keep the ones that i am really
--- working on even though all the hours may not be perfect." Confirmed the
--- five to remove: everything outlined in red on the Engagements screen.
--- "everything is still being run out of podio so none of this data is real.
--- i just want to start trimming it down so that when we go live we don't
--- have a bunch of junk in the database."
+-- Greg: "remove the test companies and their teams and hours from the
+-- database" -> then, after the first version: "they still seem to be there.
+-- i want them erased from the engagement screen."
 --
--- THIS DELETES DATA AND CANNOT BE UNDONE. Run PART 1 on its own first and
--- read what it prints. PART 2 does the deleting and is written to refuse
--- rather than guess -- see the two guards in it.
+-- WHY THE FIRST VERSION MAY NOT HAVE DELETED ANYTHING
+-- It was written as two parts with a `begin; ... commit;` around the delete,
+-- and it refused to run at all if any table referenced clients without
+-- ON DELETE CASCADE. Either of those can leave everything untouched:
+--   * running only PART 1 (which is read-only) does nothing by design;
+--   * the Supabase SQL editor commits statement by statement, so a stray
+--     begin/commit is easy to half-run;
+--   * and one non-cascading table anywhere would abort the whole thing.
 --
--- REMOVES (5 engagements, with everything hanging off them):
---   Test                   (Alloy Development)
---   Excaliber              (Annapolis)
---   First Class Funding    (Economic Development Partnership of North Carolina)
---   Gee Whiz Products      (Greater Rochester Enterprise)
---   The Best Coffee        (Test 2 Company)
+-- This version removes all three failure modes. It is ONE statement. It
+-- clears child rows itself rather than depending on cascade, so it works
+-- whatever the foreign keys say. Select all of it, run it, and read the
+-- Messages/Notices pane -- it reports what it deleted, by name.
 --
--- KEEPS: Clippard Instrument Labs, JCS Process & Controls Inc., Extremis
--- Systems, JLR Environmental -- and every Program, including the now-empty
--- Test 2 Company. Programs were not part of what Greg confirmed; the
--- Programs screen can archive that one in a click.
+-- STILL IRREVERSIBLE. It removes these five engagements and everything
+-- attached to them -- team assignments, logged hours, contacts, documents,
+-- research, notifications:
 --
--- NOT touched, on purpose:
---   * Program invoices. program_invoices references econ_dev_companies, not
---     clients -- an engagement's numbers live inside its line_items jsonb, a
---     snapshot of what was billed. Deleting an engagement does not rewrite
---     history, and rewriting it here would be worse.
---   * Files in Storage. Rows in `documents` go, but the uploaded objects sit
---     in a Storage bucket that SQL here does not reach. PART 1 lists their
---     paths so they can be cleared from the Storage browser if wanted;
---     leaving them costs nothing but space.
+--   Test, Excaliber, First Class Funding, Gee Whiz Products, The Best Coffee
+--
+-- Keeps Clippard Instrument Labs, JCS Process & Controls Inc., Extremis
+-- Systems, JLR Environmental, and every Program.
+--
+-- Safe to re-run: the second run finds nothing and says so.
 
--- =====================================================================
--- PART 1 -- PREVIEW. Read-only. Run this alone, first.
--- =====================================================================
-
--- 1a. Exactly which engagements match? Expect 5 rows and no more.
-select
-  c.id,
-  c.name,
-  coalesce(p.name, '(no Program)') as program,
-  c.project_status,
-  c.created_at::date as created
-from clients c
-left join econ_dev_companies p on p.id = c.econ_dev_company_id
-where c.name in (
-  'Test',
-  'Excaliber',
-  'First Class Funding',
-  'Gee Whiz Products',
-  'The Best Coffee'
-)
-order by c.name;
-
--- 1b. What hangs off them? One row per table that points at clients, with
---     the number of rows that will go with the delete. Reads the catalog
---     rather than a hand-written list, so a table nobody remembered still
---     shows up here.
 do $$
 declare
-  r record;
-  n bigint;
-  v_ids uuid[];
+  v_names text[] := array[
+    'Test',
+    'Excaliber',
+    'First Class Funding',
+    'Gee Whiz Products',
+    'The Best Coffee'
+  ];
+  v_ids     uuid[];
+  v_found   text;
+  v_missing text;
+  r         record;
+  n         bigint;
+  total     bigint := 0;
 begin
-  select array_agg(id) into v_ids from clients where name in (
-    'Test', 'Excaliber', 'First Class Funding', 'Gee Whiz Products', 'The Best Coffee');
+  -- Which of the five actually exist right now (trimmed + case-insensitive,
+  -- so a stray space or capital in the data cannot silently skip one).
+  select array_agg(c.id), string_agg(c.name, ', ' order by c.name)
+    into v_ids, v_found
+  from clients c
+  where lower(btrim(c.name)) = any (select lower(btrim(x)) from unnest(v_names) x);
 
-  raise notice '--- rows that will be deleted along with the 5 engagements ---';
+  if v_ids is null then
+    raise notice 'Nothing to delete -- none of those five names are in clients. Already removed?';
+    return;
+  end if;
+
+  select string_agg(x, ', ') into v_missing
+  from unnest(v_names) x
+  where lower(btrim(x)) not in (select lower(btrim(c.name)) from clients c);
+
+  raise notice 'Deleting: %', v_found;
+  if v_missing is not null then
+    raise notice 'Not found (skipped): %', v_missing;
+  end if;
+
+  -- Clear child rows explicitly, every table that points at clients,
+  -- whatever its delete rule. Cascading tables will already be empty by the
+  -- time the client row goes; non-cascading ones would otherwise block the
+  -- delete or be left orphaned. Reading the catalog means a table nobody
+  -- remembered is handled too.
   for r in
     select con.conrelid::regclass::text as child_table,
-           att.attname                  as child_column,
-           con.confdeltype::text        as on_delete
+           att.attname                  as child_column
     from pg_constraint con
     join unnest(con.conkey) with ordinality as k(attnum, ord) on true
     join pg_attribute att on att.attrelid = con.conrelid and att.attnum = k.attnum
     where con.confrelid = 'clients'::regclass
       and con.contype = 'f'
+      and con.conrelid <> 'clients'::regclass
     order by 1
   loop
-    execute format('select count(*) from %s where %I = any($1)', r.child_table, r.child_column)
-      into n using v_ids;
-    raise notice '% .% : % row(s)   [on delete %]',
-      r.child_table, r.child_column, n,
-      case r.on_delete when 'c' then 'CASCADE' when 'n' then 'SET NULL'
-                       when 'a' then 'NO ACTION' when 'r' then 'RESTRICT'
-                       when 'd' then 'SET DEFAULT' else r.on_delete end;
+    execute format('delete from %s where %I = any($1)', r.child_table, r.child_column)
+      using v_ids;
+    get diagnostics n = row_count;
+    if n > 0 then
+      raise notice '  %: % row(s)', r.child_table, n;
+      total := total + n;
+    end if;
   end loop;
-end $$;
-
--- 1c. Hours specifically -- the part Greg named. Time entries reach a client
---     through client_assignments, so they are worth their own count.
-select
-  c.name                          as engagement,
-  count(distinct a.id)            as team_slots,
-  count(t.id)                     as time_entries,
-  coalesce(sum(t.hours), 0)       as hours_logged
-from clients c
-left join client_assignments a on a.client_id = c.id
-left join time_entries t on t.assignment_id = a.id
-where c.name in ('Test', 'Excaliber', 'First Class Funding', 'Gee Whiz Products', 'The Best Coffee')
-group by c.name
-order by c.name;
-
--- 1d. Uploaded files that will lose their database row. SQL cannot delete
---     the objects themselves -- copy these paths if they should be cleared
---     from Storage too.
-select c.name as engagement, d.file_name, d.storage_path
-from documents d
-join clients c on c.id = d.client_id
-where c.name in ('Test', 'Excaliber', 'First Class Funding', 'Gee Whiz Products', 'The Best Coffee')
-  and d.storage_path is not null
-order by c.name, d.file_name;
-
-
--- =====================================================================
--- PART 2 -- THE DELETE. Run only after PART 1 looks right.
--- =====================================================================
---
--- Two guards, both of which abort the whole thing rather than do something
--- approximate:
---
---   1. The five names must match exactly five rows. If a name was renamed,
---      or something real happens to share a name, the count is wrong and
---      nothing is deleted.
---   2. Every foreign key pointing at clients must be ON DELETE CASCADE.
---      This is what makes one delete safe: without it a child row would
---      either block the delete or be left orphaned pointing at a client
---      that no longer exists. If a table is found that does not cascade,
---      this stops and names it, so it can be handled deliberately.
---
--- It runs as one transaction: any failure rolls the whole thing back.
-
-begin;
-
-do $$
-declare
-  v_ids   uuid[];
-  v_count int;
-  v_bad   text;
-begin
-  select array_agg(id), count(*) into v_ids, v_count
-  from clients
-  where name in ('Test', 'Excaliber', 'First Class Funding', 'Gee Whiz Products', 'The Best Coffee');
-
-  -- Guard 1: exactly the five, no more, no fewer.
-  if v_count is distinct from 5 then
-    raise exception
-      'Expected exactly 5 engagements to delete, found %. Nothing deleted -- check PART 1a.', coalesce(v_count, 0);
-  end if;
-
-  -- Guard 2: nothing points at clients without cascading.
-  select string_agg(format('%s.%I', con.conrelid::regclass, att.attname), ', ')
-    into v_bad
-  from pg_constraint con
-  join unnest(con.conkey) with ordinality as k(attnum, ord) on true
-  join pg_attribute att on att.attrelid = con.conrelid and att.attnum = k.attnum
-  where con.confrelid = 'clients'::regclass
-    and con.contype = 'f'
-    and con.confdeltype <> 'c';
-
-  if v_bad is not null then
-    raise exception
-      'These reference clients without ON DELETE CASCADE: %. Nothing deleted -- clear them first.', v_bad;
-  end if;
 
   delete from clients where id = any(v_ids);
-  raise notice 'Deleted % engagements and everything that cascaded from them.', v_count;
+  get diagnostics n = row_count;
+  raise notice 'Done: % engagement(s) removed, plus % related row(s).', n, total;
 end $$;
 
-commit;
 
-
--- =====================================================================
--- Verify. Expect the five to be gone and the four keepers to remain.
--- =====================================================================
+-- ---------------------------------------------------------------
+-- What is left. Expect only the four keepers.
+-- ---------------------------------------------------------------
 select
   coalesce(p.name, '(no Program)') as program,
   c.name                          as engagement,
@@ -185,11 +107,3 @@ select
 from clients c
 left join econ_dev_companies p on p.id = c.econ_dev_company_id
 order by 1, 2;
-
--- Any Program now holding no engagements at all -- Test 2 Company should be
--- among them. Archive from the Programs screen if wanted; nothing here does.
-select p.name as program_with_no_engagements
-from econ_dev_companies p
-where not p.archived
-  and not exists (select 1 from clients c where c.econ_dev_company_id = p.id)
-order by p.name;
