@@ -892,6 +892,14 @@
                     <td style="font-weight:700;" id="tw-total-used">0</td>
                     <td></td>
                   </tr>
+                  <!-- Rita, 9/14/26 (item 3): the Totals row only ever showed the sum
+                       of the work-area rows, so the engagement's own hour budget and
+                       what was left of it were invisible. Spanning the full width
+                       rather than squeezing into the two narrow number columns, which
+                       would clip at this table's fixed widths and on a laptop. -->
+                  <tr>
+                    <td colspan="5" id="tw-total-note" style="padding-top:2px; font-size:13px; color:var(--muted); font-weight:500;"></td>
+                  </tr>
                 </tfoot>
               </table>
             </div>
@@ -2196,9 +2204,51 @@
     });
 
     const totalPlanned = currentAssignments.reduce((sum, r) => sum + Number(r.hours_allotted), 0);
-    $("tw-total-planned").textContent = totalPlanned;
+    $("tw-total-planned").textContent = trimHours(totalPlanned);
     const totalUsed = currentAssignments.reduce((sum, r) => sum + Number(r.hoursSpent), 0);
-    $("tw-total-used").textContent = totalUsed;
+    $("tw-total-used").textContent = trimHours(totalUsed);
+    renderTotalsNote(totalPlanned);
+  }
+
+  // Hours are numeric, so 2.5 is legal and 0.30000000000000004 is reachable
+  // once a few of them are added together. Round before showing, never before
+  // storing.
+  function trimHours(n) {
+    return String(Math.round(Number(n) * 100) / 100);
+  }
+  function plural(n, word) {
+    return `${trimHours(n)} ${Math.abs(Number(n)) === 1 ? word : word + "s"}`;
+  }
+
+  // The engagement's own budget (clients.budget_hours_available, set when the
+  // application is accepted -- 36 on a GRE engagement, 40 on a TRN one) and the
+  // two different remainders it implies:
+  //   not yet assigned  budget minus what the work-area rows add up to
+  //                     -- "is this engagement fully planned?"
+  //   left to log       budget minus hours actually logged
+  //                     -- "how much time is still available?"
+  // They are not the same number and Rita asked for both.
+  function renderTotalsNote(plannedSum) {
+    const el = $("tw-total-note");
+    if (!el) return;
+    const budget = Number(activeClient && activeClient.budget_hours_available) || 0;
+    if (!budget) {
+      el.textContent = "No total hour budget set for this engagement.";
+      el.style.color = "var(--muted)";
+      return;
+    }
+    const used = currentAssignments.reduce((sum, r) => sum + Number(r.hoursSpent), 0);
+    const unassigned = budget - plannedSum;
+    const left = budget - used;
+    const parts = [`${trimHours(budget)}-hour engagement`];
+    parts.push(unassigned >= 0
+      ? `${plural(unassigned, "hour")} not yet assigned`
+      : `${plural(-unassigned, "hour")} over budget`);
+    parts.push(left >= 0
+      ? `${plural(left, "hour")} left to log`
+      : `${plural(-left, "hour")} logged past the budget`);
+    el.textContent = parts.join(" · ");
+    el.style.color = (unassigned < 0 || left < 0) ? "var(--danger)" : "var(--muted)";
   }
 
   async function reloadTeam() {
@@ -2256,7 +2306,10 @@
     $("tw-summary-error").style.display = notAssigned < 0 ? "block" : "none";
     if (notAssigned < 0) $("tw-summary-error").textContent = "Budget hours add up to more than Total Hours.";
     const totalEl = $("tw-total-planned");
-    if (totalEl) totalEl.textContent = rowsSum;
+    if (totalEl) totalEl.textContent = trimHours(rowsSum);
+    // Live, off the inputs -- so typing 9 into Market Research walks the
+    // "not yet assigned" figure down as you go, instead of waiting for a save.
+    renderTotalsNote(rowsSum);
   }
 
   // ---------- Unassign / remove ----------
