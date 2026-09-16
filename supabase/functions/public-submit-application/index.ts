@@ -70,9 +70,21 @@ function jsonResponse(body: unknown, status = 200) {
 // public form itself (Greg, 9/2/26) -- dropped from here too; requiring
 // either would fail every single submission since the form never sends
 // them anymore.
+// f-postal added 9/16/26 (Greg): the postal code was collected but optional.
+// GIS is one of the six work areas and zip is the unit most location
+// analysis starts from, so it is cheaper to ask the CEO once than to chase
+// it afterwards. Safe to require here because the form has always SENT this
+// key -- unlike the fields dropped above, which is the distinction that
+// matters for this list.
+//
+// DEPLOY ORDER: push the HTML first, then deploy this function. The other
+// way round, a submission from the old page with the box left blank is
+// rejected by the server with a raw "Missing required field" instead of the
+// friendly in-page prompt.
 const REQUIRED_KEYS = [
-  "f-company-name", "f-street", "f-city", "f-state", "f-county", "f-year-founded",
-  "f-p-name", "f-p-title", "f-p-email", "f-p-phone", "f-top-issues",
+  "f-company-name", "f-street", "f-city", "f-state", "f-postal", "f-county",
+  "f-year-founded", "f-p-name", "f-p-title", "f-p-email", "f-p-phone",
+  "f-top-issues",
 ];
 
 function strOrNull(v: unknown): string | null {
