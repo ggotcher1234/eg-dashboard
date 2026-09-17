@@ -397,8 +397,9 @@
      mockup -- small uppercase muted-gray caption instead of navy title
      case. Applies to both "Workflow" (new, see .cc-nav-sub below) and
      "Setup & Sharing". The old "Engagement Workspace" label above Team &
-     Hours / View Application is gone per that same mockup (crossed out
-     there) -- that top group is unlabeled now. */
+     Hours is gone per that same mockup (crossed out there) -- that top
+     group is unlabeled now. (View Application used to sit in that top
+     group too; it moved down into Workflow on 9/17/26 -- see below.) */
   .cc-nav-section { width: 100%; padding: 12px 14px 5px; font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; }
   .cc-nav-section:first-child { padding-top: 4px; }
   .cc-nav-section:not(:first-child) { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
@@ -429,8 +430,9 @@
      documents" dropped the collapse step; (9/5/26) "remove Documents. it
      adds no value" dropped the group label entirely; (9/5/26, per Chris's
      mockup) a plain "Workflow" caption was added back above just the
-     document rows (View Application stays unlabeled above it, grouped
-     with Team & Hours instead) and every row got an icon to match. */
+     document rows, and every row got an icon to match. (9/17/26) View
+     Application moved down to be the first row under that caption --
+     it used to sit unlabeled above it, grouped with Team & Hours instead. */
   .cc-nav-sub { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 6px; }
   /* View Application (Greg, 9/4/26): moved here from a breadcrumb link up
      top -- "top of the documents list" is exactly what it is, the source
@@ -1468,8 +1470,9 @@
     navItems = [
       // Greg (9/5/26), per Chris's reference mockup: dropped the
       // "Engagement Workspace" section label that used to sit above Team &
-      // Hours -- that top group (Team & Hours + View Application) is
-      // unlabeled now, same as the mockup shows.
+      // Hours -- that top group is unlabeled now, same as the mockup shows.
+      // (Greg, 9/17/26: View Application used to sit up here too -- see
+      // below, it now renders inside the Workflow group instead.)
       { key: "team", label: "Team & Hours" },
       // Greg (9/5/26), per Chris's notes: "Add Research" moved out of its
       // own top-level row and into the flat Application/Documents list,
@@ -1482,21 +1485,17 @@
       // Greg (9/6/26): "make view application fit into the right column
       // instead of opening another window." Same hidden-pane trick as Add
       // Research above -- listed here only so setActivePane can resolve the
-      // src; renderNav injects the row itself up in the top group.
+      // src; renderNav below injects the row itself into the Workflow group
+      // (moved there from the top group, Greg 9/17/26).
       { key: "application", label: "View Application", src: `client_applications.html?client=${client.id}&embed=1`, hidden: true },
       {
         key: "workflow", label: "Documents", group: true,
         docs: DOC_GROUP_ITEMS.map((d) => ({ ...d, src: `client_workflow_files.html?client=${client.id}&embed=1&doc=${d.key}` })),
       },
       { key: "setup", label: "Client Info", section: "Setup & Sharing", src: `client_profile.html?client=${client.id}&embed=1` },
-      // Rita (9/14/26, item 9): "Where is the cumulative hours report? I
-      // thought we reviewed this report in one of our meetings but I can't
-      // seem to find it in the software now." It was folded into
-      // invoicing_report.html on 8/22/26 behind the Engagement picker, which
-      // left no route to it from the engagement you are already looking at.
-      // This is that route back -- the same merged report, filtered to this
-      // engagement, rather than a second copy to drift out of step.
-      { key: "cumulative", label: "Cumulative Hours", section: "Setup & Sharing", src: `invoicing_report.html?engagement=${client.id}&embed=1` },
+      // Cumulative Hours (Rita item 9, added 9/14/26) removed from this nav
+      // again (Greg, 9/17/26) -- the route it added still works directly
+      // from invoicing_report.html, just not as its own row here.
       { key: "dashboard", label: "Client Dashboard", section: "Setup & Sharing", src: dashboardHref, disabled: !dashboardHref },
     ];
     // Greg (9/5/26), per Chris's reference mockup: small badge + "Engagement
@@ -1521,27 +1520,27 @@
       if (item.group) {
         // Greg (9/4/26): "remove the documents dropdown and just show the
         // documents" -- the 4 names are always visible now, no
-        // expand/collapse click needed first. "View Application" (was a
-        // separate breadcrumb link up top) is the first row here, since
-        // "top of the documents list" is exactly what it is: the source
-        // application this engagement was created from.
+        // expand/collapse click needed first.
         // Greg (9/5/26): "remove Documents. it adds no value." -- the
         // group's own label row is gone; the rows just sit directly under
         // the section like the other nav items.
         // Greg (9/5/26), per Chris's mockup: a plain "Workflow" caption is
-        // back, but only above the document rows -- View Application stays
-        // grouped with Team & Hours above it, unlabeled. "Add Research"
-        // (the hidden navItems entry above) is spliced in right after
-        // Controlling Document, ahead of Research Review -- order is now
-        // Application, Discovery, Controlling, Add Research, Research
-        // Review, Close-Out. Every row now gets an icon too.
+        // back above the document rows. "Add Research" (the hidden
+        // navItems entry above) is spliced in right after Controlling
+        // Document, ahead of Research Review. Every row gets an icon too.
+        // Greg (9/17/26): "View Application" moves down into this group --
+        // it used to render unlabeled up with Team & Hours (see navItems
+        // above); it's now the first row under the "Workflow" caption
+        // instead. Order is now Workflow caption, View Application,
+        // Discovery, Controlling, Add Your Research, Research Review
+        // Notes, Close-Out.
         const researchRow = `<button type="button" class="cc-nav-subbtn" data-pane="research">${navIconSvg("research")}<span>Add Your Research</span></button>`;
         // Was an <a> out to client_applications.html with a chevron marking
         // it as a trip off-page; it's a pane now, so it's a button like every
         // other nav row and the chevron went with the new window (Greg,
         // 9/6/26).
-        const subHtml = `<button type="button" class="cc-nav-subbtn" data-pane="application">${navIconSvg("application")}<span>View Application</span></button>` +
-          `<div class="cc-nav-section">Workflow</div>` +
+        const subHtml = `<div class="cc-nav-section">Workflow</div>` +
+          `<button type="button" class="cc-nav-subbtn" data-pane="application">${navIconSvg("application")}<span>View Application</span></button>` +
           item.docs.map((d) => `
             <button type="button" class="cc-nav-subbtn" data-pane="${item.key}" data-doc="${d.key}">${navIconSvg(d.key)}<span>${d.label}</span></button>
           ` + (d.key === "controlling" ? researchRow : "")).join("");
