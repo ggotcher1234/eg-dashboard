@@ -2019,17 +2019,35 @@
     if (!collides) return u.full_name;
     return u.email ? `${u.full_name} (${u.email})` : `${u.full_name} — ${specialtyDescriptor(u)}`;
   }
-  function consultantOptionsHtml(selectedId) {
-    // The pick list is the visible roster. But if this row is already held by
-    // somebody hidden -- the NCEG Admin house account on Admin/QC, or one of
-    // the hidden admins -- that person has to appear too, or the select falls
-    // back to its first option and the row reads "Not assigned" while the
-    // database says otherwise. Offer them, but only because they are already
-    // on the row: nobody can PICK a hidden account from here.
+  // Work areas that actually map to a checkbox on the roster profile (Team
+  // Directory's specialty picker). Admin and Quality Control aren't in that
+  // catalog -- Admin is a role, not a specialty, and QC was dropped from
+  // the checkbox list entirely on 8/19/26 -- so filtering the Person picker
+  // by "has the box checked" would leave those two work areas with nobody
+  // to pick at all. They keep the unfiltered roster instead (Greg, 9/17/26).
+  const SKILL_FILTERED_SPECIALTIES = ["team_lead", "market_research", "digital_marketing", "gis", "watering_holes"];
+
+  function consultantOptionsHtml(selectedId, specialty) {
+    // The pick list is the visible roster, narrowed to whoever has THIS work
+    // area checked in their Team Directory profile -- assigning Market
+    // Research shouldn't offer someone who's never checked that box (Greg,
+    // 9/17/26). Skip the narrowing when nobody on the visible roster has it
+    // checked yet, though -- an empty picker is worse than an unfiltered one.
     let options = allUsers;
-    if (selectedId && !allUsers.some((u) => u.id === selectedId)) {
+    if (specialty && SKILL_FILTERED_SPECIALTIES.includes(specialty)) {
+      const skilled = allUsers.filter((u) => (userSpecialties[u.id] || []).includes(specialty));
+      if (skilled.length) options = skilled;
+    }
+    // But if this row is already held by somebody hidden -- the NCEG Admin
+    // house account on Admin/QC, or one of the hidden admins -- or by
+    // someone the skill filter above just excluded, that person has to
+    // appear too, or the select falls back to its first option and the row
+    // reads "Not assigned" while the database says otherwise. Offer them,
+    // but only because they are already on the row: nobody can PICK an
+    // unlisted account from here.
+    if (selectedId && !options.some((u) => u.id === selectedId)) {
       const held = allUsersIncludingHidden.find((u) => u.id === selectedId);
-      if (held) options = [...allUsers, held];
+      if (held) options = [...options, held];
     }
     return '<option value="">Not assigned</option>' + options.map((u) => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${escapeHtml(consultantOptionLabel(u))}</option>`).join("");
   }
@@ -2144,7 +2162,7 @@
       const tr = document.createElement("tr");
       tr.dataset.assignmentId = r.id;
       const personCell = canManage
-        ? `<select class="row-select row-consultant-select">${consultantOptionsHtml(r.user_id)}</select>`
+        ? `<select class="row-select row-consultant-select">${consultantOptionsHtml(r.user_id, r.specialty_type)}</select>`
         : `${person ? escapeHtml(userLabel(person)) : `<span style="color:var(--muted);">Not assigned</span>`}`;
       const isFixed = fixedSlotIndex(r.specialty_type, r.slot_number) !== -1;
       const actionBtn = isFixed
@@ -2282,6 +2300,14 @@
     `;
     tbody.appendChild(tr);
 
+    // The Person picker starts unfiltered (no work area chosen yet) and
+    // re-narrows to that specialty's checked-off roster the moment one is
+    // picked -- otherwise a new row would offer Market Research work to
+    // someone who's never checked that box (Greg, 9/17/26).
+    tr.querySelector(".new-specialty").addEventListener("change", (e) => {
+      const consultantSelect = tr.querySelector(".new-consultant");
+      consultantSelect.innerHTML = consultantOptionsHtml(consultantSelect.value, e.target.value);
+    });
     tr.querySelector(".new-hours").addEventListener("input", recalcTeamStats);
     tr.querySelector("[data-cancel-row]").addEventListener("click", () => { tr.remove(); recalcTeamStats(); });
     tr.querySelector("[data-save-row]").addEventListener("click", async () => {
