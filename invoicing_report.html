@@ -1838,28 +1838,27 @@
   }
   $("history-close").addEventListener("click", () => { $("history-overlay").classList.remove("open"); });
 
-  // Each specialist gets one accent color, reused for their avatar initials
-  // and every usage bar on their row(s) -- makes a long roster scannable by
-  // eye (a color you recognize) rather than by reading every number.
-  const AVATAR_PALETTE = ["#1f4a75", "#0f7c86", "#6b4c9a", "#5c7248", "#a9740f", "#b3403a"];
-  function colorForIndex(i) { return AVATAR_PALETTE[i % AVATAR_PALETTE.length]; }
-  function initialsFor(name) {
-    const parts = String(name).trim().split(/\s+/);
-    return ((parts[0]?.[0] || "") + (parts[parts.length - 1]?.[0] || "")).toUpperCase();
-  }
+  // The per-specialist accent color lived here -- AVATAR_PALETTE,
+  // colorForIndex, initialsFor and specialistColorByName -- to tint each
+  // person's avatar initials and their usage bar. Neither of those renders
+  // any more: .specialist-avatar was never applied, initialsFor was never
+  // called, and usage-bar/ub-fill do not exist in this file. The only thing
+  // still reading the accent was the hours-remaining figure, where it looked
+  // arbitrary because it was (Rita, item 8). Removed with its last consumer
+  // rather than left as scaffolding for a design that is gone. The unused
+  // .specialist-avatar CSS above is left alone for now -- harmless, and
+  // deleting live CSS is a separate change from this one.
 
   // ---------- Time Sheets: search/filter/sort/paginate/collapse ----------
   // currentMonthRows holds the full, unfiltered set of this-month rows so
   // filters/search/pagination can all operate client-side without another
-  // round trip; specialistColorByName is keyed off that same full set so a
-  // person's color stays put even as filters narrow what's on screen.
+  // round trip.
   //
   // Grouped by Engagement (not Specialist) per Chris's "organize by program
   // and engagement" / "use invoicing format for above" note (8/22/26) -- one
   // specialist can still appear under several engagements, they just show up
   // as separate detail rows now instead of anchoring the group.
   let currentMonthRows = [];
-  let specialistColorByName = {};
   let spSearch = "";
   let spSortDir = "asc";
   let spPage = 1;
@@ -1868,10 +1867,6 @@
 
   function renderSpecialistSetup(rows) {
     currentMonthRows = rows;
-
-    const allNames = [...new Set(rows.map((r) => r.specialistName))].sort((a, b) => a.localeCompare(b));
-    specialistColorByName = {};
-    allNames.forEach((name, i) => { specialistColorByName[name] = colorForIndex(i); });
   }
 
   function wireSpecialistControls() {
@@ -2184,7 +2179,6 @@
 
       group.forEach((r, j) => {
         const remaining = round2(r.hoursAllotted - r.cumulativeThroughMonth);
-        const color = specialistColorByName[r.specialistName] || colorForIndex(0);
         html += `
         <tr class="${j === 0 ? "group-start" : ""}">
           ${j === 0 ? engagementCell : ""}
@@ -2201,7 +2195,18 @@
             <div class="ub-text">${r.cumulativeThroughMonth} / ${r.hoursAllotted} hrs</div>
           </td>
           <td class="remaining-cell">
-            <div class="remaining-value${remaining < 0 ? " negative" : ""}" style="${remaining < 0 ? "" : `color:${color};`}">${remaining < 0 ? Math.abs(remaining) + " hrs over" : remaining + " hrs"}</div>
+            <!-- Rita (9/14/26, item 8): "the color of the hours remaining
+                 doesn't seem right. Some are brown, some are green, blue or
+                 purple." Correct -- it was never about the hours. The figure
+                 took its color from specialistColorByName, a per-PERSON accent
+                 assigned by alphabetical position among whoever logged hours
+                 that month, so the same person changed color as soon as
+                 somebody new logged ahead of them alphabetically.
+                 That accent belonged to a specialist avatar and a usage bar
+                 that no longer render, leaving this number as its only
+                 output. Plain text now; red still means over budget, which is
+                 the one thing worth calling out. -->
+            <div class="remaining-value${remaining < 0 ? " negative" : ""}">${remaining < 0 ? Math.abs(remaining) + " hrs over" : remaining + " hrs"}</div>
           </td>
         </tr>
       `;
