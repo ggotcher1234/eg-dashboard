@@ -628,9 +628,49 @@
     .cum-table { table-layout: auto; }
     .cum-table th, .cum-table td { padding: 5px 7px; font-size: 10.5px; }
   }
+
+  /* ---------- Embedded mode ----------
+     Rita (9/14/26, item 9): "Where is the cumulative hours report? I thought
+     we reviewed this report in one of our meetings but I can't seem to find
+     it in the software now."
+
+     It was never deleted. On 8/22/26 it was folded out of
+     client_cumulative_hours.html and into this page, behind the Engagement
+     picker -- so the only route left was Invoicing -> Time Sheets -> notice a
+     dropdown labelled "All Engagements" -> change it. Nobody finds that, and
+     the ?engagement= deep link written for the Engagements list was never
+     wired up by anything.
+
+     embed=1 strips this page back to the single-engagement report so the
+     Engagement Workspace can show it in its right-hand pane, the way the
+     standalone page used to be reachable from the engagement itself. One
+     report, two doors -- not two reports. */
+  body.embed-mode header,
+  body.embed-mode .breadcrumb-bar,
+  body.embed-mode .std-toolbar-row,
+  body.embed-mode .sticky-top-wrap,
+  body.embed-mode .tab-bar,
+  body.embed-mode .sp-controls,
+  body.embed-mode .card-header-row,
+  body.embed-mode #flat-view-wrap,
+  body.embed-mode #panel-payroll-mtd,
+  body.embed-mode #panel-payroll-ytd,
+  /* The picker is fixed to this engagement here, so its "back to all
+     engagements" escape hatch would strand the reader inside an iframe. */
+  body.embed-mode #eng-detail-back { display: none !important; }
+
+  body.embed-mode main { padding: 0; }
+  body.embed-mode .tab-panel-frame,
+  body.embed-mode .card { border: none; box-shadow: none; padding: 0; margin: 0; background: transparent; }
 </style>
 </head>
 <body>
+<script>
+  // Set before anything renders so the page never flashes its full chrome
+  // inside the Engagement Workspace pane. Same one-liner other embedded
+  // pages use (client_profile.html and friends).
+  if (new URLSearchParams(location.search).get("embed") === "1") document.body.classList.add("embed-mode");
+</script>
 
 <div id="loading-view"><div>Loading…</div></div>
 
@@ -1708,7 +1748,17 @@
     const engagementId = new URLSearchParams(window.location.search).get("engagement");
     if (!engagementId) return;
     const select = $("eng-filter");
-    if (![...select.options].some((o) => o.value === engagementId)) return;
+    if (![...select.options].some((o) => o.value === engagementId)) {
+      // Embedded, but this engagement isn't in the list -- almost always
+      // because nobody is assigned to it yet, so it has no rows to report on.
+      // Say that rather than showing an empty page-within-a-page.
+      if (document.body.classList.contains("embed-mode")) {
+        $("engagement-detail-wrap").classList.remove("hidden");
+        $("engagement-detail-wrap").innerHTML =
+          '<div class="empty-note">No hours have been logged on this engagement yet, so there is nothing to report. It will appear here once the team starts logging time.</div>';
+      }
+      return;
+    }
     select.value = engagementId;
     applyEngagementFilter();
   }
