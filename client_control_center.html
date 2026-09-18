@@ -1624,10 +1624,10 @@
       return secHtml + `<button type="button" class="cc-nav-btn" data-pane="${item.key}" ${item.disabled ? 'style="opacity:0.5;" disabled' : ""}>${navIconSvg(item.key)}<span>${item.label}</span></button>`;
     }).join("");
     $("cc-nav").querySelectorAll(".cc-nav-btn[data-pane]").forEach((btn) => {
-      btn.addEventListener("click", () => setActivePane(btn.dataset.pane));
+      btn.addEventListener("click", () => setActivePane(btn.dataset.pane, null, true));
     });
     $("cc-nav").querySelectorAll(".cc-nav-subbtn[data-pane]").forEach((btn) => {
-      btn.addEventListener("click", () => setActivePane(btn.dataset.pane, btn.dataset.doc));
+      btn.addEventListener("click", () => setActivePane(btn.dataset.pane, btn.dataset.doc, true));
     });
     ccIframeCurrentKey = null;
     setActivePane(activePane, activeDocKey);
@@ -1639,7 +1639,25 @@
   // 8/30/26).
   const WIDE_WORKSPACE_PANE_KEYS = ["setup", "cumulative"];
 
-  function setActivePane(key, docKey) {
+  // Critical bug (Greg, 9/18/26): "i just added hours to this engagement
+  // (September) and they are not showing up on the cumulative hours."
+  // The hours WERE there and the report WAS right -- but the embedded page
+  // had been loaded once, before the hours were logged, and nothing ever
+  // re-pointed the iframe: ccIframeCurrentKey still said "cumulative", so
+  // coming back from Team & Hours skipped the src assignment and left the
+  // stale document on screen. Every embedded pane had this (Company Info,
+  // Attachments, View Application too) -- it just showed up first on the
+  // one page whose numbers change minute to minute.
+  // So: clicking a nav item always reloads, and arriving at a pane you
+  // weren't just on always reloads. Only a re-render that lands back on the
+  // pane you're already looking at is allowed to skip it.
+  // The stamp matters: assigning an identical src is not reliably a
+  // navigation, so each reload gets a fresh _t= value that the embedded
+  // pages ignore.
+  const withReloadStamp = (u) => u + (u.includes("?") ? "&" : "?") + "_t=" + Date.now();
+
+  function setActivePane(key, docKey, fromClick) {
+    const paneChanged = activePane !== key;
     activePane = key;
     activeDocKey = key === "workflow" ? (docKey || activeDocKey || "discovery") : activeDocKey;
     $("cc-nav").querySelectorAll(".cc-nav-btn").forEach((btn) => {
@@ -1682,8 +1700,8 @@
       const src = item && item.group ? (item.docs.find((d) => d.key === activeDocKey) || item.docs[0]).src : item && item.src;
       const iframeIdentity = item && item.group ? `workflow:${activeDocKey}` : key;
       if (src) {
-        if (ccIframeCurrentKey !== iframeIdentity) {
-          $("cc-iframe").src = src;
+        if (fromClick || paneChanged || ccIframeCurrentKey !== iframeIdentity) {
+          $("cc-iframe").src = withReloadStamp(src);
           ccIframeCurrentKey = iframeIdentity;
         }
       } else {
