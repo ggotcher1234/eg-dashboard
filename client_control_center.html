@@ -506,6 +506,9 @@
   .area-link:hover, .area-link:focus-visible { color: var(--navy); text-decoration: underline; }
   .field-error { color: var(--danger); font-size: 12.5px; margin-top: 8px; display: none; }
   .engagement-summary { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 12px; }
+  /* Sits beside "Totals" on the footer row: same voice as the summary line it
+     came from, deliberately lighter than the bold word next to it. */
+  .totals-left { font-size: 12.5px; font-weight: 600; color: var(--muted); margin-left: 8px; }
   /* The Add Specialist row: no bottom rule, so it reads as the seam between the
      specialist work areas above it and the house rows below, not as a row of
      its own with empty columns. */
@@ -937,9 +940,17 @@
                 <tbody id="tw-tbody"></tbody>
                 <tfoot>
                   <tr>
-                    <td colspan="2" style="font-weight:700;">Totals</td>
+                    <!-- Greg (9/18/26): "move available hours to totals line, and
+                         move the total spent hours under the numbers in the column
+                         total spent." What is left to log is the difference between
+                         these two totals, so it belongs on the row that shows them
+                         rather than in the summary above the table. And the spent
+                         total was the one number on the table not aligned with its
+                         own column -- every Spent cell is flush right (.spent-cell
+                         justifies to the end), this one defaulted to the left. -->
+                    <td colspan="2" style="font-weight:700;">Totals <span id="tw-total-left" class="totals-left"></span></td>
                     <td style="text-align:right; font-weight:700;" id="tw-total-planned">0</td>
-                    <td style="font-weight:700;" id="tw-total-used">0</td>
+                    <td style="text-align:right; font-weight:700;" id="tw-total-used">0</td>
                     <td id="tw-total-actions"></td>
                   </tr>
                 </tfoot>
@@ -2408,13 +2419,19 @@
   //   left to log       budget minus hours actually logged
   //                     -- "how much time is still available?"
   // They are not the same number and Rita asked for both.
+  // Greg (9/18/26): "left to log" moved out of this line and onto the Totals
+  // row, where the two numbers it is derived from already sit. The line above
+  // the table keeps the planning half -- how big the engagement is and whether
+  // all of it has been handed out.
   function renderTotalsNote(plannedSum) {
     const el = $("tw-total-note");
+    const leftEl = $("tw-total-left");
     if (!el) return;
     const budget = Number(activeClient && activeClient.budget_hours_available) || 0;
     if (!budget) {
       el.textContent = "No total hour budget set for this engagement.";
       el.style.color = "var(--muted)";
+      if (leftEl) leftEl.textContent = "";
       return;
     }
     const used = currentAssignments.reduce((sum, r) => sum + Number(r.hoursSpent), 0);
@@ -2424,11 +2441,14 @@
     parts.push(unassigned >= 0
       ? `${plural(unassigned, "hour")} not yet assigned`
       : `${plural(-unassigned, "hour")} over budget`);
-    parts.push(left >= 0
-      ? `${plural(left, "hour")} left to log`
-      : `${plural(-left, "hour")} logged past the budget`);
     el.textContent = parts.join(" · ");
-    el.style.color = (unassigned < 0 || left < 0) ? "var(--danger)" : "var(--muted)";
+    el.style.color = unassigned < 0 ? "var(--danger)" : "var(--muted)";
+    if (leftEl) {
+      leftEl.textContent = left >= 0
+        ? `· ${plural(left, "hour")} left to log`
+        : `· ${plural(-left, "hour")} logged past the budget`;
+      leftEl.style.color = left < 0 ? "var(--danger)" : "var(--muted)";
+    }
   }
 
   async function reloadTeam() {
