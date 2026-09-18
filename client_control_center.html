@@ -497,6 +497,7 @@
   .area-link:hover, .area-link:focus-visible { color: var(--navy); text-decoration: underline; }
   .field-error { color: var(--danger); font-size: 12.5px; margin-top: 8px; display: none; }
   .engagement-summary { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 12px; }
+  .logged-by-note { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
   .engagement-summary:empty { display: none; }
 
   /* ---------- Modals (Remove confirm / Log hours / Billing history) ---------- */
@@ -1445,7 +1446,7 @@
   // clicking Cumulative Hours set the active state and then did nothing: the
   // iframe pane stayed hidden and its src was never set (Greg, 9/18/26). The
   // list is the gate, not the navItems entry.
-  const IFRAME_PANE_KEYS = ["research", "setup", "workflow", "dashboard", "application", "cumulative"];
+  const IFRAME_PANE_KEYS = ["research", "setup", "workflow", "application", "cumulative"];
   // Tracks which pane key's page is currently sitting in the one shared
   // iframe -- NOT "has this pane ever been loaded". Bug (Greg, 8/31/26):
   // this used to be a per-key "loaded once" flag, so after visiting e.g.
@@ -2091,14 +2092,26 @@
     if (error) { showBanner("Couldn't load team & hours: " + error.message, "error"); return; }
 
     let hoursByAssignment = {};
+    // consultant_id added 9/18/26 (Greg): "team hours does not show Amjad yet he
+    // shows up on the cumulative report." Both screens were right and said
+    // different things -- this one names whoever HOLDS the row, the cumulative
+    // report names whoever LOGGED the hours. On Clippard's GIS row those are
+    // not the same: the row was unassigned after Amjad had logged 8 hours, so
+    // Team & Hours showed "Not assigned / 8" with no way to find out whose 8.
+    // Now the row can say so.
+    let loggersByAssignment = {};
     const ids = rows.map((r) => r.id);
     if (ids.length) {
-      const { data: entries, error: tErr } = await sb.from("time_entries").select("assignment_id, hours").in("assignment_id", ids);
-      if (!tErr) for (const e of entries) hoursByAssignment[e.assignment_id] = (hoursByAssignment[e.assignment_id] || 0) + Number(e.hours);
+      const { data: entries, error: tErr } = await sb.from("time_entries").select("assignment_id, consultant_id, hours").in("assignment_id", ids);
+      if (!tErr) for (const e of entries) {
+        hoursByAssignment[e.assignment_id] = (hoursByAssignment[e.assignment_id] || 0) + Number(e.hours);
+        if (e.consultant_id) (loggersByAssignment[e.assignment_id] ||= new Set()).add(e.consultant_id);
+      }
     }
     currentAssignments = rows.map((r) => ({
       ...r,
       hoursSpent: isSunkCostSpecialty(r.specialty_type, activeClient) ? Number(r.hours_allotted) : (hoursByAssignment[r.id] || 0),
+      loggedBy: [...(loggersByAssignment[r.id] || [])],
     }));
     isTeamLeadHere = isTeamLeadHere || currentAssignments.some((r) => r.user_id === currentUser.id && r.is_team_lead);
   }
@@ -2190,9 +2203,27 @@
       const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
       const tr = document.createElement("tr");
       tr.dataset.assignmentId = r.id;
-      const personCell = canManage
+      // Whoever logged against this row but is not the person on it now -- the
+      // answer to "whose 8 hours are these?" when the Person cell says Not
+      // assigned. Same rule the cumulative report uses, so the two agree.
+      // Compared by NAME, not id: Greg's hours sit under an older login than the
+      // one holding the row, and "Hours logged by Greg Gotcher" on Greg's own
+      // row is noise. Same call the cumulative report makes.
+      const holderName = person ? person.full_name : null;
+      const otherLoggers = (r.loggedBy || [])
+        .filter((id) => id !== r.user_id)
+        .map((id) => usersById()[id])
+        .filter((u) => u && u.full_name !== holderName);
+      const loggedNote = (!isSunkCostSpecialty(r.specialty_type, activeClient) && otherLoggers.length)
+        ? `<div class="logged-by-note">Hours logged by ${escapeHtml(
+            otherLoggers.length <= 2
+              ? otherLoggers.map((u) => u.full_name).join(" and ")
+              : `${otherLoggers.length} people`
+          )}</div>`
+        : "";
+      const personCell = (canManage
         ? `<select class="row-select row-consultant-select">${consultantOptionsHtml(r.user_id)}</select>`
-        : `${person ? escapeHtml(userLabel(person)) : `<span style="color:var(--muted);">Not assigned</span>`}`;
+        : `${person ? escapeHtml(userLabel(person)) : `<span style="color:var(--muted);">Not assigned</span>`}`) + loggedNote;
       const isFixed = fixedSlotIndex(r.specialty_type, r.slot_number) !== -1;
       // Chris/Rita 9/18/26: "the Unassign button will be removed... team leads
       // can directly type over a specialist's name to reassign." Clearing a
@@ -2212,7 +2243,9 @@
         : `<button class="btn-danger icon-btn" data-remove="${r.id}">Remove</button>`;
       const isSunkCost = isSunkCostSpecialty(r.specialty_type, activeClient);
       const canLogHours = !isSunkCost && !!person && (isSuperAdmin || person.id === currentUser.id);
-      const canViewHistory = !isSunkCost && !!person;
+      // Hours exist whether or not anyone holds the row now, and an unassigned
+      // row with hours on it is exactly the one a Team Lead needs to open.
+      const canViewHistory = !isSunkCost && (!!person || r.hoursSpent > 0);
       // Chris/Rita 9/18/26: the "+" goes, and the number itself opens logging.
       // That number used to open billing history, so history moved onto the
       // work-area name -- the two jobs stay one click each, on the cell each
