@@ -402,6 +402,8 @@
   .cc-nav-section { width: 100%; padding: 12px 14px 5px; font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; }
   .cc-nav-section:first-child { padding-top: 4px; }
   .cc-nav-section:not(:first-child) { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
+  /* A section break with no caption -- same rule, no words (Greg, 9/18/26). */
+  .cc-nav-divider { margin: 10px 10px 8px; border-top: 1px solid var(--border); }
   /* Greg (9/5/26): small badge + "Engagement Workspace" / client-name
      header, sitting above the nav list inside the same card -- from
      Chris's reference mockup. Text-only (no imported logo mark). */
@@ -1439,7 +1441,11 @@
   // "never leaves this screen" feel. Resource Vault (TL) used to be its
   // own pane here too, until it moved onto Client Info as its Info Wizard
   // step 6, "Resources" (Greg, 9/5/26).
-  const IFRAME_PANE_KEYS = ["research", "setup", "workflow", "dashboard", "application"];
+  // "cumulative" was missing here when the nav item was added on 9/17/26, so
+  // clicking Cumulative Hours set the active state and then did nothing: the
+  // iframe pane stayed hidden and its src was never set (Greg, 9/18/26). The
+  // list is the gate, not the navItems entry.
+  const IFRAME_PANE_KEYS = ["research", "setup", "workflow", "dashboard", "application", "cumulative"];
   // Tracks which pane key's page is currently sitting in the one shared
   // iframe -- NOT "has this pane ever been loaded". Bug (Greg, 8/31/26):
   // this used to be a per-key "loaded once" flag, so after visiting e.g.
@@ -1515,7 +1521,10 @@
         key: "workflow", label: "Documents", group: true,
         docs: DOC_GROUP_ITEMS.map((d) => ({ ...d, src: `client_workflow_files.html?client=${client.id}&embed=1&doc=${d.key}` })),
       },
-      { key: "setup", label: "Company Info", section: "Setup & Sharing", src: `client_profile.html?client=${client.id}&embed=1` },
+      // Greg (9/18/26): "remove setup and sharing heading." The caption goes,
+      // but the rule it carried stays -- without it Company Info runs straight
+      // on from the Attachments list as if it were one of the documents.
+      { key: "setup", label: "Company Info", divider: true, src: `client_profile.html?client=${client.id}&embed=1` },
       // Rita (9/14/26, item 9): "Where is the cumulative hours report? I
       // thought we reviewed this report in one of our meetings but I can't
       // seem to find it in the software now." It was folded into
@@ -1523,7 +1532,12 @@
       // left no route to it from the engagement you are already looking at.
       // This is that route back -- the same merged report, filtered to this
       // engagement, rather than a second copy to drift out of step.
-      { key: "dashboard", label: "Company Dashboard", section: "Setup & Sharing", src: dashboardHref, disabled: !dashboardHref },
+      // Greg (9/18/26): "Change Company Dashboard to View Dashboard and have it
+      // open a new window and open the real EG Dashboard." It is the one row
+      // that is not an internal pane -- it is the page a company is actually
+      // sent -- so it stops being an embedded iframe and becomes a plain link
+      // out. href instead of src is what renderNav keys off to draw an <a>.
+      { key: "dashboard", label: "View Dashboard", href: dashboardHref, disabled: !dashboardHref },
     ];
     // Greg (9/18/26): "we are no longer going to use the terminology Client
     // Workspace. Remove it from the menu and move the Team Hours to the top
@@ -1545,6 +1559,7 @@
     $("cc-nav").innerHTML = navHeaderHtml + navItems.map((item) => {
       if (item.hidden) return ""; // rendered inline elsewhere (see "workflow" group below)
       let secHtml = "";
+      if (item.divider) secHtml = `<div class="cc-nav-divider"></div>`;
       if (item.section && item.section !== _navSection) {
         _navSection = item.section;
         secHtml = `<div class="cc-nav-section">${item.section}</div>`;
@@ -1582,9 +1597,17 @@
           </div>
         `;
       }
+      // An item with href leaves the workspace instead of filling a pane, so
+      // it renders as a real anchor -- middle-click and "open in new tab" work,
+      // and the arrow icon says it goes somewhere (Greg, 9/18/26).
+      if (item.href) {
+        return secHtml + (item.disabled
+          ? `<button type="button" class="cc-nav-btn" style="opacity:0.5;" disabled>${navIconSvg(item.key)}<span>${item.label}</span></button>`
+          : `<a class="cc-nav-btn" href="${item.href}" target="_blank" rel="noopener">${navIconSvg(item.key)}<span>${item.label}</span></a>`);
+      }
       return secHtml + `<button type="button" class="cc-nav-btn" data-pane="${item.key}" ${item.disabled ? 'style="opacity:0.5;" disabled' : ""}>${navIconSvg(item.key)}<span>${item.label}</span></button>`;
     }).join("");
-    $("cc-nav").querySelectorAll(".cc-nav-btn").forEach((btn) => {
+    $("cc-nav").querySelectorAll(".cc-nav-btn[data-pane]").forEach((btn) => {
       btn.addEventListener("click", () => setActivePane(btn.dataset.pane));
     });
     $("cc-nav").querySelectorAll(".cc-nav-subbtn[data-pane]").forEach((btn) => {
@@ -1598,7 +1621,7 @@
   // right now that's just Client Info, whose Info Wizard has CSV
   // tables/forms that were designed assuming full browser width (Greg,
   // 8/30/26).
-  const WIDE_WORKSPACE_PANE_KEYS = ["setup"];
+  const WIDE_WORKSPACE_PANE_KEYS = ["setup", "cumulative"];
 
   function setActivePane(key, docKey) {
     activePane = key;
@@ -1624,18 +1647,11 @@
     syncNotesColumn();
     refreshDelayNoteVisibility();
 
-    // Client Dashboard is the one nav item that's a real, client-facing
-    // page (the same URL a client would be sent) rather than an internal
-    // tool -- so on that tab only, offer a link to open it in its own
-    // browser tab instead of the embedded iframe here (Greg, 8/31/26).
-    const openBrowserBtn = $("cc-open-browser-btn");
-    const dashboardItem = navItems.find((n) => n.key === "dashboard");
-    if (key === "dashboard" && dashboardItem && dashboardItem.src) {
-      openBrowserBtn.href = dashboardItem.src;
-      openBrowserBtn.classList.remove("hidden");
-    } else {
-      openBrowserBtn.classList.add("hidden");
-    }
+    // The "open in its own browser tab" button lived here because the company
+    // dashboard used to load in the iframe below. It opens in a new tab
+    // directly from the nav now, so the button has nothing left to offer
+    // (Greg, 9/18/26).
+    $("cc-open-browser-btn").classList.add("hidden");
 
     const isIframePane = IFRAME_PANE_KEYS.includes(key);
     $("cc-pane-iframe").classList.toggle("hidden", !isIframePane);
