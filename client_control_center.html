@@ -2039,13 +2039,34 @@
   function fixedSlotIndex(specialty, slot) {
     return FIXED_SLOTS.findIndex(([s, n]) => s === specialty && n === slot);
   }
+  // NCEG's own work rather than the specialist team's -- the two rows that sit
+  // below everything else and that an added specialist goes above.
+  const HOUSE_SPECIALTIES = ["admin", "quality_control"];
+
+  // Index of the first house row. Admin and Quality Control are NCEG's own
+  // work, not part of the specialist team, so they stay at the bottom -- and
+  // an added specialist belongs with the specialists above them, not stranded
+  // underneath (Greg, 9/18/26).
+  const FIRST_HOUSE_SLOT = FIXED_SLOTS.findIndex(([spec]) => spec === "admin");
+
+  // Sort key: the seven standard rows keep their fixed order; anything extra
+  // sits in one block just above Admin, so added specialists read as part of
+  // the specialist team rather than trailing off the end of the table. A
+  // duplicate of a house row (a second Admin) stays with the house rows.
+  function sortKeyFor(r) {
+    const fixed = fixedSlotIndex(r.specialty_type, r.slot_number);
+    if (fixed !== -1) return fixed;
+    const base = FIXED_SLOTS.findIndex(([spec]) => spec === r.specialty_type);
+    // A duplicate of a house row still sorts with the house rows; anything
+    // else sits in the specialist block, just before Admin.
+    return (base !== -1 && base >= FIRST_HOUSE_SLOT) ? base + 0.5 : FIRST_HOUSE_SLOT - 0.5;
+  }
+
   function sortedAssignments() {
     return [...currentAssignments].sort((a, b) => {
-      const ia = fixedSlotIndex(a.specialty_type, a.slot_number);
-      const ib = fixedSlotIndex(b.specialty_type, b.slot_number);
-      if (ia !== -1 && ib !== -1) return ia - ib;
-      if (ia !== -1) return -1;
-      if (ib !== -1) return 1;
+      const ka = sortKeyFor(a), kb = sortKeyFor(b);
+      if (ka !== kb) return ka - kb;
+      // Same block: keep duplicates next to the area they duplicate.
       return a.specialty_type.localeCompare(b.specialty_type) || a.slot_number - b.slot_number;
     });
   }
@@ -2383,40 +2404,60 @@
 
   $("tw-add-row-btn").addEventListener("click", () => {
     const tbody = $("tw-tbody");
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><select class="row-select new-specialty">${specialtyOptionsHtml()}</select></td>
-      <td><select class="row-select new-consultant">${consultantOptionsHtml()}</select></td>
-      <td style="text-align:right;"><input type="number" class="row-input row-hours-input new-hours" min="0" step="0.5" value="0" /></td>
-      <td style="text-align:right; color:var(--muted);">—</td>
-      <td class="row-actions">
-        <button type="button" class="btn-primary icon-btn" data-save-row>&check;</button>
-        <button type="button" class="btn-secondary icon-btn" data-cancel-row>&times;</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
+    if (tbody.querySelector(".new-specialty")) return; // one draft at a time
 
-    tr.querySelector(".new-hours").addEventListener("input", recalcTeamStats);
-    tr.querySelector("[data-cancel-row]").addEventListener("click", () => { tr.remove(); recalcTeamStats(); });
-    tr.querySelector("[data-save-row]").addEventListener("click", async () => {
-      const specialty = tr.querySelector(".new-specialty").value;
-      const userId = tr.querySelector(".new-consultant").value;
-      const hours = Number(tr.querySelector(".new-hours").value);
-      if (!specialty) {
-        showBanner("Pick a work area for this specialist first.", "error");
-        return;
-      }
+    // Greg (9/18/26): "move add specialist above Admin so that it inserts the
+    // new specialist there, and do not require a check to add the new
+    // specialist -- it should save automatically once the specialty is
+    // selected." So the draft row goes where the saved row will land, and
+    // choosing a work area IS the save. No confirm, and nothing to fill in
+    // first: the person and the hours are edited on the real row afterwards,
+    // with the same controls as every other row.
+    const tr = document.createElement("tr");
+    tr.className = "new-row";
+    tr.innerHTML = `
+      <td>
+        <select class="row-select new-specialty" aria-label="Work area for the new specialist">${specialtyOptionsHtml()}</select>
+        <div class="logged-by-note">Pick a work area to add it</div>
+      </td>
+      <td><span style="color:var(--muted);">Not assigned</span></td>
+      <td style="text-align:right; color:var(--muted);">0</td>
+      <td style="text-align:right; color:var(--muted);">—</td>
+      ${$("tw-actions-header").classList.contains("hidden") ? "" : `<td class="row-actions"></td>`}
+    `;
+
+    // Above Admin: the first house row if there is one, otherwise the end.
+    const houseRow = [...tbody.rows].find((row) => {
+      const r = currentAssignments.find((x) => x.id === row.dataset.assignmentId);
+      return r && HOUSE_SPECIALTIES.includes(r.specialty_type);
+    });
+    tbody.insertBefore(tr, houseRow || null);
+
+    const select = tr.querySelector(".new-specialty");
+    select.focus();
+
+    // Escape or blurring away with nothing chosen backs out -- there is no
+    // cancel button because there is nothing yet to cancel.
+    select.addEventListener("keydown", (e) => { if (e.key === "Escape") tr.remove(); });
+
+    select.addEventListener("change", async () => {
+      const specialty = select.value;
+      if (!specialty) return;
+      select.disabled = true;
+
       const existing = currentAssignments.filter((r) => r.specialty_type === specialty);
       const nextSlot = existing.length ? Math.max(...existing.map((r) => r.slot_number)) + 1 : 1;
       const { error } = await sb.from("client_assignments").insert({
-        client_id: activeClient.id, user_id: userId || null, specialty_type: specialty, slot_number: nextSlot, hours_allotted: hours,
-        is_team_lead: specialty === "team_lead",
+        client_id: activeClient.id, user_id: null, specialty_type: specialty, slot_number: nextSlot, hours_allotted: 0,
+        is_team_lead: false,
       });
       if (error) {
+        select.disabled = false;
         showBanner(error.message.includes("exceed Budget") ? "That would exceed the engagement's total hours." : "Couldn't add: " + error.message, "error");
         return;
       }
-      showBanner("Specialist added.", "success");
+      tr.remove();
+      showBanner(`${SPECIALTY_LABELS[specialty] || specialty} added \u2014 pick the person and set their hours.`, "success");
       await reloadTeam();
     });
 
