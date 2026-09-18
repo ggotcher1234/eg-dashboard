@@ -519,8 +519,22 @@
   .totals-left { font-size: 12.5px; font-weight: 600; color: var(--muted); margin-left: 8px; }
   /* The Add Specialist row: no bottom rule, so it reads as the seam between the
      specialist work areas above it and the house rows below, not as a row of
-     its own with empty columns. */
-  #tw-add-row td { border-bottom: none; padding: 8px 14px 10px 9px; }
+     its own with empty columns.
+     Greg (9/18/26): "the button looks a bit clunky -- instead of a button just
+     use the text Add Specialist with a line under it. also add a box default to
+     Not assigned next to it so that the form flows better." So the row now has
+     the same shape as every row under it: a work-area cell and a person cell,
+     with normal row padding so both line up with the columns they sit in. */
+  #tw-add-row td { border-bottom: none; }
+  /* Underlined at rest, unlike the work-area links above it: this one is the
+     only cell on the table that starts something rather than opening
+     something, and nothing else in its column looks like a link until you
+     hover it. */
+  .add-specialist-link {
+    background: none; border: none; padding: 0; font: inherit; font-weight: 600;
+    color: var(--navy-light); cursor: pointer; text-decoration: underline; text-align: inherit;
+  }
+  .add-specialist-link:hover, .add-specialist-link:focus-visible { color: var(--navy); }
   .logged-by-note { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
   .engagement-summary:empty { display: none; }
 
@@ -965,12 +979,12 @@
               </table>
             </div>
             <!-- Greg (9/18/26): "move add specialist button up under the watering
-                 holes row." The button lives IN the table now, on the row where
-                 the new specialist will appear. This div is just its parking
-                 space: renderTeamTable moves the live node into a table row each
-                 render, and parks it back here first so clearing the tbody does
-                 not take the node -- and its click handler -- with it. -->
-            <div id="tw-add-row-home"><button class="btn-secondary btn-sm hidden" id="tw-add-row-btn">Add Specialist</button></div>
+                 holes row", then "instead of a button just use the text Add
+                 Specialist with a line under it." Both live in the table now --
+                 renderTeamTable builds that row and wires it each render, so
+                 there is no node to park here any more. The div stays because
+                 renderManageNote anchors the "who can change this" note to it. -->
+            <div id="tw-add-row-home"></div>
           </div>
 
           <div id="cc-pane-iframe" class="cc-pane-inner hidden">
@@ -2234,7 +2248,6 @@
     const canManage = isSuperAdmin || (isTeamLeadHere && editable);
 
     $("tw-summary-error").style.display = "none";
-    $("tw-add-row-btn").classList.toggle("hidden", !canManage);
     renderManageNote(canManage, editable);
 
     renderTeamTable(canManage);
@@ -2269,9 +2282,6 @@
 
   function renderTeamTable(canManage) {
     const tbody = $("tw-tbody");
-    // Park the button before wiping the table, or innerHTML takes the node and
-    // its click handler with it.
-    $("tw-add-row-home").appendChild($("tw-add-row-btn"));
     tbody.innerHTML = "";
 
     // Four columns. There was a fifth for row actions; with Unassign and then
@@ -2289,15 +2299,26 @@
     // The Add Specialist row sits at the boundary between the specialist work
     // areas and the house rows -- directly under Watering Holes, where the row
     // it creates will appear (Greg, 9/18/26).
+    // It reads as a row of the table now rather than a control parked between
+    // two rows: "Add Specialist" sits in the Work Area column where the new
+    // area's name will appear, and the Person column carries the same name
+    // list every other row has, already on "Not assigned" (Greg, 9/18/26).
+    // Pick the person first or leave it -- either way, choosing the work area
+    // is still what saves the row.
     let addRowPlaced = false;
     const placeAddRow = () => {
       if (addRowPlaced || !canManage) return;
       addRowPlaced = true;
       const tr = document.createElement("tr");
       tr.id = "tw-add-row";
-      tr.innerHTML = `<td colspan="4" class="add-specialist-cell"></td>`;
-      tr.firstElementChild.appendChild($("tw-add-row-btn"));
+      tr.innerHTML = `
+        <td id="tw-add-area-cell"><button type="button" class="add-specialist-link" id="tw-add-specialist">Add Specialist</button></td>
+        <td><select class="row-select" id="tw-add-person" aria-label="Person for the new work area">${consultantOptionsHtml(null)}</select></td>
+        <td></td>
+        <td></td>
+      `;
       tbody.appendChild(tr);
+      tr.querySelector("#tw-add-specialist").addEventListener("click", beginAddSpecialist);
     };
 
     for (const r of sortedAssignments()) {
@@ -2464,41 +2485,35 @@
     renderTeamPane();
   }
 
-  $("tw-add-row-btn").addEventListener("click", () => {
-    const tbody = $("tw-tbody");
-    if (tbody.querySelector(".new-specialty")) return; // one draft at a time
+  // Greg (9/18/26): "move add specialist above Admin so that it inserts the
+  // new specialist there, and do not require a check to add the new
+  // specialist -- it should save automatically once the specialty is
+  // selected." So the row is added where it will land, and choosing a work
+  // area IS the save -- no confirm step.
+  // Later the same day the button became a link on a real table row, so the
+  // picker now opens in the cell where the link was -- the Work Area column,
+  // where the saved row's name goes -- with the person list already sitting
+  // beside it in the Person column.
+  function beginAddSpecialist() {
+    const cell = document.getElementById("tw-add-area-cell");
+    if (!cell || cell.querySelector(".new-specialty")) return; // one at a time
 
-    // Greg (9/18/26): "move add specialist above Admin so that it inserts the
-    // new specialist there, and do not require a check to add the new
-    // specialist -- it should save automatically once the specialty is
-    // selected." So the draft row goes where the saved row will land, and
-    // choosing a work area IS the save. No confirm, and nothing to fill in
-    // first: the person and the hours are edited on the real row afterwards,
-    // with the same controls as every other row.
-    const tr = document.createElement("tr");
-    tr.className = "new-row";
-    tr.innerHTML = `
-      <td>
-        <select class="row-select new-specialty" aria-label="Work area for the new specialist">${specialtyOptionsHtml()}</select>
-        <div class="logged-by-note">Pick a work area to add it</div>
-      </td>
-      <td><span style="color:var(--muted);">Not assigned</span></td>
-      <td style="text-align:right; color:var(--muted);">0</td>
-      <td style="text-align:right; color:var(--muted);">—</td>
+    const linkHtml = cell.innerHTML;
+    cell.innerHTML = `
+      <select class="row-select new-specialty" aria-label="Work area for the new specialist">${specialtyOptionsHtml()}</select>
+      <div class="logged-by-note">Pick a work area to add it</div>
     `;
-
-    // The draft takes the Add Specialist row's place -- same seam, directly
-    // under Watering Holes -- and the button steps aside until it resolves.
-    const addRow = document.getElementById("tw-add-row");
-    tbody.insertBefore(tr, addRow || null);
-    if (addRow) addRow.classList.add("hidden");
-
-    const select = tr.querySelector(".new-specialty");
+    const select = cell.querySelector(".new-specialty");
     select.focus();
 
     // Escape backs out -- there is no cancel button because until a work area
-    // is chosen there is nothing to cancel.
-    const dismiss = () => { tr.remove(); if (addRow) addRow.classList.remove("hidden"); recalcTeamStats(); };
+    // is chosen there is nothing to cancel. Putting the link back has to
+    // re-wire its click handler: this is fresh markup, not the old node.
+    const dismiss = () => {
+      cell.innerHTML = linkHtml;
+      const link = cell.querySelector("#tw-add-specialist");
+      if (link) { link.addEventListener("click", beginAddSpecialist); link.focus(); }
+    };
     select.addEventListener("keydown", (e) => { if (e.key === "Escape") dismiss(); });
 
     select.addEventListener("change", async () => {
@@ -2506,10 +2521,16 @@
       if (!specialty) return;
       select.disabled = true;
 
+      // Whoever is showing in the Person cell of this same row comes along
+      // with it; left on "Not assigned" the row is created unheld, exactly as
+      // it was when the only thing this could set was the work area.
+      const personSelect = document.getElementById("tw-add-person");
+      const userId = (personSelect && personSelect.value) || null;
+
       const existing = currentAssignments.filter((r) => r.specialty_type === specialty);
       const nextSlot = existing.length ? Math.max(...existing.map((r) => r.slot_number)) + 1 : 1;
       const { error } = await sb.from("client_assignments").insert({
-        client_id: activeClient.id, user_id: null, specialty_type: specialty, slot_number: nextSlot, hours_allotted: 0,
+        client_id: activeClient.id, user_id: userId, specialty_type: specialty, slot_number: nextSlot, hours_allotted: 0,
         is_team_lead: false,
       });
       if (error) {
@@ -2517,13 +2538,13 @@
         showBanner(error.message.includes("exceed Budget") ? "That would exceed the engagement's total hours." : "Couldn't add: " + error.message, "error");
         return;
       }
-      tr.remove();
-      showBanner(`${SPECIALTY_LABELS[specialty] || specialty} added \u2014 pick the person and set their hours.`, "success");
+      const who = userId ? (usersById()[userId] || {}).full_name : null;
+      showBanner(who
+        ? `${SPECIALTY_LABELS[specialty] || specialty} added for ${who} \u2014 set the hours.`
+        : `${SPECIALTY_LABELS[specialty] || specialty} added \u2014 pick the person and set their hours.`, "success");
       await reloadTeam();
     });
-
-    recalcTeamStats();
-  });
+  }
 
   function recalcTeamStats() {
     const total = Number(activeClient && activeClient.budget_hours_available) || 0;
