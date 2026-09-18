@@ -659,6 +659,10 @@
      engagements" escape hatch would strand the reader inside an iframe. */
   body.embed-mode #eng-detail-back { display: none !important; }
 
+  /* Money is Invoicing's business, not the engagement team's (Greg, 9/18/26). */
+  body.embed-mode #ed-dollars-section,
+  body.embed-mode #ed-rate-wrap { display: none !important; }
+
   body.embed-mode main { padding: 0; }
   body.embed-mode .tab-panel-frame,
   body.embed-mode .card { border: none; box-shadow: none; padding: 0; margin: 0; background: transparent; }
@@ -1022,7 +1026,7 @@
                   <label>Closed</label>
                   <div class="meta-static" id="ed-closed">—</div>
                 </div>
-                <div class="eng-detail-field">
+                <div class="eng-detail-field" id="ed-rate-wrap">
                   <label>Hourly Rate (Pay)</label>
                   <div class="meta-static" id="ed-rate">—</div>
                 </div>
@@ -1042,7 +1046,15 @@
               <div id="ed-hours-empty" class="empty-note hidden">No specialists are assigned to this engagement yet.</div>
             </div>
 
-            <div class="eng-detail-section">
+            <!-- Greg (9/18/26): "on the cumulative report that the Team Leads and
+                 Specialists can see i'd like to remove the dollar amount section
+                 but keep it as is on the Invoicing tab." Both views are this one
+                 page, so embed=1 -- which is only ever how the Engagement
+                 Workspace loads it -- is what tells them apart. The hourly Pay
+                 rate in the header above goes with it: leaving it would hand
+                 back the same figure the table was hiding, one multiplication
+                 away. -->
+            <div class="eng-detail-section" id="ed-dollars-section">
               <h3>Cumulative Value by Specialist</h3>
               <div class="card-hint">Same hours, priced at the Pay rate above.</div>
               <div class="table-scroll">
@@ -1192,6 +1204,10 @@
   // organization_settings.hourly_rate (047 migration) and editable by
   // Admins right on this page; 95 here is just the pre-load fallback in
   // case that fetch hasn't resolved yet.
+  // Set by the inline script at the top of <body> from ?embed=1. Embedded means
+  // the Engagement Workspace pane, which is the only way a Team Lead or
+  // Specialist reaches this page at all (Greg, 9/18/26).
+  const IS_EMBED = document.body.classList.contains("embed-mode");
   let hourlyRate = 95;
   function money(n) {
     return "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1392,7 +1408,14 @@
     currentUser = profile;
     $("loading-view").classList.add("hidden");
 
-    if (profile.role !== "super_admin") {
+    // Greg (9/18/26): Team Leads and Specialists need the cumulative report
+    // from the Engagement Workspace. The full page stays Super-Admin-only; the
+    // embedded single-engagement view does not, because the database already
+    // limits it -- client_assignments, clients and time_entries each grant
+    // SELECT on `is_super_admin() OR is_assigned_to_client(...)`, so the exact
+    // same queries return only the engagements this person is on. The role
+    // check here was never the boundary; RLS is.
+    if (profile.role !== "super_admin" && !IS_EMBED) {
       $("not-admin-view").classList.remove("hidden");
       return;
     }
@@ -1415,7 +1438,11 @@
     wireTabs();
     wireSpecialistControls();
 
-    await loadHourlyRate();
+    // Only the full page shows or edits money, so an embedded view has no use
+    // for the rate -- and organization_settings may not be readable by a Team
+    // Lead, which would surface an error banner about a figure we deliberately
+    // do not display.
+    if (!IS_EMBED) await loadHourlyRate();
     await loadData();
     loadGlobalSearchIndex();
   }
@@ -1810,11 +1837,18 @@
 
     renderSpecialistSetup(rowsWithTotals.filter((r) => r.hoursThisMonth > 0 && !r.isSunk));
     renderSpecialistTable();
-    const payrollRows = renderPayrollSummary(rowsWithTotals.filter((r) => r.hoursThisMonth > 0 && !r.isSunk));
-    const ytdPayrollRows = renderYtdPayrollSummary(rowsWithTotals.filter((r) => r.hoursYtd > 0 && !r.isSunk));
 
-    $("ytd-total-figure").innerHTML =
-      money(ytdPayrollRows.reduce((sum, p) => sum + p.pay, 0)) + '<span class="ytd-total-label">YTD Payroll</span>';
+    // The Time Sheets table and both payroll panels are hidden when embedded,
+    // but hidden is not the same as absent: they were still being computed and
+    // written into the DOM. Nothing in the embedded view reads them, so skip
+    // the work and leave no pay figures behind (Greg, 9/18/26).
+    let payrollRows = [], ytdPayrollRows = [];
+    if (!IS_EMBED) {
+      payrollRows = renderPayrollSummary(rowsWithTotals.filter((r) => r.hoursThisMonth > 0 && !r.isSunk));
+      ytdPayrollRows = renderYtdPayrollSummary(rowsWithTotals.filter((r) => r.hoursYtd > 0 && !r.isSunk));
+      $("ytd-total-figure").innerHTML =
+        money(ytdPayrollRows.reduce((sum, p) => sum + p.pay, 0)) + '<span class="ytd-total-label">YTD Payroll</span>';
+    }
 
     window._invoicingReportRows = rowsWithTotals; // for CSV export
     window._invoicingPayrollRows = payrollRows; // for payroll CSV export
@@ -2017,7 +2051,9 @@
     } else {
       $("ed-closed-wrap").style.display = "none";
     }
-    $("ed-rate").textContent = money(hourlyRate) + "/hr";
+    // Not rendered at all when embedded -- hours are on screen beside it, so a
+    // pay rate left in the DOM is the value table one multiplication away.
+    $("ed-rate").textContent = IS_EMBED ? "" : money(hourlyRate) + "/hr";
 
     // Union of every calendar month with real logged hours anywhere in this
     // engagement -- same rule client_cumulative_hours.html used: empty
@@ -2052,7 +2088,7 @@
     });
 
     renderEdHoursTable(detailRows, activeMonths);
-    renderEdDollarsTable(detailRows, activeMonths);
+    if (!IS_EMBED) renderEdDollarsTable(detailRows, activeMonths);
   }
 
   function renderEdHoursTable(rows, activeMonths) {
