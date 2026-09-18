@@ -544,6 +544,22 @@
   .logged-by-note { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
   .engagement-summary:empty { display: none; }
 
+  /* ---------- Welcome Email pane ---------- */
+  .welcome-title { margin: 0 0 4px; font-size: 17px; color: var(--navy); }
+  .welcome-hint { font-size: 13px; color: var(--muted); margin-bottom: 16px; max-width: 76ch; line-height: 1.5; }
+  .welcome-note { font-size: 13px; color: var(--danger); margin-bottom: 12px; line-height: 1.5; }
+  .welcome-note:empty { display: none; }
+  .welcome-field { margin-bottom: 12px; }
+  .welcome-field label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+  .welcome-field input, .welcome-field textarea {
+    width: 100%; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13.5px; font-family: inherit; color: var(--text); background: #fff;
+  }
+  .welcome-field textarea { line-height: 1.6; resize: vertical; min-height: 420px; }
+  .welcome-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .welcome-reset { background: none; border: none; padding: 0; font: inherit; font-size: 13px; color: var(--navy-light); cursor: pointer; text-decoration: underline; }
+  .welcome-reset:hover { color: var(--navy); }
+
   /* ---------- Modals (Remove confirm / Log hours / Billing history) ---------- */
   .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 50; padding: 20px; }
   .overlay.open { display: flex; }
@@ -991,6 +1007,27 @@
                  there is no node to park here any more. The div stays because
                  renderManageNote anchors the "who can change this" note to it. -->
             <div id="tw-add-row-home"></div>
+          </div>
+
+          <!-- Welcome Email (Greg, 9/18/26). A composer, not a sender: the
+               engagement's own contacts, CC list and dashboard link are
+               assembled into the note Greg sends by hand once he's assigned
+               Team Lead, and he copies it into his own mail client so it comes
+               from him. Nothing here is saved -- edits survive switching panes
+               within a visit and reset on reload. -->
+          <div id="cc-pane-welcome" class="cc-pane-inner hidden">
+            <h3 class="welcome-title">Welcome Email</h3>
+            <div class="welcome-hint">What you send a new client once you're assigned Team Lead. Addresses, the dashboard link and your name are filled in from this engagement &mdash; edit anything before you send. Nothing on this screen is saved.</div>
+            <div class="welcome-note" id="welcome-note"></div>
+            <div class="welcome-field"><label for="welcome-to">To</label><input type="text" id="welcome-to" /></div>
+            <div class="welcome-field"><label for="welcome-cc">CC</label><input type="text" id="welcome-cc" /></div>
+            <div class="welcome-field"><label for="welcome-subject">Subject</label><input type="text" id="welcome-subject" /></div>
+            <div class="welcome-field"><label for="welcome-body">Message</label><textarea id="welcome-body" spellcheck="true"></textarea></div>
+            <div class="welcome-actions">
+              <button type="button" class="btn-primary btn-sm" id="welcome-copy">Copy email</button>
+              <button type="button" class="btn-secondary btn-sm" id="welcome-mailto">Open in email app</button>
+              <button type="button" class="welcome-reset" id="welcome-reset">Start over from the template</button>
+            </div>
           </div>
 
           <div id="cc-pane-iframe" class="cc-pane-inner hidden">
@@ -1479,6 +1516,9 @@
     renderStatusToggle(client);
 
     renderNav(client);
+    // A different engagement means a different welcome note -- drop any draft
+    // from the last one so the pane rebuilds from this client's contacts.
+    welcomeBuilt = false;
 
     await loadAssignments();
     renderTeamPane();
@@ -1512,6 +1552,10 @@
   // iframe panes has to re-point src; only re-visiting the SAME pane twice
   // in a row (without leaving it) can skip the reload.
   let ccIframeCurrentKey = null;
+  // Whether the Welcome Email pane has been filled in for the engagement on
+  // screen. Declared up here with the other pane state because loadClient
+  // clears it, and loadClient sits above the welcome code itself.
+  let welcomeBuilt = false;
   // Which of the 4 Documents sub-items is currently loaded in the shared
   // iframe (Greg, 8/31/26). The group itself is always expanded now
   // (Greg, 9/4/26: "just show the documents", no collapse step first).
@@ -1539,6 +1583,8 @@
       // Cumulative Hours (Rita item 9) -- a clock, matching the hours idea,
       // and distinct from "review" (bar chart) and "eval" (check) above.
       cumulative: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+      // An envelope, for the welcome note a Team Lead sends at kickoff.
+      welcome: '<rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22 6 12 13 2 6"/>',
     };
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[key] || ""}</svg>`;
   }
@@ -1572,6 +1618,13 @@
       // Research above -- listed here only so setActivePane can resolve the
       // src; renderNav injects the row itself up in the top group.
       { key: "application", label: "View Application", src: `client_applications.html?client=${client.id}&embed=1`, hidden: true },
+      // Greg (9/18/26): "add a new menu item called Welcome Email. This is what
+      // i typically send to a new client after I'm assigned the Team Lead...
+      // this should be the first attachment." A native pane, not an iframe --
+      // hidden here for the same reason as the two above: the row itself is
+      // injected at the top of the Attachments list below, and this entry only
+      // exists so setActivePane can resolve the key.
+      { key: "welcome", label: "Welcome Email", hidden: true },
       {
         key: "workflow", label: "Documents", group: true,
         docs: DOC_GROUP_ITEMS.map((d) => ({ ...d, src: `client_workflow_files.html?client=${client.id}&embed=1&doc=${d.key}` })),
@@ -1643,6 +1696,7 @@
         // 9/6/26).
         const subHtml = `<button type="button" class="cc-nav-subbtn" data-pane="application">${navIconSvg("application")}<span>View Application</span></button>` +
           `<div class="cc-nav-section">Attachments</div>` +
+          `<button type="button" class="cc-nav-subbtn" data-pane="welcome">${navIconSvg("welcome")}<span>Welcome Email</span></button>` +
           item.docs.map((d) => `
             <button type="button" class="cc-nav-subbtn" data-pane="${item.key}" data-doc="${d.key}">${navIconSvg(d.key)}<span>${d.label}</span></button>
           ` + (d.key === "controlling" ? researchRow : "")).join("");
@@ -1714,6 +1768,8 @@
         : btn.dataset.pane === key);
     });
     $("cc-pane-team").classList.toggle("hidden", key !== "team");
+    $("cc-pane-welcome").classList.toggle("hidden", key !== "welcome");
+    if (key === "welcome") renderWelcomePane();
     document.querySelector(".cc-shell").classList.toggle("wide-workspace", WIDE_WORKSPACE_PANE_KEYS.includes(key));
     $("cm-wizard-hint").classList.toggle("hidden", key !== "setup");
     $("cm-research-hint").classList.toggle("hidden", key !== "research");
@@ -2551,6 +2607,168 @@
       await reloadTeam();
     });
   }
+
+  // ---------- Welcome Email ----------
+  // Greg (9/18/26): "add a new menu item called Welcome Email. This is what i
+  // typically send to a new client after I'm assigned the Team Lead. The main
+  // thing is it contains a link to their dashboard which includes the Resource
+  // Vault that they need to access to prep for the Discovery call."
+  // His own template, with four things filled in from the engagement: who it
+  // goes to, who is copied, the dashboard link, and the Team Lead's name.
+  // Not sent from here: he pastes it into his own mail client so it arrives
+  // from him, with his signature, and lands in his sent folder.
+  // No Calendly link -- Greg: "most team leads don't have calendly so we should
+  // replace that request with something like let me know when would be a good
+  // time for our discovery call."
+  // Chris Gibbons is copied on every one of these. Matched against the roster
+  // rather than hardcoded, so it follows his address if it ever changes.
+  const WELCOME_CC_MATCH = (u) =>
+    /^cgibbons@/i.test(u.email || "") || /\bchris(topher)?\b.*\bgibbons\b/i.test(u.full_name || "");
+
+  function welcomeFirstNames(names) {
+    const firsts = names.map((n) => String(n || "").trim().split(/\s+/)[0]).filter(Boolean);
+    if (!firsts.length) return "there";
+    if (firsts.length === 1) return firsts[0];
+    if (firsts.length === 2) return `${firsts[0]} & ${firsts[1]}`;
+    return `${firsts.slice(0, -1).join(", ")} & ${firsts[firsts.length - 1]}`;
+  }
+
+  // Pure, so the wording can be checked without a database behind it.
+  function welcomeEmailBody(greeting, dashboardUrl, teamLead) {
+    return `Good morning, ${greeting},
+
+Congratulations on being accepted into the Economic Gardening program. I'll be your EG Team Lead for this engagement.
+
+The next step is to schedule your 90-minute Discovery Call. Reply with a few times that work for you over the next couple of weeks and I'll send the invitation. We'll meet over Zoom. Once we complete the Discovery Call, our research team will begin work immediately.
+
+Before the call, I'd like to ask you to review a few items so we can make the most productive use of our time together:
+
+1. Open the Economic Gardening Dashboard we created for your engagement:
+${dashboardUrl}
+2. Click on the Resource Vault inside the dashboard.
+3. Review the first row of resources, which includes everything you need to review for our discussions:
+
+* "What to Expect"
+* EG FAQs
+* 5 Framework videos - the password is listed there
+* Work Style Preferences - a quick sorter
+
+Finally, please send me your top 10 customers and at least 3 competitors before the call. A simple list is fine.
+
+The better we understand your customers, competitors, goals, and working style going into the call, the more useful and targeted our research can be.
+
+If you have any questions, just reply, and I'll help. Also, could you do me a favor and reply to let me know this made it through your spam filters?
+
+Looking forward to scheduling our Discovery Call.
+
+${teamLead}`;
+  }
+
+  async function buildWelcomeEmail() {
+    const c = activeClient;
+    if (!c) return;
+    const notes = [];
+
+    // To: the company's own contacts. CC: this engagement's CC list, the
+    // Program contacts ticked for this engagement, and Chris.
+    const [contactsRes, ccListRes, ccPicksRes] = await Promise.all([
+      sb.from("client_contacts").select("name,email").eq("client_id", c.id).order("sort_order").order("created_at"),
+      sb.from("client_cc_list").select("name,email").eq("client_id", c.id).order("sort_order").order("created_at"),
+      sb.from("client_cc_contacts").select("partner_contact_id").eq("client_id", c.id),
+    ]);
+    const contacts = contactsRes.data || [];
+    const ccRows = ccListRes.data || [];
+
+    let partnerCc = [];
+    const pickIds = (ccPicksRes.data || []).map((r) => r.partner_contact_id).filter(Boolean);
+    if (pickIds.length) {
+      const { data } = await sb.from("econ_dev_partner_contacts").select("name,email").in("id", pickIds);
+      partnerCc = data || [];
+    }
+
+    const emailsOf = (rows) => rows.map((r) => (r.email || "").trim()).filter(Boolean);
+    const toList = emailsOf(contacts);
+    const ccList = [...emailsOf(ccRows), ...emailsOf(partnerCc)];
+
+    const chris = allUsersIncludingHidden.find(WELCOME_CC_MATCH);
+    if (chris && chris.email) ccList.push(chris.email.trim());
+    else notes.push("Chris Gibbons isn't on the roster with an email, so he couldn't be added to the CC line - add his address before you send.");
+
+    // De-duplicate case-insensitively, and never CC somebody already on the To line.
+    const seen = new Set(toList.map((e) => e.toLowerCase()));
+    const ccUnique = [];
+    for (const e of ccList) {
+      const k = e.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      ccUnique.push(e);
+    }
+
+    if (!toList.length) {
+      notes.push(contacts.length
+        ? "This engagement's contacts have no email addresses on file - add them under Company Info, step 3."
+        : "This engagement has no company contacts yet - add them under Company Info, step 3, and they'll fill in here.");
+    }
+
+    const dashboardUrl = c.slug ? new URL(`c/${encodeURIComponent(c.slug)}`, PUBLIC_SITE_BASE).href : null;
+    if (!dashboardUrl) notes.push("This engagement has no dashboard link yet (no slug on the client record), so the link in the message is a placeholder.");
+
+    const teamLead = (teamLeadContact && teamLeadContact.name)
+      || (usersById()[currentUser.id] || {}).full_name
+      || "";
+
+    $("welcome-to").value = toList.join(", ");
+    $("welcome-cc").value = ccUnique.join(", ");
+    $("welcome-subject").value = `Welcome to Economic Gardening - next steps for ${c.name}`;
+    $("welcome-body").value = welcomeEmailBody(
+      welcomeFirstNames(contacts.map((r) => r.name)),
+      dashboardUrl || "[dashboard link]",
+      teamLead
+    );
+    $("welcome-note").textContent = notes.join(" ");
+  }
+
+  // Built once per visit to the engagement, not on every pane switch, so an
+  // edit survives a trip to Team & Hours and back. "Start over" rebuilds it.
+  async function renderWelcomePane() {
+    if (welcomeBuilt) return;
+    welcomeBuilt = true;
+    try {
+      await buildWelcomeEmail();
+    } catch (err) {
+      welcomeBuilt = false;
+      $("welcome-note").textContent = "Couldn't load this engagement's contacts: " + (err && err.message ? err.message : err);
+    }
+  }
+
+  $("welcome-reset").addEventListener("click", async () => {
+    welcomeBuilt = true;
+    await buildWelcomeEmail();
+    showBanner("Reset to the template.", "success");
+  });
+
+  $("welcome-copy").addEventListener("click", async () => {
+    const text = $("welcome-body").value;
+    try {
+      await navigator.clipboard.writeText(text);
+      showBanner("Message copied. The To and CC lines are above it, ready to paste separately.", "success");
+    } catch {
+      // Clipboard API needs a secure context and permission; selecting the
+      // text is the fallback that always works.
+      $("welcome-body").select();
+      showBanner("Couldn't copy automatically - the message is selected, press Cmd+C.", "error");
+    }
+  });
+
+  $("welcome-mailto").addEventListener("click", () => {
+    const clean = (v) => v.split(",").map((e) => e.trim()).filter(Boolean).join(",");
+    const params = [];
+    const cc = clean($("welcome-cc").value);
+    if (cc) params.push("cc=" + encodeURIComponent(cc));
+    params.push("subject=" + encodeURIComponent($("welcome-subject").value));
+    params.push("body=" + encodeURIComponent($("welcome-body").value));
+    window.location.href = `mailto:${clean($("welcome-to").value)}?${params.join("&")}`;
+  });
 
   function recalcTeamStats() {
     const total = Number(activeClient && activeClient.budget_hours_available) || 0;
