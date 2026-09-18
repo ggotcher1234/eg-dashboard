@@ -506,6 +506,10 @@
   .area-link:hover, .area-link:focus-visible { color: var(--navy); text-decoration: underline; }
   .field-error { color: var(--danger); font-size: 12.5px; margin-top: 8px; display: none; }
   .engagement-summary { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 12px; }
+  /* The Add Specialist row: no bottom rule, so it reads as the seam between the
+     specialist work areas above it and the house rows below, not as a row of
+     its own with empty columns. */
+  #tw-add-row td { border-bottom: none; padding: 8px 14px 10px 9px; }
   .logged-by-note { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
   .engagement-summary:empty { display: none; }
 
@@ -941,7 +945,13 @@
                 </tfoot>
               </table>
             </div>
-            <button class="btn-secondary btn-sm hidden" id="tw-add-row-btn" style="margin-top:12px;">Add Specialist</button>
+            <!-- Greg (9/18/26): "move add specialist button up under the watering
+                 holes row." The button lives IN the table now, on the row where
+                 the new specialist will appear. This div is just its parking
+                 space: renderTeamTable moves the live node into a table row each
+                 render, and parks it back here first so clearing the tbody does
+                 not take the node -- and its click handler -- with it. -->
+            <div id="tw-add-row-home"><button class="btn-secondary btn-sm hidden" id="tw-add-row-btn">Add Specialist</button></div>
           </div>
 
           <div id="cc-pane-iframe" class="cc-pane-inner hidden">
@@ -2209,8 +2219,8 @@
       el = document.createElement("div");
       el.id = "tw-manage-note";
       el.className = "tw-manage-note";
-      const btn = $("tw-add-row-btn");
-      btn.parentNode.insertBefore(el, btn);
+      const home = $("tw-add-row-home");
+      home.parentNode.insertBefore(el, home);
     }
     if (canManage) { el.classList.add("hidden"); return; }
     el.classList.remove("hidden");
@@ -2228,6 +2238,9 @@
 
   function renderTeamTable(canManage) {
     const tbody = $("tw-tbody");
+    // Park the button before wiping the table, or innerHTML takes the node and
+    // its click handler with it.
+    $("tw-add-row-home").appendChild($("tw-add-row-btn"));
     tbody.innerHTML = "";
 
     // The actions column earns its place only when something can appear in it.
@@ -2245,7 +2258,22 @@
     });
     $("tw-actions-header").classList.toggle("hidden", !showActions);
     $("tw-total-actions").classList.toggle("hidden", !showActions);
+    // The Add Specialist row sits at the boundary between the specialist work
+    // areas and the house rows -- directly under Watering Holes, where the row
+    // it creates will appear (Greg, 9/18/26).
+    let addRowPlaced = false;
+    const placeAddRow = () => {
+      if (addRowPlaced || !canManage) return;
+      addRowPlaced = true;
+      const tr = document.createElement("tr");
+      tr.id = "tw-add-row";
+      tr.innerHTML = `<td colspan="${showActions ? 5 : 4}" class="add-specialist-cell"></td>`;
+      tr.firstElementChild.appendChild($("tw-add-row-btn"));
+      tbody.appendChild(tr);
+    };
+
     for (const r of sortedAssignments()) {
+      if (HOUSE_SPECIALTIES.includes(r.specialty_type)) placeAddRow();
       const person = usersById()[r.user_id];
       const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
       const tr = document.createElement("tr");
@@ -2313,6 +2341,8 @@
       `;
       tbody.appendChild(tr);
     }
+    // No Admin/QC rows on this engagement -- the boundary is the end of the table.
+    placeAddRow();
 
     document.querySelectorAll(".row-consultant-select").forEach((select) => {
       select.addEventListener("change", async () => {
@@ -2435,19 +2465,19 @@
       ${$("tw-actions-header").classList.contains("hidden") ? "" : `<td class="row-actions"></td>`}
     `;
 
-    // Above Admin: the first house row if there is one, otherwise the end.
-    const houseRow = [...tbody.rows].find((row) => {
-      const r = currentAssignments.find((x) => x.id === row.dataset.assignmentId);
-      return r && HOUSE_SPECIALTIES.includes(r.specialty_type);
-    });
-    tbody.insertBefore(tr, houseRow || null);
+    // The draft takes the Add Specialist row's place -- same seam, directly
+    // under Watering Holes -- and the button steps aside until it resolves.
+    const addRow = document.getElementById("tw-add-row");
+    tbody.insertBefore(tr, addRow || null);
+    if (addRow) addRow.classList.add("hidden");
 
     const select = tr.querySelector(".new-specialty");
     select.focus();
 
-    // Escape or blurring away with nothing chosen backs out -- there is no
-    // cancel button because there is nothing yet to cancel.
-    select.addEventListener("keydown", (e) => { if (e.key === "Escape") tr.remove(); });
+    // Escape backs out -- there is no cancel button because until a work area
+    // is chosen there is nothing to cancel.
+    const dismiss = () => { tr.remove(); if (addRow) addRow.classList.remove("hidden"); recalcTeamStats(); };
+    select.addEventListener("keydown", (e) => { if (e.key === "Escape") dismiss(); });
 
     select.addEventListener("change", async () => {
       const specialty = select.value;
