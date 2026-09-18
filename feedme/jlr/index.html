@@ -8,7 +8,10 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-    <!-- Per-client config — the ONLY file that differs between deployments -->
+    <!-- JLR Environmental — standalone FeedMe Pro build. This file is JLR's own
+         independent codebase; it is not shared with any other client deployment.
+         Edits here never touch other clients' copies, and vice versa. See config.js
+         for client identity (clientId/clientName). -->
     <script src="./config.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script>
@@ -1442,6 +1445,22 @@ h4{font-weight:600;font-size:15px;margin-bottom:5px}
                 </div>
                 <div id="sportsFilterStatus" style="font-size:10px;color:var(--text-secondary);margin-top:3px;"></div>
             </div>
+
+            <div class="sidebar-section" style="padding:8px 14px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-secondary);">📍 N. California Only</span>
+                    <label style="position:relative;display:inline-block;width:36px;height:20px;cursor:pointer;">
+                        <input type="checkbox" id="offGeoFilterToggle" onchange="toggleOffGeoFilter(this.checked)"
+                            style="opacity:0;width:0;height:0;position:absolute;">
+                        <span id="offGeoFilterSlider" style="position:absolute;inset:0;background:#ccc;border-radius:20px;transition:0.2s;"></span>
+                        <span id="offGeoFilterKnob" style="position:absolute;left:2px;top:2px;width:16px;height:16px;background:white;border-radius:50%;transition:0.2s;box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
+                    </label>
+                </div>
+                <div id="offGeoFilterStatus" style="font-size:10px;color:var(--text-secondary);margin-top:3px;"></div>
+                <div style="margin-top:4px;">
+                    <a href="javascript:void(0)" onclick="rescanForOffGeography()" style="font-size:10px;color:var(--accent-blue);text-decoration:none;">Sweep existing backlog now →</a>
+                </div>
+            </div>
             <!-- Leadforce footer -->
             <div style="padding:14px 14px 16px;border-top:1px solid var(--border);margin-top:auto;">
                 <div style="font-size:10px;color:#bbb;text-align:center;line-height:1.6;">
@@ -2443,10 +2462,48 @@ Respond ONLY with valid JSON:
             });
         }
 
+        // ── Northern CA Geography Filter (JLR standalone build) ───────
+        // JLR's target geography is roughly 200 miles of Sacramento, CA.
+        // An article is auto-excluded before it ever reaches the AI when its
+        // title/feed/company clearly names a state (or DC/territory) outside
+        // California AND no California/target-region anchor term is present.
+        // Same cost-free pattern as the sports filter above. Add more noisy
+        // city names to OFF_TARGET_CITY_TERMS as new patterns show up.
+        const OFF_TARGET_STATE_TERMS = [
+            'alabama','alaska','arizona','arkansas','colorado','connecticut','delaware',
+            'florida','georgia','hawaii','idaho','illinois','indiana','iowa','kansas',
+            'kentucky','louisiana','maine','maryland','massachusetts','michigan','minnesota',
+            'mississippi','missouri','montana','nebraska','nevada','new hampshire','new jersey',
+            'new mexico','new york','north carolina','north dakota','ohio','oklahoma','oregon',
+            'pennsylvania','rhode island','south carolina','south dakota','tennessee','texas',
+            'utah','vermont','virginia','washington state','west virginia','wisconsin','wyoming',
+            'washington, d.c.','washington dc','district of columbia','puerto rico','guam'
+        ];
+        const OFF_TARGET_CITY_TERMS = [
+            'chattanooga','knoxville','nashville','memphis'
+        ];
+        const CA_ANCHOR_TERMS = [
+            'california','calif.','sacramento','northern california','norcal',
+            'bay area','central valley','tahoe'
+        ];
+
+        function isOffGeographyArticle(article) {
+            const text = ((article.title || '') + ' ' + (article.feedTitle || '') + ' ' + (article.company || '')).toLowerCase();
+            if (CA_ANCHOR_TERMS.some(term => text.indexOf(term) !== -1)) return false;
+            const matches = term => {
+                const idx = text.indexOf(term);
+                if (idx === -1) return false;
+                const before = idx === 0 ? ' ' : text[idx - 1];
+                const after = idx + term.length >= text.length ? ' ' : text[idx + term.length];
+                return /\W/.test(before) && /\W/.test(after);
+            };
+            return OFF_TARGET_STATE_TERMS.some(matches) || OFF_TARGET_CITY_TERMS.some(matches);
+        }
+
         function toggleUsOnlyMode(enabled) {
             appState.usOnlyMode = enabled;
             localStorage.setItem(getStorageKey('us_only_mode'), enabled ? '1' : '0');
-            updateUsOnlyUI(); updateSportsFilterUI();
+            updateUsOnlyUI(); updateSportsFilterUI(); updateOffGeoFilterUI();
             renderArticles();
             updateSignalCounts();
         }
@@ -2537,6 +2594,77 @@ This affects:
             }
         }
         // ── End Sports Filter Toggle ─────────────────────────────────
+
+        // ── Northern CA Geography Filter Toggle ───────────────────────
+        function toggleOffGeoFilter(enabled) {
+            appState.filterOffGeo = enabled;
+            localStorage.setItem(getStorageKey('filter_offgeo'), enabled ? '1' : '0');
+            updateOffGeoFilterUI();
+            renderArticles();
+            updateSignalCounts();
+        }
+
+        function updateOffGeoFilterUI() {
+            const toggle = document.getElementById('offGeoFilterToggle');
+            const slider = document.getElementById('offGeoFilterSlider');
+            const knob   = document.getElementById('offGeoFilterKnob');
+            const status = document.getElementById('offGeoFilterStatus');
+            if (!toggle) return;
+            toggle.checked = appState.filterOffGeo;
+            slider.style.background = appState.filterOffGeo ? '#1a73e8' : '#ccc';
+            knob.style.left         = appState.filterOffGeo ? '18px' : '2px';
+            if (appState.filterOffGeo) {
+                const filtered = appState.articles.filter(a => !a.archivedAt && isOffGeographyArticle(a)).length;
+                status.textContent = filtered > 0 ? `Hiding ${filtered} off-territory articles` : 'No off-territory articles detected';
+            } else {
+                status.textContent = 'Showing all geographies';
+            }
+        }
+
+        // One-time sweep: re-stamp any already-fetched-but-unanalyzed articles
+        // that match the off-geography filter, so they never get sent to the
+        // AI and never cost anything. Safe to run any time — costs nothing.
+        async function rescanForOffGeography() {
+            const total = appState.articles.filter(a => !a.archivedAt).length;
+            if (total === 0) {
+                showStatus('No articles to scan.', 'info');
+                return;
+            }
+            const already = appState.articles.filter(a => !a.archivedAt && a.signal !== 'unanalyzed' && a.signal !== 'none' && isOffGeographyArticle(a)).length;
+            const unanalyzed = appState.articles.filter(a => !a.archivedAt && a.signal === 'unanalyzed' && isOffGeographyArticle(a)).length;
+            const toRestamp = already + unanalyzed;
+            if (toRestamp === 0) {
+                showStatus('No off-territory articles found in current data.', 'success');
+                closeSettingsModal();
+                return;
+            }
+            if (!confirm(`Found ${toRestamp} off-territory articles across ${total} total articles.
+
+Re-stamp them as None? No API credits used.
+
+This affects:
+• ${unanalyzed} unanalyzed articles (saves AI analysis cost)
+• ${already} previously analyzed articles`)) return;
+
+            let count = 0;
+            appState.articles.forEach(a => {
+                if (!a.archivedAt && isOffGeographyArticle(a)) {
+                    a.signal    = 'none';
+                    a.relevance = 0;
+                    a.company   = 'Off-Territory';
+                    a.summary   = 'Auto-excluded: outside JLR target geography (Northern California).';
+                    a.analyzedAt = new Date().toISOString();
+                    count++;
+                }
+            });
+
+            await saveArticles();
+            renderArticles();
+            updateSignalCounts();
+            closeSettingsModal();
+            showStatus(`✅ Re-stamped ${count} off-territory articles as None.`, 'success');
+        }
+        // ── End Northern CA Geography Filter Toggle ───────────────────
 
         // ── Add Feed Modal ──────────────────────────────────────────
         let addFeedSelected = new Set(); // indices of selected feeds
@@ -2934,7 +3062,7 @@ This affects:
             
             // Re-render everything
             renderFeedFolders();
-            updateUsOnlyUI(); updateSportsFilterUI();
+            updateUsOnlyUI(); updateSportsFilterUI(); updateOffGeoFilterUI();
             renderArticles();
             updateSignalCounts();
             updateSavedCount();
@@ -2982,6 +3110,7 @@ Deprioritize/exclude: pure trucking or parcel/LTL companies with no bulk-rail re
             displayLimit: 50, // how many articles to show at once
             usOnlyMode: false, // Off by default — Hondo's ICP includes Mexico/nearshoring supply-chain activity
             filterSports: true, // Filter out sports organization articles (default on)
+            filterOffGeo: true, // Filter out off-Northern-CA-geography articles (default on — JLR standalone build)
             freshnessWindow: 90, // Days before articles are hidden entirely (hard cutoff)
             // localStorage-only — no cloud storage in client version
             cumulativeFolderCounts: {}, // Cumulative article totals per folder — only ever increase
@@ -3228,7 +3357,7 @@ Deprioritize/exclude: pure trucking or parcel/LTL companies with no bulk-rail re
             debugLog(`Loaded: Client=${clientManager.currentClient || 'none'}, Feeds=${appState.feeds.length}, Articles=${appState.articles.length}`, 'success');
             
             renderFeedFolders();
-            updateUsOnlyUI(); updateSportsFilterUI();
+            updateUsOnlyUI(); updateSportsFilterUI(); updateOffGeoFilterUI();
             // Sync the active filter chip to match restored currentFilter
             document.querySelectorAll('.filter-chip').forEach(c => {
                 c.classList.toggle('active', c.getAttribute('data-filter') === appState.currentFilter);
@@ -3351,6 +3480,8 @@ Deprioritize/exclude: pure trucking or parcel/LTL companies with no bulk-rail re
                 if (savedUsOnly !== null) appState.usOnlyMode = savedUsOnly === '1';
                 const savedSportsFilter = localStorage.getItem(getStorageKey('filter_sports'));
                 if (savedSportsFilter !== null) appState.filterSports = savedSportsFilter === '1';
+                const savedOffGeoFilter = localStorage.getItem(getStorageKey('filter_offgeo'));
+                if (savedOffGeoFilter !== null) appState.filterOffGeo = savedOffGeoFilter === '1';
                 const savedFreshness = localStorage.getItem(getStorageKey('freshness_window'));
                 if (savedFreshness !== null) appState.freshnessWindow = parseInt(savedFreshness, 10);
 
@@ -3721,9 +3852,11 @@ Deprioritize/exclude: pure trucking or parcel/LTL companies with no bulk-rail re
                             if (brandNew.length > 0) {
                                 const withSignal = brandNew.map(a => {
                                     const sports = isSportsArticle(a);
-                                    return { ...a, signal: sports ? 'none' : 'unanalyzed', relevance: 0,
-                                        company: sports ? 'Sports Organization' : 'Not analyzed',
-                                        summary: sports ? 'Auto-excluded: sports organization.' : stripHTML(a.content).substring(0, 200) + '…',
+                                    const offGeo = !sports && isOffGeographyArticle(a);
+                                    const excluded = sports || offGeo;
+                                    return { ...a, signal: excluded ? 'none' : 'unanalyzed', relevance: 0,
+                                        company: sports ? 'Sports Organization' : (offGeo ? 'Off-Territory' : 'Not analyzed'),
+                                        summary: sports ? 'Auto-excluded: sports organization.' : offGeo ? 'Auto-excluded: outside JLR target geography (Northern California).' : stripHTML(a.content).substring(0, 200) + '…',
                                         analyzedAt: new Date().toISOString() };
                                 });
                                 appState.articles.push(...withSignal);
@@ -4207,12 +4340,14 @@ Deprioritize/exclude: pure trucking or parcel/LTL companies with no bulk-rail re
                         debugLog(`  ✔ ${feed.title}: ${brandNew.length} new / ${articles.length} total`, 'success');
                         const unanalyzed = brandNew.map(a => {
                             const sports = isSportsArticle(a);
+                            const offGeo = !sports && isOffGeographyArticle(a);
+                            const excluded = sports || offGeo;
                             return {
                                 ...a,
-                                signal: sports ? 'none' : 'unanalyzed',
-                                relevance: sports ? 0 : 0,
-                                company: sports ? 'Sports Organization' : 'Not analyzed',
-                                summary: sports ? 'Auto-excluded: sports organization — not a B2B prospect.' : stripHTML(a.content).substring(0, 200) + '...',
+                                signal: excluded ? 'none' : 'unanalyzed',
+                                relevance: 0,
+                                company: sports ? 'Sports Organization' : (offGeo ? 'Off-Territory' : 'Not analyzed'),
+                                summary: sports ? 'Auto-excluded: sports organization — not a B2B prospect.' : offGeo ? 'Auto-excluded: outside JLR target geography (Northern California).' : stripHTML(a.content).substring(0, 200) + '...',
                                 analyzedAt: new Date().toISOString()
                             };
                         });
@@ -5117,6 +5252,10 @@ Respond ONLY with valid JSON, no other text.`
             if (appState.filterSports) {
                 articles = articles.filter(a => !isSportsArticle(a));
             }
+            // Northern CA geography filter: hide off-territory articles
+            if (appState.filterOffGeo) {
+                articles = articles.filter(a => !isOffGeographyArticle(a));
+            }
 
             debugLog(`renderArticles: Starting with ${articles.length} total articles`, 'info');
 
@@ -5434,6 +5573,7 @@ Respond ONLY with valid JSON, no other text.`
                     && a.signal !== 'none');
                 if (appState.usOnlyMode) pool = pool.filter(a => !isForeignArticle(a));
                 if (appState.filterSports) pool = pool.filter(a => !isSportsArticle(a));
+                if (appState.filterOffGeo) pool = pool.filter(a => !isOffGeographyArticle(a));
 
                 if (signal === 'all') {
                     // pool already excludes unanalyzed and none
@@ -5476,6 +5616,7 @@ Respond ONLY with valid JSON, no other text.`
                 let pool = appState.articles.filter(a => !a.archivedAt);
                 if (appState.usOnlyMode) pool = pool.filter(a => !isForeignArticle(a));
                 if (appState.filterSports) pool = pool.filter(a => !isSportsArticle(a));
+                if (appState.filterOffGeo) pool = pool.filter(a => !isOffGeographyArticle(a));
                 return pool.filter(a => a.signal && a.signal !== 'unanalyzed' && a.signal !== 'none').length;
             })();
             const totalArticles = appState.articles.filter(a => !a.archivedAt).length;

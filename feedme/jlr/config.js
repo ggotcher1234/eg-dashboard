@@ -1,5 +1,6 @@
-// Per-client config for JLR Environmental — the ONLY file that should
-// differ between FeedMe deployments. Do not edit index.html for branding.
+// Client identity for JLR Environmental's FeedMe Pro build.
+// feedme/jlr/ is a fully standalone deployment — its index.html is JLR's
+// own independent codebase, not shared with any other client.
 window.FMP_CONFIG = {
   clientId: "jlr",
   clientName: "JLR Environmental",
