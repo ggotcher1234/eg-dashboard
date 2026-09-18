@@ -2633,6 +2633,30 @@
     return `${firsts.slice(0, -1).join(", ")} & ${firsts[firsts.length - 1]}`;
   }
 
+  // Greg (9/18/26): "the title format is the same for all EG Emails we send
+  // including the welcome email. (Program Initials) Client Name - Subject
+  // line." The initials are the Program's own Code -- the short abbreviation
+  // set on the Programs page -- so they match whatever Chris and Rita put
+  // there rather than a second abbreviation invented here. If a Program has no
+  // Code, its name's initials stand in; with no Program at all the parenthetical
+  // is dropped rather than left empty.
+  function programInitials(client) {
+    const partner = client && client.econ_dev_companies;
+    if (!partner) return "";
+    const code = (partner.code || "").trim();
+    if (code) return code;
+    return (partner.name || "")
+      .split(/\s+/)
+      .map((w) => w.replace(/[^A-Za-z]/g, "")[0] || "")
+      .join("")
+      .toUpperCase()
+      .slice(0, 4);
+  }
+  function egEmailSubject(client, subject) {
+    const initials = programInitials(client);
+    return `${initials ? `(${initials}) ` : ""}${client.name} - ${subject}`;
+  }
+
   // Pure, so the wording can be checked without a database behind it.
   function welcomeEmailBody(greeting, dashboardUrl, teamLead) {
     return `Good morning, ${greeting},
@@ -2719,7 +2743,7 @@ ${teamLead}`;
 
     $("welcome-to").value = toList.join(", ");
     $("welcome-cc").value = ccUnique.join(", ");
-    $("welcome-subject").value = `Welcome to Economic Gardening - next steps for ${c.name}`;
+    $("welcome-subject").value = egEmailSubject(c, "Welcome to Economic Gardening");
     $("welcome-body").value = welcomeEmailBody(
       welcomeFirstNames(contacts.map((r) => r.name)),
       dashboardUrl || "[dashboard link]",
