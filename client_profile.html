@@ -436,9 +436,14 @@
   /* ---------- Info Wizard (mirrors the New Application wizard on
      client_applications.html so editing a live engagement feels the same
      as creating one) ---------- */
-  .wizard-topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  /* 18px, not the old 14px: the progress bar used to sit between this heading
+     and the numbered steps and carried its own 20px of space with it. */
+  .wizard-topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
   .wizard-topbar h2 { margin: 0; font-size: 22px; color: var(--navy); }
-  .wizard-progress-text { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  /* Greg (9/18/26): "don't need to tell them the step we are on or the
+     percentage complete. remove that." The numbered pills under this already
+     say where you are, and they say it without implying the form is a race
+     to 100%. The progress text and the bar under it both went. */
   /* Greg (9/5/26): "add preview client info link on every page of the
      wizard." The bottom-bar Preview button only shows on the last step,
      and the top overview card (which had its own preview link) is hidden
@@ -447,9 +452,6 @@
   .wizard-topbar .wiz-preview-top { font-size: 13.5px; font-weight: 700; color: var(--accent-dark); text-decoration: none; white-space: nowrap; flex-shrink: 0; margin-top: 3px; }
   .wizard-topbar .wiz-preview-top:hover { text-decoration: underline; }
   .wizard-topbar .wiz-preview-top.disabled-link { opacity: 0.45; pointer-events: none; }
-
-  .wizard-progress-bar { height: 6px; border-radius: 999px; background: #e7ecf1; overflow: hidden; margin-bottom: 20px; }
-  .wizard-progress-fill { height: 100%; border-radius: 999px; background: var(--navy-light); transition: width 0.25s ease; }
 
   /* Step pills stack the label under the circle (Greg, 8/31/26 -- "put a
      one word description under each number") rather than beside it, so the
@@ -900,12 +902,9 @@
       <div class="wizard-topbar">
         <div>
           <h2>Company Information</h2>
-          <div class="wizard-progress-text">Step <span id="wiz-step-num">1</span> of <span id="wiz-step-total">8</span> &middot; <span id="wiz-pct">13%</span> complete</div>
         </div>
         <a class="wiz-preview-top" id="wiz-preview-top" href="#" target="_blank" rel="noopener">Preview Company Info &#8599;</a>
       </div>
-
-      <div class="wizard-progress-bar"><div class="wizard-progress-fill" id="wiz-progress-fill" style="width:13%;"></div></div>
 
       <div class="wizard-steps-track" id="wiz-steps-track"></div>
 
@@ -3054,12 +3053,6 @@
   }
 
   function wizRenderChrome() {
-    const pct = Math.round((wizStep / WIZARD_STEPS.length) * 100);
-    $("wiz-step-num").textContent = wizStep;
-    $("wiz-step-total").textContent = WIZARD_STEPS.length;
-    $("wiz-pct").textContent = pct + "%";
-    $("wiz-progress-fill").style.width = pct + "%";
-
     $("wiz-steps-track").innerHTML = WIZARD_STEPS.map((s, i) => {
       const status = wizStepStatus(s.n);
       const circleContent = status === "complete" ? "&#10003;" : s.n;
