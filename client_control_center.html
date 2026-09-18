@@ -483,11 +483,11 @@
   tbody tr:last-child td { border-bottom: none; }
   tfoot td { padding: 11px 14px; font-size: 13.5px; border-top: 2px solid var(--border); }
   .spent-cell { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
-  td.actions, .row-actions { text-align: right; white-space: nowrap; }
   .row-input { width: 100%; padding: 5px 0 5px 7px; border: 1px solid transparent; border-radius: 5px; font-size: 13.5px; font-family: inherit; background: transparent; text-align: right; }
   .row-input:hover, .row-input:focus { border-color: var(--border); background: #fff; }
   .row-select { width: 100%; padding: 5px 7px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; font-family: inherit; background: #fff; }
-  .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+  /* .row-actions went with the Remove button on 9/18/26 -- no row on this
+     table carries a button any more. */
   .icon-btn { padding: 4px 8px; font-size: 13px; line-height: 1; }
   input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
@@ -964,17 +964,11 @@
   </main>
 </div>
 
-<!-- Remove specialist confirm -->
-<div class="overlay" id="tw-remove-overlay">
-  <div class="modal" style="width:360px;">
-    <h3 id="tw-remove-title">Unassign this work area?</h3>
-    <p id="tw-remove-text"></p>
-    <div class="modal-actions">
-      <button type="button" class="btn-secondary" id="tw-remove-cancel">Cancel</button>
-      <button type="button" class="btn-danger" id="tw-remove-confirm">Remove</button>
-    </div>
-  </div>
-</div>
+<!-- The "Remove this specialist?" confirm dialog stood here until 9/18/26.
+     Both buttons that opened it are gone -- Unassign, then Remove -- so there
+     is no longer any way to delete an assignment from this screen. Emptying a
+     row is picking "Not assigned" in the name list, which needs no confirm
+     because picking a name again undoes it. -->
 
 <!-- Log hours -->
 <div class="overlay" id="tw-log-hours-overlay">
@@ -2243,21 +2237,18 @@
     $("tw-add-row-home").appendChild($("tw-add-row-btn"));
     tbody.innerHTML = "";
 
-    // The actions column earns its place only when something can appear in it.
-    // The seven standard work areas carry no button since Unassign went, so on
-    // most engagements the column is empty -- and an empty fixed-width column
-    // still draws every row's bottom border across it (Greg, 9/18/26: "the
-    // right column lines are not right"). Collapse it to zero and give the
-    // width to Person, which is the column that truncates.
-    const showActions = canManage && sortedAssignments().some(
-      (r) => fixedSlotIndex(r.specialty_type, r.slot_number) === -1
-    );
-    const widths = showActions ? [18, 46, 13, 13, 10] : [18, 56, 13, 13, 0];
+    // Four columns. There was a fifth for row actions; with Unassign and then
+    // Remove both gone there is nothing that can ever appear in it, and an
+    // empty fixed-width column still draws every row's bottom border across it
+    // (Greg, 9/18/26: "the right column lines are not right"). The <col> stays
+    // at zero rather than being deleted so the header, body and totals rows
+    // keep matching cell counts.
+    const widths = [18, 56, 13, 13, 0];
     [...$("tw-colgroup").children].forEach((col, i) => {
       col.style.width = widths[i] ? widths[i] + "%" : "0";
     });
-    $("tw-actions-header").classList.toggle("hidden", !showActions);
-    $("tw-total-actions").classList.toggle("hidden", !showActions);
+    $("tw-actions-header").classList.add("hidden");
+    $("tw-total-actions").classList.add("hidden");
     // The Add Specialist row sits at the boundary between the specialist work
     // areas and the house rows -- directly under Watering Holes, where the row
     // it creates will appear (Greg, 9/18/26).
@@ -2267,7 +2258,7 @@
       addRowPlaced = true;
       const tr = document.createElement("tr");
       tr.id = "tw-add-row";
-      tr.innerHTML = `<td colspan="${showActions ? 5 : 4}" class="add-specialist-cell"></td>`;
+      tr.innerHTML = `<td colspan="4" class="add-specialist-cell"></td>`;
       tr.firstElementChild.appendChild($("tw-add-row-btn"));
       tbody.appendChild(tr);
     };
@@ -2299,23 +2290,13 @@
       const personCell = (canManage
         ? `<select class="row-select row-consultant-select">${consultantOptionsHtml(r.user_id)}</select>`
         : `${person ? escapeHtml(userLabel(person)) : `<span style="color:var(--muted);">Not assigned</span>`}`) + loggedNote;
-      const isFixed = fixedSlotIndex(r.specialty_type, r.slot_number) !== -1;
-      // Chris/Rita 9/18/26: "the Unassign button will be removed... team leads
-      // can directly type over a specialist's name to reassign." Clearing a
-      // row is now the blank "Not assigned" entry already sitting at the top
-      // of the name list, which is one gesture instead of a button plus a
-      // confirm. The seven standard work areas therefore carry no action
-      // button at all; only an extra specialist row added on top of them can
-      // be removed outright, because that row is not part of the engagement's
-      // shape.
-      //
-      // One deliberate difference from the old Unassign: it also zeroed the
-      // allotted hours. Picking "Not assigned" leaves them, so the plan for
-      // that work area survives a change of person -- which is what a team
-      // lead swapping a specialist actually wants.
-      const actionBtn = isFixed
-        ? ""
-        : `<button class="btn-danger icon-btn" data-remove="${r.id}">Remove</button>`;
+      // No action buttons on any row (Greg, 9/18/26: "remove the Remove
+      // button -- if i later don't want it i can leave it unassigned").
+      // Unassign went on the same reasoning earlier today: picking the blank
+      // "Not assigned" entry at the top of the name list empties a row in one
+      // gesture, and an emptied extra row costs nothing to leave in place.
+      // Nothing on this screen deletes an assignment now, which also means no
+      // route to losing the hours logged against one.
       const isSunkCost = isSunkCostSpecialty(r.specialty_type, activeClient);
       const canLogHours = !isSunkCost && !!person && (isSuperAdmin || person.id === currentUser.id);
       // Hours exist whether or not anyone holds the row now, and an unassigned
@@ -2337,7 +2318,6 @@
         <td>${personCell}</td>
         <td style="text-align:right;"><input type="number" class="row-input row-hours-input" min="0" step="0.5" value="${Number(r.hours_allotted)}" ${canManage ? "" : "disabled"} /></td>
         <td style="white-space:nowrap;">${usedCell}</td>
-        ${showActions ? `<td class="row-actions">${actionBtn}</td>` : ""}
       `;
       tbody.appendChild(tr);
     }
@@ -2377,9 +2357,6 @@
         showBanner("Hours updated.", "success");
         await reloadTeam();
       });
-    });
-    document.querySelectorAll("[data-remove]").forEach((btn) => {
-      btn.addEventListener("click", () => openRemove(btn.dataset.remove));
     });
     document.querySelectorAll("[data-log]").forEach((btn) => {
       btn.addEventListener("click", () => openLogHours(btn.dataset.log));
@@ -2462,7 +2439,6 @@
       <td><span style="color:var(--muted);">Not assigned</span></td>
       <td style="text-align:right; color:var(--muted);">0</td>
       <td style="text-align:right; color:var(--muted);">—</td>
-      ${$("tw-actions-header").classList.contains("hidden") ? "" : `<td class="row-actions"></td>`}
     `;
 
     // The draft takes the Add Specialist row's place -- same seam, directly
@@ -2521,31 +2497,6 @@
   // Only one mode left. "clear" belonged to the Unassign button, which went
   // on 9/18/26 -- clearing a row is now picking "Not assigned" in the name
   // list, which needs no confirm because it is undone by picking a name again.
-  let pendingRemoveId = null;
-  function openRemove(assignmentId) {
-    const r = currentAssignments.find((x) => x.id === assignmentId);
-    if (!r) return;
-    const person = usersById()[r.user_id];
-    pendingRemoveId = assignmentId;
-    const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
-    $("tw-remove-title").textContent = "Remove this specialist?";
-    $("tw-remove-confirm").textContent = "Remove";
-    $("tw-remove-text").textContent = `Remove ${person ? userLabel(person) : "this row"} from ${label}? Their logged hours stay on record.`;
-    $("tw-remove-overlay").classList.add("open");
-  }
-  $("tw-remove-cancel").addEventListener("click", () => { $("tw-remove-overlay").classList.remove("open"); pendingRemoveId = null; });
-  $("tw-remove-confirm").addEventListener("click", async () => {
-    if (!pendingRemoveId) return;
-    const { error } = await sb.from("client_assignments").delete().eq("id", pendingRemoveId);
-    $("tw-remove-overlay").classList.remove("open");
-    pendingRemoveId = null;
-    if (error) {
-      showBanner("Couldn't remove: " + error.message, "error");
-      return;
-    }
-    showBanner("Specialist removed.", "success");
-    await reloadTeam();
-  });
 
   // ---------- Log hours ----------
   let pendingLogAssignmentId = null;
