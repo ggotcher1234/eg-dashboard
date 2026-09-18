@@ -898,17 +898,19 @@
 
             <div class="table-scroll">
               <table style="table-layout:fixed;">
-                <!-- Widths rebalanced 9/18/26. Removing Unassign left the actions
-                     column holding a Remove button on extra specialist rows only,
-                     so 18% of the table was empty on a standard engagement. The
-                     space goes to Person, which was truncating longer names and
-                     emails. -->
-                <colgroup>
+                <!-- Widths are set in renderTeamTable, not here: the actions column
+                     only exists when some row actually has a Remove button on it.
+                     Since Unassign went, a standard seven-row engagement has none,
+                     and a fixed-layout column that nothing fills still drew each
+                     row's bottom border across it -- stub lines floating to the
+                     right of Spent Hours, under a header that stopped short
+                     (Greg, 9/18/26). -->
+                <colgroup id="tw-colgroup">
                   <col style="width:18%;">
-                  <col style="width:46%;">
+                  <col style="width:56%;">
                   <col style="width:13%;">
                   <col style="width:13%;">
-                  <col style="width:10%;">
+                  <col style="width:0;">
                 </colgroup>
                 <thead>
                   <tr>
@@ -925,7 +927,7 @@
                     <td colspan="2" style="font-weight:700;">Totals</td>
                     <td style="text-align:right; font-weight:700;" id="tw-total-planned">0</td>
                     <td style="font-weight:700;" id="tw-total-used">0</td>
-                    <td></td>
+                    <td id="tw-total-actions"></td>
                   </tr>
                 </tfoot>
               </table>
@@ -2162,7 +2164,6 @@
 
     $("tw-summary-error").style.display = "none";
     $("tw-add-row-btn").classList.toggle("hidden", !canManage);
-    $("tw-actions-header").classList.toggle("hidden", !canManage);
     renderManageNote(canManage, editable);
 
     renderTeamTable(canManage);
@@ -2198,6 +2199,22 @@
   function renderTeamTable(canManage) {
     const tbody = $("tw-tbody");
     tbody.innerHTML = "";
+
+    // The actions column earns its place only when something can appear in it.
+    // The seven standard work areas carry no button since Unassign went, so on
+    // most engagements the column is empty -- and an empty fixed-width column
+    // still draws every row's bottom border across it (Greg, 9/18/26: "the
+    // right column lines are not right"). Collapse it to zero and give the
+    // width to Person, which is the column that truncates.
+    const showActions = canManage && sortedAssignments().some(
+      (r) => fixedSlotIndex(r.specialty_type, r.slot_number) === -1
+    );
+    const widths = showActions ? [18, 46, 13, 13, 10] : [18, 56, 13, 13, 0];
+    [...$("tw-colgroup").children].forEach((col, i) => {
+      col.style.width = widths[i] ? widths[i] + "%" : "0";
+    });
+    $("tw-actions-header").classList.toggle("hidden", !showActions);
+    $("tw-total-actions").classList.toggle("hidden", !showActions);
     for (const r of sortedAssignments()) {
       const person = usersById()[r.user_id];
       const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
@@ -2262,7 +2279,7 @@
         <td>${personCell}</td>
         <td style="text-align:right;"><input type="number" class="row-input row-hours-input" min="0" step="0.5" value="${Number(r.hours_allotted)}" ${canManage ? "" : "disabled"} /></td>
         <td style="white-space:nowrap;">${usedCell}</td>
-        ${canManage ? `<td class="row-actions">${actionBtn}</td>` : ""}
+        ${showActions ? `<td class="row-actions">${actionBtn}</td>` : ""}
       `;
       tbody.appendChild(tr);
     }
