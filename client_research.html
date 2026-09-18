@@ -1468,9 +1468,15 @@
                 aria-label="Reorder ${escapeHtml(shownName || "document")}">&#10303;</button>
         ${linkHtml}
         <button type="button" class="btn-secondary icon-btn" data-rename-doc="${d.id}" title="Rename -- sets the label the client sees, not the file itself">&#9998;</button>
-        <button type="button" class="btn-secondary icon-btn rq-visibility-toggle" data-id="${d.id}" data-visibility="${d.visibility}">
-          ${d.visibility === "client_facing" ? "Client-facing" : "Internal"}
-        </button>
+        <!-- The Client-facing / Internal toggle stood here until 9/18/26.
+             Chris/Rita: "the Internal Only toggle for research will be removed.
+             All research will be client-facing by default." Both insert paths
+             above now write visibility: "client_facing", so nothing needs
+             flipping after upload -- which is what everyone was doing anyway;
+             all 30 documents on the system were already client-facing. The
+             column stays in the database, and the client dashboard still
+             filters on it, so an individual document can be hidden with one
+             UPDATE if that is ever needed again. -->
         <button type="button" class="btn-danger icon-btn" data-delete-doc="${d.id}" data-path="${escapeHtml(d.storage_path || "")}" title="Delete">&times;</button>
       </div>
     `;
@@ -1483,15 +1489,6 @@
     // to fetch.
     scopeEl.querySelectorAll(".rq-doc-link[data-path]").forEach((el) => {
       el.addEventListener("click", () => openStoredDocument(el.dataset.path));
-    });
-    scopeEl.querySelectorAll(".rq-visibility-toggle").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const next = btn.dataset.visibility === "client_facing" ? "internal" : "client_facing";
-        const { error } = await sb.from("documents").update({ visibility: next }).eq("id", btn.dataset.id);
-        if (error) { showBanner("Couldn't update visibility: " + error.message, "error"); return; }
-        await loadDocuments();
-        RESEARCH_AREAS.forEach(([key]) => renderAreaDocs(key));
-      });
     });
     scopeEl.querySelectorAll("[data-rename-doc]").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -1694,7 +1691,7 @@
         file_name: file.name,
         display_name: displayName,
         storage_path: path,
-        visibility: "internal",
+        visibility: "client_facing",
         uploaded_by: currentUser.id,
         sort_order: nextSortOrder++,
       });
@@ -1724,7 +1721,7 @@
       file_name: label,
       storage_path: null,
       url,
-      visibility: "internal",
+      visibility: "client_facing",
       uploaded_by: currentUser.id,
       sort_order: nextSortOrderForArea(area),
     });

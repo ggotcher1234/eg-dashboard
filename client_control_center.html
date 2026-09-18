@@ -377,7 +377,7 @@
      (not stretched/spread to fill the pane's height) -- items keep their
      natural spacing, and the active item gets a navy left-edge accent bar
      instead of relying on background tint alone. */
-  .cc-shell { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 24px; align-items: start; }
+  .cc-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
   .cc-shell.wide-workspace { grid-template-columns: 180px minmax(0, 1fr); }
   .cc-nav {
     background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px;
@@ -397,9 +397,8 @@
      mockup -- small uppercase muted-gray caption instead of navy title
      case. Applies to both "Workflow" (new, see .cc-nav-sub below) and
      "Setup & Sharing". The old "Engagement Workspace" label above Team &
-     Hours is gone per that same mockup (crossed out there) -- that top
-     group is unlabeled now. (View Application used to sit in that top
-     group too; it moved down into Workflow on 9/17/26 -- see below.) */
+     Hours / View Application is gone per that same mockup (crossed out
+     there) -- that top group is unlabeled now. */
   .cc-nav-section { width: 100%; padding: 12px 14px 5px; font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; }
   .cc-nav-section:first-child { padding-top: 4px; }
   .cc-nav-section:not(:first-child) { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
@@ -430,9 +429,8 @@
      documents" dropped the collapse step; (9/5/26) "remove Documents. it
      adds no value" dropped the group label entirely; (9/5/26, per Chris's
      mockup) a plain "Workflow" caption was added back above just the
-     document rows, and every row got an icon to match. (9/17/26) View
-     Application moved down to be the first row under that caption --
-     it used to sit unlabeled above it, grouped with Team & Hours instead. */
+     document rows (View Application stays unlabeled above it, grouped
+     with Team & Hours instead) and every row got an icon to match. */
   .cc-nav-sub { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 6px; }
   /* View Application (Greg, 9/4/26): moved here from a breadcrumb link up
      top -- "top of the documents list" is exactly what it is, the source
@@ -467,7 +465,6 @@
   tbody tr:last-child td { border-bottom: none; }
   tfoot td { padding: 11px 14px; font-size: 13.5px; border-top: 2px solid var(--border); }
   .spent-cell { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
-  .spent-action { width: 26px; display: inline-flex; justify-content: flex-end; flex-shrink: 0; }
   td.actions, .row-actions { text-align: right; white-space: nowrap; }
   .row-input { width: 100%; padding: 5px 0 5px 7px; border: 1px solid transparent; border-radius: 5px; font-size: 13.5px; font-family: inherit; background: transparent; text-align: right; }
   .row-input:hover, .row-input:focus { border-color: var(--border); background: #fff; }
@@ -476,11 +473,24 @@
   .icon-btn { padding: 4px 8px; font-size: 13px; line-height: 1; }
   input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
-  .spent-link { background: none; border: none; padding: 0; font: inherit; font-weight: 700; color: var(--navy-light); cursor: pointer; text-decoration: underline; }
-  .spent-link:hover { color: var(--navy); }
+  /* Chris/Rita 9/18/26: "links will be indicated by an underline on hover,
+     preserving a clean default UI." So the underline is the hover state, not
+     the resting one, on both of the table's in-cell links. Colour still marks
+     them as clickable at rest -- take the underline away AND leave them black
+     and nobody would know they do anything. Keyboard focus keeps a visible
+     underline too, since focus has no hover to rely on. */
+  .spent-link, .area-link {
+    background: none; border: none; padding: 0; font: inherit; color: var(--navy-light);
+    cursor: pointer; text-decoration: none; text-align: inherit;
+  }
+  .spent-link { font-weight: 700; }
+  .spent-link:hover, .spent-link:focus-visible,
+  .area-link:hover, .area-link:focus-visible { color: var(--navy); text-decoration: underline; }
   .field-error { color: var(--danger); font-size: 12.5px; margin-top: 8px; display: none; }
+  .engagement-summary { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 12px; }
+  .engagement-summary:empty { display: none; }
 
-  /* ---------- Modals (Unassign confirm / Log hours / Billing history) ---------- */
+  /* ---------- Modals (Remove confirm / Log hours / Billing history) ---------- */
   .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 50; padding: 20px; }
   .overlay.open { display: flex; }
   .modal { background: #fff; border-radius: 10px; width: 400px; max-width: 92vw; padding: 26px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); max-height: 88vh; overflow-y: auto; }
@@ -868,21 +878,34 @@
           <div id="cc-pane-team" class="cc-pane-inner">
             <div class="field-error" id="tw-summary-error"></div>
 
+            <!-- Chris/Rita 9/18/26: "the engagement summary will be moved to the
+                 top of the workspace for better visibility." It sat under the
+                 table, which is the last place a specialist looks before typing
+                 hours into it. Above the table it answers "how big is this
+                 engagement and what is left" before the first keystroke.
+                 Still updates live as hours are typed -- see renderTotalsNote. -->
+            <div id="tw-total-note" class="engagement-summary"></div>
+
             <div class="table-scroll">
               <table style="table-layout:fixed;">
+                <!-- Widths rebalanced 9/18/26. Removing Unassign left the actions
+                     column holding a Remove button on extra specialist rows only,
+                     so 18% of the table was empty on a standard engagement. The
+                     space goes to Person, which was truncating longer names and
+                     emails. -->
                 <colgroup>
-                  <col style="width:17%;">
-                  <col style="width:40%;">
-                  <col style="width:13%;">
-                  <col style="width:12%;">
                   <col style="width:18%;">
+                  <col style="width:46%;">
+                  <col style="width:13%;">
+                  <col style="width:13%;">
+                  <col style="width:10%;">
                 </colgroup>
                 <thead>
                   <tr>
                     <th>Work Area</th>
                     <th>Person</th>
-                    <th style="text-align:right;">Budget Hours</th>
-                    <th>Hours Used</th>
+                    <th style="text-align:right;">Allotted Hours</th>
+                    <th>Spent Hours</th>
                     <th id="tw-actions-header" class="hidden"></th>
                   </tr>
                 </thead>
@@ -894,18 +917,10 @@
                     <td style="font-weight:700;" id="tw-total-used">0</td>
                     <td></td>
                   </tr>
-                  <!-- Rita, 9/14/26 (item 3): the Totals row only ever showed the sum
-                       of the work-area rows, so the engagement's own hour budget and
-                       what was left of it were invisible. Spanning the full width
-                       rather than squeezing into the two narrow number columns, which
-                       would clip at this table's fixed widths and on a laptop. -->
-                  <tr>
-                    <td colspan="5" id="tw-total-note" style="padding-top:2px; font-size:13px; color:var(--muted); font-weight:500;"></td>
-                  </tr>
                 </tfoot>
               </table>
             </div>
-            <button class="btn-secondary btn-sm hidden" id="tw-add-row-btn" style="margin-top:12px;">+ Add work area</button>
+            <button class="btn-secondary btn-sm hidden" id="tw-add-row-btn" style="margin-top:12px;">Add Specialist</button>
           </div>
 
           <div id="cc-pane-iframe" class="cc-pane-inner hidden">
@@ -918,14 +933,14 @@
   </main>
 </div>
 
-<!-- Unassign / remove confirm -->
+<!-- Remove specialist confirm -->
 <div class="overlay" id="tw-remove-overlay">
   <div class="modal" style="width:360px;">
     <h3 id="tw-remove-title">Unassign this work area?</h3>
     <p id="tw-remove-text"></p>
     <div class="modal-actions">
       <button type="button" class="btn-secondary" id="tw-remove-cancel">Cancel</button>
-      <button type="button" class="btn-danger" id="tw-remove-confirm">Unassign</button>
+      <button type="button" class="btn-danger" id="tw-remove-confirm">Remove</button>
     </div>
   </div>
 </div>
@@ -943,10 +958,6 @@
       <div class="field">
         <label>Date</label>
         <input type="date" id="tw-log-hours-date" required />
-      </div>
-      <div class="field">
-        <label>Note <span class="hint">(optional)</span></label>
-        <input type="text" id="tw-log-hours-note" maxlength="200" />
       </div>
       <div class="field-error" id="tw-log-hours-error"></div>
       <div class="modal-actions">
@@ -1440,7 +1451,7 @@
   const DOC_GROUP_ITEMS = [
     { key: "discovery", label: "Discovery Document" },
     { key: "controlling", label: "Controlling Document" },
-    { key: "review", label: "Research Review Notes" },
+    { key: "review", label: "Research Review" },
     { key: "eval", label: "Close-Out Document" },
   ];
 
@@ -1470,10 +1481,14 @@
     navItems = [
       // Greg (9/5/26), per Chris's reference mockup: dropped the
       // "Engagement Workspace" section label that used to sit above Team &
-      // Hours -- that top group is unlabeled now, same as the mockup shows.
-      // (Greg, 9/17/26: View Application used to sit up here too -- see
-      // below, it now renders inside the Workflow group instead.)
+      // Hours -- that top group (Team & Hours + View Application) is
+      // unlabeled now, same as the mockup shows.
       { key: "team", label: "Team & Hours" },
+      // Chris/Rita 9/18/26: "the Cumulative Report will be added to the Team
+      // and Hours section." It sat under Setup & Sharing when it came back
+      // yesterday; hours belong beside hours, so it moves up into the top
+      // group directly under Team & Hours.
+      { key: "cumulative", label: "Cumulative Hours", src: `invoicing_report.html?engagement=${client.id}&embed=1` },
       // Greg (9/5/26), per Chris's notes: "Add Research" moved out of its
       // own top-level row and into the flat Application/Documents list,
       // between Controlling Document and Research Review -- it's a "key
@@ -1481,22 +1496,25 @@
       // section. Kept here (hidden: true, no section) purely so
       // setActivePane can still find its src by key; renderNav below
       // injects its actual row inline inside the "workflow" group's list.
-      { key: "research", label: "Add Your Research", src: `client_research.html?client=${client.id}&embed=1`, hidden: true },
+      { key: "research", label: "Add Research", src: `client_research.html?client=${client.id}&embed=1`, hidden: true },
       // Greg (9/6/26): "make view application fit into the right column
       // instead of opening another window." Same hidden-pane trick as Add
       // Research above -- listed here only so setActivePane can resolve the
-      // src; renderNav below injects the row itself into the Workflow group
-      // (moved there from the top group, Greg 9/17/26).
+      // src; renderNav injects the row itself up in the top group.
       { key: "application", label: "View Application", src: `client_applications.html?client=${client.id}&embed=1`, hidden: true },
       {
         key: "workflow", label: "Documents", group: true,
         docs: DOC_GROUP_ITEMS.map((d) => ({ ...d, src: `client_workflow_files.html?client=${client.id}&embed=1&doc=${d.key}` })),
       },
-      { key: "setup", label: "Client Info", section: "Setup & Sharing", src: `client_profile.html?client=${client.id}&embed=1` },
-      // Cumulative Hours (Rita item 9, added 9/14/26) removed from this nav
-      // again (Greg, 9/17/26) -- the route it added still works directly
-      // from invoicing_report.html, just not as its own row here.
-      { key: "dashboard", label: "Client Dashboard", section: "Setup & Sharing", src: dashboardHref, disabled: !dashboardHref },
+      { key: "setup", label: "Company Info", section: "Setup & Sharing", src: `client_profile.html?client=${client.id}&embed=1` },
+      // Rita (9/14/26, item 9): "Where is the cumulative hours report? I
+      // thought we reviewed this report in one of our meetings but I can't
+      // seem to find it in the software now." It was folded into
+      // invoicing_report.html on 8/22/26 behind the Engagement picker, which
+      // left no route to it from the engagement you are already looking at.
+      // This is that route back -- the same merged report, filtered to this
+      // engagement, rather than a second copy to drift out of step.
+      { key: "dashboard", label: "Company Dashboard", section: "Setup & Sharing", src: dashboardHref, disabled: !dashboardHref },
     ];
     // Greg (9/5/26), per Chris's reference mockup: small badge + "Engagement
     // Workspace" / client-name header above the nav list itself (text only,
@@ -1520,27 +1538,27 @@
       if (item.group) {
         // Greg (9/4/26): "remove the documents dropdown and just show the
         // documents" -- the 4 names are always visible now, no
-        // expand/collapse click needed first.
+        // expand/collapse click needed first. "View Application" (was a
+        // separate breadcrumb link up top) is the first row here, since
+        // "top of the documents list" is exactly what it is: the source
+        // application this engagement was created from.
         // Greg (9/5/26): "remove Documents. it adds no value." -- the
         // group's own label row is gone; the rows just sit directly under
         // the section like the other nav items.
         // Greg (9/5/26), per Chris's mockup: a plain "Workflow" caption is
-        // back above the document rows. "Add Research" (the hidden
-        // navItems entry above) is spliced in right after Controlling
-        // Document, ahead of Research Review. Every row gets an icon too.
-        // Greg (9/17/26): "View Application" moves down into this group --
-        // it used to render unlabeled up with Team & Hours (see navItems
-        // above); it's now the first row under the "Workflow" caption
-        // instead. Order is now Workflow caption, View Application,
-        // Discovery, Controlling, Add Your Research, Research Review
-        // Notes, Close-Out.
-        const researchRow = `<button type="button" class="cc-nav-subbtn" data-pane="research">${navIconSvg("research")}<span>Add Your Research</span></button>`;
+        // back, but only above the document rows -- View Application stays
+        // grouped with Team & Hours above it, unlabeled. "Add Research"
+        // (the hidden navItems entry above) is spliced in right after
+        // Controlling Document, ahead of Research Review -- order is now
+        // Application, Discovery, Controlling, Add Research, Research
+        // Review, Close-Out. Every row now gets an icon too.
+        const researchRow = `<button type="button" class="cc-nav-subbtn" data-pane="research">${navIconSvg("research")}<span>Add Research</span></button>`;
         // Was an <a> out to client_applications.html with a chevron marking
         // it as a trip off-page; it's a pane now, so it's a button like every
         // other nav row and the chevron went with the new window (Greg,
         // 9/6/26).
-        const subHtml = `<div class="cc-nav-section">Workflow</div>` +
-          `<button type="button" class="cc-nav-subbtn" data-pane="application">${navIconSvg("application")}<span>View Application</span></button>` +
+        const subHtml = `<button type="button" class="cc-nav-subbtn" data-pane="application">${navIconSvg("application")}<span>View Application</span></button>` +
+          `<div class="cc-nav-section">Attachments</div>` +
           item.docs.map((d) => `
             <button type="button" class="cc-nav-subbtn" data-pane="${item.key}" data-doc="${d.key}">${navIconSvg(d.key)}<span>${d.label}</span></button>
           ` + (d.key === "controlling" ? researchRow : "")).join("");
@@ -1947,7 +1965,7 @@
       showBanner("Open an engagement first to export its team & hours.", "error");
       return;
     }
-    const rows = [["Work Area", "Person", "Budget Hours", "Hours Used"]];
+    const rows = [["Work Area", "Person", "Allotted Hours", "Spent Hours"]];
     for (const r of currentAssignments) {
       const person = usersById()[r.user_id];
       rows.push([SPECIALTY_LABELS[r.specialty_type] || r.specialty_type, person ? person.full_name : "Not assigned", r.hours_allotted, r.hoursSpent]);
@@ -2018,35 +2036,17 @@
     if (!collides) return u.full_name;
     return u.email ? `${u.full_name} (${u.email})` : `${u.full_name} — ${specialtyDescriptor(u)}`;
   }
-  // Work areas that actually map to a checkbox on the roster profile (Team
-  // Directory's specialty picker). Admin and Quality Control aren't in that
-  // catalog -- Admin is a role, not a specialty, and QC was dropped from
-  // the checkbox list entirely on 8/19/26 -- so filtering the Person picker
-  // by "has the box checked" would leave those two work areas with nobody
-  // to pick at all. They keep the unfiltered roster instead (Greg, 9/17/26).
-  const SKILL_FILTERED_SPECIALTIES = ["team_lead", "market_research", "digital_marketing", "gis", "watering_holes"];
-
-  function consultantOptionsHtml(selectedId, specialty) {
-    // The pick list is the visible roster, narrowed to whoever has THIS work
-    // area checked in their Team Directory profile -- assigning Market
-    // Research shouldn't offer someone who's never checked that box (Greg,
-    // 9/17/26). Skip the narrowing when nobody on the visible roster has it
-    // checked yet, though -- an empty picker is worse than an unfiltered one.
+  function consultantOptionsHtml(selectedId) {
+    // The pick list is the visible roster. But if this row is already held by
+    // somebody hidden -- the NCEG Admin house account on Admin/QC, or one of
+    // the hidden admins -- that person has to appear too, or the select falls
+    // back to its first option and the row reads "Not assigned" while the
+    // database says otherwise. Offer them, but only because they are already
+    // on the row: nobody can PICK a hidden account from here.
     let options = allUsers;
-    if (specialty && SKILL_FILTERED_SPECIALTIES.includes(specialty)) {
-      const skilled = allUsers.filter((u) => (userSpecialties[u.id] || []).includes(specialty));
-      if (skilled.length) options = skilled;
-    }
-    // But if this row is already held by somebody hidden -- the NCEG Admin
-    // house account on Admin/QC, or one of the hidden admins -- or by
-    // someone the skill filter above just excluded, that person has to
-    // appear too, or the select falls back to its first option and the row
-    // reads "Not assigned" while the database says otherwise. Offer them,
-    // but only because they are already on the row: nobody can PICK an
-    // unlisted account from here.
-    if (selectedId && !options.some((u) => u.id === selectedId)) {
+    if (selectedId && !allUsers.some((u) => u.id === selectedId)) {
       const held = allUsersIncludingHidden.find((u) => u.id === selectedId);
-      if (held) options = [...options, held];
+      if (held) options = [...allUsers, held];
     }
     return '<option value="">Not assigned</option>' + options.map((u) => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${escapeHtml(consultantOptionLabel(u))}</option>`).join("");
   }
@@ -2161,21 +2161,41 @@
       const tr = document.createElement("tr");
       tr.dataset.assignmentId = r.id;
       const personCell = canManage
-        ? `<select class="row-select row-consultant-select">${consultantOptionsHtml(r.user_id, r.specialty_type)}</select>`
+        ? `<select class="row-select row-consultant-select">${consultantOptionsHtml(r.user_id)}</select>`
         : `${person ? escapeHtml(userLabel(person)) : `<span style="color:var(--muted);">Not assigned</span>`}`;
       const isFixed = fixedSlotIndex(r.specialty_type, r.slot_number) !== -1;
+      // Chris/Rita 9/18/26: "the Unassign button will be removed... team leads
+      // can directly type over a specialist's name to reassign." Clearing a
+      // row is now the blank "Not assigned" entry already sitting at the top
+      // of the name list, which is one gesture instead of a button plus a
+      // confirm. The seven standard work areas therefore carry no action
+      // button at all; only an extra specialist row added on top of them can
+      // be removed outright, because that row is not part of the engagement's
+      // shape.
+      //
+      // One deliberate difference from the old Unassign: it also zeroed the
+      // allotted hours. Picking "Not assigned" leaves them, so the plan for
+      // that work area survives a change of person -- which is what a team
+      // lead swapping a specialist actually wants.
       const actionBtn = isFixed
-        ? `<button class="btn-secondary icon-btn" data-clear="${r.id}">Unassign</button>`
+        ? ""
         : `<button class="btn-danger icon-btn" data-remove="${r.id}">Remove</button>`;
       const isSunkCost = isSunkCostSpecialty(r.specialty_type, activeClient);
       const canLogHours = !isSunkCost && !!person && (isSuperAdmin || person.id === currentUser.id);
       const canViewHistory = !isSunkCost && !!person;
-      const usedDisplay = canViewHistory
-        ? `<button type="button" class="spent-link" data-history="${r.id}" title="View billing history">${r.hoursSpent}</button>`
+      // Chris/Rita 9/18/26: the "+" goes, and the number itself opens logging.
+      // That number used to open billing history, so history moved onto the
+      // work-area name -- the two jobs stay one click each, on the cell each
+      // one belongs to.
+      const usedDisplay = canLogHours
+        ? `<button type="button" class="spent-link" data-log="${r.id}" title="Log hours">${r.hoursSpent}</button>`
         : `<span>${r.hoursSpent}</span>`;
-      const usedCell = `<div class="spent-cell">${usedDisplay}<span class="spent-action">${canLogHours ? `<button class="btn-secondary icon-btn" data-log="${r.id}" title="Log hours">+</button>` : ""}</span></div>`;
+      const usedCell = `<div class="spent-cell">${usedDisplay}</div>`;
+      const areaCell = canViewHistory
+        ? `<button type="button" class="area-link" data-history="${r.id}" title="View billing history">${escapeHtml(label)}</button>`
+        : escapeHtml(label);
       tr.innerHTML = `
-        <td>${escapeHtml(label)}</td>
+        <td>${areaCell}</td>
         <td>${personCell}</td>
         <td style="text-align:right;"><input type="number" class="row-input row-hours-input" min="0" step="0.5" value="${Number(r.hours_allotted)}" ${canManage ? "" : "disabled"} /></td>
         <td style="white-space:nowrap;">${usedCell}</td>
@@ -2210,7 +2230,7 @@
         const assignmentId = tr.dataset.assignmentId;
         const { error } = await sb.from("client_assignments").update({ hours_allotted: Number(input.value) }).eq("id", assignmentId);
         if (error) {
-          showBanner(error.message.includes("exceed Budget") ? "That would exceed the client's Total Hours." : "Couldn't save: " + error.message, "error");
+          showBanner(error.message.includes("exceed Budget") ? "That would exceed the engagement's total hours." : "Couldn't save: " + error.message, "error");
           await reloadTeam();
           return;
         }
@@ -2219,10 +2239,7 @@
       });
     });
     document.querySelectorAll("[data-remove]").forEach((btn) => {
-      btn.addEventListener("click", () => openRemove(btn.dataset.remove, "delete"));
-    });
-    document.querySelectorAll("[data-clear]").forEach((btn) => {
-      btn.addEventListener("click", () => openRemove(btn.dataset.clear, "clear"));
+      btn.addEventListener("click", () => openRemove(btn.dataset.remove));
     });
     document.querySelectorAll("[data-log]").forEach((btn) => {
       btn.addEventListener("click", () => openLogHours(btn.dataset.log));
@@ -2299,14 +2316,6 @@
     `;
     tbody.appendChild(tr);
 
-    // The Person picker starts unfiltered (no work area chosen yet) and
-    // re-narrows to that specialty's checked-off roster the moment one is
-    // picked -- otherwise a new row would offer Market Research work to
-    // someone who's never checked that box (Greg, 9/17/26).
-    tr.querySelector(".new-specialty").addEventListener("change", (e) => {
-      const consultantSelect = tr.querySelector(".new-consultant");
-      consultantSelect.innerHTML = consultantOptionsHtml(consultantSelect.value, e.target.value);
-    });
     tr.querySelector(".new-hours").addEventListener("input", recalcTeamStats);
     tr.querySelector("[data-cancel-row]").addEventListener("click", () => { tr.remove(); recalcTeamStats(); });
     tr.querySelector("[data-save-row]").addEventListener("click", async () => {
@@ -2314,7 +2323,7 @@
       const userId = tr.querySelector(".new-consultant").value;
       const hours = Number(tr.querySelector(".new-hours").value);
       if (!specialty) {
-        showBanner("Pick a work area before adding the row.", "error");
+        showBanner("Pick a work area for this specialist first.", "error");
         return;
       }
       const existing = currentAssignments.filter((r) => r.specialty_type === specialty);
@@ -2324,10 +2333,10 @@
         is_team_lead: specialty === "team_lead",
       });
       if (error) {
-        showBanner(error.message.includes("exceed Budget") ? "That would exceed the client's Total Hours." : "Couldn't add: " + error.message, "error");
+        showBanner(error.message.includes("exceed Budget") ? "That would exceed the engagement's total hours." : "Couldn't add: " + error.message, "error");
         return;
       }
-      showBanner("Work area added.", "success");
+      showBanner("Specialist added.", "success");
       await reloadTeam();
     });
 
@@ -2340,7 +2349,7 @@
     document.querySelectorAll(".row-hours-input").forEach((input) => { rowsSum += Number(input.value) || 0; });
     const notAssigned = total - rowsSum;
     $("tw-summary-error").style.display = notAssigned < 0 ? "block" : "none";
-    if (notAssigned < 0) $("tw-summary-error").textContent = "Budget hours add up to more than Total Hours.";
+    if (notAssigned < 0) $("tw-summary-error").textContent = "Allotted hours add up to more than the engagement total.";
     const totalEl = $("tw-total-planned");
     if (totalEl) totalEl.textContent = trimHours(rowsSum);
     // Live, off the inputs -- so typing 9 into Market Research walks the
@@ -2349,39 +2358,32 @@
   }
 
   // ---------- Unassign / remove ----------
+  // Only one mode left. "clear" belonged to the Unassign button, which went
+  // on 9/18/26 -- clearing a row is now picking "Not assigned" in the name
+  // list, which needs no confirm because it is undone by picking a name again.
   let pendingRemoveId = null;
-  let pendingRemoveMode = "delete";
-  function openRemove(assignmentId, mode) {
+  function openRemove(assignmentId) {
     const r = currentAssignments.find((x) => x.id === assignmentId);
     if (!r) return;
     const person = usersById()[r.user_id];
     pendingRemoveId = assignmentId;
-    pendingRemoveMode = mode;
     const label = (SPECIALTY_LABELS[r.specialty_type] || r.specialty_type) + (r.slot_number > 1 ? " " + r.slot_number : "");
-    if (mode === "clear") {
-      $("tw-remove-title").textContent = "Unassign this work area?";
-      $("tw-remove-confirm").textContent = "Unassign";
-      $("tw-remove-text").textContent = `Reset ${label} back to not assigned with 0 hours? Logged hours stay on record.`;
-    } else {
-      $("tw-remove-title").textContent = "Remove this row?";
-      $("tw-remove-confirm").textContent = "Remove";
-      $("tw-remove-text").textContent = `Remove ${person ? userLabel(person) : "this person"} from ${label}? Their logged hours stay on record.`;
-    }
+    $("tw-remove-title").textContent = "Remove this specialist?";
+    $("tw-remove-confirm").textContent = "Remove";
+    $("tw-remove-text").textContent = `Remove ${person ? userLabel(person) : "this row"} from ${label}? Their logged hours stay on record.`;
     $("tw-remove-overlay").classList.add("open");
   }
   $("tw-remove-cancel").addEventListener("click", () => { $("tw-remove-overlay").classList.remove("open"); pendingRemoveId = null; });
   $("tw-remove-confirm").addEventListener("click", async () => {
     if (!pendingRemoveId) return;
-    const { error } = pendingRemoveMode === "clear"
-      ? await sb.from("client_assignments").update({ user_id: null, hours_allotted: 0 }).eq("id", pendingRemoveId)
-      : await sb.from("client_assignments").delete().eq("id", pendingRemoveId);
+    const { error } = await sb.from("client_assignments").delete().eq("id", pendingRemoveId);
     $("tw-remove-overlay").classList.remove("open");
     pendingRemoveId = null;
     if (error) {
-      showBanner((pendingRemoveMode === "clear" ? "Couldn't unassign: " : "Couldn't remove: ") + error.message, "error");
+      showBanner("Couldn't remove: " + error.message, "error");
       return;
     }
-    showBanner(pendingRemoveMode === "clear" ? "Work area unassigned." : "Row removed.", "success");
+    showBanner("Specialist removed.", "success");
     await reloadTeam();
   });
 
@@ -2417,7 +2419,10 @@
       consultant_id: r.user_id,
       hours: Number($("tw-log-hours-amount").value),
       entry_date: $("tw-log-hours-date").value,
-      note: $("tw-log-hours-note").value.trim() || null,
+      // Note field removed 9/18/26 (Chris/Rita: "reduce data entry"). Zero of
+      // the entries logged so far carried one. The column stays -- billing
+      // history still shows a note where one exists -- it just is not asked
+      // for any more.
     });
     btn.disabled = false;
     btn.textContent = "Log hours";

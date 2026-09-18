@@ -1461,6 +1461,22 @@ h4{font-weight:600;font-size:15px;margin-bottom:5px}
                     <a href="javascript:void(0)" onclick="rescanForOffGeography()" style="font-size:10px;color:var(--accent-blue);text-decoration:none;">Sweep existing backlog now →</a>
                 </div>
             </div>
+
+            <div class="sidebar-section" style="padding:8px 14px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-secondary);">📚 Filter Reference/Junk Pages</span>
+                    <label style="position:relative;display:inline-block;width:36px;height:20px;cursor:pointer;">
+                        <input type="checkbox" id="junkFilterToggle" onchange="toggleJunkFilter(this.checked)"
+                            style="opacity:0;width:0;height:0;position:absolute;">
+                        <span id="junkFilterSlider" style="position:absolute;inset:0;background:#ccc;border-radius:20px;transition:0.2s;"></span>
+                        <span id="junkFilterKnob" style="position:absolute;left:2px;top:2px;width:16px;height:16px;background:white;border-radius:50%;transition:0.2s;box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
+                    </label>
+                </div>
+                <div id="junkFilterStatus" style="font-size:10px;color:var(--text-secondary);margin-top:3px;"></div>
+                <div style="margin-top:4px;">
+                    <a href="javascript:void(0)" onclick="rescanForJunk()" style="font-size:10px;color:var(--accent-blue);text-decoration:none;">Sweep existing backlog now →</a>
+                </div>
+            </div>
             <!-- Leadforce footer -->
             <div style="padding:14px 14px 16px;border-top:1px solid var(--border);margin-top:auto;">
                 <div style="font-size:10px;color:#bbb;text-align:center;line-height:1.6;">
@@ -2500,10 +2516,34 @@ Respond ONLY with valid JSON:
             return OFF_TARGET_STATE_TERMS.some(matches) || OFF_TARGET_CITY_TERMS.some(matches);
         }
 
+        // ── Reference/Junk Source Filter (JLR standalone build) ────────
+        // Some feed queries fall back to generic reference content instead of
+        // real news (Wikipedia, dictionary definitions, "Welcome to X" landing
+        // pages). None of this is ever a real signal for JLR, regardless of
+        // geography, so it's excluded unconditionally — same cost-free pattern.
+        const JUNK_TITLE_TERMS = [
+            'wikipedia','wiktionary','the free encyclopedia',
+            'merriam-webster','cambridge dictionary','thefreedictionary','dictionary.com','vocabulary.com'
+        ];
+        function isJunkReferenceArticle(article) {
+            const title = (article.title || '').toLowerCase();
+            const url = (article.url || '').toLowerCase();
+            if (JUNK_TITLE_TERMS.some(term => title.indexOf(term) !== -1)) return true;
+            if (url.indexOf('wikipedia.org') !== -1 || url.indexOf('wiktionary.org') !== -1) return true;
+            if (/definition\s*&\s*meaning/.test(title)) return true;
+            if (/english meaning\s*-/.test(title)) return true;
+            if (/^welcome to\b/.test(title)) return true;
+            if (/^home\s*(\||::)/.test(title)) return true;
+            if (/^about\s.+\|/.test(title)) return true;
+            if (/^departments?\s*-/.test(title)) return true;
+            if (/\bofficial (website|travel)\b/.test(title)) return true;
+            return false;
+        }
+
         function toggleUsOnlyMode(enabled) {
             appState.usOnlyMode = enabled;
             localStorage.setItem(getStorageKey('us_only_mode'), enabled ? '1' : '0');
-            updateUsOnlyUI(); updateSportsFilterUI(); updateOffGeoFilterUI();
+            updateUsOnlyUI(); updateSportsFilterUI(); updateOffGeoFilterUI(); updateJunkFilterUI();
             renderArticles();
             updateSignalCounts();
         }
@@ -2665,6 +2705,74 @@ This affects:
             showStatus(`✅ Re-stamped ${count} off-territory articles as None.`, 'success');
         }
         // ── End Northern CA Geography Filter Toggle ───────────────────
+
+        // ── Reference/Junk Source Filter Toggle ────────────────────────
+        function toggleJunkFilter(enabled) {
+            appState.filterJunk = enabled;
+            localStorage.setItem(getStorageKey('filter_junk'), enabled ? '1' : '0');
+            updateJunkFilterUI();
+            renderArticles();
+            updateSignalCounts();
+        }
+
+        function updateJunkFilterUI() {
+            const toggle = document.getElementById('junkFilterToggle');
+            const slider = document.getElementById('junkFilterSlider');
+            const knob   = document.getElementById('junkFilterKnob');
+            const status = document.getElementById('junkFilterStatus');
+            if (!toggle) return;
+            toggle.checked = appState.filterJunk;
+            slider.style.background = appState.filterJunk ? '#1a73e8' : '#ccc';
+            knob.style.left         = appState.filterJunk ? '18px' : '2px';
+            if (appState.filterJunk) {
+                const filtered = appState.articles.filter(a => !a.archivedAt && isJunkReferenceArticle(a)).length;
+                status.textContent = filtered > 0 ? `Hiding ${filtered} reference/junk pages` : 'No reference/junk pages detected';
+            } else {
+                status.textContent = 'Showing all pages (incl. Wikipedia etc.)';
+            }
+        }
+
+        async function rescanForJunk() {
+            const total = appState.articles.filter(a => !a.archivedAt).length;
+            if (total === 0) {
+                showStatus('No articles to scan.', 'info');
+                return;
+            }
+            const already = appState.articles.filter(a => !a.archivedAt && a.signal !== 'unanalyzed' && a.signal !== 'none' && isJunkReferenceArticle(a)).length;
+            const unanalyzed = appState.articles.filter(a => !a.archivedAt && a.signal === 'unanalyzed' && isJunkReferenceArticle(a)).length;
+            const toRestamp = already + unanalyzed;
+            if (toRestamp === 0) {
+                showStatus('No reference/junk pages found in current data.', 'success');
+                closeSettingsModal();
+                return;
+            }
+            if (!confirm(`Found ${toRestamp} reference/junk pages across ${total} total articles.
+
+Re-stamp them as None? No API credits used.
+
+This affects:
+• ${unanalyzed} unanalyzed articles (saves AI analysis cost)
+• ${already} previously analyzed articles`)) return;
+
+            let count = 0;
+            appState.articles.forEach(a => {
+                if (!a.archivedAt && isJunkReferenceArticle(a)) {
+                    a.signal    = 'none';
+                    a.relevance = 0;
+                    a.company   = 'Reference/Junk Page';
+                    a.summary   = 'Auto-excluded: Wikipedia/dictionary/generic landing page, not news.';
+                    a.analyzedAt = new Date().toISOString();
+                    count++;
+                }
+            });
+
+            await saveArticles();
+            renderArticles();
+            updateSignalCounts();
+            closeSettingsModal();
+            showStatus(`✅ Re-stamped ${count} reference/junk pages as None.`, 'success');
+        }
+        // ── End Reference/Junk Source Filter Toggle ────────────────────
 
         // ── Add Feed Modal ──────────────────────────────────────────
         let addFeedSelected = new Set(); // indices of selected feeds
@@ -3062,7 +3170,7 @@ This affects:
             
             // Re-render everything
             renderFeedFolders();
-            updateUsOnlyUI(); updateSportsFilterUI(); updateOffGeoFilterUI();
+            updateUsOnlyUI(); updateSportsFilterUI(); updateOffGeoFilterUI(); updateJunkFilterUI();
             renderArticles();
             updateSignalCounts();
             updateSavedCount();
@@ -3111,6 +3219,7 @@ Deprioritize/exclude: pure trucking or parcel/LTL companies with no bulk-rail re
             usOnlyMode: false, // Off by default — Hondo's ICP includes Mexico/nearshoring supply-chain activity
             filterSports: true, // Filter out sports organization articles (default on)
             filterOffGeo: true, // Filter out off-Northern-CA-geography articles (default on — JLR standalone build)
+            filterJunk: true, // Filter out Wikipedia/dictionary/generic reference pages (default on — JLR standalone build)
             freshnessWindow: 90, // Days before articles are hidden entirely (hard cutoff)
             // localStorage-only — no cloud storage in client version
             cumulativeFolderCounts: {}, // Cumulative article totals per folder — only ever increase
@@ -3357,7 +3466,7 @@ Deprioritize/exclude: pure trucking or parcel/LTL companies with no bulk-rail re
             debugLog(`Loaded: Client=${clientManager.currentClient || 'none'}, Feeds=${appState.feeds.length}, Articles=${appState.articles.length}`, 'success');
             
             renderFeedFolders();
-            updateUsOnlyUI(); updateSportsFilterUI(); updateOffGeoFilterUI();
+            updateUsOnlyUI(); updateSportsFilterUI(); updateOffGeoFilterUI(); updateJunkFilterUI();
             // Sync the active filter chip to match restored currentFilter
             document.querySelectorAll('.filter-chip').forEach(c => {
                 c.classList.toggle('active', c.getAttribute('data-filter') === appState.currentFilter);
@@ -3482,6 +3591,8 @@ Deprioritize/exclude: pure trucking or parcel/LTL companies with no bulk-rail re
                 if (savedSportsFilter !== null) appState.filterSports = savedSportsFilter === '1';
                 const savedOffGeoFilter = localStorage.getItem(getStorageKey('filter_offgeo'));
                 if (savedOffGeoFilter !== null) appState.filterOffGeo = savedOffGeoFilter === '1';
+                const savedJunkFilter = localStorage.getItem(getStorageKey('filter_junk'));
+                if (savedJunkFilter !== null) appState.filterJunk = savedJunkFilter === '1';
                 const savedFreshness = localStorage.getItem(getStorageKey('freshness_window'));
                 if (savedFreshness !== null) appState.freshnessWindow = parseInt(savedFreshness, 10);
 
@@ -3853,10 +3964,11 @@ Deprioritize/exclude: pure trucking or parcel/LTL companies with no bulk-rail re
                                 const withSignal = brandNew.map(a => {
                                     const sports = isSportsArticle(a);
                                     const offGeo = !sports && isOffGeographyArticle(a);
-                                    const excluded = sports || offGeo;
+                                    const junk = !sports && !offGeo && isJunkReferenceArticle(a);
+                                    const excluded = sports || offGeo || junk;
                                     return { ...a, signal: excluded ? 'none' : 'unanalyzed', relevance: 0,
-                                        company: sports ? 'Sports Organization' : (offGeo ? 'Off-Territory' : 'Not analyzed'),
-                                        summary: sports ? 'Auto-excluded: sports organization.' : offGeo ? 'Auto-excluded: outside JLR target geography (Northern California).' : stripHTML(a.content).substring(0, 200) + '…',
+                                        company: sports ? 'Sports Organization' : (offGeo ? 'Off-Territory' : (junk ? 'Reference/Junk Page' : 'Not analyzed')),
+                                        summary: sports ? 'Auto-excluded: sports organization.' : offGeo ? 'Auto-excluded: outside JLR target geography (Northern California).' : junk ? 'Auto-excluded: Wikipedia/dictionary/generic landing page, not news.' : stripHTML(a.content).substring(0, 200) + '…',
                                         analyzedAt: new Date().toISOString() };
                                 });
                                 appState.articles.push(...withSignal);
@@ -4341,13 +4453,14 @@ Deprioritize/exclude: pure trucking or parcel/LTL companies with no bulk-rail re
                         const unanalyzed = brandNew.map(a => {
                             const sports = isSportsArticle(a);
                             const offGeo = !sports && isOffGeographyArticle(a);
-                            const excluded = sports || offGeo;
+                            const junk = !sports && !offGeo && isJunkReferenceArticle(a);
+                            const excluded = sports || offGeo || junk;
                             return {
                                 ...a,
                                 signal: excluded ? 'none' : 'unanalyzed',
                                 relevance: 0,
-                                company: sports ? 'Sports Organization' : (offGeo ? 'Off-Territory' : 'Not analyzed'),
-                                summary: sports ? 'Auto-excluded: sports organization — not a B2B prospect.' : offGeo ? 'Auto-excluded: outside JLR target geography (Northern California).' : stripHTML(a.content).substring(0, 200) + '...',
+                                company: sports ? 'Sports Organization' : (offGeo ? 'Off-Territory' : (junk ? 'Reference/Junk Page' : 'Not analyzed')),
+                                summary: sports ? 'Auto-excluded: sports organization — not a B2B prospect.' : offGeo ? 'Auto-excluded: outside JLR target geography (Northern California).' : junk ? 'Auto-excluded: Wikipedia/dictionary/generic landing page, not news.' : stripHTML(a.content).substring(0, 200) + '...',
                                 analyzedAt: new Date().toISOString()
                             };
                         });
@@ -5256,6 +5369,10 @@ Respond ONLY with valid JSON, no other text.`
             if (appState.filterOffGeo) {
                 articles = articles.filter(a => !isOffGeographyArticle(a));
             }
+            // Reference/junk source filter: hide Wikipedia/dictionary/landing pages
+            if (appState.filterJunk) {
+                articles = articles.filter(a => !isJunkReferenceArticle(a));
+            }
 
             debugLog(`renderArticles: Starting with ${articles.length} total articles`, 'info');
 
@@ -5574,6 +5691,7 @@ Respond ONLY with valid JSON, no other text.`
                 if (appState.usOnlyMode) pool = pool.filter(a => !isForeignArticle(a));
                 if (appState.filterSports) pool = pool.filter(a => !isSportsArticle(a));
                 if (appState.filterOffGeo) pool = pool.filter(a => !isOffGeographyArticle(a));
+                if (appState.filterJunk) pool = pool.filter(a => !isJunkReferenceArticle(a));
 
                 if (signal === 'all') {
                     // pool already excludes unanalyzed and none
@@ -5617,6 +5735,7 @@ Respond ONLY with valid JSON, no other text.`
                 if (appState.usOnlyMode) pool = pool.filter(a => !isForeignArticle(a));
                 if (appState.filterSports) pool = pool.filter(a => !isSportsArticle(a));
                 if (appState.filterOffGeo) pool = pool.filter(a => !isOffGeographyArticle(a));
+                if (appState.filterJunk) pool = pool.filter(a => !isJunkReferenceArticle(a));
                 return pool.filter(a => a.signal && a.signal !== 'unanalyzed' && a.signal !== 'none').length;
             })();
             const totalArticles = appState.articles.filter(a => !a.archivedAt).length;
