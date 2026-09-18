@@ -444,14 +444,10 @@
      percentage complete. remove that." The numbered pills under this already
      say where you are, and they say it without implying the form is a race
      to 100%. The progress text and the bar under it both went. */
-  /* Greg (9/5/26): "add preview client info link on every page of the
-     wizard." The bottom-bar Preview button only shows on the last step,
-     and the top overview card (which had its own preview link) is hidden
-     in embed mode -- so this always-visible copy lives in the wizard
-     topbar, present on every step. */
-  .wizard-topbar .wiz-preview-top { font-size: 13.5px; font-weight: 700; color: var(--accent-dark); text-decoration: none; white-space: nowrap; flex-shrink: 0; margin-top: 3px; }
-  .wizard-topbar .wiz-preview-top:hover { text-decoration: underline; }
-  .wizard-topbar .wiz-preview-top.disabled-link { opacity: 0.45; pointer-events: none; }
+  /* Greg (9/5/26) added a Preview link to the wizard topbar so it was on
+     every step; (9/18/26) "i also don't want the Preview Company Info link at
+     the top. remove it." The bottom-bar Preview button on the last step is
+     the one that remains. */
 
   /* Step pills stack the label under the circle (Greg, 8/31/26 -- "put a
      one word description under each number") rather than beside it, so the
@@ -903,7 +899,6 @@
         <div>
           <h2>Company Information</h2>
         </div>
-        <a class="wiz-preview-top" id="wiz-preview-top" href="#" target="_blank" rel="noopener">Preview Company Info &#8599;</a>
       </div>
 
       <div class="wizard-steps-track" id="wiz-steps-track"></div>
@@ -1705,10 +1700,8 @@
       openBtn.href = "#";
       openBtn.classList.add("disabled-link");
       copyBtn.disabled = true;
-      for (const id of ["wiz-preview-btn", "wiz-preview-top"]) {
-        $(id).href = "#";
-        $(id).classList.add("disabled-link");
-      }
+      $("wiz-preview-btn").href = "#";
+      $("wiz-preview-btn").classList.add("disabled-link");
       return;
     }
     const shareUrl = new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href;
@@ -1720,13 +1713,11 @@
     // same client dashboard, but with ?preview=1 so the sections the
     // client-facing view hides (company overview, NAICS, socials,
     // competitors, customers, client contacts) render for the review.
-    // Two copies: the bottom-bar CTA on the last step, and the always-
-    // visible topbar link on every step.
+    // One copy now: the bottom-bar CTA on the last step (Greg, 9/18/26 --
+    // the topbar link is gone).
     const previewUrl = new URL(`client_public.html?slug=${encodeURIComponent(client.slug)}&preview=1`, PUBLIC_SITE_BASE).href;
-    for (const id of ["wiz-preview-btn", "wiz-preview-top"]) {
-      $(id).href = previewUrl;
-      $(id).classList.remove("disabled-link");
-    }
+    $("wiz-preview-btn").href = previewUrl;
+    $("wiz-preview-btn").classList.remove("disabled-link");
   }
 
   $("share-link-copy-btn").addEventListener("click", async () => {
