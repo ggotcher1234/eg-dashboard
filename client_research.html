@@ -1015,20 +1015,37 @@
   // Saves on the click rather than behind a Save button: it is one boolean,
   // and the banner says which way it went so there is no doubt about whether
   // it took. On failure the box snaps back to what the database still says.
+  //
+  // .select() is load-bearing, not decoration (Greg, 9/19/26 -- "i clicked add
+  // questions to client dashboard but they are not showing"). An update that
+  // RLS filters out comes back HTTP 200 with error: null and zero rows
+  // touched, so checking `error` alone reports a save that never happened --
+  // which is exactly what it did for an engagement this login doesn't lead.
+  // The returned row is the only honest proof, so an empty result is failure.
   $("show-questions").addEventListener("change", async () => {
     if (!currentClient) return;
     const box = $("show-questions");
     const next = box.checked;
     box.disabled = true;
-    const { error } = await sb.from("clients").update({ show_research_questions: next }).eq("id", currentClient.id);
+    const { data, error } = await sb
+      .from("clients")
+      .update({ show_research_questions: next })
+      .eq("id", currentClient.id)
+      .select("id, show_research_questions");
     box.disabled = false;
     if (error) {
       box.checked = !next;
       showBanner("Couldn't save that: " + error.message, "error");
       return;
     }
-    currentClient.show_research_questions = next;
-    showBanner(next
+    if (!data || !data.length) {
+      box.checked = !next;
+      showBanner("Couldn't save that \u2014 only this engagement's Team Lead or an Admin can change what its dashboard shows.", "error");
+      return;
+    }
+    currentClient.show_research_questions = data[0].show_research_questions;
+    box.checked = !!data[0].show_research_questions;
+    showBanner(box.checked
       ? "The research questions now show on this client's dashboard."
       : "The research questions are hidden from this client's dashboard.", "success");
   });
