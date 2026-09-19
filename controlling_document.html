@@ -108,17 +108,18 @@
   .cd-q-row { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; background: #fcfdfe; }
   .cd-q-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
   .cd-q-row.collapsed .cd-q-head { margin-bottom: 0; }
-  /* Expanded, the head is only the chevron and the remove button -- no label
-     any more -- so it doesn't need the full 10px under it. */
+  /* Expanded, QUESTION sits on the head line and the textarea follows it, so
+     the gap under the head is the same 4px a field label gets. */
   .cd-q-row:not(.collapsed) .cd-q-head { margin-bottom: 4px; }
-  /* Head doubles as the accordion toggle -- click anywhere along it to roll
-     the row up when it's empty / not needed. It carries no label of its own
-     (the red QUESTION label over the textarea is the card's only one); the
-     chevron plus, when collapsed, the question preview is all it shows. The
-     button still spans the row so the click target stays full-width. */
-  .cd-q-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 22px; background: none; border: none; padding: 0; font-family: inherit; cursor: pointer; text-align: left; }
-  .cd-q-chevron { flex-shrink: 0; color: var(--navy-light); font-size: 11px; transform: rotate(90deg); transition: transform 0.15s ease; }
-  .cd-q-row.collapsed .cd-q-chevron { transform: rotate(0deg); }
+  /* Greg (9/19/26): "get rid of the bullet point and move the word question up
+     to that line. inline with the X to delete. make the word question font
+     black." So the head carries the card's one QUESTION label -- black, same
+     size and weight as BACKGROUND / PRIORITY / CUSTOMER NOTES below it -- and
+     the chevron is gone. The head is still the accordion toggle and still
+     spans the row, so clicking the label (or the empty space beside it) rolls
+     the card up; collapsed, the question preview follows the label. */
+  .cd-q-toggle { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; min-height: 22px; background: none; border: none; padding: 0; font-family: inherit; cursor: pointer; text-align: left; }
+  .cd-q-headlabel { flex-shrink: 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: #000; }
   .cd-q-preview { min-width: 0; font-size: 12.5px; font-weight: 400; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cd-q-preview-empty { font-style: italic; }
   .cd-q-row:not(.collapsed) .cd-q-preview { display: none; }
@@ -148,7 +149,6 @@
   .cd-q-bg-editor ul, .cd-q-bg-editor ol { margin: 0 0 8px; padding-left: 22px; }
   .cd-q-bg-editor ul:last-child, .cd-q-bg-editor ol:last-child { margin-bottom: 0; }
   .cd-q-bg-editor:empty:before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
-  .cd-q-flabel-q    { color: #d81f1f; }
   .cd-q-flabel-rank { color: #1a56db; }
   /* Priority + Customer Notes share one row: fixed-width A/B/C picker, notes fills the rest.
      "Priority" is the label only -- the column behind it is still `ranking`. */
@@ -223,7 +223,7 @@
            (Greg, 8/31/26: "The Catagory and the questions will flow
            through to the Questions on EG Research Reports Page"). ===== -->
       <div class="card">
-        <div class="field-hint" style="margin:0;">Each question has a <strong style="color:#d81f1f;">Question</strong>, its <strong>Background</strong> context, a customer <strong style="color:#1a56db;">Priority</strong> (A/B/C) and <strong style="color:#1a56db;">Customer Notes</strong>. All of it saves to this engagement; the Question also appears on the EG Research Reports page.</div>
+        <div class="field-hint" style="margin:0;">Each question has a <strong>Question</strong>, its <strong>Background</strong> context, a customer <strong style="color:#1a56db;">Priority</strong> (A/B/C) and <strong style="color:#1a56db;">Customer Notes</strong>. All of it saves to this engagement; the Question also appears on the EG Research Reports page.</div>
       </div>
       <div class="card">
         <h2>Market Dynamics Research</h2>
@@ -475,27 +475,24 @@
           <div class="cd-q-row${row.collapsed ? " collapsed" : ""}" data-area="${area}" data-idx="${idx}">
             <div class="cd-q-head">
               <button type="button" class="cd-q-toggle" aria-expanded="${row.collapsed ? "false" : "true"}">
-                <span class="cd-q-chevron">&#9656;</span>
-                <!-- Greg (9/19/26): "There are still 2 redundant questions on
-                     this form... i just want 1 question shown for each
-                     question." The card used to say "Question" twice: once as
-                     this accordion header label and again as the red field
-                     label over the textarea. The field label is the one that
-                     survives -- it pairs with BACKGROUND / PRIORITY / CUSTOMER
-                     NOTES below it. The header keeps only the chevron and, when
-                     the card is collapsed, a preview of the typed question,
-                     which identifies the card better than the word ever did.
-                     Earlier same day, the trailing number went too: the header
-                     numbered cards 1..n across all four areas, which fought
-                     with the numbering people type into the question itself
-                     ("1. Where is the opportunity?"). The typed one carries
-                     through to the dashboard and the close-out survey. -->
+                <!-- Greg (9/19/26), in three passes on the same card header:
+                     the trailing number went first (it numbered cards 1..n
+                     across all four areas and fought with the numbering people
+                     type into the question itself, "1. Where is the
+                     opportunity?" -- the typed one is what carries through to
+                     the dashboard and the close-out survey); then the duplicate
+                     label ("i just want 1 question shown for each question" --
+                     the word was here AND over the textarea); then the chevron
+                     ("get rid of the bullet point and move the word question up
+                     to that line. inline with the X to delete. make the word
+                     question font black"). So this is the card's only QUESTION
+                     label, and the head is still the toggle that collapses it. -->
+                <span class="cd-q-headlabel">Question</span>
                 <span class="cd-q-preview${qprev ? "" : " cd-q-preview-empty"}">${escapeHtml(qprevText)}</span>
               </button>
               <button type="button" class="cd-q-del no-print" title="Remove question">&times;</button>
             </div>
             <div class="cd-q-field">
-              <span class="cd-q-flabel cd-q-flabel-q">Question</span>
               <textarea class="cd-q-question" rows="3" placeholder="${escapeHtml(ph)}">${escapeHtml(row.question || "")}</textarea>
             </div>
             <div class="cd-q-field">
