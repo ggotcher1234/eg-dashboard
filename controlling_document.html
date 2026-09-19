@@ -457,14 +457,12 @@
   }
 
   function renderQuestions() {
-    let n = 0;
     RESEARCH_AREAS.forEach((area) => {
       const container = document.querySelector(`.cd-questions[data-cd-area="${area}"]`);
       if (!container) return;
       let rows = questionsByArea[area] || [];
       if (rows.length === 0) { rows = [blankQuestion()]; questionsByArea[area] = rows; }
       container.innerHTML = rows.map((row, idx) => {
-        n += 1;
         const ph = idx === 0 ? (AREA_PLACEHOLDER[area] || "") : "";
         const qprev = (row.question || "").trim().replace(/\s+/g, " ");
         const qprevText = qprev ? (qprev.length > 80 ? qprev.slice(0, 80) + "…" : qprev) : "empty";
@@ -473,7 +471,17 @@
             <div class="cd-q-head">
               <button type="button" class="cd-q-toggle" aria-expanded="${row.collapsed ? "false" : "true"}">
                 <span class="cd-q-chevron">&#9656;</span>
-                <span class="cd-q-headlabel">Question ${n}</span>
+                <!-- Greg (9/19/26): "the word Question 1 is redundant... we
+                     just need Question and then a box to enter the question,
+                     and question number should we want one." The header used
+                     to number every card 1..n across all four areas, which
+                     fought with the numbering people type into the question
+                     itself ("1. Where is the opportunity?") -- two numbering
+                     schemes on one card, and they drifted apart as soon as a
+                     question was added or deleted anywhere above. The typed
+                     one is the one that carries through to the dashboard and
+                     the close-out survey, so it wins; this is just a label. -->
+                <span class="cd-q-headlabel">Question</span>
                 <span class="cd-q-preview${qprev ? "" : " cd-q-preview-empty"}">${escapeHtml(qprevText)}</span>
               </button>
               <button type="button" class="cd-q-del no-print" title="Remove question">&times;</button>
