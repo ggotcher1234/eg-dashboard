@@ -18,7 +18,9 @@
     --danger: #b3403a;
     --danger-dark: #922f2b;
     --bg: #a3b9aa;
-    /* Panels inside a white card keep the old page colour (Greg, 9/19/26) */
+    /* Panels that sit inside a white card. They used to inherit the page
+       background; that stopped working when the page went sage on 9/19/26, so
+       they keep the old page colour under a name of their own. */
     --note-bg: #eaeff4;
     --card: #ffffff;
     --border: #dde3e9;
@@ -165,6 +167,14 @@
   .meta-line a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
   .meta-line a:hover { text-decoration: underline; }
   .overview-top-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .show-questions-toggle {
+    display: flex; align-items: flex-start; gap: 9px; max-width: 290px; cursor: pointer;
+    font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35;
+    border: 1px solid var(--border); border-radius: 10px; padding: 10px 13px; background: var(--note-bg, #eaeff4);
+  }
+  .show-questions-toggle input { margin: 2px 0 0; width: auto; flex-shrink: 0; }
+  .show-questions-toggle[hidden] { display: none; }
+  .show-questions-hint { display: block; font-size: 11.5px; font-weight: 400; color: var(--muted); margin-top: 2px; }
 
   .field { margin-bottom: 12px; }
   .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
@@ -636,6 +646,19 @@
               <span class="badge" id="p-lifecycle-badge"></span>
             </div>
           </div>
+          <!-- Greg (9/19/26): "add a small option on this page to show the
+               questions on the EG Dashboard. the default should be no." The
+               questions were deliberately kept off the client dashboard on
+               8/28/26 -- they are what the CEO close-out survey asks about --
+               so this is per engagement, off unless somebody turns it on, and
+               it says where the effect lands rather than just "show". -->
+          <label class="show-questions-toggle" id="show-questions-wrap" hidden>
+            <input type="checkbox" id="show-questions" />
+            <span>
+              Show these questions on the client's dashboard
+              <span class="show-questions-hint">Off by default. The research files show either way.</span>
+            </span>
+          </label>
         </div>
       </div>
 
@@ -987,6 +1010,27 @@
     downloadCsv(`${currentClient.name.replace(/[^a-z0-9]+/gi, "-")}-research-${new Date().toISOString().slice(0, 10)}.csv`, rows);
   });
 
+  // Saves on the click rather than behind a Save button: it is one boolean,
+  // and the banner says which way it went so there is no doubt about whether
+  // it took. On failure the box snaps back to what the database still says.
+  $("show-questions").addEventListener("change", async () => {
+    if (!currentClient) return;
+    const box = $("show-questions");
+    const next = box.checked;
+    box.disabled = true;
+    const { error } = await sb.from("clients").update({ show_research_questions: next }).eq("id", currentClient.id);
+    box.disabled = false;
+    if (error) {
+      box.checked = !next;
+      showBanner("Couldn't save that: " + error.message, "error");
+      return;
+    }
+    currentClient.show_research_questions = next;
+    showBanner(next
+      ? "The research questions now show on this client's dashboard."
+      : "The research questions are hidden from this client's dashboard.", "success");
+  });
+
   async function loadClient(clientId) {
     const { data: client, error } = await sb.from("clients").select("*, econ_dev_companies(name)").eq("id", clientId).single();
     if (error || !client) {
@@ -995,6 +1039,14 @@
       return;
     }
     currentClient = client;
+
+    // The switch only makes sense to whoever can change the engagement, and
+    // only once we know its current setting (Greg, 9/19/26).
+    const sqWrap = $("show-questions-wrap");
+    if (sqWrap) {
+      sqWrap.hidden = false;
+      $("show-questions").checked = !!client.show_research_questions;
+    }
 
     $("research-view").classList.remove("hidden");
     $("p-name").textContent = client.name;

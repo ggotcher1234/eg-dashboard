@@ -181,6 +181,14 @@
      deliberately: they are what keeps the four boxes level in the row. */
   .research-card .rc-body { padding: 12px 14px; height: 300px; overflow-y: auto; }
   .research-card .rc-empty { color: var(--muted); font-size: 12.5px; font-style: italic; }
+  /* The questions, when an engagement opts into showing them: quieter than
+     the document links they sit above, since the files are what a client
+     came for (Greg, 9/19/26). */
+  .rc-questions { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .rc-questions-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+  .rc-questions ul { margin: 0; padding-left: 17px; }
+  .rc-questions li { font-size: 12.5px; line-height: 1.45; color: var(--text); margin-bottom: 4px; }
+  .rc-questions li:last-child { margin-bottom: 0; }
   .rc-question-block { margin-bottom: 12px; }
   .rc-question-block:last-child { margin-bottom: 0; }
   .rc-question-title { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
@@ -952,24 +960,35 @@
   });
 
   // Each area is a list of { question, documents } entries from
-  // get_client_public_view() -- one per client_research_questions row,
-  // plus a trailing entry (question: null) for documents not tied to a
-  // specific question. Question text is intentionally NOT shown here
-  // (Greg, 8/28/26): research questions are what the CEO close-out survey
-  // asks about, not something meant for the client-facing dashboard.
-  // Documents also aren't tagged to a specific question anymore (client_
-  // research.html dropped that linkage 8/26/26), so every real question
-  // row comes through with an empty documents array -- those are filtered
-  // out entirely rather than rendered as an empty block; only entries that
-  // actually have documents (in practice, just the trailing one) show.
+  // get_client_public_view(): the engagement's research questions (documents
+  // empty), then a trailing entry (question: null) carrying the area's
+  // documents, which aren't tagged to a specific question any more
+  // (client_research.html dropped that linkage 8/26/26).
+  //
+  // Questions were kept off this page entirely on 8/28/26 -- they are what
+  // the CEO close-out survey asks about. Greg (9/19/26) made that a per
+  // engagement choice instead: the switch on Add Research, off by default.
+  // The page needs no flag of its own -- with the switch off the payload
+  // simply carries no questions, so "render whatever questions arrive" is
+  // the whole rule.
   function renderResearchAreaBody(entriesIn) {
-    const entries = (entriesIn || []).filter((e) => e && e.documents && e.documents.length);
+    const all = entriesIn || [];
+    const questions = all
+      .map((e) => e && typeof e.question === "string" ? e.question.trim() : "")
+      .filter(Boolean);
+    const docEntries = all.filter((e) => e && e.documents && e.documents.length);
     // Greg (8/29/26): "the conclusion is obvious" -- an empty research area
     // just shows as a blank white box now instead of spelling out "Nothing
     // here yet." The box itself (rc-body's padding) still gives it some
     // visible height even with nothing inside.
-    if (!entries.length) return "";
-    return entries.map((entry) => `
+    if (!questions.length && !docEntries.length) return "";
+    const questionsHtml = questions.length ? `
+      <div class="rc-questions">
+        <div class="rc-questions-label">Research questions</div>
+        <ul>${questions.map((q) => `<li>${escapeHtml(q)}</li>`).join("")}</ul>
+      </div>
+    ` : "";
+    return questionsHtml + docEntries.map((entry) => `
       <div class="rc-question-block">
         ${renderDocLinks(entry.documents)}
       </div>
