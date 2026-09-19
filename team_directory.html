@@ -1015,6 +1015,13 @@
   // count in the summary row, so that number doesn't wobble based on who
   // happens to be assigned one today.
   const SPECIALTY_FILTER_KEYS = Object.keys(SPECIALTY_LABELS);
+  // Greg (9/19/26): "remove Team Lead checkbox from specialty selection as you
+  // cannot select yourself as a Team Lead." Being a Team Lead is a Role an
+  // Admin grants, not a box anyone can tick, so it is not offered in either
+  // checkbox group. It stays in SPECIALTY_LABELS -- the roster still needs the
+  // word to label the people who hold it, and the filter still needs it to
+  // find them -- and the save handlers keep it in step with the Role instead.
+  const SPECIALTY_PICK_KEYS = SPECIALTY_FILTER_KEYS.filter((k) => k !== "team_lead");
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -1245,7 +1252,7 @@
   // both forms and the filter dropdown below always stay in sync.
   function buildSpecialtyCheckboxes(containerId, namePrefix) {
     const container = $(containerId);
-    container.innerHTML = SPECIALTY_FILTER_KEYS.map((key) => `
+    container.innerHTML = SPECIALTY_PICK_KEYS.map((key) => `
       <label class="specialty-check-item">
         <input type="checkbox" value="${key}" id="${namePrefix}-${key}" />
         ${escapeHtml(SPECIALTY_LABELS[key])}
@@ -1802,6 +1809,9 @@
     $("add-error").style.display = "none";
 
     const specialties = getCheckedSpecialties("add-specialties");
+    // Same rule as the profile (Greg, 9/19/26): the Role picked above is what
+    // makes someone a Team Lead, and the specialty follows it.
+    if ($("add-role").value === "team_lead") specialties.unshift("team_lead");
     const payload = {
       full_name: $("add-name").value.trim(),
       email: $("add-email").value.trim(),
@@ -2449,7 +2459,14 @@
       return;
     }
 
+    // The checkbox group no longer offers Team Lead, so it can't report one
+    // either -- the Role is what says whether this person is a Team Lead, and
+    // the specialty is written to match it. That keeps the roster's label and
+    // the Team Lead filter honest in both directions: promote someone and the
+    // tag appears, move them back to Specialist and it goes.
+    const nextRole = isSuperAdmin ? $("pf-role").value : u.role;
     const specialties = getCheckedSpecialties("pf-specialties");
+    if (nextRole === "team_lead") specialties.unshift("team_lead");
     const payload = {
       // No title here on purpose (Greg, 9/19/26): the field is gone from the
       // form, and writing it from a control that no longer exists would blank
