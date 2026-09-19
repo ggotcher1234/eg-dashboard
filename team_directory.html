@@ -249,7 +249,6 @@
   tbody td { padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover { background: #fafbfc; }
-  td.actions { text-align: right; white-space: nowrap; position: relative; }
 
   .member-name { font-weight: 700; color: var(--navy); font-size: 13.5px; line-height: 1.3; }
   .member-role-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
@@ -275,10 +274,9 @@
   .contact-link:hover { text-decoration: underline; }
   .contact-link svg { opacity: 0.65; flex-shrink: 0; }
 
-  /* Manage dropdown replaced (Greg, 8/19/26) with a plain Edit button plus
-     a minimal delete icon, matching the Programs page pattern. */
-  .delete-row-btn { background: transparent; border: none; color: var(--muted); font-size: 17px; padding: 4px 8px; line-height: 1; cursor: pointer; }
-  .delete-row-btn:hover { color: var(--danger-dark); }
+  /* The roster row's Edit button and delete icon (Greg, 8/19/26) are both
+     gone as of 9/19/26 -- the name opens the profile, and Remove from Roster
+     lives inside it. No row on this table carries a control now. */
   .avatar-sm {
     width: 28px; height: 28px; border-radius: 50%; background: var(--navy-light); color: #fff;
     display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; flex-shrink: 0;
@@ -325,6 +323,14 @@
   .field-static a { color: var(--navy-light); }
   .field-static.muted { color: var(--muted); font-style: italic; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+  /* Sits hard left of Close/Save: it is the destructive one, so it should not
+     be the button your hand lands on, and it should not look like the two that
+     end the dialog harmlessly (Greg, 9/19/26). */
+  .btn-danger-quiet {
+    margin-right: auto; background: transparent; border: 1px solid var(--border);
+    color: var(--danger-dark); font-weight: 600;
+  }
+  .btn-danger-quiet:hover { background: #fdf2f2; border-color: var(--danger-dark); }
   .readonly-hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
   .field-error { color: var(--danger); font-size: 12px; margin-top: 8px; }
   .import-row { display: flex; justify-content: space-between; gap: 10px; padding: 5px 2px; font-size: 12.5px; border-bottom: 1px solid #f0f2f4; }
@@ -492,7 +498,7 @@
   @media print {
     body { background: #fff; }
     .no-print, header, .ai-drawer-overlay, .ai-drawer, #banner, .search-wrap, #roster-import-btn,
-    #roster-print-btn, #import-btn, #workload-section, td.actions { display: none !important; }
+    #roster-print-btn, #import-btn, #workload-section { display: none !important; }
     main { max-width: none; margin: 0; padding: 0; }
     table { border: 1px solid #ccc; }
   }
@@ -742,10 +748,6 @@
           <th class="sortable" data-sort="address" id="th-address">Address<span class="sort-arrow"></span></th>
           <th style="width:150px; white-space:nowrap;">Phone</th>
           <th>Email</th>
-          <!-- Just the delete icon now (Greg, 9/19/26) -- 1% makes the browser
-               give this column only what that icon needs and hand the rest to
-               Address and Email. -->
-          <th style="width:1%;"></th>
         </tr>
       </thead>
       <tbody id="team-tbody"></tbody>
@@ -905,6 +907,9 @@
       <textarea id="pf-about" placeholder="A short bio…"></textarea>
 
       <div class="modal-actions">
+        <!-- Admin only, and never on your own profile -- deleting the account
+             you are signed in with has no good outcome (Greg, 9/19/26). -->
+        <button type="button" class="btn-danger-quiet hidden" id="profile-delete">Remove from Roster</button>
         <button type="button" class="btn-secondary" id="profile-cancel">Close</button>
         <button type="submit" class="btn-primary hidden" id="profile-save">Save</button>
       </div>
@@ -1726,16 +1731,13 @@
       const phoneDisplay = formatPhoneDisplay(u.phone);
 
       // Greg (9/19/26): "remove the edit and view buttons as they are
-      // redundant. clicking on the name opens for edits already. expand the
-      // other rows to use the space currently used by this column." The name
-      // has always opened the same profile the button did -- and it underlines
-      // on hover to say so -- so the button was a second door to one room.
-      // Delete stays: it is the one thing the name doesn't do, and it is a
-      // Super Admin action. Without the button beside it the column shrinks to
-      // the width of that one icon, which is where the space comes from.
-      const actionsCell = isSuperAdmin
-        ? `<button type="button" class="delete-row-btn" onclick="openDelete('${u.id}')" title="Delete ${escapeHtml(u.full_name)}">&times;</button>`
-        : "";
+      // redundant. clicking on the name opens for edits already", then "remove
+      // the x's that delete and put them in the profile." So the row carries
+      // no controls at all now -- the name opens the profile (it underlines on
+      // hover to say so), and Remove from Roster lives inside that profile,
+      // next to the Save it sits beside in every other admin flow. A delete
+      // one stray click from a whole column of rows was the riskiest button on
+      // the page; behind a profile it takes two deliberate steps.
 
       tr.innerHTML = `
         <td>
@@ -1753,7 +1755,6 @@
           ? `<a class="contact-link" href="${telHref(u.phone)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>${escapeHtml(phoneDisplay)}</a>`
           : '<span class="cell-muted">Not provided</span>'}</td>
         <td><a class="contact-link" href="mailto:${escapeHtml(u.email)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M22 6l-10 7L2 6"/></svg>${escapeHtml(u.email)}</a></td>
-        <td class="actions">${actionsCell}</td>
       `;
       tbody.appendChild(tr);
     }
@@ -2320,6 +2321,7 @@
     $("pf-hidden-from-roster").checked = !!u.hidden_from_roster;
 
     $("profile-save").classList.toggle("hidden", !canEdit);
+    $("profile-delete").classList.toggle("hidden", !isSuperAdmin || u.id === currentUser.id);
 
     $("relink-section").classList.toggle("hidden", !isSuperAdmin);
     $("relink-new-id").value = "";
@@ -2331,6 +2333,16 @@
 
     $("profile-overlay").classList.add("open");
   }
+
+  // The confirm dialog is its own overlay and sits BELOW this one in the DOM,
+  // so the profile has to close first or the confirmation would open behind it
+  // (Greg, 9/19/26).
+  $("profile-delete").addEventListener("click", () => {
+    const id = $("pf-id").value;
+    if (!id) return;
+    closeProfile();
+    openDelete(id);
+  });
 
   $("profile-cancel").addEventListener("click", closeProfile);
   function closeProfile() {
