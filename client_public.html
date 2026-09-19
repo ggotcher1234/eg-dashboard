@@ -192,6 +192,10 @@
      markers for one item. */
   .rc-question { font-size: 12.5px; line-height: 1.45; color: var(--text); margin-bottom: 5px; }
   .rc-question:last-child { margin-bottom: 0; }
+  /* The files answering the question directly above them (Greg, 9/19/26) --
+     indented so the pairing is visible at a glance. */
+  .rc-question-docs { margin: 6px 0 10px 12px; }
+  .rc-question-docs:last-child { margin-bottom: 0; }
   .rc-question-block { margin-bottom: 12px; }
   .rc-question-block:last-child { margin-bottom: 0; }
   .rc-question-title { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
@@ -976,22 +980,25 @@
   // the whole rule.
   function renderResearchAreaBody(entriesIn) {
     const all = entriesIn || [];
-    const questions = all
-      .map((e) => e && typeof e.question === "string" ? e.question.trim() : "")
-      .filter(Boolean);
-    const docEntries = all.filter((e) => e && e.documents && e.documents.length);
-    // Greg (8/29/26): "the conclusion is obvious" -- an empty research area
-    // just shows as a blank white box now instead of spelling out "Nothing
-    // here yet." The box itself (rc-body's padding) still gives it some
-    // visible height even with nothing inside.
-    if (!questions.length && !docEntries.length) return "";
-    const questionsHtml = questions.length ? `
+    // Greg (9/19/26): files sit under the question they answer. An entry with
+    // question text is that question and its files; the trailing entry
+    // (question: null) is whatever is not tied to one -- which, with the
+    // switch off, is every file in the area, exactly as before.
+    const questionEntries = all.filter((e) => e && typeof e.question === "string" && e.question.trim());
+    const looseEntries = all.filter((e) => e && !e.question && e.documents && e.documents.length);
+    if (!questionEntries.length && !looseEntries.length) return "";
+
+    const questionsHtml = questionEntries.length ? `
       <div class="rc-questions">
         <div class="rc-questions-label">Research questions</div>
-        ${questions.map((q) => `<div class="rc-question">${escapeHtml(q)}</div>`).join("")}
+        ${questionEntries.map((e) => `
+          <div class="rc-question">${escapeHtml(e.question.trim())}</div>
+          ${e.documents && e.documents.length ? `<div class="rc-question-docs">${renderDocLinks(e.documents)}</div>` : ""}
+        `).join("")}
       </div>
     ` : "";
-    return questionsHtml + docEntries.map((entry) => `
+
+    return questionsHtml + looseEntries.map((entry) => `
       <div class="rc-question-block">
         ${renderDocLinks(entry.documents)}
       </div>

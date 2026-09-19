@@ -167,6 +167,15 @@
   .meta-line a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
   .meta-line a:hover { text-decoration: underline; }
   .overview-top-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  /* One question and the files that answer it, as a single block (Greg,
+     9/19/26). The left rule is what says "these files belong to that
+     question" without boxing every group in its own card. */
+  .rq-question-group { margin-bottom: 14px; }
+  .rq-question-group .rq-question-docs,
+  .rq-question-group .rq-question-add,
+  .rq-question-group .rq-link-form { margin-left: 22px; border-left: 2px solid var(--border); padding-left: 14px; }
+  .rq-question-group .rq-question-docs:empty { display: none; }
+  .rq-question-group .rq-question-add { padding-top: 6px; padding-bottom: 2px; }
   .show-questions-toggle {
     display: flex; align-items: flex-start; gap: 9px; margin: 0 0 16px; cursor: pointer;
     font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35;
@@ -1301,13 +1310,20 @@
           <span class="accordion-hint">${isOpen ? "Click to close" : "Click to open"}</span>
         </div>
         <div class="accordion-body ${isOpen ? "open" : ""}" id="ra-${key}-body">
+          <!-- Greg (9/19/26): "i need to be able to associate research links
+               and documents under the appropriate question." Each question is
+               its own block now, with its files beneath it and its own add
+               buttons, so a file is filed in the right place when it arrives
+               rather than sorted out later. The group below them holds
+               anything not tied to a question -- files that pre-date this, and
+               anything deliberately filed under the area itself. -->
           <div class="rq-docs-label">Research Questions</div>
           <div id="ra-${key}-questions"></div>
           <div class="rq-add-row" style="margin-bottom:16px;">
             <button type="button" class="btn-secondary btn-sm" data-area-add-question="${key}">+ Add Question</button>
           </div>
 
-          <div class="rq-docs-label">Documents &amp; Links</div>
+          <div class="rq-docs-label" id="ra-${key}-untied-label">Not tied to a question</div>
           <div id="ra-${key}-docs"></div>
           <div class="rq-add-row">
             <button type="button" class="btn-secondary btn-sm" data-area-add-doc="${key}">+ Add Document</button>
@@ -1402,11 +1418,18 @@
     RESEARCH_AREAS.forEach(([key]) => { renderAreaQuestions(key); renderAreaDocs(key); });
   }
 
+  // Everything in this area that is NOT under a question: files added before
+  // 9/19/26, and anything filed against the area itself.
   function renderAreaDocs(area) {
     const el = $(`ra-${area}-docs`);
-    const docs = allDocuments.filter((d) => d.research_area === area);
-    el.innerHTML = renderQuestionDocs(docs, `area:${area}`);
+    const docs = allDocuments.filter((d) => d.research_area === area && !d.question_id);
+    el.innerHTML = renderQuestionDocs(docs, `gen:${area}`);
     wireDocRowHandlers(el);
+    // The heading is only worth its space when something is under it -- but
+    // the add buttons stay, since that group is how you file something with
+    // no question.
+    const label = $(`ra-${area}-untied-label`);
+    if (label) label.style.display = docs.length ? "" : "none";
   }
 
   // Research Questions -- flat list of question text per area, no document
@@ -1419,16 +1442,74 @@
     if (!questions.length) {
       el.innerHTML = `<div class="field-hint" style="margin-bottom:10px;">No research questions yet — these are what the CEO close-out survey asks about.</div>`;
     } else {
-      el.innerHTML = questions.map((q) => `
-        <div class="rq-doc-row rq-question-row">
-          <textarea class="row-input-edit rq-question-input" rows="1" data-question-id="${q.id}" placeholder="e.g. Who are our fastest-growing competitors?">${escapeHtml(q.question || "")}</textarea>
-          <button type="button" class="btn-danger icon-btn" data-delete-question="${q.id}" title="Delete">&times;</button>
+      el.innerHTML = questions.map((q) => {
+        const hasText = !!(q.question && q.question.trim());
+        const gate = hasText ? "" : ' disabled title="Give this question some text first."';
+        return `
+        <div class="rq-question-group" data-question-group="${q.id}">
+          <div class="rq-doc-row rq-question-row">
+            <textarea class="row-input-edit rq-question-input" rows="1" data-question-id="${q.id}" placeholder="e.g. Who are our fastest-growing competitors?">${escapeHtml(q.question || "")}</textarea>
+            <button type="button" class="btn-danger icon-btn" data-delete-question="${q.id}" title="Delete this question — its files stay, untied">&times;</button>
+          </div>
+          <div class="rq-question-docs" id="rq-docs-${q.id}"></div>
+          <div class="rq-add-row rq-question-add">
+            <button type="button" class="btn-secondary btn-sm" data-q-add-doc="${q.id}" data-area="${area}"${gate}>+ Add Document</button>
+            <button type="button" class="btn-secondary btn-sm" data-q-add-link="${q.id}" data-area="${area}"${gate}>+ Add Link</button>
+          </div>
+          <div class="rq-link-form" id="rq-link-form-${q.id}">
+            <div class="field">
+              <label for="rq-link-label-${q.id}">Label</label>
+              <input type="text" id="rq-link-label-${q.id}" placeholder="e.g. Listening Post" />
+            </div>
+            <div class="field">
+              <label for="rq-link-url-${q.id}">URL</label>
+              <input type="text" id="rq-link-url-${q.id}" placeholder="https://…" />
+            </div>
+            <button type="button" class="btn-primary btn-sm" data-q-save-link="${q.id}" data-area="${area}">Save Link</button>
+            <button type="button" class="btn-secondary btn-sm" data-q-cancel-link="${q.id}">Cancel</button>
+          </div>
         </div>
-      `).join("");
+      `;
+      }).join("");
       el.querySelectorAll(".rq-question-input").forEach(autosizeQuestion);
       wireQuestionHandlers(el, area);
+      wireQuestionDocButtons(el, area);
+      questions.forEach((q) => renderQuestionGroupDocs(area, q.id));
     }
     updateAreaAddButtonsState(area);
+  }
+
+  // The files under one question.
+  function renderQuestionGroupDocs(area, questionId) {
+    const el = $(`rq-docs-${questionId}`);
+    if (!el) return;
+    const docs = allDocuments.filter((d) => d.research_area === area && d.question_id === questionId);
+    el.innerHTML = renderQuestionDocs(docs, `q:${area}:${questionId}`);
+    wireDocRowHandlers(el);
+  }
+
+  function wireQuestionDocButtons(scopeEl, area) {
+    scopeEl.querySelectorAll("[data-q-add-doc]").forEach((btn) => {
+      btn.addEventListener("click", () => pickAreaDocuments(area, btn.dataset.qAddDoc));
+    });
+    scopeEl.querySelectorAll("[data-q-add-link]").forEach((btn) => {
+      const form = $(`rq-link-form-${btn.dataset.qAddLink}`);
+      btn.addEventListener("click", () => {
+        form.classList.toggle("open");
+        if (form.classList.contains("open")) $(`rq-link-label-${btn.dataset.qAddLink}`).focus();
+      });
+    });
+    scopeEl.querySelectorAll("[data-q-cancel-link]").forEach((btn) => {
+      const qid = btn.dataset.qCancelLink;
+      btn.addEventListener("click", () => {
+        $(`rq-link-form-${qid}`).classList.remove("open");
+        $(`rq-link-label-${qid}`).value = "";
+        $(`rq-link-url-${qid}`).value = "";
+      });
+    });
+    scopeEl.querySelectorAll("[data-q-save-link]").forEach((btn) => {
+      btn.addEventListener("click", () => saveAreaLink(area, btn.dataset.qSaveLink));
+    });
   }
 
   // Greg (8/28/26): a document or link has to be answering *something* --
@@ -1491,10 +1572,14 @@
     });
     scopeEl.querySelectorAll("[data-delete-question]").forEach((btn) => {
       btn.addEventListener("click", async () => {
+        const tied = allDocuments.filter((d) => d.question_id === btn.dataset.deleteQuestion).length;
+        if (tied && !confirm(`${tied} file${tied === 1 ? "" : "s"} sit under this question. Deleting it keeps ${tied === 1 ? "that file" : "those files"} and moves ${tied === 1 ? "it" : "them"} to "Not tied to a question". Delete the question?`)) return;
         const { error } = await sb.from("client_research_questions").delete().eq("id", btn.dataset.deleteQuestion);
         if (error) { showBanner("Couldn't delete question: " + error.message, "error"); return; }
-        await loadResearchQuestions();
-        RESEARCH_AREAS.forEach(([key]) => renderAreaQuestions(key));
+        // Its documents came loose rather than going with it (migration 124),
+        // so both halves of every area have to be redrawn.
+        await Promise.all([loadResearchQuestions(), loadDocuments()]);
+        RESEARCH_AREAS.forEach(([key]) => { renderAreaQuestions(key); renderAreaDocs(key); });
       });
     });
   }
@@ -1575,7 +1660,7 @@
         const { error } = await sb.from("documents").update({ display_name: value }).eq("id", doc.id);
         if (error) { showBanner("Couldn't rename: " + error.message, "error"); return; }
         await loadDocuments();
-        RESEARCH_AREAS.forEach(([key]) => renderAreaDocs(key));
+        RESEARCH_AREAS.forEach(([key]) => { renderAreaQuestions(key); renderAreaDocs(key); });
       });
     });
     scopeEl.querySelectorAll("[data-delete-doc]").forEach((btn) => {
@@ -1585,7 +1670,7 @@
         const { error } = await sb.from("documents").delete().eq("id", btn.dataset.deleteDoc);
         if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
         await loadDocuments();
-        RESEARCH_AREAS.forEach(([key]) => renderAreaDocs(key));
+        RESEARCH_AREAS.forEach(([key]) => { renderAreaQuestions(key); renderAreaDocs(key); });
       });
     });
     wireDocDragHandlers(scopeEl);
@@ -1659,12 +1744,23 @@
     });
   }
 
+  // A scope is one draggable list. Since 9/19/26 an area has several: one
+  // per question ("q:<area>:<questionId>") and the untied group
+  // ("gen:<area>"). Dragging moves a row within its own list; to move a file
+  // to a different question, delete it there and add it here -- the same
+  // gesture as before, one list at a time.
+  function parseScope(scope) {
+    const parts = scope.split(":");
+    return parts[0] === "q" ? { area: parts[1], questionId: parts[2] } : { area: parts[1], questionId: null };
+  }
+
   // Docs for a given scope, in their current display order -- allDocuments
   // is already sorted (sort_order asc, uploaded_at desc) by loadDocuments(),
   // so filtering it preserves that order without a re-sort.
   function docsForScope(scope) {
-    const [, id] = scope.split(":");
-    return allDocuments.filter((d) => d.research_area === id);
+    const { area, questionId } = parseScope(scope);
+    return allDocuments.filter((d) => d.research_area === area
+      && (questionId ? d.question_id === questionId : !d.question_id));
   }
 
   // This is the one control that sets the order BOTH this page and the
@@ -1687,14 +1783,29 @@
   async function applyDocOrder(ordered, scope) {
     // Paint the new order immediately, then persist. A reorder that waited
     // on six round trips before moving anything feels broken.
-    const [, area] = scope.split(":");
+    //
+    // sort_order stays area-wide, because that single number is also what
+    // orders the client dashboard. So the whole area is rebuilt in display
+    // order -- each question's list in turn, then the untied group, with the
+    // dragged list swapped in -- and renumbered 1..n across all of it. Doing
+    // it per group instead would hand two files in the same area the same
+    // number, and the dashboard would pick between them arbitrarily.
+    const { area, questionId } = parseScope(scope);
+    const groupFor = (qid) => (qid === questionId
+      ? ordered
+      : allDocuments.filter((d) => d.research_area === area && (qid ? d.question_id === qid : !d.question_id)));
+    const areaOrdered = [];
+    allQuestions.filter((q) => q.research_area === area).forEach((q) => areaOrdered.push(...groupFor(q.id)));
+    areaOrdered.push(...groupFor(null));
+
     const rest = allDocuments.filter((d) => d.research_area !== area);
-    allDocuments = rest.concat(ordered.map((d, i) => ({ ...d, sort_order: i + 1 })));
+    allDocuments = rest.concat(areaOrdered.map((d, i) => ({ ...d, sort_order: i + 1 })));
+    renderAreaQuestions(area);
     renderAreaDocs(area);
-    if (!(await persistDocOrder(ordered))) {
+    if (!(await persistDocOrder(areaOrdered))) {
       // Put the screen back to what the database actually holds.
       await loadDocuments();
-      RESEARCH_AREAS.forEach(([key]) => renderAreaDocs(key));
+      RESEARCH_AREAS.forEach(([key]) => { renderAreaQuestions(key); renderAreaDocs(key); });
     }
   }
 
@@ -1736,18 +1847,19 @@
     return existing.length ? Math.max(...existing.map((d) => d.sort_order || 0)) + 1 : 1;
   }
 
-  function pickAreaDocuments(area) {
+  // questionId is null for the "not tied to a question" group.
+  function pickAreaDocuments(area, questionId) {
     const picker = document.createElement("input");
     picker.type = "file";
     picker.multiple = true;
-    picker.addEventListener("change", () => { if (picker.files.length) uploadAreaDocuments(area, picker.files); });
+    picker.addEventListener("change", () => { if (picker.files.length) uploadAreaDocuments(area, picker.files, questionId || null); });
     picker.click();
   }
 
   // An area can have any number of documents attached — this always takes
   // a FileList (even a single-file selection is a FileList of 1) so one
   // trip through the file picker can attach several at once.
-  async function uploadAreaDocuments(area, fileList) {
+  async function uploadAreaDocuments(area, fileList, questionId) {
     let nextSortOrder = nextSortOrderForArea(area);
     const errors = [];
     for (const file of Array.from(fileList)) {
@@ -1761,6 +1873,7 @@
       const { error: rowErr } = await sb.from("documents").insert({
         client_id: currentClient.id,
         research_area: area,
+        question_id: questionId || null,
         file_name: file.name,
         display_name: displayName,
         storage_path: path,
@@ -1772,6 +1885,7 @@
     }
     if (errors.length) showBanner("Some files didn't upload: " + errors.join("; "), "error");
     await loadDocuments();
+    renderAreaQuestions(area);
     renderAreaDocs(area);
   }
 
@@ -1780,9 +1894,10 @@
   // app itself, like the Listening Post, not a document to upload." Stored
   // as a documents row same as a file, just with url set and storage_path
   // left null.
-  async function saveAreaLink(area) {
-    const labelInput = $(`ra-link-label-${area}`);
-    const urlInput = $(`ra-link-url-${area}`);
+  async function saveAreaLink(area, questionId) {
+    const suffix = questionId || area;
+    const labelInput = questionId ? $(`rq-link-label-${questionId}`) : $(`ra-link-label-${area}`);
+    const urlInput = questionId ? $(`rq-link-url-${questionId}`) : $(`ra-link-url-${area}`);
     let url = urlInput.value.trim();
     if (!url) { showBanner("Enter a URL first.", "error"); return; }
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
@@ -1791,6 +1906,7 @@
     const { error } = await sb.from("documents").insert({
       client_id: currentClient.id,
       research_area: area,
+      question_id: questionId || null,
       file_name: label,
       storage_path: null,
       url,
@@ -1802,9 +1918,10 @@
 
     labelInput.value = "";
     urlInput.value = "";
-    const form = $(`ra-link-form-${area}`);
+    const form = questionId ? $(`rq-link-form-${questionId}`) : $(`ra-link-form-${area}`);
     if (form) form.classList.remove("open");
     await loadDocuments();
+    renderAreaQuestions(area);
     renderAreaDocs(area);
   }
 </script>
