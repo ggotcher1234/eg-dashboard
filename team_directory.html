@@ -865,8 +865,29 @@
       <input type="hidden" id="pf-id" />
       <hr />
 
-      <label for="pf-title">Title</label>
-      <input type="text" id="pf-title" placeholder="e.g. GIS Researcher" />
+      <!-- Greg (9/19/26): "delete Title as it is redundant to role. move role
+           to the top where Title is now and put the specialty selection boxes
+           directly under the Role dropdown." Role and Specialties are what the
+           rest of the app actually reads -- who can be a Team Lead, who shows
+           up in which pick list -- so they open the profile, and the contact
+           details follow. Title is gone from this form entirely; any value
+           already stored is left alone rather than blanked on the next save. -->
+      <label for="pf-role">Role <span id="pf-role-lock-note" style="font-weight:400; text-transform:none;">(Admin only)</span></label>
+      <select id="pf-role">
+        <option value="consultant">Specialist</option>
+        <option value="team_lead">Team Lead</option>
+        <option value="super_admin">Admin</option>
+      </select>
+
+      <label>Specialties <span style="font-weight:400; text-transform:none;">(pick any that apply)</span></label>
+      <div class="specialty-checks" id="pf-specialties"></div>
+
+      <label id="pf-hidden-wrap" class="hidden" style="display:flex; align-items:flex-start; gap:8px; font-weight:400; text-transform:none; margin-top:10px;">
+        <input type="checkbox" id="pf-hidden-from-roster" style="width:auto; margin-top:3px;" />
+        <span>Hide from Roster <span style="color:var(--muted);">— keeps full Admin access, but removes this person from the Roster, every specialist / team-lead pick list, and global search.</span></span>
+      </label>
+
+      <hr style="margin:18px 0;" />
 
       <label for="pf-company">Company</label>
       <input type="text" id="pf-company" placeholder="e.g. Acme Consulting" />
@@ -885,23 +906,6 @@
 
       <label for="pf-timezone">Time Zone</label>
       <input type="text" id="pf-timezone" placeholder="e.g. Mountain" />
-
-      <hr style="margin:18px 0;" />
-
-      <label>Specialties <span style="font-weight:400; text-transform:none;">(pick any that apply)</span></label>
-      <div class="specialty-checks" id="pf-specialties"></div>
-
-      <label for="pf-role">Role <span id="pf-role-lock-note" style="font-weight:400; text-transform:none;">(Admin only)</span></label>
-      <select id="pf-role">
-        <option value="consultant">Specialist</option>
-        <option value="team_lead">Team Lead</option>
-        <option value="super_admin">Admin</option>
-      </select>
-
-      <label id="pf-hidden-wrap" class="hidden" style="display:flex; align-items:flex-start; gap:8px; font-weight:400; text-transform:none; margin-top:10px;">
-        <input type="checkbox" id="pf-hidden-from-roster" style="width:auto; margin-top:3px;" />
-        <span>Hide from Roster <span style="color:var(--muted);">— keeps full Admin access, but removes this person from the Roster, every specialist / team-lead pick list, and global search.</span></span>
-      </label>
 
       <label for="pf-about">About</label>
       <textarea id="pf-about" placeholder="A short bio…"></textarea>
@@ -2290,12 +2294,13 @@
 
     renderAvatarField(u, canEdit);
     $("pf-name").textContent = u.full_name;
-    $("pf-title-display").textContent = u.title || specialtyLabelsForDisplay(u).join(", ") || "";
+    // Was u.title with specialties as the fallback; Title left the form on
+    // 9/19/26, so the specialties are the line.
+    $("pf-title-display").textContent = specialtyLabelsForDisplay(u).join(", ");
     $("pf-role-badge").textContent = ROLE_LABELS[u.role] || u.role;
     $("pf-role-badge").className = "role-badge " + u.role;
 
     $("pf-id").value = u.id;
-    $("pf-title").value = u.title || "";
     $("pf-company").value = u.company_name || "";
     setCheckedSpecialties("pf-specialties", u.specialties, !canEdit);
     $("pf-role").value = u.role;
@@ -2307,7 +2312,6 @@
     $("pf-email-display").innerHTML = `<a href="mailto:${escapeHtml(u.email)}">${escapeHtml(u.email)}</a>`;
 
     // Lock down fields the viewer isn't allowed to touch
-    $("pf-title").disabled = !canEdit;
     $("pf-company").disabled = !canEdit;
     $("pf-about").disabled = !canEdit;
     $("pf-secondary-email").disabled = !canEdit;
@@ -2447,7 +2451,9 @@
 
     const specialties = getCheckedSpecialties("pf-specialties");
     const payload = {
-      title: $("pf-title").value.trim() || null,
+      // No title here on purpose (Greg, 9/19/26): the field is gone from the
+      // form, and writing it from a control that no longer exists would blank
+      // out whatever is already stored.
       company_name: $("pf-company").value.trim() || null,
       // Kept in sync with the first checked specialty for backward compat
       // with anything still reading the old single-value column; the real
