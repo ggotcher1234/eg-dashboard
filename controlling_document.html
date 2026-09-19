@@ -99,8 +99,8 @@
     .field-row { flex-direction: column; }
   }
 
-  /* Research questions -- dynamic list per area, numbered continuously
-     1..N across all four cards (see renderQuestions()). Greg (9/1/26):
+  /* Research questions -- dynamic list per area, unnumbered as of 9/19/26
+     (any numbering is typed into the question text itself). Greg (9/1/26):
      each question is now three stacked, independently-scrollable fields
      -- Question (red), Background (black), Customer ranking & notes
      (blue) -- instead of one textarea whose first line was the question. */
@@ -108,12 +108,17 @@
   .cd-q-row { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; background: #fcfdfe; }
   .cd-q-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
   .cd-q-row.collapsed .cd-q-head { margin-bottom: 0; }
-  /* Head doubles as the accordion toggle -- click "Question N" to roll the
-     row up when it's empty / not needed. All rows start expanded. */
-  .cd-q-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; background: none; border: none; padding: 0; font-family: inherit; cursor: pointer; text-align: left; }
+  /* Expanded, the head is only the chevron and the remove button -- no label
+     any more -- so it doesn't need the full 10px under it. */
+  .cd-q-row:not(.collapsed) .cd-q-head { margin-bottom: 4px; }
+  /* Head doubles as the accordion toggle -- click anywhere along it to roll
+     the row up when it's empty / not needed. It carries no label of its own
+     (the red QUESTION label over the textarea is the card's only one); the
+     chevron plus, when collapsed, the question preview is all it shows. The
+     button still spans the row so the click target stays full-width. */
+  .cd-q-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 22px; background: none; border: none; padding: 0; font-family: inherit; cursor: pointer; text-align: left; }
   .cd-q-chevron { flex-shrink: 0; color: var(--navy-light); font-size: 11px; transform: rotate(90deg); transition: transform 0.15s ease; }
   .cd-q-row.collapsed .cd-q-chevron { transform: rotate(0deg); }
-  .cd-q-headlabel { flex-shrink: 0; font-size: 13px; font-weight: 700; color: var(--navy); }
   .cd-q-preview { min-width: 0; font-size: 12.5px; font-weight: 400; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cd-q-preview-empty { font-style: italic; }
   .cd-q-row:not(.collapsed) .cd-q-preview { display: none; }
@@ -471,17 +476,20 @@
             <div class="cd-q-head">
               <button type="button" class="cd-q-toggle" aria-expanded="${row.collapsed ? "false" : "true"}">
                 <span class="cd-q-chevron">&#9656;</span>
-                <!-- Greg (9/19/26): "the word Question 1 is redundant... we
-                     just need Question and then a box to enter the question,
-                     and question number should we want one." The header used
-                     to number every card 1..n across all four areas, which
-                     fought with the numbering people type into the question
-                     itself ("1. Where is the opportunity?") -- two numbering
-                     schemes on one card, and they drifted apart as soon as a
-                     question was added or deleted anywhere above. The typed
-                     one is the one that carries through to the dashboard and
-                     the close-out survey, so it wins; this is just a label. -->
-                <span class="cd-q-headlabel">Question</span>
+                <!-- Greg (9/19/26): "There are still 2 redundant questions on
+                     this form... i just want 1 question shown for each
+                     question." The card used to say "Question" twice: once as
+                     this accordion header label and again as the red field
+                     label over the textarea. The field label is the one that
+                     survives -- it pairs with BACKGROUND / PRIORITY / CUSTOMER
+                     NOTES below it. The header keeps only the chevron and, when
+                     the card is collapsed, a preview of the typed question,
+                     which identifies the card better than the word ever did.
+                     Earlier same day, the trailing number went too: the header
+                     numbered cards 1..n across all four areas, which fought
+                     with the numbering people type into the question itself
+                     ("1. Where is the opportunity?"). The typed one carries
+                     through to the dashboard and the close-out survey. -->
                 <span class="cd-q-preview${qprev ? "" : " cd-q-preview-empty"}">${escapeHtml(qprevText)}</span>
               </button>
               <button type="button" class="cd-q-del no-print" title="Remove question">&times;</button>
