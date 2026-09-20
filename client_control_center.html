@@ -824,7 +824,14 @@
          that information is already in the box below." The engagement card
          names the Program on its own line, two inches under this bar, so the
          trail starts at Engagements. -->
-    <div class="breadcrumb"><a href="index.html">Engagements</a><span class="sep">›</span><span class="current" id="bc-client">Engagement</span></div>
+    <!-- Greg (9/20/26): "add breadcrumbs in the heading for each item in the
+         left menu." The trail used to stop at the engagement, so every one of
+         the eleven left-menu panes read the same up here. The engagement name
+         becomes a link back to Team & Hours (the workspace's home pane) and
+         the third crumb names whichever nav row is open. View Dashboard is the
+         one row that doesn't touch it -- it opens a new tab, so this page's
+         trail hasn't moved. -->
+    <div class="breadcrumb"><a href="index.html">Engagements</a><span class="sep">›</span><a href="#" id="bc-client">Engagement</a><span class="sep">›</span><span class="current" id="bc-pane">Team &amp; Hours</span></div>
   </nav>
 
   <div class="ai-drawer-overlay no-print" id="ai-drawer-overlay"></div>
@@ -1476,7 +1483,18 @@
 
     const partner = client.econ_dev_companies;
     $("cm-name").textContent = client.name;
-    const _bcC = document.getElementById("bc-client"); if (_bcC) _bcC.textContent = client.name;
+    const _bcC = document.getElementById("bc-client");
+    if (_bcC) {
+      _bcC.textContent = client.name;
+      // Now that a third crumb names the open pane, this one is a real step in
+      // the trail rather than the end of it: clicking it comes back to Team &
+      // Hours, the pane the workspace opens on. Bound once -- renderClient can
+      // run again on a reload.
+      if (!_bcC.dataset.wired) {
+        _bcC.dataset.wired = "1";
+        _bcC.addEventListener("click", (e) => { e.preventDefault(); setActivePane("team", null, true); });
+      }
+    }
     // The trail is Engagements › this engagement. It used to open with the
     // Program's name (Chris, 9/4/26, mirroring Podio's workspace › app › item)
     // -- dropped 9/18/26 as a repeat of the "Partner:" line on the card below.
@@ -1568,6 +1586,28 @@
     { key: "review", label: "Research Review" },
     { key: "eval", label: "Close-Out Document" },
   ];
+
+  // Breadcrumb label per nav row. Deliberately its own map rather than a
+  // lookup into navItems: navItems is rebuilt per client and is empty until
+  // renderNav runs, and three of its rows are hidden:true (their real rows are
+  // injected inline), so reading labels off it would leave the crumb blank on
+  // exactly the panes that need it most. "workflow" is not here -- it rotates
+  // through DOC_GROUP_ITEMS and is resolved by activeDocKey.
+  const PANE_CRUMB_LABELS = {
+    team: "Team & Hours",
+    cumulative: "Cumulative Hours",
+    application: "View Application",
+    welcome: "Welcome Email",
+    research: "Add Research",
+    setup: "Company Info",
+  };
+  function paneCrumbLabel(key, docKey) {
+    if (key === "workflow") {
+      const doc = DOC_GROUP_ITEMS.find((d) => d.key === docKey);
+      return doc ? doc.label : "Documents";
+    }
+    return PANE_CRUMB_LABELS[key] || "";
+  }
 
   function navIconSvg(key) {
     const icons = {
@@ -1769,6 +1809,8 @@
         ? (key === "workflow" && btn.dataset.doc === activeDocKey)
         : btn.dataset.pane === key);
     });
+    const _bcPane = document.getElementById("bc-pane");
+    if (_bcPane) _bcPane.textContent = paneCrumbLabel(key, activeDocKey);
     $("cc-pane-team").classList.toggle("hidden", key !== "team");
     $("cc-pane-welcome").classList.toggle("hidden", key !== "welcome");
     if (key === "welcome") renderWelcomePane();
