@@ -250,7 +250,10 @@
      line directly above it, and for a specialist who isn't on the team the
      Team & Hours pane already spells out who can change what. */
   .tw-manage-note { margin-top: 12px; padding: 9px 12px; border-radius: 8px; background: var(--note-bg);
-                    border: 1px solid var(--border); font-size: 12.5px; color: var(--muted); }
+                    border: 1px solid var(--border); font-size: 12.5px; color: var(--muted);
+                    transition: opacity 0.4s ease; }
+  .tw-manage-note.tw-note-fading { opacity: 0; }
+  @media (prefers-reduced-motion: reduce) { .tw-manage-note { transition: none; } }
 
   /* Status-age dot -- green under 30 days in the current status, yellow
      under 60, red 60+. Only ever shown for In Progress, since that's the
@@ -2331,6 +2334,20 @@
   // When the assignment controls aren't there, say who they belong to. Before
   // this the table just went quiet, which reads as a bug rather than a
   // permission (Greg, 9/11/26: "i can't add a resource on the hours page").
+  //
+  // Greg (9/20/26): "this warning/error message seems to be permanently on. it
+  // should only show for a few seconds and disappear." It was written as a
+  // standing caption, but it reads as an alert, and an alert that never clears
+  // looks like something is wrong. So it now behaves like one: it appears,
+  // holds for MANAGE_NOTE_MS, fades, and stays gone for the rest of the visit
+  // (manageNoteSpent) rather than flashing again on every re-render -- the
+  // table re-renders whenever hours are logged or the pane is revisited. The
+  // information itself is not lost with it: the engagement card directly above
+  // names the Team Lead on its own line.
+  const MANAGE_NOTE_MS = 6000;
+  let manageNoteTimer = null;
+  let manageNoteSpent = false;
+
   function renderManageNote(canManage, editable) {
     let el = document.getElementById("tw-manage-note");
     if (!el) {
@@ -2340,18 +2357,43 @@
       const home = $("tw-add-row-home");
       home.parentNode.insertBefore(el, home);
     }
-    if (canManage) { el.classList.add("hidden"); return; }
-    el.classList.remove("hidden");
+    // Nothing to explain, or it has already had its few seconds.
+    if (canManage || manageNoteSpent) {
+      clearTimeout(manageNoteTimer);
+      manageNoteTimer = null;
+      el.classList.add("hidden");
+      el.classList.remove("tw-note-fading");
+      return;
+    }
 
     if (!editable) {
       const why = activeClient && activeClient.project_status === "closed" ? "closed" : "On Hold";
       el.textContent = `This engagement is ${why}, so its team and hours are locked. A Super Admin can still make changes.`;
-      return;
+    } else {
+      const tl = teamLeadContact
+        ? `${teamLeadContact.name}${teamLeadContact.email ? ` (${teamLeadContact.email})` : ""}`
+        : "this engagement's Team Lead";
+      el.textContent = `Only ${tl} or a Super Admin can change who's assigned here. You can still log your own hours.`;
     }
-    const tl = teamLeadContact
-      ? `${teamLeadContact.name}${teamLeadContact.email ? ` (${teamLeadContact.email})` : ""}`
-      : "this engagement's Team Lead";
-    el.textContent = `Only ${tl} or a Super Admin can change who's assigned here. You can still log your own hours.`;
+
+    el.classList.remove("hidden", "tw-note-fading");
+
+    // Start the clock ONCE and let it run out. Restarting it on every render
+    // would reproduce the bug being fixed: renderTeamHours runs again whenever
+    // hours are logged or the pane is revisited, and each of those would push
+    // the countdown back, so on a busy screen the note would never clear.
+    if (manageNoteTimer) return;
+    manageNoteTimer = setTimeout(() => {
+      el.classList.add("tw-note-fading");
+      // Wait out the opacity transition before pulling it from the flow, so
+      // the table below doesn't jump while the note is still on screen.
+      manageNoteTimer = setTimeout(() => {
+        el.classList.add("hidden");
+        el.classList.remove("tw-note-fading");
+        manageNoteTimer = null;
+        manageNoteSpent = true;
+      }, 450);
+    }, MANAGE_NOTE_MS);
   }
 
   function renderTeamTable(canManage) {
