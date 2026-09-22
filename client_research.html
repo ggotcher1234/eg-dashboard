@@ -1900,6 +1900,17 @@
     const urlInput = questionId ? $(`rq-link-url-${questionId}`) : $(`ra-link-url-${area}`);
     let url = urlInput.value.trim();
     if (!url) { showBanner("Enter a URL first.", "error"); return; }
+    // Greg (9/22/26): a blob:/data:/javascript: URL copied out of a browser
+    // tab (e.g. from a just-opened document preview) looks like a real
+    // address but only lives in the tab that created it -- saved here it
+    // just becomes a dead link that gets blocked when clicked later. Catch
+    // it before it's stored instead of silently https://-prefixing it into
+    // a mangled, equally-dead URL. Use "+ Add Document" to upload the file
+    // itself instead -- that regenerates a working preview link on demand.
+    if (/^(blob|data|javascript|file):/i.test(url)) {
+      showBanner(`That's a temporary browser link (starts with "${url.split(":")[0]}:"), not a permanent web address -- it stops working once the tab that made it closes. Use "+ Add Document" to upload the actual file instead.`, "error");
+      return;
+    }
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     const label = labelInput.value.trim() || url;
 

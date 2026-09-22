@@ -2971,6 +2971,14 @@
     const url = $("rv-new-url").value.trim();
     const fileInput = $("rv-new-file");
     if (!title) { showBanner("Title is required.", "error"); return; }
+    // Greg (9/22/26): same guard as client_research.html's saveAreaLink --
+    // a blob:/data:/javascript: URL only lives in the tab that created it,
+    // so saving one here just produces a dead link. Upload the file with
+    // the file picker above instead.
+    if (url && /^(blob|data|javascript|file):/i.test(url)) {
+      showBanner(`That's a temporary browser link (starts with "${url.split(":")[0]}:"), not a permanent web address -- it stops working once the tab that made it closes. Use the file picker above to upload the actual file instead.`, "error");
+      return;
+    }
 
     let storagePath = null;
     if (fileInput.files.length) {
