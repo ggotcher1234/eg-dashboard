@@ -2502,6 +2502,16 @@ Respond ONLY with valid JSON:
             'california','calif.','sacramento','northern california','norcal',
             'bay area','central valley','tahoe'
         ];
+        // Postal abbreviations for the same off-target states. Two-letter
+        // codes collide with common English words ("OR", "IN", "ME", "HI"),
+        // so these only match in the "City, XX" dateline/byline pattern
+        // (comma + space immediately before the code), never as bare words.
+        const OFF_TARGET_STATE_ABBR = [
+            'al','ak','az','ar','co','ct','de','fl','ga','hi','id','il','in','ia','ks',
+            'ky','la','me','md','ma','mi','mn','ms','mo','mt','ne','nv','nh','nj','nm',
+            'ny','nc','nd','oh','ok','or','pa','ri','sc','sd','tn','tx','ut','vt','va',
+            'wa','wv','wi','wy','dc'
+        ];
 
         function isOffGeographyArticle(article) {
             const text = ((article.title || '') + ' ' + (article.feedTitle || '') + ' ' + (article.company || '')).toLowerCase();
@@ -2513,7 +2523,14 @@ Respond ONLY with valid JSON:
                 const after = idx + term.length >= text.length ? ' ' : text[idx + term.length];
                 return /\W/.test(before) && /\W/.test(after);
             };
-            return OFF_TARGET_STATE_TERMS.some(matches) || OFF_TARGET_CITY_TERMS.some(matches);
+            if (OFF_TARGET_STATE_TERMS.some(matches) || OFF_TARGET_CITY_TERMS.some(matches)) return true;
+            const abbrRe = new RegExp(',\\s*(' + OFF_TARGET_STATE_ABBR.join('|') + ')\\b', 'i');
+            if (abbrRe.test(text)) return true;
+            // JLR is Northern-California-only — a clearly foreign/international
+            // article (Panama Canal, China, etc.) is just as off-territory as
+            // an out-of-state one, so fold the existing foreign-geo check in
+            // here too rather than adding a separate ingestion-time filter.
+            return isForeignArticle(article);
         }
 
         // ── Reference/Junk Source Filter (JLR standalone build) ────────
@@ -2523,20 +2540,38 @@ Respond ONLY with valid JSON:
         // geography, so it's excluded unconditionally — same cost-free pattern.
         const JUNK_TITLE_TERMS = [
             'wikipedia','wiktionary','the free encyclopedia',
-            'merriam-webster','cambridge dictionary','thefreedictionary','dictionary.com','vocabulary.com'
+            'merriam-webster','cambridge dictionary','thefreedictionary','the free dictionary',
+            'dictionary.com','vocabulary.com'
+        ];
+        // Generic business/directory homepage taglines — companies whose name
+        // happens to match a geography query term (e.g. "Central Bank",
+        // "Central Garden & Pet") but the article is just their homepage/nav,
+        // not news. Matched only when they appear as a title-ending tagline
+        // after a "Name | Tagline" or "Name - Tagline" split, to avoid
+        // false-positiving on real headlines that happen to contain these words.
+        const JUNK_HOMEPAGE_TAGLINE_TERMS = [
+            'personal & business banking','personal and business banking','online banking',
+            'banking, loans','shipping & logistics','freight shipping','less than truckload',
+            'lawn & garden','garden & pet','pet supplies','grocery store','supermarket',
+            'golf course','golf club','tee times','directions, hours','hours & directions',
+            'store locator','find a store','find a location','contact us','about us'
         ];
         function isJunkReferenceArticle(article) {
             const title = (article.title || '').toLowerCase();
             const url = (article.url || '').toLowerCase();
             if (JUNK_TITLE_TERMS.some(term => title.indexOf(term) !== -1)) return true;
             if (url.indexOf('wikipedia.org') !== -1 || url.indexOf('wiktionary.org') !== -1) return true;
+            if (url.indexOf('facebook.com') !== -1 || url.indexOf('instagram.com') !== -1) return true;
+            if (url.indexOf('google.com/maps') !== -1 || url.indexOf('maps.google.') !== -1) return true;
             if (/definition\s*&\s*meaning/.test(title)) return true;
             if (/english meaning\s*-/.test(title)) return true;
             if (/^welcome to\b/.test(title)) return true;
-            if (/^home\s*(\||::)/.test(title)) return true;
+            if (/^home\s*(\||::|-)/.test(title)) return true;
             if (/^about\s.+\|/.test(title)) return true;
             if (/^departments?\s*-/.test(title)) return true;
             if (/\bofficial (website|travel)\b/.test(title)) return true;
+            if (/^directions to\b/.test(title)) return true;
+            if (JUNK_HOMEPAGE_TAGLINE_TERMS.some(term => title.indexOf(term) !== -1)) return true;
             return false;
         }
 
@@ -3383,20 +3418,28 @@ Deprioritize/exclude: pure trucking or parcel/LTL companies with no bulk-rail re
             // Backup settings to Supabase (non-blocking)
         }
 
+        // Company values stamped by the free, ingestion-time cost filters
+        // (sports / off-territory / junk-reference) rather than by a real
+        // paid AI analysis call. Re-analyze must never re-queue these —
+        // doing so was silently undoing all three filters every time context
+        // was updated, sending known junk back to the AI at full cost.
+        const FILTER_STAMPED_COMPANIES = ['Sports Organization', 'Off-Territory', 'Reference/Junk Page'];
         async function resetForReanalysis() {
             const analyzedArticles = appState.articles.filter(a =>
-                !a.archivedAt && a.signal !== 'unanalyzed'
+                !a.archivedAt && a.signal !== 'unanalyzed' && !FILTER_STAMPED_COMPANIES.includes(a.company)
             );
             if (analyzedArticles.length === 0) {
                 showStatus('No analyzed articles to reset — run AI Analysis first.', 'info');
                 return;
             }
-            if (!confirm(`Reset ${analyzedArticles.length} analyzed articles back to "unanalyzed" so they can be re-scored with your updated client context?\n\nThis will clear all existing signal classifications. You'll need to run AI Analysis again.`)) {
+            if (!confirm(`Reset ${analyzedArticles.length} analyzed articles back to "unanalyzed" so they can be re-scored with your updated client context?\n\nThis will clear all existing signal classifications. You'll need to run AI Analysis again.\n\n(Articles already auto-excluded as sports/off-territory/junk stay excluded — they won't be re-sent to the AI.)`)) {
                 return;
             }
-            // Reset all analyzed articles back to unanalyzed
+            // Reset analyzed articles back to unanalyzed — but leave the
+            // free ingestion-filter exclusions (sports/off-territory/junk)
+            // alone so they never get re-queued for paid AI analysis.
             appState.articles = appState.articles.map(a => {
-                if (a.archivedAt || a.signal === 'unanalyzed') return a;
+                if (a.archivedAt || a.signal === 'unanalyzed' || FILTER_STAMPED_COMPANIES.includes(a.company)) return a;
                 return {
                     ...a,
                     signal: 'unanalyzed',
