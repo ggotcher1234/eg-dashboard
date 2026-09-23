@@ -3324,6 +3324,7 @@ NOT AN OPPORTUNITY — classify "none"
                 if (banner) banner.style.display = 'flex';
             }
             await loadStoredData();
+            startAutoCloudSync();
 
             updateClientBadge();
             debugLog(`Loaded: Client=${clientManager.currentClient || 'none'}, Feeds=${appState.feeds.length}, Articles=${appState.articles.length}`, 'success');
@@ -3512,6 +3513,25 @@ NOT AN OPPORTUNITY — classify "none"
                 const resp = await fetch(FMP_SUPABASE_URL + '/rest/v1/feedme_reports?id=eq.' + encodeURIComponent(reportId), { method: 'DELETE', headers: supabaseHeaders() });
                 return resp.ok;
             } catch (err) { console.warn('Supabase delete report failed:', err.message); return false; }
+        }
+
+        // Belt-and-suspenders auto-sync: push to the cloud on a timer AND
+        // whenever the tab is hidden/closed, independent of any specific
+        // save action. Nothing ever depends on remembering to click Save or
+        // close a dialog the right way — this runs on its own.
+        let _fmpAutoSyncTimer = null;
+        function startAutoCloudSync() {
+            if (_fmpAutoSyncTimer) return;
+            _fmpAutoSyncTimer = setInterval(() => {
+                supabaseSaveSettings().catch(() => {});
+                supabaseSaveArticles().catch(() => {});
+            }, 5 * 60 * 1000); // every 5 minutes
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') {
+                    supabaseSaveSettings().catch(() => {});
+                    supabaseSaveArticles().catch(() => {});
+                }
+            });
         }
         // ── End Storage Layer ─────────────────────────────────
 
