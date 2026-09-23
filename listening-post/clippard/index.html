@@ -2307,10 +2307,14 @@ Respond ONLY with valid JSON:
                         localStorage.setItem('feedmepro_current_client', clientList[0].id || clientList[0]);
                     }
 
-                    // Verify the clients list was actually written
-                    const verify = JSON.parse(localStorage.getItem('feedmepro_clients') || '[]');
-                    if (verify.length === 0) {
-                        showStatus('⚠️ Import wrote data but verification failed — your browser may be blocking localStorage for local files. Try opening in Chrome.', 'error');
+                    // Verify the import actually wrote data. Note: this build is a
+                    // single-client deployment (see "Multi-client stubs" above), so
+                    // 'feedmepro_clients' is never populated by normal use and is NOT
+                    // a reliable signal — checking it here used to produce a false
+                    // "verification failed" alarm even when the real data (ICP,
+                    // articles, settings) had been written successfully.
+                    if (written === 0) {
+                        showStatus('⚠️ Import found data but wrote 0 keys — your browser may be blocking localStorage for local files. Try opening in Chrome.', 'error');
                         return;
                     }
 
