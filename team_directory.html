@@ -132,6 +132,10 @@
      EG Programs page. */
   .toolbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
   .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  /* The archived record, under the name in the Archived view -- "Archived Sep
+     23, 2026 by Chris Gibbons". Greg (9/23/26) on the old hide checkbox: "you
+     don't know what's really happening". This line is the answer to that. */
+  .member-archived-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; font-style: italic; }
   .show-hidden-wrap {
     display: flex; align-items: center; gap: 6px; font-size: 12.5px;
     color: var(--muted); cursor: pointer; white-space: nowrap;
@@ -718,6 +722,11 @@
         <label id="show-hidden-wrap" class="show-hidden-wrap hidden">
           <input type="checkbox" id="show-hidden-toggle" style="width:auto;" /> Show hidden
         </label>
+        <!-- Greg (9/23/26): "we will need a view archived button." Hidden and
+             archived are different questions, so they get different controls:
+             "Show hidden" widens the active list, this swaps the list for the
+             archived one. Admin-only, same as the checkbox beside it. -->
+        <button type="button" class="btn-secondary hidden" id="view-archived-btn">View Archived</button>
         <!-- "+ Add Roster Member" moved into the top-nav Roster dropdown
              (Greg, 9/6/26) so it's reachable from any page; removed here to
              avoid the same action existing in two places. -->
@@ -777,18 +786,19 @@
   </main>
 </div>
 
-<!-- Delete confirm modal -->
-<div class="overlay" id="delete-overlay">
-  <div class="modal" style="width:380px;">
-    <h3 style="margin:0 0 8px; font-size:16.5px;">Remove roster member?</h3>
-    <p style="font-size:13.5px; color:var(--muted);">
-      This deletes <strong id="delete-name"></strong>'s login and directory profile. If they have any client
-      assignments or logged hours on record, this will be blocked automatically to protect that history.
-    </p>
-    <div class="field-error" id="delete-error" style="display:none;"></div>
+<!-- Archive / Restore confirm modal.
+     Greg (9/23/26): "we will never delete just archive." This replaces the
+     delete dialog outright. It asks nothing beyond yes/no -- "i do not want
+     anyone to have to do any data entry on archive" -- and the date and the
+     admin's name are stamped by the Edge Function. -->
+<div class="overlay" id="archive-overlay">
+  <div class="modal" style="width:420px;">
+    <h3 style="margin:0 0 8px; font-size:16.5px;" id="archive-title">Archive roster member?</h3>
+    <p style="font-size:13.5px; color:var(--muted);" id="archive-body"></p>
+    <div class="field-error" id="archive-error" style="display:none;"></div>
     <div class="modal-actions">
-      <button type="button" class="btn-secondary" id="delete-cancel">Cancel</button>
-      <button type="button" class="btn-danger" id="delete-confirm">Delete</button>
+      <button type="button" class="btn-secondary" id="archive-cancel">Cancel</button>
+      <button type="button" class="btn-danger" id="archive-confirm">Archive</button>
     </div>
   </div>
 </div>
@@ -935,9 +945,13 @@
 
 
       <div class="modal-actions">
-        <!-- Admin only, and never on your own profile -- deleting the account
-             you are signed in with has no good outcome (Greg, 9/19/26). -->
-        <button type="button" class="btn-danger-quiet hidden" id="profile-delete">Remove from Roster</button>
+        <!-- Greg (9/23/26): "delete - no". "Remove from Roster" was a hard
+             delete of the login and the profile row; it is gone. Archive is
+             what takes someone off the Roster now, and it is reversible.
+             Admin only, and never your own account -- archiving the login you
+             are signed in with locks you out of undoing it. -->
+        <button type="button" class="btn-danger-quiet hidden" id="profile-archive">Archive Member</button>
+        <button type="button" class="btn-secondary hidden" id="profile-restore">Restore Member</button>
         <button type="button" class="btn-secondary" id="profile-cancel">Close</button>
         <button type="submit" class="btn-primary hidden" id="profile-save">Save</button>
       </div>
@@ -1408,6 +1422,7 @@
     $("roster-import-btn").classList.toggle("hidden", !isSuperAdmin);
     $("workload-section").classList.toggle("hidden", !isSuperAdmin);
     $("show-hidden-wrap").classList.toggle("hidden", !isSuperAdmin);
+    $("view-archived-btn").classList.toggle("hidden", !isSuperAdmin);
 
     await loadUsers();
     if (isSuperAdmin) await loadTeamLeadWorkload();
@@ -1461,19 +1476,26 @@
     await addUserSpecialties(userId, specialties);
   }
 
-  async function callDeleteTeamMember(userId) {
+  // Archiving is a PATCH on the same admin function that creates members and
+  // sets passwords. It runs there rather than as a direct table update for two
+  // reasons: the function already proves the caller is an Admin before it
+  // touches anything, so "only admins can archive" is enforced server-side and
+  // in one place; and it holds the service key needed to ban the person's
+  // sign-in, which is the part that actually removes their access. There is no
+  // callDeleteTeamMember any more -- Greg (9/23/26): "delete - no".
+  async function callSetArchived(userId, archived) {
     const { data: { session } } = await sb.auth.getSession();
     const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-create-team-member`, {
-      method: "DELETE",
+      method: "PATCH",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${session.access_token}`,
         "apikey": SUPABASE_ANON_KEY,
       },
-      body: JSON.stringify({ user_id: userId }),
+      body: JSON.stringify({ user_id: userId, archived }),
     });
     const result = await res.json();
-    if (!res.ok) throw new Error(result.error || "Couldn't delete this person.");
+    if (!res.ok) throw new Error(result.error || (archived ? "Couldn't archive this person." : "Couldn't restore this person."));
     return result;
   }
 
@@ -1493,41 +1515,57 @@
     return result;
   }
 
-  let pendingDeleteId = null;
+  let pendingArchiveId = null;
+  let pendingArchiveTo = true;   // true = archive, false = restore
 
-  window.openDelete = function (id) {
+  // Opened from the profile, never from a table row. A row-level archive would
+  // be one stray click away down a whole column; behind the profile it takes
+  // two deliberate steps, the same reasoning that moved the old delete in
+  // there on 9/19/26.
+  window.openArchive = function (id, archive) {
     const u = allUsers.find((x) => x.id === id);
     if (!u || !isSuperAdmin) return;
-    pendingDeleteId = id;
-    $("delete-name").textContent = u.full_name;
-    $("delete-error").style.display = "none";
-    $("delete-overlay").classList.add("open");
+    pendingArchiveId = id;
+    pendingArchiveTo = archive;
+
+    $("archive-title").textContent = archive ? "Archive roster member?" : "Restore roster member?";
+    $("archive-body").innerHTML = archive
+      ? `<strong>${escapeHtml(u.full_name)}</strong> comes off the Roster and out of every assignment list, and can no longer sign in. `
+        + `Their assignments and logged hours are kept exactly as they are, so past invoices and engagement records still show their name. `
+        + `You can restore them at any time.`
+      : `<strong>${escapeHtml(u.full_name)}</strong> goes back on the Roster, becomes assignable again, and can sign in as before.`;
+    $("archive-confirm").textContent = archive ? "Archive" : "Restore";
+    $("archive-confirm").className = archive ? "btn-danger" : "btn-primary";
+    $("archive-error").style.display = "none";
+    $("archive-overlay").classList.add("open");
   };
 
-  $("delete-cancel").addEventListener("click", () => {
-    $("delete-overlay").classList.remove("open");
-    pendingDeleteId = null;
+  $("archive-cancel").addEventListener("click", () => {
+    $("archive-overlay").classList.remove("open");
+    pendingArchiveId = null;
   });
 
-  $("delete-confirm").addEventListener("click", async () => {
-    if (!pendingDeleteId) return;
-    const btn = $("delete-confirm");
+  $("archive-confirm").addEventListener("click", async () => {
+    if (!pendingArchiveId) return;
+    const archive = pendingArchiveTo;
+    const btn = $("archive-confirm");
+    const label = btn.textContent;
     btn.disabled = true;
-    btn.textContent = "Deleting…";
-    $("delete-error").style.display = "none";
+    btn.textContent = archive ? "Archiving…" : "Restoring…";
+    $("archive-error").style.display = "none";
 
     try {
-      await callDeleteTeamMember(pendingDeleteId);
-      $("delete-overlay").classList.remove("open");
-      showBanner("Roster member removed.", "success");
+      await callSetArchived(pendingArchiveId, archive);
+      $("archive-overlay").classList.remove("open");
+      showBanner(archive ? "Roster member archived." : "Roster member restored.", "success");
       await loadUsers();
     } catch (err) {
-      $("delete-error").textContent = err.message;
-      $("delete-error").style.display = "block";
+      $("archive-error").textContent = err.message;
+      $("archive-error").style.display = "block";
     } finally {
       btn.disabled = false;
-      btn.textContent = "Delete";
-      pendingDeleteId = null;
+      btn.textContent = label;
+      pendingArchiveId = null;
     }
   });
 
@@ -1571,11 +1609,25 @@
   // left out of the Roster and every pick list. A Super Admin can flip
   // "Show hidden" in the toolbar to see and un-hide them.
   let showHiddenMembers = false;
+  // "active" | "archived" -- which population the table is showing. Greg
+  // (9/23/26) asked for a View Archived button rather than another checkbox,
+  // and the distinction matters: Show hidden WIDENS the active list, this
+  // REPLACES it. Someone can be hidden and archived at once; they are separate
+  // questions with separate answers.
+  let rosterView = "active";
   async function loadUsers() {
     let usersQuery = sb.from("users")
-      .select("id, full_name, title, company_name, role, email, secondary_email, phone, address, time_zone, about, default_specialty, avatar_url, hidden_from_roster")
+      .select("id, full_name, title, company_name, role, email, secondary_email, phone, address, time_zone, about, default_specialty, avatar_url, hidden_from_roster, archived_at, archived_by")
       .order("full_name", { ascending: true });
-    if (!showHiddenMembers) usersQuery = usersQuery.eq("hidden_from_roster", false);
+    if (rosterView === "archived") {
+      usersQuery = usersQuery.not("archived_at", "is", null);
+    } else {
+      usersQuery = usersQuery.is("archived_at", null);
+      // Hidden only narrows the ACTIVE list. In the archived view everyone is
+      // shown -- hiding a departed person from a list of departed people would
+      // make the archive lie about who is in it.
+      if (!showHiddenMembers) usersQuery = usersQuery.eq("hidden_from_roster", false);
+    }
     const [{ data, error }, { data: specialtyRows, error: specErr }] = await Promise.all([
       usersQuery,
       sb.from("user_specialties").select("user_id, specialty"),
@@ -1594,7 +1646,33 @@
       (specialtiesByUser[r.user_id] || (specialtiesByUser[r.user_id] = [])).push(r.specialty);
     });
     allUsers = data.map((u) => ({ ...u, specialties: specialtiesByUser[u.id] || [] }));
+
+    // Who archived whom. The archived view only fetches archived people, and
+    // the admin who archived them is (nearly always) still active, so their
+    // name is not in `data` -- it takes its own lookup. Without it the row
+    // could only say "Archived Sep 23", which is half of what Greg asked the
+    // record to carry.
+    archivedByNames = {};
+    if (rosterView === "archived") {
+      const adminIds = [...new Set(allUsers.map((u) => u.archived_by).filter(Boolean))];
+      if (adminIds.length) {
+        const { data: admins } = await sb.from("users").select("id, full_name").in("id", adminIds);
+        (admins || []).forEach((a) => { archivedByNames[a.id] = a.full_name; });
+      }
+    }
     renderList();
+  }
+
+  let archivedByNames = {};
+
+  // "Archived Sep 23, 2026 by Chris Gibbons". Falls back gracefully: an admin
+  // account that has since been removed leaves archived_by null (the column is
+  // ON DELETE SET NULL), and the date on its own is still worth showing.
+  function archivedStamp(u) {
+    if (!u.archived_at) return "";
+    const when = new Date(u.archived_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    const who = u.archived_by ? archivedByNames[u.archived_by] : null;
+    return who ? `Archived ${when} by ${who}` : `Archived ${when}`;
   }
 
   // ---------- Column sorting ----------
@@ -1688,7 +1766,7 @@
   async function loadTeamLeadWorkload() {
     const { data, error } = await sb
       .from("client_assignments")
-      .select("user_id, users(full_name, hidden_from_roster), clients(project_status)")
+      .select("user_id, users(full_name, hidden_from_roster, archived_at), clients(project_status)")
       .eq("is_team_lead", true)
       .not("user_id", "is", null);
     if (error) {
@@ -1698,7 +1776,7 @@
     const countsByUser = {};
     const namesByUser = {};
     (data || []).forEach((r) => {
-      if (!r.user_id || !r.users || r.users.hidden_from_roster) return;
+      if (!r.user_id || !r.users || r.users.hidden_from_roster || r.users.archived_at) return;
       namesByUser[r.user_id] = r.users.full_name;
       if (r.clients && r.clients.project_status === "closed") return;
       countsByUser[r.user_id] = (countsByUser[r.user_id] || 0) + 1;
@@ -1754,11 +1832,16 @@
     updateSortIndicators();
     renderStats(rows);
 
-    $("row-count").textContent = `${rows.length} of ${allUsers.length} people`;
+    $("row-count").textContent = rosterView === "archived"
+      ? `${rows.length} of ${allUsers.length} archived`
+      : `${rows.length} of ${allUsers.length} people`;
 
     const tbody = $("team-tbody");
     tbody.innerHTML = "";
     $("empty-note").classList.toggle("hidden", rows.length !== 0);
+    $("empty-note").textContent = rosterView === "archived"
+      ? "Nobody has been archived yet."
+      : "No one matches your search.";
 
     for (const u of rows) {
       const tr = document.createElement("tr");
@@ -1782,6 +1865,7 @@
               <div class="member-name">${escapeHtml(u.full_name)}${u.hidden_from_roster ? ` <span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:var(--muted); background:#eef1f4; border-radius:999px; padding:1px 7px; vertical-align:middle;">Hidden</span>` : ""}</div>
               <div class="member-role-sub">${escapeHtml(primaryCategoryLabel(u))}</div>
               ${u.company_name ? `<div class="member-company-sub">${escapeHtml(u.company_name)}</div>` : ""}
+              ${u.archived_at ? `<div class="member-archived-sub">${escapeHtml(archivedStamp(u))}</div>` : ""}
             </div>
           </div>
         </td>
@@ -1801,6 +1885,29 @@
     showHiddenMembers = $("show-hidden-toggle").checked;
     await loadUsers();
   });
+
+  $("view-archived-btn").addEventListener("click", async () => {
+    rosterView = rosterView === "archived" ? "active" : "archived";
+    applyRosterViewChrome();
+    await loadUsers();
+  });
+
+  // Everything that has to read differently when the table is holding people
+  // who have left rather than the working roster.
+  function applyRosterViewChrome() {
+    const archived = rosterView === "archived";
+    $("view-archived-btn").textContent = archived ? "← Back to Roster" : "View Archived";
+    $("view-archived-btn").classList.toggle("active-filter", archived);
+    // "Show hidden" only means something in the active list, so it goes away
+    // rather than sitting there doing nothing.
+    $("show-hidden-wrap").classList.toggle("hidden", archived || !isSuperAdmin);
+    // Same for the Team Lead Workload card -- it counts In Progress engagements
+    // per active lead, which says nothing about a list of people who have left.
+    $("workload-section").classList.toggle("hidden", archived || !isSuperAdmin);
+    // The page has no heading element of its own -- the nav names it -- so the
+    // button's own label is what says which list you are looking at, and
+    // renderList's count line spells it out underneath.
+  }
 
   // ---------- Add Roster Member modal ----------
   // Opened from the top-nav Roster dropdown now that the toolbar button is
@@ -2359,7 +2466,11 @@
     $("pf-hidden-from-roster").checked = !!u.hidden_from_roster;
 
     $("profile-save").classList.toggle("hidden", !canEdit);
-    $("profile-delete").classList.toggle("hidden", !isSuperAdmin || u.id === currentUser.id);
+    // Archive and Restore are the same decision in two directions, so only one
+    // of them is ever on screen. Admin only, and never your own account.
+    const canArchiveThis = isSuperAdmin && u.id !== currentUser.id;
+    $("profile-archive").classList.toggle("hidden", !canArchiveThis || !!u.archived_at);
+    $("profile-restore").classList.toggle("hidden", !canArchiveThis || !u.archived_at);
 
     $("relink-section").classList.toggle("hidden", !isSuperAdmin);
     $("relink-new-id").value = "";
@@ -2375,11 +2486,17 @@
   // The confirm dialog is its own overlay and sits BELOW this one in the DOM,
   // so the profile has to close first or the confirmation would open behind it
   // (Greg, 9/19/26).
-  $("profile-delete").addEventListener("click", () => {
+  $("profile-archive").addEventListener("click", () => {
     const id = $("pf-id").value;
     if (!id) return;
     closeProfile();
-    openDelete(id);
+    openArchive(id, true);
+  });
+  $("profile-restore").addEventListener("click", () => {
+    const id = $("pf-id").value;
+    if (!id) return;
+    closeProfile();
+    openArchive(id, false);
   });
 
   $("profile-cancel").addEventListener("click", closeProfile);

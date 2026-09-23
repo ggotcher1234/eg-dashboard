@@ -1452,7 +1452,10 @@
   let allPrograms = [];
   async function loadSearchIndex() {
     const [{ data: users }, { data: programs }] = await Promise.all([
-      sb.from("users").select("id, full_name").eq("hidden_from_roster", false).order("full_name"),
+      // Archived people are out of this list too (125, 9/23/26). Two separate
+      // exclusions with two separate meanings: hidden = working account kept off
+      // staff-facing lists; archived = left, sign-in revoked.
+      sb.from("users").select("id, full_name").eq("hidden_from_roster", false).is("archived_at", null).order("full_name"),
       sb.from("econ_dev_companies").select("id, name, code").order("name"),
     ]);
     allSpecialists = users || [];

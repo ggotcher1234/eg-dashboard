@@ -717,7 +717,14 @@
   async function loadGlobalSearchIndex() {
     const [{ data: clients }, { data: users }, { data: programs }] = await Promise.all([
       sb.from("clients").select("id, name, project_status"),
-      sb.from("users").select("id, full_name").eq("hidden_from_roster", false),
+      // .is("archived_at", null) added 9/23/26 with 125_archive_roster_members.sql:
+      // an archived person must not appear in any assignment picker. It sits
+      // beside hidden_from_roster rather than replacing it -- hidden means "on
+      // the team, not listed as a specialist", archived means "gone". This is a
+      // PICKER, so it filters on both; lookups that only name whoever is already
+      // on a row deliberately filter on neither, or an archived person's old
+      // assignments would render as blanks.
+      sb.from("users").select("id, full_name").eq("hidden_from_roster", false).is("archived_at", null),
       sb.from("econ_dev_companies").select("id, name, code"),
     ]);
     gsClients = clients || [];

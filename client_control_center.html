@@ -1428,7 +1428,14 @@
 
   async function loadUsers() {
     const [{ data, error }, { data: specialtyRows, error: specErr }, { data: nameRows }] = await Promise.all([
-      sb.from("users").select("id, full_name, role, email").eq("hidden_from_roster", false).order("full_name"),
+      // .is("archived_at", null) added 9/23/26 with 125_archive_roster_members.sql:
+      // an archived person must not appear in any assignment picker. It sits
+      // beside hidden_from_roster rather than replacing it -- hidden means "on
+      // the team, not listed as a specialist", archived means "gone". This is a
+      // PICKER, so it filters on both; lookups that only name whoever is already
+      // on a row deliberately filter on neither, or an archived person's old
+      // assignments would render as blanks.
+      sb.from("users").select("id, full_name, role, email").eq("hidden_from_roster", false).is("archived_at", null).order("full_name"),
       sb.from("user_specialties").select("user_id, specialty"),
       // Every account's name, hidden ones included. A duplicated name has to
       // show its email even when only ONE of the duplicates is on the visible

@@ -988,7 +988,10 @@
   async function loadGlobalSearchIndex() {
     const [{ data: clients }, { data: users }] = await Promise.all([
       sb.from("clients").select("id, name, project_status"),
-      sb.from("users").select("id, full_name").eq("hidden_from_roster", false),
+      // Archived people are out of this list too (125, 9/23/26). Two separate
+      // exclusions with two separate meanings: hidden = working account kept off
+      // staff-facing lists; archived = left, sign-in revoked.
+      sb.from("users").select("id, full_name").eq("hidden_from_roster", false).is("archived_at", null),
     ]);
     gsClients = clients || [];
     gsUsers = users || [];

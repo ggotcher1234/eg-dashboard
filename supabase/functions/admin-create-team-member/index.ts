@@ -31,11 +31,42 @@
 //   need to configure any secrets by hand.
 //
 // WHAT CALLS THIS
-//   team_directory.html's "+ Add Team Member" button (POST), its Delete
-//   button (DELETE, Super Admin only), and its "Set Password" action in the
-//   profile modal (PATCH, Super Admin only) — via normal fetch() calls
-//   using the signed-in Super Admin's own session token — never the
-//   service role key, which never leaves this function.
+//   team_directory.html's "+ Add Team Member" button (POST), and its
+//   "Set Password", "Archive Member" and "Restore" actions in the profile
+//   modal (PATCH, Super Admin only) — via normal fetch() calls using the
+//   signed-in Super Admin's own session token — never the service role key,
+//   which never leaves this function.
+//
+// ARCHIVE / RESTORE (PATCH with { user_id, archived: true | false })
+//   Greg (9/23/26): "we will never delete just archive... archived members
+//   will lose all access to any EG information... i do not want anyone to have
+//   to do any data entry on archive, only admins can archive or hide. archive
+//   auto saves the data and the admin that archived them."
+//
+//   So archiving takes no input beyond who to archive. It stamps
+//   users.archived_at / archived_by (125_archive_roster_members.sql) and BANS
+//   the person's Supabase Auth account, which is what actually takes their
+//   access away -- they cannot sign in, and their session cannot refresh.
+//   One caveat, stated plainly because it is easy to assume otherwise: an
+//   access token already in a browser stays valid until it expires, an hour by
+//   default. Somebody signed in at the moment you archive them is out within
+//   the hour, not that second.
+//
+//   Nothing is deleted. Assignments and logged hours stay exactly where they
+//   are, so past invoices and Team & Hours rows still resolve the name.
+//   Restore is the same call with archived: false -- it clears both columns
+//   and lifts the ban.
+//
+//   Two refusals, both about not locking the org out of itself: an admin
+//   cannot archive their own account, and the last active super_admin cannot
+//   be archived.
+//
+// WHY THERE IS NO LONGER A DELETE
+//   Greg (9/23/26): "delete - no". Hard delete was the only way to take
+//   somebody off the Roster, which meant the irreversible action was also the
+//   everyday one. Archive replaces it outright and the DELETE branch is gone --
+//   the method is refused with a message rather than quietly 404ing, in case an
+//   older cached copy of team_directory.html is still calling it.
 //
 // SET PASSWORD (PATCH)
 //   Supabase's built-in email sender (used by "Forgot your password?" and
@@ -44,19 +75,19 @@
 //   use (Greg, 8/17/26). Rather than fight that limit, a Super Admin can
 //   set someone's password directly here, no email involved at all.
 //
-// DELETE SAFETY NOTE
-//   client_assignments.user_id and time_entries.consultant_id both cascade
-//   off users(id) — a raw delete of a team member would silently wipe any
-//   client assignments AND logged hours they have on record. This function
-//   checks for both first and refuses to delete (with a clear reason)
-//   rather than let that happen quietly.
+// WHAT THE OLD DELETE SAFETY CHECK WAS PROTECTING
+//   client_assignments.user_id and time_entries.consultant_id both cascade off
+//   users(id), so a raw delete of a team member silently wiped their client
+//   assignments AND logged hours. The old DELETE branch checked for both and
+//   refused. Archiving makes that whole class of accident impossible: it never
+//   removes a row, so there is nothing to check for and nothing to lose.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, DELETE, PATCH, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, PATCH, OPTIONS",
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -72,7 +103,15 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
-  if (req.method !== "POST" && req.method !== "DELETE" && req.method !== "PATCH") {
+  // DELETE used to remove a team member outright. Roster members are archived
+  // now, never deleted (Greg, 9/23/26), so it is answered rather than dropped --
+  // a stale cached page calling it should say something useful.
+  if (req.method === "DELETE") {
+    return jsonResponse({
+      error: "Roster members are archived, not deleted. Reload the Roster page and use Archive Member.",
+    }, 405);
+  }
+  if (req.method !== "POST" && req.method !== "PATCH") {
     return jsonResponse({ error: "Method not allowed." }, 405);
   }
 
@@ -94,12 +133,19 @@ Deno.serve(async (req: Request) => {
 
     const { data: callerProfile, error: profileErr } = await callerClient
       .from("users")
-      .select("role, organization_id")
+      .select("role, organization_id, archived_at")
       .eq("id", userData.user.id)
       .single();
 
     if (profileErr || !callerProfile || callerProfile.role !== "super_admin") {
-      return jsonResponse({ error: "Only a Super Admin can add or remove team members." }, 403);
+      return jsonResponse({ error: "Only an Admin can add, archive or restore roster members." }, 403);
+    }
+    // Belt and braces. An archived admin should never get this far -- their
+    // auth account is banned, so they cannot hold a session -- but a token
+    // issued just before the ban stays valid for up to an hour, and archiving
+    // people is not something to leave open during that window.
+    if (callerProfile.archived_at) {
+      return jsonResponse({ error: "This account has been archived." }, 403);
     }
 
     // From here on we use the service role client — this is the one place
@@ -113,39 +159,97 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
 
-    if (req.method === "DELETE") {
-      const targetId = body.user_id;
-      if (!targetId) {
-        return jsonResponse({ error: "user_id is required." }, 400);
-      }
-
-      const { count: assignmentCount } = await adminClient
-        .from("client_assignments")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", targetId);
-
-      const { count: timeEntryCount } = await adminClient
-        .from("time_entries")
-        .select("id", { count: "exact", head: true })
-        .eq("consultant_id", targetId);
-
-      if ((assignmentCount || 0) > 0 || (timeEntryCount || 0) > 0) {
-        return jsonResponse({
-          error: "Can't delete — this person has client assignments or logged hours on record. Removing them would erase that history.",
-        }, 400);
-      }
-
-      const { error: delProfileErr } = await adminClient.from("users").delete().eq("id", targetId);
-      if (delProfileErr) {
-        return jsonResponse({ error: delProfileErr.message }, 400);
-      }
-
-      await adminClient.auth.admin.deleteUser(targetId);
-      return jsonResponse({ ok: true });
-    }
-
     if (req.method === "PATCH") {
       const targetId = body.user_id;
+
+      // ---- Archive / Restore ----
+      // Checked before the password branch because it is the only PATCH that
+      // carries no password, and `archived` is an explicit boolean rather than
+      // a truthy flag so that a malformed body can't be read as "archive".
+      if (typeof body.archived === "boolean") {
+        if (!targetId) {
+          return jsonResponse({ error: "user_id is required." }, 400);
+        }
+
+        const { data: target, error: targetErr } = await adminClient
+          .from("users")
+          .select("id, full_name, role, archived_at")
+          .eq("id", targetId)
+          .single();
+
+        if (targetErr || !target) {
+          return jsonResponse({ error: "That roster member no longer exists." }, 404);
+        }
+
+        if (body.archived) {
+          if (targetId === userData.user.id) {
+            return jsonResponse({
+              error: "You can't archive your own account. Ask another Admin to do it.",
+            }, 400);
+          }
+
+          // Archiving the last working Admin would leave nobody able to
+          // restore anyone -- including the person who just did it.
+          if (target.role === "super_admin") {
+            const { count: activeAdmins } = await adminClient
+              .from("users")
+              .select("id", { count: "exact", head: true })
+              .eq("role", "super_admin")
+              .is("archived_at", null);
+            if ((activeAdmins || 0) <= 1) {
+              return jsonResponse({
+                error: "This is the only active Admin left. Make someone else an Admin first.",
+              }, 400);
+            }
+          }
+
+          const { error: archErr } = await adminClient
+            .from("users")
+            .update({ archived_at: new Date().toISOString(), archived_by: userData.user.id })
+            .eq("id", targetId);
+          if (archErr) {
+            return jsonResponse({ error: archErr.message }, 400);
+          }
+
+          // What actually takes their access away. 876000h is 100 years --
+          // Supabase has no "forever", and Restore lifts it anyway.
+          const { error: banErr } = await adminClient.auth.admin.updateUserById(targetId, {
+            ban_duration: "876000h",
+          });
+          if (banErr) {
+            // The row is already stamped, so say what did and didn't happen
+            // rather than reporting a clean success or rolling back a record
+            // that is, on its own, correct.
+            return jsonResponse({
+              error: `Archived on the Roster, but their sign-in could not be blocked: ${banErr.message}`,
+            }, 500);
+          }
+
+          return jsonResponse({ ok: true, archived: true });
+        }
+
+        // ---- Restore ----
+        const { error: unArchErr } = await adminClient
+          .from("users")
+          .update({ archived_at: null, archived_by: null })
+          .eq("id", targetId);
+        if (unArchErr) {
+          return jsonResponse({ error: unArchErr.message }, 400);
+        }
+
+        const { error: unbanErr } = await adminClient.auth.admin.updateUserById(targetId, {
+          ban_duration: "none",
+        });
+        if (unbanErr) {
+          return jsonResponse({
+            error: `Restored on the Roster, but their sign-in could not be re-enabled: ${unbanErr.message}`,
+          }, 500);
+        }
+
+        return jsonResponse({ ok: true, archived: false });
+      }
+
+      // ---- Set password ----
       const password = body.password || "";
       if (!targetId || !password) {
         return jsonResponse({ error: "user_id and password are required." }, 400);
