@@ -1560,6 +1560,12 @@ h4{font-weight:600;font-size:15px;margin-bottom:5px}
                     <label for="clientContextInput">Ideal Customer Profile <span style="font-weight:normal;color:var(--text-secondary);">(improves AI signal accuracy)</span></label>
                     <textarea id="clientContextInput" placeholder="e.g. Our client sells packaging automation equipment and services to food & beverage manufacturers, CPG companies, and contract packagers in North America." style="width:100%;padding:8px 12px;border:2px solid var(--border);border-radius:6px;font-size:13px;height:134px;resize:vertical;"></textarea>
                     <div style="margin-top:4px;font-size:12px;color:var(--text-secondary);">Describe what the client sells and who they sell to. This filters out irrelevant signals (sports teams, government, etc.) and sharpens relevance scores.</div>
+                    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+                        <button type="button" class="btn btn-secondary" onclick="saveIcpToFile()" style="font-size:12px;padding:6px 12px;">💾 Save ICP to File</button>
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('icpFileInput').click()" style="font-size:12px;padding:6px 12px;">📂 Load ICP from File</button>
+                        <input type="file" id="icpFileInput" accept=".txt" style="display:none;" onchange="loadIcpFromFile(this.files[0])">
+                    </div>
+                    <div style="margin-top:4px;font-size:11px;color:var(--text-secondary);">Settings here live only in this browser. Save to a file so your ICP survives a cleared cache or a new computer -- reload it here with one click.</div>
                 </div>
                 <div class="form-group">
                     <label for="freshnessWindowSelect">Freshness Window <span style="font-weight:normal;color:var(--text-secondary);">(articles older than this are hidden)</span></label>
@@ -3147,6 +3153,42 @@ Deprioritize/exclude: pure trucking or parcel/LTL companies with no bulk-rail re
             updateSignalCounts();
             debugLog('Settings saved', 'info');
             // Backup settings to Supabase (non-blocking)
+        }
+
+        // Greg (9/23/26): the ICP textarea above only ever lived in this
+        // browser's localStorage -- clear the cache, switch browsers, or
+        // switch computers (as happened with Extremis) and it's gone, with
+        // no warning, silently falling back to whatever default is
+        // hardcoded in appState.clientContext. These two functions give the
+        // ICP a real, durable backup: a plain .txt file the user controls,
+        // independent of this browser -- save it once, reload it anywhere
+        // with one click.
+        function saveIcpToFile() {
+            const text = (document.getElementById('clientContextInput').value || '').trim();
+            if (!text) { showStatus('Nothing to save -- the ICP field is empty.', 'error'); return; }
+            const companyName = (window.FMP_CONFIG.clientName || 'Client').replace(/[^a-zA-Z0-9]+/g, '_');
+            const blob = new Blob([text], { type: 'text/plain' });
+            const downloadUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `${companyName}_ICP_${new Date().toISOString().slice(0, 10)}.txt`;
+            link.click();
+            URL.revokeObjectURL(downloadUrl);
+            showStatus('💾 ICP saved to file -- keep it somewhere durable (Dropbox, etc.) in case this browser\'s data is ever lost.', 'success');
+        }
+
+        function loadIcpFromFile(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = (e.target.result || '').trim();
+                document.getElementById('clientContextInput').value = text;
+                saveSettings(true); // persist immediately -- retrievable with one click, not a second save step
+                showStatus('📂 ICP loaded and saved.', 'success');
+            };
+            reader.onerror = function() { showStatus('Could not read that file.', 'error'); };
+            reader.readAsText(file);
+            document.getElementById('icpFileInput').value = ''; // allow re-selecting the same file later
         }
 
         async function resetForReanalysis() {
