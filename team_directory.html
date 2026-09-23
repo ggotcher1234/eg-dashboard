@@ -136,6 +136,10 @@
      23, 2026 by Chris Gibbons". Greg (9/23/26) on the old hide checkbox: "you
      don't know what's really happening". This line is the answer to that. */
   .member-archived-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; font-style: italic; }
+  /* The hide/archive pair at the foot of the profile -- set off from the
+     fields above it, because these two are decisions about the person's
+     standing rather than more details about them (Greg, 9/23/26). */
+  .pf-standing { margin-top: 18px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: #f7f9fb; font-size: 13px; }
   .show-hidden-wrap {
     display: flex; align-items: center; gap: 6px; font-size: 12.5px;
     color: var(--muted); cursor: pointer; white-space: nowrap;
@@ -918,11 +922,6 @@
       <label for="pf-about">About</label>
       <textarea id="pf-about" placeholder="A short bio…"></textarea>
 
-      <label id="pf-hidden-wrap" class="hidden" style="display:flex; align-items:flex-start; gap:8px; font-weight:400; text-transform:none; margin-top:10px;">
-        <input type="checkbox" id="pf-hidden-from-roster" style="width:auto; margin-top:3px;" />
-        <span>Hide from Roster <span style="color:var(--muted);">— keeps full Admin access, but removes this person from the Roster, every specialist / team-lead pick list, and global search.</span></span>
-      </label>
-
       <hr style="margin:18px 0;" />
 
       <label for="pf-company">Company</label>
@@ -943,6 +942,22 @@
       <label for="pf-timezone">Time Zone</label>
       <input type="text" id="pf-timezone" placeholder="e.g. Mountain" />
 
+
+      <!-- Greg (9/23/26): "move the Hide function down just above the Archive
+           so that you have 2 choices, hide or archive." Hide used to sit up
+           under About, among the fields that describe the person, which read
+           as one more detail to fill in. It is not -- it is a decision about
+           whether they appear at all, the same kind of decision as Archive.
+           Sitting them together, in ascending order of consequence, is what
+           makes the pair legible: hide keeps everything and only takes them
+           off the lists; archive takes their access too. Both are Admin-only,
+           so on anyone else's view this whole strip is simply absent. -->
+      <div id="pf-standing-wrap" class="pf-standing hidden">
+        <label id="pf-hidden-wrap" style="display:flex; align-items:flex-start; gap:8px; font-weight:400; text-transform:none; margin:0;">
+          <input type="checkbox" id="pf-hidden-from-roster" style="width:auto; margin-top:3px;" />
+          <span>Hide from Roster <span style="color:var(--muted);">— keeps their access and everything on this profile, but takes them off the Roster, every specialist / team-lead pick list, and global search. Saved with the Save button.</span></span>
+        </label>
+      </div>
 
       <div class="modal-actions">
         <!-- Greg (9/23/26): "delete - no". "Remove from Roster" was a hard
@@ -2462,7 +2477,9 @@
     $("pf-role").disabled = !canEditRole;
     $("pf-role-lock-note").textContent = canEditRole ? "" : "(Admin only)";
 
-    $("pf-hidden-wrap").classList.toggle("hidden", !isSuperAdmin);
+    // The strip holds Hide; Archive/Restore sit in the row directly beneath it.
+    // Non-admins see neither.
+    $("pf-standing-wrap").classList.toggle("hidden", !isSuperAdmin);
     $("pf-hidden-from-roster").checked = !!u.hidden_from_roster;
 
     $("profile-save").classList.toggle("hidden", !canEdit);
