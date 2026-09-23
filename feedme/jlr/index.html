@@ -3545,6 +3545,7 @@ Confidence: High / Medium / Low`, // JLR Environmental ICP — restored 9/23/26,
             updateSignalCounts();
             debugLog('Settings saved', 'info');
             // Backup settings to Supabase (non-blocking)
+            supabaseSaveSettings().then(ok => updateSupabaseBadge(ok)).catch(() => updateSupabaseBadge(false));
         }
 
         // Greg (9/23/26): the ICP textarea above only ever lived in this
@@ -3710,25 +3711,170 @@ Confidence: High / Medium / Low`, // JLR Environmental ICP — restored 9/23/26,
         // ══════════════════════════════════════════════════════
         // STORAGE (client version — localStorage only)
         // ══════════════════════════════════════════════════════
-        function isSupabaseConfigured()          { return false; }
-        function updateSupabaseBadge()           {}
-        async function supabaseSaveSettings()    { return false; }
-        async function supabaseLoadSettings()    { return false; }
-        async function supabaseLoadArticles()    { return null; }
-        async function supabaseSaveArticles()    { return false; }
-        async function supabaseDeleteClientArticles() {}
-        async function supabaseTestConnection()  { return { ok: false, msg: 'N/A' }; }
-        async function supabaseMigrateAllClients() {}
-        async function supabaseRestoreAll()      {}
-        async function supabaseSaveReport()      { return false; }
-        async function supabaseLoadReports()     { return []; }
-        async function supabaseLoadReportHtml()  { return null; }
-        async function supabaseDeleteReport()    { return false; }
+        // ---- Supabase cloud sync (shared FeedMe project, isolated by client_id) ----
+        // Added 9/23/26: this build previously stubbed these out, so ICP/feeds/
+        // articles never left this one browser. They now sync to the same
+        // Supabase project already used by Browne/TAM/TSR (isolated by
+        // client_id), so a client opening this dashboard's link sees the setup
+        // work done here, and switching computers/browsers no longer loses data.
+        const FMP_SUPABASE_URL = 'https://iachygliskhxapxngqfn.supabase.co';
+        const FMP_SUPABASE_KEY = 'sb_publishable_BOhJMoLJHzgs2mV8nVO_ug_3vnVeKF6';
+
+        function supabaseHeaders(extra) {
+            const key = appState.supabaseKey || FMP_SUPABASE_KEY;
+            return Object.assign({
+                'apikey': key,
+                'Authorization': 'Bearer ' + key,
+                'Content-Type': 'application/json'
+            }, extra || {});
+        }
+
+        function isSupabaseConfigured() { return true; }
+
+        async function supabaseTestConnection() {
+            try {
+                const resp = await fetch(FMP_SUPABASE_URL + '/rest/v1/feedme_settings?select=key&limit=1', { headers: supabaseHeaders() });
+                if (!resp.ok) return { ok: false, msg: 'HTTP ' + resp.status };
+                return { ok: true, msg: 'Connected' };
+            } catch (err) { return { ok: false, msg: err.message }; }
+        }
+
+        async function supabaseSaveSettings() {
+            if (!clientManager.currentClient) return false;
+            try {
+                const prefix = 'feedmepro_' + clientManager.currentClient + '_';
+                const rows = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && k.startsWith(prefix) && !k.endsWith('_articles')) {
+                        rows.push({ key: k, value: localStorage.getItem(k) });
+                    }
+                }
+                if (rows.length === 0) return true;
+                const resp = await fetch(FMP_SUPABASE_URL + '/rest/v1/feedme_settings?on_conflict=key', {
+                    method: 'POST',
+                    headers: supabaseHeaders({ 'Prefer': 'resolution=merge-duplicates' }),
+                    body: JSON.stringify(rows)
+                });
+                return resp.ok;
+            } catch (err) { console.warn('Supabase save settings failed:', err.message); return false; }
+        }
+
+        async function supabaseLoadSettings() {
+            if (!clientManager.currentClient) return false;
+            try {
+                const prefix = 'feedmepro_' + clientManager.currentClient + '_';
+                const resp = await fetch(FMP_SUPABASE_URL + '/rest/v1/feedme_settings?key=like.' + encodeURIComponent(prefix) + '*&select=key,value', { headers: supabaseHeaders() });
+                if (!resp.ok) return false;
+                const rows = await resp.json();
+                if (!rows || rows.length === 0) return false;
+                rows.forEach(r => { if (r.value !== null && r.value !== undefined) localStorage.setItem(r.key, r.value); });
+                return true;
+            } catch (err) { console.warn('Supabase load settings failed:', err.message); return false; }
+        }
+
+        async function supabaseSaveArticles(articlesToSave) {
+            if (!clientManager.currentClient) return false;
+            const list = articlesToSave || appState.articles || [];
+            if (list.length === 0) return true;
+            try {
+                const rows = list.filter(a => a && a.url).map(a => {
+                    const { content, ...slim } = a;
+                    return { client_id: clientManager.currentClient, url: a.url, data: JSON.stringify(slim) };
+                });
+                const BATCH = 200;
+                for (let i = 0; i < rows.length; i += BATCH) {
+                    const resp = await fetch(FMP_SUPABASE_URL + '/rest/v1/feedme_articles?on_conflict=client_id,url', {
+                        method: 'POST',
+                        headers: supabaseHeaders({ 'Prefer': 'resolution=merge-duplicates' }),
+                        body: JSON.stringify(rows.slice(i, i + BATCH))
+                    });
+                    if (!resp.ok) return false;
+                }
+                return true;
+            } catch (err) { console.warn('Supabase save articles failed:', err.message); return false; }
+        }
+
+        async function supabaseLoadArticles() {
+            if (!clientManager.currentClient) return null;
+            try {
+                const resp = await fetch(FMP_SUPABASE_URL + '/rest/v1/feedme_articles?client_id=eq.' + encodeURIComponent(clientManager.currentClient) + '&select=data', { headers: supabaseHeaders() });
+                if (!resp.ok) return null;
+                const rows = await resp.json();
+                if (!rows) return null;
+                return rows.map(r => { try { return JSON.parse(r.data); } catch(e) { return null; } }).filter(Boolean);
+            } catch (err) { console.warn('Supabase load articles failed:', err.message); return null; }
+        }
+
+        async function supabaseDeleteClientArticles() {
+            if (!clientManager.currentClient) return;
+            try {
+                await fetch(FMP_SUPABASE_URL + '/rest/v1/feedme_articles?client_id=eq.' + encodeURIComponent(clientManager.currentClient), { method: 'DELETE', headers: supabaseHeaders() });
+            } catch (err) { console.warn('Supabase delete articles failed:', err.message); }
+        }
+
+        async function supabaseMigrateAllClients() { /* not applicable — this build is single-client */ }
+        async function supabaseRestoreAll() { /* not applicable — this build is single-client */ }
+
+        async function supabaseSaveReport(reportHtml, meta) {
+            if (!clientManager.currentClient) return false;
+            try {
+                const resp = await fetch(FMP_SUPABASE_URL + '/rest/v1/feedme_reports', {
+                    method: 'POST',
+                    headers: supabaseHeaders({ 'Prefer': 'return=minimal' }),
+                    body: JSON.stringify([{
+                        client_id: clientManager.currentClient,
+                        range_label: (meta && meta.rangeLabel) || null,
+                        opportunity_count: (meta && meta.opportunityCount) || null,
+                        html: reportHtml || null
+                    }])
+                });
+                return resp.ok;
+            } catch (err) { console.warn('Supabase save report failed:', err.message); return false; }
+        }
+
+        async function supabaseLoadReports() {
+            if (!clientManager.currentClient) return [];
+            try {
+                const resp = await fetch(FMP_SUPABASE_URL + '/rest/v1/feedme_reports?client_id=eq.' + encodeURIComponent(clientManager.currentClient) + '&select=id,range_label,opportunity_count,generated_at&order=generated_at.desc', { headers: supabaseHeaders() });
+                if (!resp.ok) return [];
+                return await resp.json();
+            } catch (err) { console.warn('Supabase load reports failed:', err.message); return []; }
+        }
+
+        async function supabaseLoadReportHtml(reportId) {
+            if (!reportId) return null;
+            try {
+                const resp = await fetch(FMP_SUPABASE_URL + '/rest/v1/feedme_reports?id=eq.' + encodeURIComponent(reportId) + '&select=html', { headers: supabaseHeaders() });
+                if (!resp.ok) return null;
+                const rows = await resp.json();
+                return (rows && rows[0] && rows[0].html) || null;
+            } catch (err) { console.warn('Supabase load report html failed:', err.message); return null; }
+        }
+
+        async function supabaseDeleteReport(reportId) {
+            if (!reportId) return false;
+            try {
+                const resp = await fetch(FMP_SUPABASE_URL + '/rest/v1/feedme_reports?id=eq.' + encodeURIComponent(reportId), { method: 'DELETE', headers: supabaseHeaders() });
+                return resp.ok;
+            } catch (err) { console.warn('Supabase delete report failed:', err.message); return false; }
+        }
         // ── End Storage Layer ─────────────────────────────────
 
         async function loadStoredData() {
             try {
                 debugLog('Loading stored data from localStorage...', 'info');
+
+                // Cloud bootstrap: if this browser has never seen this client's
+                // data (e.g. a client opening the link Greg set up for them, or
+                // a fresh browser after a computer switch), pull settings from
+                // the shared Supabase project before falling back to whatever
+                // localStorage/export defaults exist.
+                const _hasLocalClientData = !!localStorage.getItem(getStorageKey('client_context')) || !!localStorage.getItem(getStorageKey('feeds'));
+                if (!_hasLocalClientData) {
+                    debugLog('No local data for this client — checking cloud...', 'info');
+                    await supabaseLoadSettings();
+                }
 
                 // Reset appState to defaults before loading — prevents stale data
                 // from a previous client carrying over if keys don't exist
@@ -3775,6 +3921,18 @@ Confidence: High / Medium / Low`, // JLR Environmental ICP — restored 9/23/26,
                         localStorage.setItem(getStorageKey('articles'), JSON.stringify(appState.articles));
                         window.FEEDME_ARTICLES = null; // free memory
                     } catch(e) { /* quota — will reload from window.FEEDME_ARTICLES next open */ }
+                }
+
+                // CLOUD FALLBACK: still nothing local (e.g. a client opening this
+                // link for the first time, or a fresh browser) — pull analyzed
+                // articles from the shared Supabase project.
+                if (appState.articles.length === 0) {
+                    const cloudArticles = await supabaseLoadArticles();
+                    if (cloudArticles && cloudArticles.length > 0) {
+                        appState.articles = cloudArticles;
+                        try { localStorage.setItem(getStorageKey('articles'), JSON.stringify(cloudArticles)); } catch(e) {}
+                        debugLog('✔ Loaded ' + cloudArticles.length + ' articles from cloud', 'success');
+                    }
                 }
                 
                 const archived = localStorage.getItem(getStorageKey('archived'));
@@ -3974,6 +4132,7 @@ Confidence: High / Medium / Low`, // JLR Environmental ICP — restored 9/23/26,
             // On quota error: stop and alert the user — never silently drop articles.
             try {
                 localStorage.setItem(getStorageKey('articles'), JSON.stringify(slim));
+                supabaseSaveArticles(slim).catch(() => {}); // cloud sync, non-blocking
             } catch (error) {
                 const isQuota = error.name === 'QuotaExceededError' || (error.message && error.message.includes('quota'));
                 if (isQuota) {
