@@ -296,6 +296,29 @@
      title + description, the title linking out to its URL or opening its
      uploaded file, with a red x to remove. */
   .rv-table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .rv-add-status { flex: 1 1 100%; margin-top: 8px; font-size: 12.5px; display: none; }
+  .rv-add-status.working { display: block; color: var(--muted); }
+  .rv-add-status.error   { display: block; color: #922f2b; background: #fbe9e9; border: 1px solid #f0c2c0; border-radius: 6px; padding: 8px 11px; }
+  .rv-add-status.success { display: block; color: #24614a; }
+
+  /* Drag to reorder, ported from client_research.html's document lists so the
+     gesture is the same in both places (Greg, 9/24/26: "i need to be able to
+     drag the order of the resources to different rows"). Only the handle is
+     draggable -- a draggable row would fight text selection in the title. */
+  .rv-drag-handle {
+    flex-shrink: 0; cursor: grab; color: var(--muted); font-size: 17px; line-height: 1;
+    padding: 4px 3px; margin-right: 2px; border-radius: 5px; user-select: none;
+    background: none; border: none; font-family: inherit;
+  }
+  .rv-drag-handle:hover { background: #eef1f4; color: var(--navy); }
+  .rv-drag-handle:active { cursor: grabbing; }
+  .rv-drag-handle:focus-visible { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .rv-simple-row.is-dragging { opacity: 0.4; }
+  /* A line showing the gap the row will land in, rather than a placeholder
+     that can fall out of step with the pointer. */
+  .rv-simple-row.drop-above { box-shadow: inset 0 2px 0 0 var(--navy-light); }
+  .rv-simple-row.drop-below { box-shadow: inset 0 -2px 0 0 var(--navy-light); }
+
   .rv-simple-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 12px 16px; border-bottom: 1px solid #f0f2f4; }
   .rv-simple-row:last-child { border-bottom: none; }
   .rv-simple-main { min-width: 0; }
@@ -1146,7 +1169,26 @@
                 <input type="file" id="rv-new-file" />
               </div>
               <div class="field-hint" style="flex:1 1 220px; margin-bottom:10px;">Use one or the other &mdash; a link URL opens in a new tab, a file downloads. If both are set, the link wins.</div>
-              <button type="submit" class="btn-secondary btn-sm">+ Add Resource (this client only)</button>
+              <button type="submit" class="btn-secondary btn-sm" id="rv-add-btn">+ Add Resource (this client only)</button>
+              <!-- Greg (9/24/26): "logged in as admin and need to be able to add
+                   resource to ALL clients." That was always possible, but only
+                   from resource_templates.html -- and nothing here said so, so
+                   this form quietly did the narrower thing while looking like
+                   the only option. An Admin gets both choices in the same
+                   place, each labelled with its reach. This one writes a
+                   resource_vault_templates row; the trigger from
+                   029_auto_link_new_templates.sql then links it into every
+                   client in the organization, existing ones included. -->
+              <button type="submit" class="btn-primary btn-sm hidden" id="rv-add-all-btn">+ Add to All Clients</button>
+              <!-- Greg (9/24/26): "i'm trying to add a new video to the Resource
+                   Library... but it doesn't seem to save." It was reporting the
+                   failure all along -- into #banner, which sits at the very top
+                   of this page. In the workspace this page is an iframe that
+                   grows to its content height, so by the time you are down here
+                   at step 6 the banner is over a thousand pixels above the
+                   fold: the click looked like it did nothing at all. Outcomes
+                   now land here, beside the button that caused them. -->
+              <div id="rv-add-status" class="rv-add-status" role="status" aria-live="polite"></div>
             </form>
           </div>
 
@@ -1500,6 +1542,9 @@
 
     currentUser = profile;
     isSuperAdmin = profile.role === "super_admin";
+    // Org-wide resources are a Super Admin action -- everyone else keeps the
+    // single, client-scoped button.
+    $("rv-add-all-btn").classList.toggle("hidden", !isSuperAdmin);
 
     $("loading-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
@@ -2912,6 +2957,9 @@
       description: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.description) || "") : (r.description || ""),
       url: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.url) || null) : (r.url || null),
       storagePath: r.template_id ? ((r.resource_vault_templates && r.resource_vault_templates.storage_path) || null) : (r.storage_path || null),
+      // Needed by applyResourceOrder so a drag only writes the rows whose
+      // number actually changed, rather than all of them every time.
+      sortOrder: r.sort_order,
     }));
     const countLabel = listData.resource_vault.length ? `${listData.resource_vault.length} item${listData.resource_vault.length === 1 ? "" : "s"}` : "";
     $("resource_vault-count").textContent = countLabel;
@@ -2939,8 +2987,11 @@
         ? `data-unlink-id="${r.id}" title="Remove from this client's Resources"`
         : `data-delete-id="${r.id}" title="Delete this resource"`;
       return `
-        <div class="rv-simple-row">
-          <div class="rv-simple-main">
+        <div class="rv-simple-row" data-row-rv="${r.id}">
+          <button type="button" class="rv-drag-handle" draggable="true" data-drag-rv="${r.id}"
+                  title="Drag to reorder (or focus and press the up/down arrows)"
+                  aria-label="Reorder ${title}">&#8942;&#8942;</button>
+          <div class="rv-simple-main" style="flex:1 1 auto;">
             <div class="rv-simple-title">${titleHtml}</div>
             ${r.description ? `<div class="rv-simple-sub">${escapeHtml(r.description)}</div>` : ""}
           </div>
@@ -2948,6 +2999,8 @@
         </div>
       `;
     }).join("");
+
+    wireResourceDragHandlers(list);
 
     list.querySelectorAll(".rv-file-link").forEach((el) => {
       el.addEventListener("click", () => openStoredDocument(el.dataset.path));
@@ -2972,44 +3025,254 @@
     });
   }
 
-  async function addCustomResourceVaultItem() {
+  function rvStatus(kind, message) {
+    const el = $("rv-add-status");
+    el.className = "rv-add-status" + (kind ? " " + kind : "");
+    el.textContent = message || "";
+    // Only the error needs chasing -- it is the one you have to read before
+    // you can do anything about it, and the panel it sits in can be taller
+    // than the window.
+    if (kind === "error") el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  // Greg (9/24/26): "i need to be able to drag the order of the resources to
+  // different rows." Same native HTML5 drag as client_research.html's document
+  // lists -- no library, and the gesture matches, so it only has to be learned
+  // once. Only the handle carries draggable=true; the row is what moves, so
+  // dragstart sets the drag image to the row or the browser drags a picture of
+  // the grip with nothing to aim by.
+  //
+  // One list here, not several: shared resources (rows carrying a template_id)
+  // and this client's own rows sit in one order, because that is the order the
+  // client sees them in on their dashboard. Both kinds are rows of
+  // client_resource_vault_items, so both carry their own sort_order and both
+  // can be moved.
+  let dragRvId = null;
+
+  function clearRvDropMarkers(listEl) {
+    listEl.querySelectorAll(".rv-simple-row").forEach((r) => r.classList.remove("drop-above", "drop-below"));
+  }
+
+  function wireResourceDragHandlers(listEl) {
+    listEl.querySelectorAll(".rv-drag-handle").forEach((handle) => {
+      const row = handle.closest(".rv-simple-row");
+
+      handle.addEventListener("dragstart", (e) => {
+        dragRvId = handle.dataset.dragRv;
+        e.dataTransfer.effectAllowed = "move";
+        // Firefox will not start a drag unless some data is set.
+        e.dataTransfer.setData("text/plain", dragRvId);
+        if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(row, 20, row.offsetHeight / 2);
+        row.classList.add("is-dragging");
+      });
+
+      handle.addEventListener("dragend", () => {
+        row.classList.remove("is-dragging");
+        clearRvDropMarkers(listEl);
+        dragRvId = null;
+      });
+
+      // Dragging is unreachable without a pointer, so the handle also takes
+      // the arrow keys once focused.
+      handle.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+        e.preventDefault();
+        moveResourceBy(handle.dataset.dragRv, e.key === "ArrowUp" ? -1 : 1);
+      });
+    });
+
+    listEl.querySelectorAll(".rv-simple-row").forEach((row) => {
+      row.addEventListener("dragover", (e) => {
+        if (!dragRvId || row.dataset.rowRv === dragRvId) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const box = row.getBoundingClientRect();
+        const below = e.clientY > box.top + box.height / 2;
+        clearRvDropMarkers(listEl);
+        row.classList.add(below ? "drop-below" : "drop-above");
+      });
+
+      row.addEventListener("drop", (e) => {
+        if (!dragRvId || row.dataset.rowRv === dragRvId) return;
+        e.preventDefault();
+        const box = row.getBoundingClientRect();
+        const below = e.clientY > box.top + box.height / 2;
+        clearRvDropMarkers(listEl);
+        reorderResource(dragRvId, row.dataset.rowRv, below);
+      });
+    });
+  }
+
+  function reorderResource(movingId, targetId, below) {
+    const rows = (listData.resource_vault || []).slice();
+    const from = rows.findIndex((r) => r.id === movingId);
+    if (from === -1) return;
+    const [moved] = rows.splice(from, 1);
+    let to = rows.findIndex((r) => r.id === targetId);
+    if (to === -1) return;
+    if (below) to += 1;
+    rows.splice(to, 0, moved);
+    applyResourceOrder(rows);
+  }
+
+  function moveResourceBy(id, delta) {
+    const rows = (listData.resource_vault || []).slice();
+    const from = rows.findIndex((r) => r.id === id);
+    const to = from + delta;
+    if (from === -1 || to < 0 || to >= rows.length) return;
+    rows.splice(to, 0, rows.splice(from, 1)[0]);
+    applyResourceOrder(rows).then(() => {
+      // Keep the keyboard on the row that just moved, or the next arrow press
+      // would act on whatever landed under the old focus.
+      const handle = document.querySelector(`.rv-drag-handle[data-drag-rv="${id}"]`);
+      if (handle) handle.focus();
+    });
+  }
+
+  // Renumber 1..n and write back only the rows whose number actually changed.
+  // Redrawn from the new order first so the list does not sit still while the
+  // updates are in flight; loadResourceVault at the end is what confirms it
+  // against the database.
+  async function applyResourceOrder(ordered) {
+    const previous = (listData.resource_vault || []).slice();
+    listData.resource_vault = ordered;
+    renderResourceVaultRows(ordered);
+
+    const changed = ordered
+      .map((r, i) => ({ id: r.id, sort_order: i + 1, was: r.sortOrder }))
+      .filter((r) => r.sort_order !== r.was);
+
+    for (const c of changed) {
+      const { error } = await sb.from("client_resource_vault_items")
+        .update({ sort_order: c.sort_order })
+        .eq("id", c.id);
+      if (error) {
+        // Put the list back the way it was rather than leaving the screen
+        // showing an order the database does not have.
+        listData.resource_vault = previous;
+        renderResourceVaultRows(previous);
+        showBanner("Couldn't save the new order: " + error.message, "error");
+        return;
+      }
+    }
+    await loadResourceVault(currentClient.id);
+  }
+
+  // scope: "client" -- one row in client_resource_vault_items, this engagement
+  //         "all"    -- one row in resource_vault_templates; the 029 trigger
+  //                     fans it out to every client in the organization.
+  async function addCustomResourceVaultItem(scope) {
+    const orgWide = scope === "all";
+    if (orgWide && !isSuperAdmin) { rvStatus("error", "Only an Admin can add a resource for every client."); return; }
     const title = $("rv-new-title").value.trim();
     const description = $("rv-new-description").value.trim();
     const url = $("rv-new-url").value.trim();
     const fileInput = $("rv-new-file");
-    if (!title) { showBanner("Title is required.", "error"); return; }
+    if (!title) { rvStatus("error", "Title is required."); return; }
     // Greg (9/22/26): same guard as client_research.html's saveAreaLink --
     // a blob:/data:/javascript: URL only lives in the tab that created it,
     // so saving one here just produces a dead link. Upload the file with
     // the file picker above instead.
     if (url && /^(blob|data|javascript|file):/i.test(url)) {
-      showBanner(`That's a temporary browser link (starts with "${url.split(":")[0]}:"), not a permanent web address -- it stops working once the tab that made it closes. Use the file picker above to upload the actual file instead.`, "error");
+      rvStatus("error", `That's a temporary browser link (starts with "${url.split(":")[0]}:"), not a permanent web address -- it stops working once the tab that made it closes. Use the file picker above to upload the actual file instead.`);
       return;
     }
 
-    let storagePath = null;
-    if (fileInput.files.length) {
-      const file = fileInput.files[0];
-      storagePath = `clients/${currentClient.id}/resource-vault/${Date.now()}-${sanitizeFilename(file.name)}`;
-      const { error: uploadErr } = await sb.storage.from("client-documents").upload(storagePath, file, { contentType: contentTypeFor(file) });
-      if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
-    }
+    const btn = orgWide ? $("rv-add-all-btn") : $("rv-add-btn");
+    const btnLabel = btn.textContent;
+    btn.disabled = true;
+    $("rv-add-btn").disabled = true;
+    $("rv-add-all-btn").disabled = true;
 
-    const sortOrder = (listData.resource_vault || []).length + 1;
-    const { error } = await sb.from("client_resource_vault_items").insert({
-      client_id: currentClient.id,
-      title,
-      description: description || null,
-      url: url || null,
-      storage_path: storagePath,
-      sort_order: sortOrder,
-    });
-    if (error) { showBanner("Couldn't add resource: " + error.message, "error"); return; }
-    $("resource-vault-add-form").reset();
-    showBanner("Resource added.", "success");
-    await loadResourceVault(currentClient.id);
+    try {
+      let storagePath = null;
+      if (fileInput.files.length) {
+        const file = fileInput.files[0];
+        const mb = (file.size / 1048576).toFixed(1);
+        // A video is far bigger than the PDFs this form was built for, and an
+        // upload of one takes long enough that a silent button reads as broken
+        // even when it is working.
+        btn.textContent = "Uploading…";
+        rvStatus("working", `Uploading ${file.name} (${mb} MB)…`);
+
+        // A shared resource must not live under one client's folder, or
+        // removing that engagement would take the file every other client is
+        // pointing at. Same path resource_templates.html uses.
+        storagePath = orgWide
+          ? `resource-templates/${currentUser.organization_id}/${Date.now()}-${sanitizeFilename(file.name)}`
+          : `clients/${currentClient.id}/resource-vault/${Date.now()}-${sanitizeFilename(file.name)}`;
+        const { error: uploadErr } = await sb.storage
+          .from("client-documents")
+          .upload(storagePath, file, { contentType: contentTypeFor(file) });
+
+        if (uploadErr) {
+          // Storage refuses a file for two reasons worth naming, because
+          // neither is obvious from the raw message and both are fixed in the
+          // Supabase dashboard rather than here.
+          const raw = uploadErr.message || String(uploadErr);
+          let hint = "";
+          if (/exceeded the maximum allowed size|payload too large|413/i.test(raw)) {
+            hint = ` This file is ${mb} MB, which is over the client-documents bucket's per-file limit. Raise the limit on that bucket in Supabase, or host the video elsewhere and paste its address in Link URL instead.`;
+          } else if (/mime|content type|not allowed/i.test(raw)) {
+            hint = ` The client-documents bucket isn't accepting ${contentTypeFor(file)} files. Add that type to the bucket's allowed MIME types in Supabase, or use Link URL instead.`;
+          }
+          rvStatus("error", "Couldn't upload the file: " + raw + hint);
+          return;
+        }
+      }
+
+      btn.textContent = "Saving…";
+      rvStatus("working", "Saving…");
+
+      const sortOrder = (listData.resource_vault || []).length + 1;
+      // .select() matters: an INSERT that RLS filters out can come back 200
+      // with error null and zero rows, which is how a save "succeeds" and
+      // stores nothing. An empty result is treated as the failure it is.
+      const { data: inserted, error } = orgWide
+        ? await sb.from("resource_vault_templates").insert({
+            organization_id: currentUser.organization_id,
+            title,
+            description: description || null,
+            url: url || null,
+            storage_path: storagePath,
+            sort_order: sortOrder,
+          }).select("id")
+        : await sb.from("client_resource_vault_items").insert({
+            client_id: currentClient.id,
+            title,
+            description: description || null,
+            url: url || null,
+            storage_path: storagePath,
+            sort_order: sortOrder,
+          }).select("id");
+
+      if (error) { rvStatus("error", "Couldn't add the resource: " + error.message); return; }
+      if (!inserted || !inserted.length) {
+        rvStatus("error", orgWide
+          ? "The resource wasn't saved -- the database accepted the request but stored nothing, which means this login can't add org-wide resources."
+          : "The resource wasn't saved -- the database accepted the request but stored nothing, which usually means this login doesn't have permission to edit this engagement. Try again as an Admin.");
+        return;
+      }
+
+      $("resource-vault-add-form").reset();
+      rvStatus("success", orgWide ? "Resource added for every client." : "Resource added to this client.");
+      setTimeout(() => rvStatus("", ""), 5000);
+      await loadResourceVault(currentClient.id);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = btnLabel;
+      $("rv-add-btn").disabled = false;
+      $("rv-add-all-btn").disabled = false;
+    }
   }
-  $("resource-vault-add-form").addEventListener("submit", (e) => { e.preventDefault(); addCustomResourceVaultItem(); });
+  // Two submit buttons on one form -- submitter says which was pressed.
+  // Enter in a text field submits with no submitter, which stays the safer,
+  // client-only action rather than silently publishing to everyone.
+  $("resource-vault-add-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const id = e.submitter && e.submitter.id;
+    addCustomResourceVaultItem(id === "rv-add-all-btn" ? "all" : "client");
+  });
 
   async function addListRow(cfg) {
     const values = { client_id: currentClient.id };
