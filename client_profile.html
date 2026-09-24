@@ -307,9 +307,30 @@
   .rv-edit-btn:hover { color: var(--navy); background: #eef1f4; }
   .rv-edit-form { flex: 1 1 auto; display: flex; flex-wrap: wrap; gap: 10px; }
   .rv-edit-form .field { flex: 1 1 180px; margin: 0; }
+  /* Description and Link URL hold the long values -- a password tucked on the
+     end of a description, a full YouTube address -- so they get the room.
+     Title is short and fixed-ish (Greg, 9/24/26: the description read
+     "5 Frameworks Videos - Pas" with the rest cut off). */
+  .rv-edit-form .field-wide { flex: 2 1 300px; }
   .rv-edit-form label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 3px; }
   .rv-edit-form input { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; }
-  .rv-edit-actions { flex: 1 1 100%; display: flex; align-items: center; gap: 8px; }
+  .rv-edit-form input[type="text"]:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
+  /* Greg (9/24/26): "it is not clear how to save the edit." Save and Cancel
+     were two identical grey buttons sitting under a grey Choose File button --
+     nothing said which one finished the job. Save is now the green primary,
+     Cancel is quiet text beside it, and the pair sits on its own line above a
+     rule so it reads as the end of the form rather than another field. */
+  .rv-edit-actions {
+    flex: 1 1 100%; display: flex; align-items: center; gap: 14px;
+    margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--border);
+  }
+  .rv-edit-actions .btn-primary { padding: 7px 18px; font-size: 13px; }
+  .rv-edit-cancel {
+    background: none; border: none; padding: 0; font-family: inherit;
+    font-size: 13px; color: var(--muted); cursor: pointer; text-decoration: underline;
+  }
+  .rv-edit-cancel:hover { color: var(--text); }
+  .rv-edit-hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
   /* Editing a shared resource changes it everywhere. That has to be visible
      before the Save, not explained after it. */
   .rv-edit-shared { flex: 1 1 100%; font-size: 12px; color: #7a5b12; background: #fdf6e3; border: 1px solid #f0e0b6; border-radius: 6px; padding: 7px 10px; }
@@ -3096,11 +3117,11 @@
           <label for="rv-edit-title-${id}">Title</label>
           <input type="text" id="rv-edit-title-${id}" value="${escapeHtml(r.title || "")}" />
         </div>
-        <div class="field">
+        <div class="field field-wide">
           <label for="rv-edit-desc-${id}">Description</label>
           <input type="text" id="rv-edit-desc-${id}" value="${escapeHtml(r.description || "")}" />
         </div>
-        <div class="field">
+        <div class="field field-wide">
           <label for="rv-edit-url-${id}">Link URL</label>
           <input type="text" id="rv-edit-url-${id}" value="${escapeHtml(r.url || "")}" placeholder="https://…" />
         </div>
@@ -3111,8 +3132,9 @@
         </div>
         <div class="rv-edit-error" id="rv-edit-error-${id}" style="display:none;"></div>
         <div class="rv-edit-actions">
-          <button type="button" class="btn-secondary btn-sm" id="rv-edit-save-${id}">Save</button>
-          <button type="button" class="btn-secondary btn-sm" id="rv-edit-cancel-${id}">Cancel</button>
+          <button type="button" class="btn-primary" id="rv-edit-save-${id}">Save changes</button>
+          <button type="button" class="rv-edit-cancel" id="rv-edit-cancel-${id}">Cancel</button>
+          <span class="rv-edit-hint">Enter saves &middot; Esc cancels</span>
         </div>
       </div>
     `;
@@ -3122,6 +3144,17 @@
       renderResourceVaultRows(listData.resource_vault || []);
     });
     $(`rv-edit-save-${id}`).addEventListener("click", () => saveResourceEdit(id));
+
+    // Typing a value and pressing Enter is what most people try first, and it
+    // did nothing here because this is a div, not a form -- one more reason
+    // the save was hard to find.
+    rowEl.querySelectorAll('input[type="text"]').forEach((input) => {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); saveResourceEdit(id); }
+        if (e.key === "Escape") { e.preventDefault(); rvEditingId = null; renderResourceVaultRows(listData.resource_vault || []); }
+      });
+    });
+
     $(`rv-edit-title-${id}`).focus();
   }
 
@@ -3192,7 +3225,7 @@
       await loadResourceVault(currentClient.id);
     } finally {
       saveBtn.disabled = false;
-      saveBtn.textContent = "Save";
+      saveBtn.textContent = "Save changes";
     }
   }
 
