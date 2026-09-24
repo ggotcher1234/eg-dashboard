@@ -3254,6 +3254,33 @@
         return;
       }
 
+      // An org-wide resource is two steps, and only the first one happens
+      // here: this insert creates the template, and the trigger from
+      // 029_auto_link_new_templates.sql is what puts a row in
+      // client_resource_vault_items for every client. If that trigger was
+      // never applied to this database, or a client's organization_id doesn't
+      // match the admin's, the template lands and links to nobody -- the save
+      // reports success and the resource appears in no list, anywhere. So the
+      // second step is checked rather than assumed (Greg, 9/24/26: "i tried to
+      // save for all and it doesn't show up in the resources list").
+      if (orgWide) {
+        const templateId = inserted[0].id;
+        const { count, error: linkErr } = await sb
+          .from("client_resource_vault_items")
+          .select("id", { count: "exact", head: true })
+          .eq("template_id", templateId);
+
+        if (!linkErr && !count) {
+          rvStatus("error",
+            "The resource was created, but it didn't get attached to any client, so it won't appear in any Resources list yet. " +
+            "That link is made by a database trigger from migration 029_auto_link_new_templates.sql -- either that migration hasn't been run on this database, " +
+            "or this engagement's organization doesn't match yours. The resource itself is saved and visible on the Resource Vault templates page.");
+          $("resource-vault-add-form").reset();
+          await loadResourceVault(currentClient.id);
+          return;
+        }
+      }
+
       $("resource-vault-add-form").reset();
       rvStatus("success", orgWide ? "Resource added for every client." : "Resource added to this client.");
       setTimeout(() => rvStatus("", ""), 5000);
