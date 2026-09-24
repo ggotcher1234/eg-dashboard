@@ -292,6 +292,19 @@
 
   /* ---------- Preview / past-invoices tables ---------- */
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+  /* County / segment chips and the missing-county warning (9/24/26). */
+  .county-tag { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+                color: var(--navy); background: #e7edf3; border-radius: 999px; padding: 1px 8px; margin-left: 6px; vertical-align: middle; }
+  .county-tag-missing { color: #7a5b12; background: #fdf6e3; border: 1px solid #f0e0b6; }
+  .county-input { margin-left: 10px; width: 130px; padding: 2px 8px; font-family: inherit; font-size: 12px; font-weight: 600;
+                  color: var(--navy); border: 1px solid var(--border); border-radius: 999px; background: #fff; vertical-align: middle; }
+  .county-input::placeholder { font-weight: 400; color: var(--muted); }
+  .county-input-missing { border-color: #e0c779; background: #fdf6e3; }
+  .county-input:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
+  .segment-row td { background: var(--navy); color: #fff; font-weight: 700; font-size: 12.5px;
+                    text-transform: uppercase; letter-spacing: 0.3px; padding: 8px 12px; }
+  .pi-county-warning { margin: 0 0 12px; padding: 10px 13px; border-radius: 8px; font-size: 12.5px;
+                       color: #7a5b12; background: #fdf6e3; border: 1px solid #f0e0b6; }
   table.pi-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   table.pi-table th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); background: #eef2f6; padding: 10px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   table.pi-table th.sortable { cursor: pointer; user-select: none; }
@@ -628,8 +641,27 @@
             </div>
             <div id="pi-setup-fee-timing" style="font-size:11.5px; color:var(--muted); margin-top:4px; max-width:230px;"></div>
           </div>
+          <!-- Rita (9/24/26): "We send them 2 invoices: one for all engagements
+               in Monroe County and the other for the rest of the engagements
+               in all other counties." Lives here beside Hourly Rate and Setup
+               Fee because it is the same kind of thing -- a billing property
+               of the Program, autosaved to econ_dev_companies the moment it
+               changes. Blank = one invoice, which is every other Program. -->
+          <div class="field-group">
+            <label for="pi-split-county">Split invoice by county <span style="font-weight:400; color:var(--muted);">(program-wide)</span></label>
+            <input type="text" id="pi-split-county" placeholder="e.g. Monroe" disabled style="max-width:170px;" />
+            <div id="pi-split-county-hint" style="font-size:11.5px; color:var(--muted); margin-top:4px; max-width:230px;">
+              Leave blank for a single invoice.
+            </div>
+          </div>
           <button type="button" class="btn-primary" id="pi-generate-btn" disabled>Generate Invoice</button>
         </div>
+
+        <!-- An engagement with no county silently lands on the "all other
+             counties" invoice. On a split Program that is the difference
+             between a correct invoice and a wrong one, so it gets its own
+             line rather than only a small tag on the row (9/24/26). -->
+        <div id="pi-county-warning" class="pi-county-warning hidden"></div>
 
         <div class="table-scroll">
           <table class="pi-table" id="preview-table">
@@ -908,7 +940,7 @@
   async function loadPrograms() {
     const { data, error } = await sb
       .from("econ_dev_companies")
-      .select("id, name, address, billing_hourly_rate, bill_admin_qc_upfront, bill_setup_fee_upfront, setup_fee")
+      .select("id, name, address, billing_hourly_rate, bill_admin_qc_upfront, bill_setup_fee_upfront, setup_fee, invoice_split_county")
       .order("name", { ascending: true });
     if (error) { showBanner("Couldn't load Programs: " + error.message, "error"); return; }
     programs = data || [];
@@ -1063,11 +1095,14 @@
   }
   $("std-print-btn").addEventListener("click", () => window.print());
   $("std-export-btn").addEventListener("click", () => {
-    const rows = [["Invoice #", "Program", "Month", "Date", "Total Due", "Voided"]];
+    const rows = [["Invoice #", "Program", "Segment", "Month", "Date", "Total Due", "Voided"]];
     for (const inv of pastInvoices) {
       rows.push([
         inv.invoice_number,
         (inv.econ_dev_companies && inv.econ_dev_companies.name) || "",
+        // Without this, two invoices for the same program and month read as
+        // duplicates in a spreadsheet.
+        inv.billing_segment || "",
         monthLongLabel(inv.billing_month),
         inv.invoice_date,
         inv.total_due,
@@ -1077,14 +1112,23 @@
     downloadCsv(`program-invoices-${new Date().toISOString().slice(0, 10)}.csv`, rows);
   });
 
+  function loadSplitCountyForSelectedProgram() {
+    const program = programs.find((p) => p.id === $("pi-program").value);
+    $("pi-split-county").disabled = !program;
+    $("pi-split-county").value = (program && program.invoice_split_county) || "";
+    renderSplitCountyHint();
+  }
+
   function wireBuilderControls() {
     $("pi-program").addEventListener("change", () => {
       loadRateForSelectedProgram();
       loadSetupFeeForSelectedProgram();
+      loadSplitCountyForSelectedProgram();
       refreshPreview();
     });
     $("pi-rate").addEventListener("change", saveRateForSelectedProgram);
     $("pi-setup-fee").addEventListener("change", saveSetupFeeForSelectedProgram);
+    wireSplitCountyField();
     $("pi-month").addEventListener("change", refreshPreview);
     $("pi-month-prev").addEventListener("click", () => shiftMonth(-1));
     $("pi-month-next").addEventListener("click", () => shiftMonth(1));
@@ -1124,6 +1168,7 @@
     // (Greg, 8/22/26 bug report).
     loadRateForSelectedProgram();
     loadSetupFeeForSelectedProgram();
+    loadSplitCountyForSelectedProgram();
 
     if (!programId || !monthValue) {
       renderPreviewTable();
@@ -1139,7 +1184,7 @@
 
     const { data: clients, error: clientsErr } = await sb
       .from("clients")
-      .select("id, name, setup_fee_billed, project_status, closed_at")
+      .select("id, name, setup_fee_billed, project_status, closed_at, county")
       .eq("econ_dev_company_id", programId);
     if (clientsErr) { showBanner("Couldn't load clients for this Program: " + clientsErr.message, "error"); return; }
 
@@ -1231,6 +1276,10 @@
       previewClients.push({
         client_id: client.id,
         client_name: client.name,
+        // Carried into the line_items snapshot too, so a reprinted invoice
+        // still shows which county each engagement was billed under even if
+        // the engagement is later corrected (127, 9/24/26).
+        county: client.county || null,
         lines,
         setup_fee: null,                     // set by recomputeSetupFeeAmounts() below, from the Program's setup_fee
         setup_fee_billed: !!client.setup_fee_billed,
@@ -1292,6 +1341,69 @@
     previewTotalDue = round2(previewClients.reduce((s, c) => s + c.subtotal, 0));
   }
 
+  // Rita (9/24/26): "We send them 2 invoices: one for all engagements in Monroe
+  // County and the other for the rest of the engagements in all other
+  // counties." A Program with econ_dev_companies.invoice_split_county set
+  // bills in two halves; every other Program is untouched and still bills once.
+  //
+  // An engagement with no county recorded falls into "all other counties".
+  // That is the only sane default, but it is also silently wrong for a Monroe
+  // engagement nobody filled in, so the preview calls those out rather than
+  // letting them slide onto the wrong invoice.
+  function splitCounty() {
+    const program = programs.find((p) => p.id === $("pi-program").value);
+    return (program && (program.invoice_split_county || "").trim()) || null;
+  }
+
+  function segmentFor(county, split) {
+    if (!split) return null;
+    return (county || "").trim().toLowerCase() === split.toLowerCase()
+      ? `${split} County`
+      : "All other counties";
+  }
+
+  // The two halves, in the order they are generated and printed.
+  function splitPreview() {
+    const split = splitCounty();
+    if (!split) return [{ segment: null, clients: previewClients }];
+    const inCounty = previewClients.filter((c) => segmentFor(c.county, split) === `${split} County`);
+    const rest     = previewClients.filter((c) => segmentFor(c.county, split) !== `${split} County`);
+    return [
+      { segment: `${split} County`,     clients: inCounty },
+      { segment: "All other counties",  clients: rest },
+    ].filter((g) => g.clients.length);
+  }
+
+  function groupTotal(clients) {
+    return round2(clients.reduce((s, c) => s + c.subtotal, 0));
+  }
+
+  // Saving a county re-partitions the preview, so the row can jump to the
+  // other invoice as soon as you leave the field -- which is the point.
+  function wireCountyInputs() {
+    document.querySelectorAll("[data-county-client]").forEach((input) => {
+      const original = input.value;
+      input.addEventListener("blur", async () => {
+        const value = input.value.trim().replace(/\s+county$/i, "");
+        if (value === original.trim()) return;
+        const clientId = input.dataset.countyClient;
+
+        const { data, error } = await sb.from("clients")
+          .update({ county: value || null }).eq("id", clientId).select("id");
+        if (error) { showBanner("Couldn't save the county: " + error.message, "error"); input.value = original; return; }
+        if (!data || !data.length) {
+          showBanner("The county wasn't saved -- this login can't edit that engagement.", "error");
+          input.value = original;
+          return;
+        }
+        const row = previewClients.find((c) => c.client_id === clientId);
+        if (row) row.county = value || null;
+        renderPreviewTable();
+      });
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
+    });
+  }
+
   function renderPreviewTable() {
     const tbody = $("preview-tbody");
     if (!previewClients.length) {
@@ -1303,9 +1415,27 @@
     $("preview-table").classList.remove("hidden");
     $("preview-empty").classList.add("hidden");
 
+    const split = splitCounty();
+    const groups = splitPreview();
+
     let rows = "";
-    for (const c of previewClients) {
-      rows += `<tr class="client-group-row"><td colspan="4">${escapeHtml(c.client_name)}</td></tr>`;
+    for (const g of groups) {
+    if (g.segment) {
+      rows += `<tr class="segment-row"><td colspan="4">Invoice ${groups.indexOf(g) + 1} of ${groups.length} &mdash; ${escapeHtml(g.segment)} &middot; ${money(groupTotal(g.clients))}</td></tr>`;
+    }
+    for (const c of g.clients) {
+      // Editable here rather than on Company Info. The Company Details
+      // subcard in that wizard (Engagement Name / Address / NAICS) was
+      // deliberately removed on 9/2/26 as redundant, and county is billing
+      // data anyway -- this is the one screen where a wrong or missing one
+      // changes the outcome, and where you are looking when it matters.
+      const countyCell = split
+        ? ` <input type="text" class="county-input${c.county ? "" : " county-input-missing"}"
+                   data-county-client="${c.client_id}" value="${escapeHtml(c.county || "")}"
+                   placeholder="county" aria-label="County for ${escapeHtml(c.client_name)}" />`
+        : "";
+      const countyTag = countyCell;
+      rows += `<tr class="client-group-row"><td colspan="4">${escapeHtml(c.client_name)}${countyTag}</td></tr>`;
       for (const l of c.lines) {
         rows += `<tr><td style="padding-left:22px;">${escapeHtml(l.label)}</td><td class="num">${l.qty}</td><td class="num">${money(l.rate)}</td><td class="num">${money(l.amount)}</td></tr>`;
       }
@@ -1321,15 +1451,35 @@
       }
       rows += `<tr class="subtotal-row"><td colspan="4">Subtotal: ${money(c.subtotal)}</td></tr>`;
     }
+    }
     tbody.innerHTML = rows;
+    wireCountyInputs();
     $("preview-total").textContent = money(previewTotalDue);
+
+    // Named separately from the per-row tag: one engagement with no county is
+    // easy to miss in a long list, and it is the difference between a correct
+    // invoice and a wrong one.
+    const missing = split ? previewClients.filter((c) => !c.county) : [];
+    const warn = $("pi-county-warning");
+    if (warn) {
+      warn.classList.toggle("hidden", !missing.length);
+      if (missing.length) {
+        warn.innerHTML = `<strong>${missing.length} engagement${missing.length === 1 ? " has" : "s have"} no county recorded</strong> `
+          + `(${missing.map((c) => escapeHtml(c.client_name)).join(", ")}) — `
+          + `${missing.length === 1 ? "it is" : "they are"} being billed under “All other counties”. `
+          + `Set the county on each one before generating if ${missing.length === 1 ? "it belongs" : "any belong"} in ${escapeHtml(split)} County.`;
+      }
+    }
   }
 
   // ---------- Generate ----------
   function openConfirmModal() {
     const programName = programs.find((p) => p.id === $("pi-program").value)?.name || "";
-    $("confirm-summary").textContent =
-      `${programName} — ${monthLongLabel($("pi-month").value)} — Total Due ${money(previewTotalDue)}`;
+    const confirmGroups = splitPreview();
+    $("confirm-summary").textContent = confirmGroups.length > 1
+      ? `${programName} — ${monthLongLabel($("pi-month").value)} — ${confirmGroups.length} invoices `
+        + `(${confirmGroups.map((g) => `${g.segment} ${money(groupTotal(g.clients))}`).join(", ")}) — Total Due ${money(previewTotalDue)}`
+      : `${programName} — ${monthLongLabel($("pi-month").value)} — Total Due ${money(previewTotalDue)}`;
     $("confirm-overlay").classList.add("open");
   }
 
@@ -1338,9 +1488,7 @@
     const programId = $("pi-program").value;
     const monthValue = $("pi-month").value;
     const invoiceDate = new Date().toISOString().slice(0, 10);
-
-    const setupFeeClientIds = previewClients.filter((c) => c.setup_fee !== null).map((c) => c.client_id);
-    const sunkCostAssignmentIds = previewClients.flatMap((c) => c.lines.filter((l) => l.is_sunk_cost).map((l) => l.assignment_id));
+    const groups = splitPreview();
 
     // The setup-fee amount lives on the Program (econ_dev_companies.setup_fee),
     // saved the moment it's edited above -- nothing per-engagement to write
@@ -1348,28 +1496,113 @@
     // snapshot below; generate_program_invoice() just flips
     // setup_fee_billed for the engagements in p_setup_fee_client_ids.
 
-    const { data, error } = await sb.rpc("generate_program_invoice", {
-      p_organization_id: currentUser.organization_id,
-      p_econ_dev_company_id: programId,
-      p_billing_month: monthValue,
-      p_invoice_date: invoiceDate,
-      p_line_items: previewClients,
-      p_total_due: previewTotalDue,
-      p_setup_fee_client_ids: setupFeeClientIds,
-      p_sunk_cost_assignment_ids: sunkCostAssignmentIds,
-    });
+    // One call per segment. generate_program_invoice() serialises numbering
+    // behind a per-year advisory lock, so two calls in a row get consecutive
+    // numbers with no chance of a collision -- nothing extra needed here.
+    //
+    // The setup-fee and sunk-cost id lists are scoped to each group, so an
+    // engagement's one-time charges are only flagged billed on the invoice
+    // that actually carries them.
+    const generated = [];
+    for (const g of groups) {
+      const setupFeeClientIds = g.clients.filter((c) => c.setup_fee !== null).map((c) => c.client_id);
+      const sunkCostAssignmentIds = g.clients.flatMap((c) => c.lines.filter((l) => l.is_sunk_cost).map((l) => l.assignment_id));
+
+      const { data, error } = await sb.rpc("generate_program_invoice", {
+        p_organization_id: currentUser.organization_id,
+        p_econ_dev_company_id: programId,
+        p_billing_month: monthValue,
+        p_invoice_date: invoiceDate,
+        p_line_items: g.clients,
+        p_total_due: groupTotal(g.clients),
+        p_setup_fee_client_ids: setupFeeClientIds,
+        p_sunk_cost_assignment_ids: sunkCostAssignmentIds,
+      });
+
+      if (error) {
+        $("confirm-generate-btn").disabled = false;
+        $("confirm-overlay").classList.remove("open");
+        // Say plainly what did and did not happen. Half a split is a real
+        // state -- the first invoice exists and is numbered -- and pretending
+        // otherwise would have someone regenerate and double-bill.
+        const done = generated.length
+          ? ` Invoice ${generated.map((i) => i.invoice_number).join(" and ")} ${generated.length === 1 ? "was" : "were"} already generated; void ${generated.length === 1 ? "it" : "them"} before trying again.`
+          : "";
+        showBanner(`Couldn't generate${g.segment ? " the " + g.segment + " invoice" : " the invoice"}: ${error.message}.${done}`, "error");
+        await loadPastInvoices();
+        await refreshPreview();
+        return;
+      }
+
+      // billing_segment is stamped after the fact rather than passed in --
+      // generate_program_invoice() takes a fixed argument list, and adding a
+      // parameter would mean dropping and recreating a function that also
+      // writes to clients and client_assignments. An Admin can update
+      // program_invoices directly (062's admin-all policy), and the invoice
+      // itself is already safely created by this point.
+      if (g.segment) {
+        const { error: segErr } = await sb.from("program_invoices")
+          .update({ billing_segment: g.segment }).eq("id", data.id).select("id");
+        if (segErr) {
+          showBanner(`Invoice ${data.invoice_number} was generated, but couldn't be labelled "${g.segment}": ${segErr.message}`, "error");
+        } else {
+          data.billing_segment = g.segment;
+        }
+      }
+      generated.push(data);
+    }
 
     $("confirm-generate-btn").disabled = false;
     $("confirm-overlay").classList.remove("open");
+    if (!generated.length) { showBanner("Nothing to invoice for this Program and month.", "error"); return; }
 
-    if (error) { showBanner("Couldn't generate the invoice: " + error.message, "error"); return; }
+    showBanner(generated.length === 1
+      ? `Invoice ${generated[0].invoice_number} generated.`
+      : `Invoices ${generated.map((i) => i.invoice_number).join(" and ")} generated — one per county group.`, "success");
 
-    showBanner(`Invoice ${data.invoice_number} generated.`, "success");
     const programName = programs.find((p) => p.id === programId)?.name || "";
     const programAddress = programs.find((p) => p.id === programId)?.address || "";
     await loadPastInvoices();
     await refreshPreview();
-    showInvoiceView(data, programName, programAddress);
+    // Opens the first; the rest are one click away in Past Invoices, which now
+    // shows the segment beside each.
+    showInvoiceView(generated[0], programName, programAddress);
+  }
+
+  // Autosaved on blur, same as Hourly Rate and Setup Fee. Stored trimmed and
+  // without the word "County" -- the invoice label adds that -- so "Monroe",
+  // "monroe" and "Monroe County" all behave the same when typed.
+  function wireSplitCountyField() {
+    const el = $("pi-split-county");
+    if (!el) return;
+    el.addEventListener("blur", async () => {
+      const programId = $("pi-program").value;
+      if (!programId) return;
+      const program = programs.find((p) => p.id === programId);
+      const value = el.value.trim().replace(/\s+county$/i, "");
+      const next = value || null;
+      if ((program && (program.invoice_split_county || null)) === next) return;
+
+      const { data, error } = await sb.from("econ_dev_companies")
+        .update({ invoice_split_county: next }).eq("id", programId).select("id");
+      if (error) { showBanner("Couldn't save the county split: " + error.message, "error"); return; }
+      if (!data || !data.length) { showBanner("The county split wasn't saved -- this login can't change Program billing settings.", "error"); return; }
+
+      if (program) program.invoice_split_county = next;
+      el.value = next || "";
+      showBanner(next ? `This Program now bills as two invoices: ${next} County, and all other counties.` : "This Program is back to a single invoice.", "success");
+      renderSplitCountyHint();
+      refreshPreview();
+    });
+  }
+
+  function renderSplitCountyHint() {
+    const el = $("pi-split-county-hint");
+    if (!el) return;
+    const split = splitCounty();
+    el.textContent = split
+      ? `Two invoices each month: ${split} County, and all other counties.`
+      : "Leave blank for a single invoice.";
   }
 
   // ---------- Past invoices ----------
@@ -1442,7 +1675,7 @@
 
     tbody.innerHTML = sortPastInvoices(pastInvoices).map((inv) => `
       <tr>
-        <td><span class="invoice-number-badge">${escapeHtml(inv.invoice_number)}</span>${inv.voided ? ' <span class="voided-badge">Voided</span>' : ""}</td>
+        <td><span class="invoice-number-badge">${escapeHtml(inv.invoice_number)}</span>${inv.billing_segment ? ` <span class="county-tag">${escapeHtml(inv.billing_segment)}</span>` : ""}${inv.voided ? ' <span class="voided-badge">Voided</span>' : ""}</td>
         <td>${escapeHtml((inv.econ_dev_companies && inv.econ_dev_companies.name) || "—")}</td>
         <td>${escapeHtml(monthLongLabel(inv.billing_month))}</td>
         <td>${new Date(inv.invoice_date).toLocaleDateString()}</td>
