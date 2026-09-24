@@ -296,6 +296,24 @@
      title + description, the title linking out to its URL or opening its
      uploaded file, with a red x to remove. */
   .rv-table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Pencil sits beside the x, same quiet-until-hovered treatment, but navy
+     rather than red -- editing and removing should not look like the same
+     weight of action (Greg, 9/24/26). */
+  .rv-edit-btn {
+    flex-shrink: 0; width: 28px; height: 28px; border: none; background: none;
+    color: var(--muted); font-size: 14px; line-height: 1; cursor: pointer;
+    border-radius: 6px; font-family: inherit;
+  }
+  .rv-edit-btn:hover { color: var(--navy); background: #eef1f4; }
+  .rv-edit-form { flex: 1 1 auto; display: flex; flex-wrap: wrap; gap: 10px; }
+  .rv-edit-form .field { flex: 1 1 180px; margin: 0; }
+  .rv-edit-form label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 3px; }
+  .rv-edit-form input { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; }
+  .rv-edit-actions { flex: 1 1 100%; display: flex; align-items: center; gap: 8px; }
+  /* Editing a shared resource changes it everywhere. That has to be visible
+     before the Save, not explained after it. */
+  .rv-edit-shared { flex: 1 1 100%; font-size: 12px; color: #7a5b12; background: #fdf6e3; border: 1px solid #f0e0b6; border-radius: 6px; padding: 7px 10px; }
+  .rv-edit-error { flex: 1 1 100%; font-size: 12.5px; color: #922f2b; background: #fbe9e9; border: 1px solid #f0c2c0; border-radius: 6px; padding: 7px 10px; }
   .rv-add-status { flex: 1 1 100%; margin-top: 8px; font-size: 12.5px; display: none; }
   .rv-add-status.working { display: block; color: var(--muted); }
   .rv-add-status.error   { display: block; color: #922f2b; background: #fbe9e9; border: 1px solid #f0c2c0; border-radius: 6px; padding: 8px 11px; }
@@ -2995,12 +3013,17 @@
             <div class="rv-simple-title">${titleHtml}</div>
             ${r.description ? `<div class="rv-simple-sub">${escapeHtml(r.description)}</div>` : ""}
           </div>
+          <button type="button" class="rv-edit-btn" data-edit-id="${r.id}" title="Edit this resource" aria-label="Edit ${title}">&#9998;</button>
           <button type="button" class="rv-x-btn" ${removeAttr}>&times;</button>
         </div>
       `;
     }).join("");
 
     wireResourceDragHandlers(list);
+
+    list.querySelectorAll("[data-edit-id]").forEach((btn) => {
+      btn.addEventListener("click", () => openResourceEditor(btn.dataset.editId));
+    });
 
     list.querySelectorAll(".rv-file-link").forEach((el) => {
       el.addEventListener("click", () => openStoredDocument(el.dataset.path));
@@ -3033,6 +3056,144 @@
     // you can do anything about it, and the panel it sits in can be taller
     // than the window.
     if (kind === "error") el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  // Greg (9/24/26): "i need a small pencil icon next to the x that allows me to
+  // edit the title, link, etc."
+  //
+  // Edits happen in the row itself rather than a modal -- the list is short,
+  // and swapping one row for its own fields keeps the rest of the order in
+  // view while you work.
+  //
+  // WHICH TABLE gets written depends on the row, and the difference matters to
+  // more people than the person clicking:
+  //   * a row with a template_id is a SHARED resource. Its title, description,
+  //     link and file live in resource_vault_templates and resolve live for
+  //     every client. Editing it edits it everywhere, so the form says so
+  //     before you save and only an Admin may do it -- the same bar as
+  //     "+ Add to All Clients" and the templates page.
+  //   * a row without one is this client's own, and is edited in place.
+  let rvEditingId = null;
+
+  function openResourceEditor(id) {
+    const r = (listData.resource_vault || []).find((x) => x.id === id);
+    if (!r) return;
+    const rowEl = document.querySelector(`.rv-simple-row[data-row-rv="${id}"]`);
+    if (!rowEl) return;
+    rvEditingId = id;
+
+    const sharedNote = r.isTemplate
+      ? `<div class="rv-edit-shared">This is a shared resource — changes apply to <strong>every client</strong>, not just this one.${isSuperAdmin ? "" : " Only an Admin can change it."}</div>`
+      : "";
+    const fileNote = r.storagePath
+      ? `Currently: ${escapeHtml(fileNameFromPath(r.storagePath))}. Choosing a new file replaces it.`
+      : "Attach a file instead of a link.";
+
+    rowEl.innerHTML = `
+      <div class="rv-edit-form">
+        ${sharedNote}
+        <div class="field">
+          <label for="rv-edit-title-${id}">Title</label>
+          <input type="text" id="rv-edit-title-${id}" value="${escapeHtml(r.title || "")}" />
+        </div>
+        <div class="field">
+          <label for="rv-edit-desc-${id}">Description</label>
+          <input type="text" id="rv-edit-desc-${id}" value="${escapeHtml(r.description || "")}" />
+        </div>
+        <div class="field">
+          <label for="rv-edit-url-${id}">Link URL</label>
+          <input type="text" id="rv-edit-url-${id}" value="${escapeHtml(r.url || "")}" placeholder="https://…" />
+        </div>
+        <div class="field" style="flex:1 1 100%;">
+          <label for="rv-edit-file-${id}">Replace file (optional)</label>
+          <input type="file" id="rv-edit-file-${id}" />
+          <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">${fileNote} If both a link and a file are set, the link wins.</div>
+        </div>
+        <div class="rv-edit-error" id="rv-edit-error-${id}" style="display:none;"></div>
+        <div class="rv-edit-actions">
+          <button type="button" class="btn-secondary btn-sm" id="rv-edit-save-${id}">Save</button>
+          <button type="button" class="btn-secondary btn-sm" id="rv-edit-cancel-${id}">Cancel</button>
+        </div>
+      </div>
+    `;
+
+    $(`rv-edit-cancel-${id}`).addEventListener("click", () => {
+      rvEditingId = null;
+      renderResourceVaultRows(listData.resource_vault || []);
+    });
+    $(`rv-edit-save-${id}`).addEventListener("click", () => saveResourceEdit(id));
+    $(`rv-edit-title-${id}`).focus();
+  }
+
+  async function saveResourceEdit(id) {
+    const r = (listData.resource_vault || []).find((x) => x.id === id);
+    if (!r) return;
+    const errEl = $(`rv-edit-error-${id}`);
+    const fail = (msg) => { errEl.textContent = msg; errEl.style.display = "block"; };
+    errEl.style.display = "none";
+
+    if (r.isTemplate && !isSuperAdmin) { fail("Only an Admin can change a shared resource."); return; }
+
+    const title = $(`rv-edit-title-${id}`).value.trim();
+    const description = $(`rv-edit-desc-${id}`).value.trim();
+    const url = $(`rv-edit-url-${id}`).value.trim();
+    const fileInput = $(`rv-edit-file-${id}`);
+    if (!title) { fail("Title is required."); return; }
+    // Same guard as the add form: a blob:/data: URL dies with the tab that
+    // made it, so saving one just produces a dead link.
+    if (url && /^(blob|data|javascript|file):/i.test(url)) {
+      fail(`That's a temporary browser link (starts with "${url.split(":")[0]}:"), not a permanent web address. Use the file picker instead.`);
+      return;
+    }
+
+    const saveBtn = $(`rv-edit-save-${id}`);
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+
+    try {
+      const patch = { title, description: description || null, url: url || null };
+      const oldPath = r.storagePath;
+
+      if (fileInput.files.length) {
+        const file = fileInput.files[0];
+        saveBtn.textContent = "Uploading…";
+        const path = r.isTemplate
+          ? `resource-templates/${currentUser.organization_id}/${Date.now()}-${sanitizeFilename(file.name)}`
+          : `clients/${currentClient.id}/resource-vault/${Date.now()}-${sanitizeFilename(file.name)}`;
+        const { error: upErr } = await sb.storage.from("client-documents")
+          .upload(path, file, { contentType: contentTypeFor(file) });
+        if (upErr) { fail("Couldn't upload the file: " + upErr.message); return; }
+        patch.storage_path = path;
+        saveBtn.textContent = "Saving…";
+      }
+
+      // .select() again: an update RLS filters out returns 200 with no rows
+      // and no error, which would otherwise read as a successful save.
+      const { data: updated, error } = r.isTemplate
+        ? await sb.from("resource_vault_templates").update(patch).eq("id", r.templateId).select("id")
+        : await sb.from("client_resource_vault_items").update(patch).eq("id", r.id).select("id");
+
+      if (error) { fail("Couldn't save: " + error.message); return; }
+      if (!updated || !updated.length) {
+        fail(r.isTemplate
+          ? "Nothing was saved — this login isn't allowed to change shared resources."
+          : "Nothing was saved — this login isn't allowed to edit this engagement.");
+        return;
+      }
+
+      // Only now that the row is definitely updated is the old file expendable.
+      if (patch.storage_path && oldPath && oldPath !== patch.storage_path) {
+        await sb.storage.from("client-documents").remove([oldPath]);
+      }
+
+      rvEditingId = null;
+      rvStatus("success", r.isTemplate ? "Shared resource updated for every client." : "Resource updated.");
+      setTimeout(() => rvStatus("", ""), 4000);
+      await loadResourceVault(currentClient.id);
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save";
+    }
   }
 
   // Greg (9/24/26): "i need to be able to drag the order of the resources to
