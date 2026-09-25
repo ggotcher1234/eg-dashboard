@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Economic Gardening Dashboard</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --bg: #a3b9aa;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  .hidden { display: none !important; }
+
+  #loading-view, #error-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; text-align: center; padding: 20px; }
+  #error-view .error-box { max-width: 420px; }
+  #error-view h2 { color: var(--text); font-size: 18px; margin-bottom: 8px; }
+
+  header { background: var(--navy); color: #fff; padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .brand-badge { background: #fff; border-radius: 8px; padding: 6px 12px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 30px; display: block; }
+  header h1 { font-size: 19px; margin: 0; font-weight: 700; }
+  .header-right { text-align: right; font-size: 12px; color: #a9bdd2; }
+  .header-right strong { color: #fff; }
+
+  main { max-width: 1000px; margin: 0 auto; padding: 24px 20px 80px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 22px 26px; margin-bottom: 16px; }
+
+  .dashboard-kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-dark); margin-bottom: 8px; }
+  .company-top { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 14px; }
+  .company-logo { width: 64px; height: 64px; border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; background: #fafbfc; }
+  .company-logo img { max-width: 100%; max-height: 100%; }
+  .company-name { font-size: 21px; font-weight: 700; color: var(--navy); margin: 0; }
+  .company-address { font-size: 13px; color: var(--muted); margin-top: 3px; }
+  /* "Updated:" under the address (Greg, 9/8/26) -- a quieter line than the
+     address above it, since it is a freshness note rather than information
+     about the company. */
+  .company-updated { font-size: 12px; color: var(--muted); margin-top: 5px; opacity: 0.85; }
+
+  .company-description { font-size: 14px; line-height: 1.65; }
+  .company-description p { margin: 0 0 10px; }
+  .company-description p:last-child { margin-bottom: 0; }
+  .company-description ul { margin: 0 0 10px; padding-left: 22px; }
+  .company-description ul:last-child { margin-bottom: 0; }
+  .company-description strong { color: var(--navy); text-transform: uppercase; font-size: 12.5px; letter-spacing: 0.3px; }
+  .company-description em { font-style: italic; }
+
+  .company-naics { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .company-website { display: inline-block; font-size: 13.5px; font-weight: 700; color: var(--accent-dark); text-decoration: none; margin-top: 10px; }
+  .company-website:hover { text-decoration: underline; }
+  .company-socials { margin-top: 8px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .social-link { font-size: 13px; font-weight: 600; text-decoration: none; }
+  .social-link.li { color: #0a66c2; }
+  .social-link.fb { color: #1877f2; }
+  .social-link.ig { color: #c1327a; }
+  .social-link.tw { color: #14304d; }
+  .social-link.yt { color: #c4302b; }
+  .social-link.ot { color: #5b6472; }
+  .social-link:hover { text-decoration: underline; }
+
+  .stat-pills { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .stat-pill { display: inline-flex; align-items: center; gap: 9px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 9px 16px; font-size: 13px; font-weight: 700; color: var(--navy); cursor: pointer; }
+  .stat-pill:hover { border-color: var(--accent); }
+  .stat-pill.open { border-color: var(--accent); background: #f3f6f1; }
+  .stat-pill .count { background: #eef1f4; color: var(--muted); border-radius: 999px; padding: 2px 9px; font-size: 11.5px; }
+  .stat-pill .pill-chevron { color: var(--muted); font-size: 11px; transition: transform 0.15s ease; }
+  .stat-pill.open .pill-chevron { transform: rotate(90deg); }
+  #stat-pill-details .action-body { margin: 10px 0 0; }
+
+  .action-bar { background: var(--accent); color: #fff; border-radius: 8px; padding: 13px 20px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; cursor: pointer; font-weight: 700; font-size: 14px; }
+  .action-bar:hover { background: var(--accent-dark); }
+  .action-bar .ab-chevron { transition: transform 0.15s ease; }
+  .action-bar.open .ab-chevron { transform: rotate(90deg); }
+  .action-body { display: none; background: #fff; border: 1px solid var(--border); border-radius: 8px; margin: -4px 0 12px; padding: 14px 20px; }
+  .action-body.open { display: block; }
+  .action-empty { color: var(--muted); font-size: 13.5px; font-style: italic; }
+  .action-row { padding: 8px 0; border-bottom: 1px solid #f0f2f4; font-size: 13.5px; }
+  .action-row:last-child { border-bottom: none; }
+  .action-row .ar-title { font-weight: 600; }
+  .action-row .ar-sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .action-row .ar-sub a { color: var(--accent-dark); text-decoration: none; }
+  .action-row.done .ar-title { text-decoration: line-through; color: var(--muted); }
+
+  /* Fixed layout so a handful of very long tracking-parameter URLs in the
+     Website column can't blow the table wider than the card -- each column
+     gets a hard percentage cap and long content truncates/wraps inside it
+     instead of pushing later columns off to the right. Greg (8/18/26). */
+  .mini-table { width: 100%; border-collapse: collapse; font-size: 13.5px; table-layout: fixed; }
+  .mini-table th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px;
+    color: var(--muted); font-weight: 700; padding: 0 14px 7px 0; border-bottom: 1px solid var(--border);
+  }
+  .mini-table td { padding: 9px 14px 9px 0; border-bottom: 1px solid #f0f2f4; vertical-align: top; overflow: hidden; }
+  .mini-table tr:last-child td { border-bottom: none; }
+  .mini-table th:nth-child(1), .mini-table td:nth-child(1) { width: 22%; word-break: break-word; }
+  .mini-table th:nth-child(2), .mini-table td:nth-child(2) { width: 36%; }
+  .mini-table th:nth-child(3), .mini-table td:nth-child(3) { width: 20%; word-break: break-word; }
+  .mini-table th:nth-child(4), .mini-table td:nth-child(4) { width: 22%; word-break: break-word; }
+  .mini-table td.mt-name { font-weight: 600; }
+  .mini-table a { color: var(--accent-dark); text-decoration: none; }
+  .mini-table a:hover { text-decoration: underline; }
+  /* Website links truncate to one line with an ellipsis rather than
+     wrapping raw URLs across the row -- the full address is still in the
+     href and shows on hover via the title attribute. */
+  .mini-table td:nth-child(2) a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Close-Out Evaluation has no document to open like the other three
+     workflow steps do -- it's rows in client_evaluation_responses, not a
+     file -- so clicking it once submitted opens this modal with the same
+     answers instead (Greg, 8/25/26: "all the other workflow fields bring
+     up a document... this should do the same"). */
+  .eval-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.55); z-index: 100; align-items: flex-start; justify-content: center; padding: 40px 20px; overflow-y: auto; }
+  .eval-modal-overlay.open { display: flex; }
+  .eval-modal { background: var(--card); border-radius: 12px; max-width: 640px; width: 100%; padding: 28px 30px; position: relative; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+  .eval-modal-close { position: absolute; top: 16px; right: 18px; background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer; line-height: 1; }
+  .eval-modal-close:hover { color: var(--text); }
+  .eval-modal h2 { font-size: 18px; color: var(--navy); margin: 0 0 4px; }
+  .eval-modal .em-meta { font-size: 12.5px; color: var(--muted); margin-bottom: 18px; }
+  .eval-modal .em-block { font-size: 13.5px; line-height: 1.6; color: var(--text); margin-bottom: 14px; }
+  .eval-modal .em-label { font-weight: 700; color: var(--navy); }
+  .eval-modal ul { margin: 4px 0 0 18px; padding: 0; }
+
+  .workflow-tracker { display: flex; margin: 4px 0; }
+  .wf-step {
+    flex: 1; padding: 12px 20px 12px 32px; color: #fff; font-size: 12px; font-weight: 700;
+    text-align: center; text-transform: uppercase; letter-spacing: 0.3px; position: relative;
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%, 16px 50%);
+    margin-left: -16px; text-decoration: none; display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s ease;
+  }
+  .wf-step:first-child { margin-left: 0; clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%); }
+  .wf-step.filled { cursor: pointer; }
+  /* Greg (9/25/26), on Chris: "it's not intuitively obvious that workflow
+     arrows are clickable with documents behind them if they have a
+     checkmark." The checkmark says DONE, which is not the same claim as
+     OPENS SOMETHING -- and the only other cue was a cursor change and a
+     slight darkening, both of which you have to already be hovering to
+     find. The fix reuses the vocabulary this page has already taught: every
+     document row in the four columns below carries a ↗, so by the time
+     anyone reaches the strip they know what it means. Two marks, two
+     meanings: ✓ = finished, ↗ = opens. */
+  .wf-step .wf-open { margin-left: 7px; font-size: 13px; opacity: 0.85; }
+  .wf-step.filled:hover .wf-label { text-decoration: underline; text-underline-offset: 2px; }
+  .wf-step.filled:hover .wf-open { opacity: 1; }
+
+  /* Each step gets its own color, dimmed until its document/link is set,
+     bright (and clickable) once it is -- Discovery blue, Controlling tan,
+     Research Review sage, Close-Out slate. */
+  .wf-step-0 { background: #7fa4c4; }
+  .wf-step-0.filled { background: #2f6fb0; }
+  .wf-step-0.filled:hover { background: #255a8f; }
+  .wf-step-1 { background: #c9ac74; }
+  .wf-step-1.filled { background: var(--amber); }
+  .wf-step-1.filled:hover { background: #8a5f0c; }
+  .wf-step-2 { background: #96ab84; }
+  .wf-step-2.filled { background: var(--accent); }
+  .wf-step-2.filled:hover { background: var(--accent-dark); }
+  .wf-step-3 { background: #8998a6; }
+  .wf-step-3.filled { background: var(--navy); }
+  .wf-step-3.filled:hover { background: var(--navy-light); }
+  .wf-eval-detail-btn { cursor: pointer; }
+
+  .research-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 4px; margin-bottom: 16px; }
+  .research-card { border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #fff; }
+  .research-card .rc-header { background: var(--accent); color: #fff; padding: 11px 14px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  /* Greg (8/30/26): "double the height of this row and each box needs to
+     scroll if there are documents extending below the visible box." A
+     fixed height (instead of the old auto-height-to-content) keeps all 4
+     research-area boxes the same height in the row regardless of how much
+     each one holds -- overflow-y:auto lets a box with more documents than
+     fit just scroll internally instead of growing past its neighbors. */
+  /* Greg (9/14/26): raised from 180px when the documents became cards. 180
+     was sized for one-line list rows; a card is ~54px (70 when the name
+     wraps), so at 180 the third one was sliced in half by the scroll edge --
+     which reads as broken rather than as "there is more below". 300 shows
+     four comfortably. The fixed height and the internal scroll are both kept
+     deliberately: they are what keeps the four boxes level in the row. */
+  .research-card .rc-body { padding: 12px 14px; height: 300px; overflow-y: auto; }
+  .research-card .rc-empty { color: var(--muted); font-size: 12.5px; font-style: italic; }
+  /* The questions, when an engagement opts into showing them: quieter than
+     the document links they sit above, since the files are what a client
+     came for (Greg, 9/19/26). */
+  .rc-questions { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .rc-questions-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+  /* No bullets and no hanging indent (Greg, 9/19/26): "if i want a bullet
+     i'll add it in the controlling document." The questions arrive numbered
+     from there -- "1.", "2." -- and a bullet in front of a number is two
+     markers for one item. */
+  .rc-question { font-size: 12.5px; line-height: 1.45; color: var(--text); margin-bottom: 5px; }
+  .rc-question:last-child { margin-bottom: 0; }
+  /* The files answering the question directly above them (Greg, 9/19/26) --
+     indented so the pairing is visible at a glance. */
+  .rc-question-docs { margin: 6px 0 10px 12px; }
+  .rc-question-docs:last-child { margin-bottom: 0; }
+  .rc-question-block { margin-bottom: 12px; }
+  .rc-question-block:last-child { margin-bottom: 0; }
+  .rc-question-title { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+  /* Greg (9/14/26): "I prefer the legacy EG Dashboard look and feel for the
+     research items. Each item has it's own card and a colorful icon telling
+     what type of file it is."
+     Each document is its own tile rather than a line in a list: the name on
+     the left, a colour-coded type badge and an open arrow on the right. The
+     badge colours are each format's own brand colour, so the type is
+     readable before the name is. */
+  .doc-card {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: #eef1f6; border: 1px solid #e1e7ef; border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 8px; cursor: pointer; text-decoration: none;
+    color: var(--text); font-size: 12.5px; line-height: 1.35;
+  }
+  .doc-card:last-child { margin-bottom: 0; }
+  .doc-card:hover { background: #e6ebf3; border-color: #cfd8e4; }
+  .doc-card.is-dead { opacity: 0.6; cursor: default; }
+  .doc-card.is-dead:hover { background: #eef1f6; border-color: #e1e7ef; }
+  .doc-card-name { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+  .doc-card-meta { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+  .doc-card-arrow { color: var(--muted); font-size: 12px; line-height: 1; }
+  .doc-badge {
+    display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: 0.5px;
+    text-transform: uppercase; color: #fff; padding: 3px 6px; border-radius: 5px; white-space: nowrap;
+  }
+  /* Each format's own brand colour, so the badge reads the way the app's own
+     icon does on a desktop. */
+  .doc-badge-pdf   { background: #d93025; }
+  .doc-badge-doc   { background: #2b579a; }
+  .doc-badge-xls   { background: #217346; }
+  .doc-badge-ppt   { background: #d24726; }
+  .doc-badge-img   { background: #7b5ea7; }
+  .doc-badge-zip   { background: #6b7683; }
+  .doc-badge-link  { background: #1a9e4b; }
+  .doc-badge-file  { background: #64748b; }
+
+  footer { background: var(--navy); color: #a9bdd2; padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; border-radius: 10px; }
+  footer .footer-left { display: flex; align-items: center; gap: 12px; }
+  footer .footer-icon { width: 34px; height: 34px; border-radius: 999px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; color: #a9bdd2; flex-shrink: 0; }
+  footer .footer-icon svg { width: 16px; height: 16px; }
+  footer .footer-right { display: flex; gap: 20px; text-transform: uppercase; letter-spacing: 0.3px; font-size: 10.5px; }
+  footer .footer-right div div:first-child { color: #7d93aa; }
+  footer .footer-right div div:last-child { color: #fff; font-weight: 700; margin-top: 2px; }
+
+  .archive-badge {
+    display: inline-block; background: var(--accent); color: #fff; font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px; padding: 3px 10px; border-radius: 999px; margin-top: 4px;
+  }
+  #print-btn {
+    font-family: inherit; cursor: pointer; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.08);
+    color: #fff; border-radius: 6px; padding: 8px 14px; font-size: 12.5px; font-weight: 700; flex-shrink: 0;
+  }
+  #print-btn:hover { background: rgba(255,255,255,0.18); }
+
+  /* This page doubles as the client's downloadable/printable leave-behind
+     record — printing (or "Save as PDF") should show every section fully
+     expanded, with none of the click-to-open chrome. */
+  @media print {
+    body { background: #fff; }
+    #print-btn, .stat-pill .count, .ab-chevron, .pill-chevron { display: none !important; }
+    .action-bar { cursor: default; }
+    .action-body { display: block !important; }
+    .card, .research-card, .action-bar, .action-body { break-inside: avoid; }
+    /* The fixed-height/scroll box (above) is a screen-only convenience --
+       printing/PDF should still show every document, not clip to 180px. */
+    .research-card .rc-body { height: auto !important; overflow: visible !important; }
+    a { text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading-view"><div>Loading…</div></div>
+
+<div id="error-view" class="hidden">
+  <div class="error-box">
+    <h2>Page not found</h2>
+    <div id="error-message">This client dashboard link isn't available. Please check the link or contact your EG Group consultant.</div>
+  </div>
+</div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <div class="header-left">
+      <div class="brand-badge"><img src="/NCEG_Logo_transparent.png" alt="National Center for Economic Gardening" /></div>
+      <h1 id="brand-title">Economic Gardening Dashboard</h1>
+    </div>
+    <div style="display:flex; align-items:center; gap:18px;">
+      <div class="header-right">
+        Client: <strong id="client-name"></strong><br />
+        <span id="status-line"></span><br />
+        <span id="archive-badge-wrap" class="hidden"><span class="archive-badge" id="archive-badge">Final Engagement Archive</span></span>
+      </div>
+      <button type="button" id="print-btn">&#128190; Download / Print</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="card">
+      <div class="dashboard-kicker">Economic Gardening Engagement Dashboard</div>
+      <div class="company-top">
+        <div class="company-logo hidden" id="company-logo-wrap"><img id="company-logo" alt="" /></div>
+        <div>
+          <h2 class="company-name" id="company-name"></h2>
+          <div class="company-address" id="company-address"></div>
+          <div class="company-updated hidden" id="company-updated"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Workflow tracker + research-area cards (8/21/26): Greg asked for
+         this whole block moved up to sit directly under the logo/name,
+         ahead of Company Info / Top Business Issues and everything else. -->
+    <div class="card">
+      <div class="workflow-tracker" id="workflow-tracker"></div>
+    </div>
+
+    <div class="research-grid" id="research-grid"></div>
+
+    <!-- The whole card is hidden unless it has something to show (Team
+         Lead ?preview=1 with company data on file) -- otherwise it just
+         renders as an empty white box on the client-facing dashboard
+         (Greg, 9/5/26). Company Info used to be its own bar with Top
+         Business Issues as a separate bar right after it, plus
+         NAICS/website/socials and the Competitors/Top Customers stat
+         pills as plain siblings; Chris rolled all of that into this one
+         accordion (8/26/26). -->
+    <div class="card hidden" id="company-info-card">
+      <div id="company-info-bar-wrap">
+        <div class="action-bar" id="bar-company_info">
+          <span>&#127970; Company Info</span>
+          <span class="ab-chevron">&#9656;</span>
+        </div>
+        <div class="action-body" id="bar-company_info-body">
+          <div id="company-description-section" class="hidden">
+            <div style="font-weight:700; font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:6px;">&#128196; Company Description</div>
+            <div id="company-description-slot"></div>
+          </div>
+
+          <div id="top-issues-section" class="hidden" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+            <div style="font-weight:700; font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:6px;">&#9888;&#65039; Top Business Issues</div>
+            <div class="company-description" id="top-issues-content"></div>
+          </div>
+
+          <div class="company-naics hidden" id="company-naics"></div>
+          <a class="company-website hidden" id="company-website" target="_blank" rel="noopener"></a>
+          <div class="company-socials" id="company-socials"></div>
+          <div class="stat-pills" id="stat-pills"></div>
+          <div id="stat-pill-details">
+            <div class="action-body" id="detail-competitors"></div>
+            <div class="action-body" id="detail-top_customers"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div id="action-bars"></div>
+    </div>
+
+    <div class="card hidden" id="general-docs-card">
+      <div class="research-card" style="border:none;">
+        <div class="rc-header" style="border-radius:8px;"><span>&#128193;</span> Additional Documents</div>
+        <div class="rc-body" id="general-docs-body"></div>
+      </div>
+    </div>
+
+    <!-- Footer -- always the last thing on the page, sized to the report's
+         width by simply living inside <main> (max-width:1000px, centered)
+         instead of spanning the full browser width. -->
+    <footer>
+      <div class="footer-left">
+        <div class="footer-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"/><path d="M12 12C12 7 8 5 4 5c0 4 2 7 8 7Z"/><path d="M12 12c0-4 3-6 8-6 0 4-2 6-8 6Z"/></svg></div>
+        <div>Economic Gardening Research Engagement</div>
+      </div>
+      <div class="footer-right">
+        <div id="footer-program-wrap" class="hidden"><div>Program</div><div id="footer-program"></div></div>
+        <div><div>Dashboard</div><div>Company Portal</div></div>
+        <div><div>Confidential</div><div>For Client Use Only</div></div>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<!-- Close-Out Evaluation detail modal -- shows the CEO their own submitted
+     answers when they click the completed workflow step (there's no
+     document to open like the other three steps have). Placed before the
+     script block below so its elements exist in the DOM before that
+     script's top-level code (which wires click handlers to it) runs. -->
+<div class="eval-modal-overlay" id="eval-modal-overlay">
+  <div class="eval-modal">
+    <button type="button" class="eval-modal-close" id="eval-modal-close" aria-label="Close">&#10005;</button>
+    <div id="eval-modal-body"></div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const STATUS_LABELS = { active: "Active Engagement", finalized: "Final Engagement Archive", archived: "Archived" };
+
+  // Greg (9/5/26): the client-facing dashboard hides Company Info (company
+  // overview, NAICS, socials) and Client Contacts -- "they already know
+  // their own information." The Team Lead's "Preview Client Info" button
+  // on the Info Wizard passes ?preview=1 so those sections come back for
+  // an internal review of the full record. The real /c/<slug> share link
+  // never carries it, so clients still don't see them.
+  const previewMode = new URLSearchParams(location.search).get("preview") === "1";
+
+  // GIS is folded into Outbound Marketing, not its own card (Greg, 8/22/26).
+  const RESEARCH_AREAS = [
+    ["market_dynamics", "Market Dynamics Research", "&#128200;"],
+    ["outbound", "Outbound Marketing", "&#127919;"],
+    ["inbound", "Inbound Marketing", "&#127793;"],
+    ["watering_holes", "Watering Holes", "&#9749;"],
+  ];
+
+  // Known hosting-platform domains whose own subdomain (e.g. "egdb" in
+  // egdb.netlify.app) is NOT a client slug — without this list, any site
+  // hosted at <name>.netlify.app would misread its own site name as the
+  // client's memorable subdomain and ignore ?slug= entirely.
+  const HOSTING_PLATFORM_SUFFIXES = ["netlify.app", "vercel.app", "pages.dev", "github.io", "web.app"];
+
+  function resolveSlug() {
+    // ?slug= always wins when present — this is also how testing/preview
+    // links work today, before wildcard DNS for real client subdomains
+    // (Section 8.1) is set up at all.
+    const qsSlug = new URLSearchParams(location.search).get("slug");
+    if (qsSlug) return qsSlug;
+
+    // The short /c/<slug> link (netlify.toml rewrites /c/:slug to
+    // /client_public.html?slug=:slug) is a server-side rewrite — Netlify
+    // serves this page's bytes for that request, but the browser's own
+    // address bar (and therefore location.search, from this script's point
+    // of view) still shows /c/<slug>, never the rewritten query string. So
+    // this page has to recognize its own short-link path directly instead
+    // of relying on the query string being there.
+    const pathMatch = location.pathname.match(/^\/c\/([^/]+)\/?$/);
+    if (pathMatch) return decodeURIComponent(pathMatch[1]);
+
+    // Long-term: a memorable subdomain, e.g. acmerobotics.egdashboardbuilder.com
+    // — once wildcard DNS is wired up, the first hostname label IS the slug.
+    // Hosting-platform domains (netlify.app, etc.) are excluded so a site's
+    // own name (e.g. "egdb" in egdb.netlify.app) is never mistaken for one.
+    const host = location.hostname;
+    const onHostingPlatform = HOSTING_PLATFORM_SUFFIXES.some((suf) => host === suf || host.endsWith("." + suf));
+    if (onHostingPlatform) return null;
+
+    const labels = host.split(".");
+    const looksLikeApex = labels.length <= 2 || ["www", "app", "dashboard", "localhost"].includes(labels[0]);
+    if (!looksLikeApex) return labels[0];
+
+    return null;
+  }
+
+  // Very small markdown-lite renderer for the free-text Company Description
+  // and Top Business Issues fields (client_profile.html's editor writes
+  // this same format): "- " lines become bullets, **text** becomes bold
+  // (uppercase section-label style on Description, see CSS), *text*
+  // becomes italic.
+  function renderDescription(text) {
+    if (!text) return "";
+    const lines = String(text).split(/\r?\n/);
+    let html = "";
+    let inList = false;
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) { if (inList) { html += "</ul>"; inList = false; } continue; }
+      if (line.startsWith("- ")) {
+        if (!inList) { html += "<ul>"; inList = true; }
+        html += `<li>${formatInline(line.slice(2))}</li>`;
+      } else {
+        if (inList) { html += "</ul>"; inList = false; }
+        html += `<p>${formatInline(line)}</p>`;
+      }
+    }
+    if (inList) html += "</ul>";
+    return html;
+  }
+
+  function formatInline(line) {
+    return escapeHtml(line)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>");
+  }
+
+  // Word/Excel/PowerPoint files have no native in-browser viewer -- opening
+  // the raw signed URL just makes the browser prompt to save them instead
+  // of showing them. Route those through Microsoft's Office Online Viewer
+  // so they actually open; everything else (PDFs, images) the browser can
+  // already display inline, so those still open directly.
+  const OFFICE_VIEWER_EXTENSIONS = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
+  function fileExtension(path) {
+    // Guard against null/undefined (Greg, 8/19/26) -- a link-type document
+    // has no storage_path at all, and until 059_document_url_field.sql is
+    // run this can also happen for a link whose url the backend hasn't
+    // started returning yet. Either way, path.split() on null was crashing
+    // renderDocLinks and hanging the whole dashboard on "Loading...".
+    if (!path) return "";
+    const name = (path.split("/").pop() || "").toLowerCase();
+    const dot = name.lastIndexOf(".");
+    return dot === -1 ? "" : name.slice(dot + 1);
+  }
+
+  // Color-coded by file type so a file list is scannable at a glance --
+  // red book for PDF, blue for Word, green for Excel, orange for
+  // PowerPoint, matching each app's own brand color.
+  const FILE_TYPE_ICONS = {
+    pdf: "\u{1F4D5}",
+    doc: "\u{1F4D8}", docx: "\u{1F4D8}",
+    xls: "\u{1F4D7}", xlsx: "\u{1F4D7}", csv: "\u{1F4D7}",
+    ppt: "\u{1F4D9}", pptx: "\u{1F4D9}",
+    png: "\u{1F5BC}\u{FE0F}", jpg: "\u{1F5BC}\u{FE0F}", jpeg: "\u{1F5BC}\u{FE0F}", gif: "\u{1F5BC}\u{FE0F}",
+    zip: "\u{1F5C3}\u{FE0F}",
+  };
+  function fileIconFor(path) {
+    return FILE_TYPE_ICONS[fileExtension(path)] || "\u{1F4C4}";
+  }
+
+  // The label and colour on a document card's badge. Grouped by family, so
+  // .docx and .doc read the same and a reader doesn't have to know which
+  // Office version produced a file.
+  const FILE_TYPE_BADGES = {
+    pdf:  ["PDF", "pdf"],
+    doc:  ["DOC", "doc"],  docx: ["DOC", "doc"],  rtf: ["DOC", "doc"],  txt: ["TXT", "file"],
+    xls:  ["XLS", "xls"],  xlsx: ["XLS", "xls"],  csv: ["CSV", "xls"],
+    ppt:  ["PPT", "ppt"],  pptx: ["PPT", "ppt"],
+    png:  ["IMG", "img"],  jpg:  ["IMG", "img"],  jpeg: ["IMG", "img"],
+    gif:  ["IMG", "img"],  svg:  ["IMG", "img"],  webp: ["IMG", "img"],
+    zip:  ["ZIP", "zip"],
+    html: ["WEB", "link"], htm: ["WEB", "link"],
+  };
+  function badgeFor(nameOrPath, isLink) {
+    const hit = FILE_TYPE_BADGES[fileExtension(nameOrPath)];
+    // A link with no recognisable extension is labelled LINK rather than the
+    // legacy dashboard's "APP" -- most are apps, but not all, and a news
+    // article badged APP would be wrong. A link that DOES point at a file
+    // (".../report.pdf") gets that file's badge, which is more useful than
+    // either.
+    if (hit) return hit;
+    return isLink ? ["LINK", "link"] : ["FILE", "file"];
+  }
+  function badgeHtml(nameOrPath, isLink) {
+    const [label, tone] = badgeFor(nameOrPath, isLink);
+    return `<span class="doc-badge doc-badge-${tone}">${label}</span>`;
+  }
+
+  // Text-based formats (html, htm, svg) have no magic bytes for Supabase
+  // Storage's server-side MIME sniffer to detect, so no matter what
+  // Content-Type the upload declared, the object gets served back as
+  // text/plain -- confirmed directly against this project's bucket
+  // (Greg, 8/26/26). That made an uploaded HTML "mini app" open as raw
+  // source instead of running. Binary formats (pdf, docx, xlsx, pptx,
+  // images) sniff correctly and don't need this detour.
+  const TEXT_RENDER_TYPES = { html: "text/html", htm: "text/html", svg: "image/svg+xml" };
+  // Second layer of the same root-cause fix (Greg, 8/30/26): old exported
+  // "mini apps" -- like the AIM Targeted Intelligence GIS market maps Greg
+  // uploads here -- often hardcode their CSS/JS <script>/<link> tags to
+  // http:// instead of https://. The blob: URL these now render from is
+  // itself served under https://egdb.netlify.app, so browsers block those
+  // http:// subresource loads outright as mixed content -- the page's
+  // static HTML (header, labels, chrome) still shows, but everything a
+  // blocked script was supposed to populate (the map, its data) never
+  // appears. Confirmed via the browser console: "Mixed Content... This
+  // request has been blocked; the content must be served over HTTPS."
+  // Injecting the standard `upgrade-insecure-requests` CSP directive tells
+  // the browser to silently retry each blocked http:// asset over https://
+  // first instead of just failing -- no edits to the uploaded file needed,
+  // and it's a no-op for files that don't have this problem.
+  function upgradeInsecureRequests(html) {
+    const meta = '<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">';
+    if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (m) => m + meta);
+    if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (m) => m + "<head>" + meta + "</head>");
+    return meta + html;
+  }
+  function openSignedDoc(path) {
+    return async () => {
+      const ext = fileExtension(path);
+      if (TEXT_RENDER_TYPES[ext]) {
+        const { data, error } = await sb.storage.from("client-documents").download(path);
+        if (error) { alert("Couldn't open this file: " + error.message); return; }
+        let blob;
+        if (ext === "html" || ext === "htm") {
+          const text = await data.text();
+          blob = new Blob([upgradeInsecureRequests(text)], { type: "text/html" });
+        } else {
+          blob = new Blob([data], { type: TEXT_RENDER_TYPES[ext] });
+        }
+        window.open(URL.createObjectURL(blob), "_blank");
+        return;
+      }
+      // 300s (not 60s) so the Office viewer has time to fetch the file
+      // itself before the link expires.
+      const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, 300);
+      if (error) { alert("Couldn't open this file: " + error.message); return; }
+      if (OFFICE_VIEWER_EXTENSIONS.includes(ext)) {
+        window.open(`https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(data.signedUrl)}`, "_blank");
+        return;
+      }
+      window.open(data.signedUrl, "_blank");
+    };
+  }
+
+  function renderDocLinks(docs) {
+    // Postgres's jsonb_agg() over a correlated subquery with zero matching
+    // rows can come back as a literal JSON null inside the array in some
+    // edge cases (rather than an empty array) -- filter(Boolean) guards
+    // against that so one null entry doesn't crash the whole page (Greg,
+    // 8/19/26 -- this was hanging the Clippard dashboard on "Loading...").
+    const clean = (docs || []).filter(Boolean);
+    if (!clean.length) return `<div class="rc-empty">No files shared yet.</div>`;
+    // A doc is either an uploaded file (storage_path -- opens via a signed
+    // URL) or a link (url -- opens directly, it isn't in our storage). Until
+    // 059_document_url_field.sql is run, a link-type document may come back
+    // with neither field set (the backend wasn't returning its url yet) --
+    // show it as plain, non-clickable text rather than a dead link (Greg,
+    // 8/19/26; this exact case -- Clippard's "Clippard Listening Post" link
+    // -- is what was crashing the page).
+    return clean.map((d) => {
+      // display_name is an optional staff-set label; the file-type icon and
+      // the actual download are unchanged.
+      const shownName = d.display_name || d.file_name;
+      const card = (attrs, name, badge) =>
+        `<a class="doc-card" ${attrs}><span class="doc-card-name">${escapeHtml(name)}</span>` +
+        `<span class="doc-card-meta">${badge}<span class="doc-card-arrow">&#8599;</span></span></a>`;
+      if (d.url) {
+        return card(`href="${escapeHtml(d.url)}" target="_blank" rel="noopener"`,
+                    shownName || d.url, badgeHtml(d.url, true));
+      }
+      if (d.storage_path) {
+        return card(`data-path="${escapeHtml(d.storage_path)}"`,
+                    shownName, badgeHtml(d.storage_path, false));
+      }
+      // Neither a file nor a usable URL -- shown, but plainly not clickable,
+      // and without the arrow that would promise it opens something.
+      return `<div class="doc-card is-dead"><span class="doc-card-name">${escapeHtml(shownName || "Untitled link")}</span>` +
+             `<span class="doc-card-meta">${badgeHtml(shownName || "", true)}</span></div>`;
+    }).join("");
+  }
+
+  function wireDocLinks(container) {
+    container.querySelectorAll(".doc-card[data-path]").forEach((el) => {
+      el.addEventListener("click", (e) => { e.preventDefault(); openSignedDoc(el.dataset.path)(); });
+    });
+  }
+
+  function renderBrandHeader(row) {
+    const c = row.company || {};
+    const name = c.brand_name || row.client_name || "Economic Gardening Dashboard";
+    const el = $("brand-title");
+    if (c.brand_url) {
+      el.innerHTML = `<a href="${escapeHtml(c.brand_url)}" target="_blank" rel="noopener" style="color:inherit; text-decoration:none;">${escapeHtml(name)}</a>`;
+    } else {
+      el.textContent = name;
+    }
+  }
+
+  // Date only -- the question this answers is "how current is this page",
+  // and a time of day doesn't help with that. Returns "" for anything that
+  // isn't a real date so the caller can hide the line entirely.
+  function formatUpdatedDate(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d)) return "";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  function renderCompany(row, expandAll) {
+    const c = row.company || {};
+    if (c.logo_url) {
+      $("company-logo-wrap").classList.remove("hidden");
+      $("company-logo").src = c.logo_url;
+    }
+    $("company-name").textContent = row.client_name;
+    $("company-address").textContent = c.address || "";
+
+    // "Updated:" -- the latest of the engagement row, its activity stamp and
+    // the newest client-facing document (115_public_view_updated_at.sql).
+    // Hidden rather than blank when there is no date: a finalized engagement
+    // is served from its snapshot, which has no updated_at until it is
+    // re-finalized, and a frozen dashboard should not claim a date at all.
+    const updatedEl = $("company-updated");
+    const updatedText = formatUpdatedDate(c.updated_at);
+    updatedEl.textContent = updatedText ? `Updated: ${updatedText}` : "";
+    updatedEl.classList.toggle("hidden", !updatedText);
+
+    if (c.program_name) {
+      $("footer-program-wrap").classList.remove("hidden");
+      $("footer-program").textContent = c.program_name;
+    }
+
+    if (c.description) {
+      $("company-description-section").classList.remove("hidden");
+      $("company-description-slot").innerHTML = `<div class="company-description">${renderDescription(c.description)}</div>`;
+    }
+
+    if (c.top_business_issues) {
+      $("top-issues-section").classList.remove("hidden");
+      $("top-issues-content").innerHTML = renderDescription(c.top_business_issues);
+    }
+
+    // Everything inside the Company Info accordion now rolls up together
+    // (Greg/Chris, 8/26/26) -- Top Business Issues, NAICS, website, socials,
+    // and the Competitors/Top Customers stat pills all live inside
+    // bar-company_info-body, so the bar itself shows if ANY of that has
+    // content, not just the description. Stat-pill counts come from the
+    // same `row` this function already receives, same as renderStatPills().
+    // (Greg, 8/29/26: Next Steps removed from the client-facing dashboard
+    // entirely -- the workflow tracker above is the only progress display
+    // now, so it's dropped from this check too.)
+    const hasStats = (row.competitors || []).length || (row.top_customers || []).length;
+    const hasSocials = c.linkedin_url || c.facebook_url || c.instagram_url || c.twitter_url || c.youtube_url || c.other_social_url;
+    // Team Lead preview only -- the client-facing view leaves this hidden.
+    if (previewMode && (c.description || c.top_business_issues || c.naics_codes || c.website_url || hasSocials || hasStats)) {
+      $("company-info-card").classList.remove("hidden");
+      $("bar-company_info").classList.toggle("open", !!expandAll);
+      $("bar-company_info-body").classList.toggle("open", !!expandAll);
+    }
+
+    if (c.naics_codes) {
+      $("company-naics").classList.remove("hidden");
+      $("company-naics").textContent = "NAICS: " + c.naics_codes;
+    }
+    if (c.website_url) {
+      const websiteEl = $("company-website");
+      websiteEl.classList.remove("hidden");
+      websiteEl.href = c.website_url;
+      websiteEl.textContent = c.website_url;
+    }
+
+    const socials = [
+      c.linkedin_url && ["li", "LinkedIn", c.linkedin_url],
+      c.facebook_url && ["fb", "Facebook", c.facebook_url],
+      c.instagram_url && ["ig", "Instagram", c.instagram_url],
+      c.twitter_url && ["tw", "X / Twitter", c.twitter_url],
+      c.youtube_url && ["yt", "YouTube", c.youtube_url],
+      c.other_social_url && ["ot", "Other", c.other_social_url],
+    ].filter(Boolean);
+    $("company-socials").innerHTML = socials
+      .map(([cls, label, url]) => `<a class="social-link ${cls}" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`)
+      .join("");
+  }
+
+  // Competitors / Top Customers used to also get their own full-width
+  // accordion bars below, which just duplicated these pill counts. The
+  // pills are now the only place to see them — clicking one expands the
+  // same list content right underneath instead.
+  // (Greg, 8/29/26: Next Steps pill removed -- Project Next Steps no longer
+  // surfaces on the client-facing dashboard at all; the workflow tracker
+  // above is the sole progress display now.)
+  function renderStatPills(row) {
+    const competitorsCount = (row.competitors || []).length;
+    const customersCount = (row.top_customers || []).length;
+    $("stat-pills").innerHTML = `
+      <div class="stat-pill" data-pill="competitors">&#127970; Competitors <span class="count">${competitorsCount}</span> <span class="pill-chevron">&#9656;</span></div>
+      <div class="stat-pill" data-pill="top_customers">&#127991; Top Customers <span class="count">${customersCount}</span> <span class="pill-chevron">&#9656;</span></div>
+    `;
+
+    $("detail-competitors").innerHTML = renderActionBody("competitors", row.competitors || []);
+    $("detail-top_customers").innerHTML = renderActionBody("top_customers", row.top_customers || []);
+
+    $("stat-pills").querySelectorAll("[data-pill]").forEach((pill) => {
+      pill.addEventListener("click", () => {
+        const key = pill.dataset.pill;
+        const detail = $(`detail-${key}`);
+        const wasOpen = detail.classList.contains("open");
+        // Only one pill's detail shows at a time.
+        $("stat-pills").querySelectorAll(".stat-pill").forEach((p) => p.classList.remove("open"));
+        document.querySelectorAll("#stat-pill-details .action-body").forEach((el) => el.classList.remove("open"));
+        if (!wasOpen) {
+          pill.classList.add("open");
+          detail.classList.add("open");
+        }
+      });
+    });
+  }
+
+  // Competitors, Top Customers, and Next Steps used to be here too — they
+  // now live only under the stat pills above (see renderStatPills), since a
+  // full-width accordion bar down here just duplicated that count.
+  const ACTION_BAR_DEFS = [
+    // Client Contacts is Team-Lead-preview-only (?preview=1) -- the
+    // client-facing dashboard drops it, they already have their own
+    // contacts (Greg, 9/4/26).
+    // Greg (9/25/26): "the really wide green bars at the bottom have documents
+    // you will find when you click on them" -- and nothing said so. The count
+    // is the strongest hint that something is inside, and it was already being
+    // passed to these label functions and thrown away.
+    ...(previewMode ? [{ key: "contacts", icon: "&#128100;", label: (n) => `Client Contacts${n ? ` (${n})` : ""}` }] : []),
+    { key: "team", icon: "&#128101;", label: (n) => `Economic Gardening Team${n ? ` (${n})` : ""}` },
+    // Open on arrival. The welcome email tells every client to open the
+    // dashboard, click the Resource Vault and review six specific things --
+    // then they arrive and it is a shut green bar. Expanded by default, they
+    // land on exactly what they were told to read, and it still collapses.
+    { key: "resource_vault", icon: "&#128193;", label: (n) => `Resource Vault${n ? ` (${n})` : ""}`, openByDefault: true },
+  ];
+
+  function renderActionBars(row, expandAll) {
+    const container = $("action-bars");
+    container.innerHTML = ACTION_BAR_DEFS.map((def) => {
+      const rows = row[def.key] || [];
+      // Nothing to show means nothing to open -- an empty section expanded on
+      // arrival just advertises that it is empty.
+      const open = expandAll || (def.openByDefault && rows.length > 0);
+      return `
+        <div class="action-bar ${open ? "open" : ""}" id="bar-${def.key}" data-target="${def.key}">
+          <span>${def.icon} ${escapeHtml(def.label(rows.length))}</span>
+          <span class="ab-chevron">&#9656;</span>
+        </div>
+        <div class="action-body ${open ? "open" : ""}" id="bar-${def.key}-body">${renderActionBody(def.key, rows)}</div>
+      `;
+    }).join("");
+
+    container.querySelectorAll(".action-bar").forEach((bar) => {
+      bar.addEventListener("click", () => {
+        bar.classList.toggle("open");
+        $(bar.id + "-body").classList.toggle("open");
+      });
+    });
+
+    // Resource Vault items with an uploaded file (either the client's own,
+    // or resolved live from a shared template) open via a signed URL, same
+    // as the Documents section — the client-documents bucket isn't public.
+    container.querySelectorAll(".rv-doc-link").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openSignedDoc(el.dataset.path)();
+      });
+    });
+  }
+
+  function renderActionBody(key, rowsIn) {
+    // Defensive against a stray null landing in a jsonb_agg() array from
+    // the backend (see renderDocLinks) -- cheap insurance so one bad row
+    // never blanks out this whole section (Greg, 8/19/26).
+    const rows = (rowsIn || []).filter(Boolean);
+    if (!rows.length) return `<div class="action-empty">Nothing here yet.</div>`;
+    if (key === "contacts") {
+      return rows.map((r) => `
+        <div class="action-row">
+          <div class="ar-title">${escapeHtml(r.name)}</div>
+          <div class="ar-sub">${[r.title, r.email, r.phone].filter(Boolean).map(escapeHtml).join(" · ")}</div>
+        </div>
+      `).join("");
+    }
+    if (key === "team") {
+      const SPECIALTY_LABELS = { team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing", gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control" };
+      return rows.map((r) => `
+        <div class="action-row">
+          <div class="ar-title">${escapeHtml(r.name)}</div>
+          <div class="ar-sub">${[SPECIALTY_LABELS[r.specialty] || r.specialty, r.email, r.phone].filter(Boolean).map(escapeHtml).join(" · ")}</div>
+        </div>
+      `).join("");
+    }
+    if (key === "resource_vault") {
+      return rows.map((r) => {
+        const titleHtml = r.storage_path
+          ? `<a class="rv-doc-link" data-path="${escapeHtml(r.storage_path)}" href="#" style="color:var(--accent-dark); text-decoration:none;">${escapeHtml(r.title)}</a>`
+          : r.url
+          ? `<a href="${escapeHtml(r.url)}" target="_blank" rel="noopener" style="color:var(--accent-dark); text-decoration:none;">${escapeHtml(r.title)}</a>`
+          : escapeHtml(r.title);
+        return `
+          <div class="action-row">
+            <div class="ar-title">${titleHtml}</div>
+            ${r.description ? `<div class="ar-sub">${escapeHtml(r.description)}</div>` : ""}
+          </div>
+        `;
+      }).join("");
+    }
+    if (key === "competitors" || key === "top_customers") {
+      return `
+        <table class="mini-table">
+          <thead><tr><th>Name</th><th>Website</th><th>Location</th><th>NAICS</th></tr></thead>
+          <tbody>
+            ${rows.map((r) => `
+              <tr>
+                <td class="mt-name">${escapeHtml(r.name)}</td>
+                <td>${r.website_url ? `<a href="${escapeHtml(r.website_url)}" target="_blank" rel="noopener" title="${escapeHtml(r.website_url)}">${escapeHtml(r.website_url)}</a>` : "—"}</td>
+                <td>${escapeHtml(r.location || "—")}</td>
+                <td>${escapeHtml(r.notes || "—")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+    return "";
+  }
+
+  const WORKFLOW_STEPS = [
+    { urlKey: "discovery_doc_url", pathKey: "discovery_doc_storage_path", label: "Discovery Call Notes" },
+    { urlKey: "controlling_doc_url", pathKey: "controlling_doc_storage_path", label: "Controlling Document", clientLinkKey: "controlling_doc_link_url" },
+    { urlKey: "research_review_url", pathKey: "research_review_storage_path", label: "Research Review" },
+    { urlKey: "closeout_survey_url", pathKey: "closeout_survey_storage_path", label: "Close-Out Evaluation", extraFilledKey: "evaluation_submitted_at" },
+  ];
+
+  function renderWorkflow(workflow) {
+    const w = workflow || {};
+    $("workflow-tracker").innerHTML = WORKFLOW_STEPS.map((step, i) => {
+      const path = step.pathKey ? w[step.pathKey] : null;
+      const url = w[step.urlKey];
+      const clientLink = step.clientLinkKey ? w[step.clientLinkKey] : null;
+      const extraFilled = step.extraFilledKey ? w[step.extraFilledKey] : null;
+      const colorClass = `wf-step-${i}`;
+      // A checkmark marks "done" explicitly -- the color shift alone (esp.
+      // step 3's slate-on-slate) was too subtle for Greg to tell filled
+      // from unfilled at a glance (8/25/26).
+      // A client-facing review link (the polished Controlling Document page
+      // we email out) is the nicest thing for the client to open, so it
+      // wins over an uploaded file or the internal editor self-link (Greg,
+      // 9/1/26: "make the client dashboard showcase the link we send").
+      if (clientLink) {
+        return `<a class="wf-step ${colorClass} filled" href="${escapeHtml(clientLink)}" target="_blank" rel="noopener">&#10003; <span class="wf-label">${escapeHtml(step.label)}</span><span class="wf-open" aria-hidden="true">&#8599;</span></a>`;
+      }
+      if (path) {
+        return `<a class="wf-step ${colorClass} filled wf-doc-link" data-path="${escapeHtml(path)}" href="#">&#10003; <span class="wf-label">${escapeHtml(step.label)}</span><span class="wf-open" aria-hidden="true">&#8599;</span></a>`;
+      }
+      if (url) {
+        return `<a class="wf-step ${colorClass} filled" href="${escapeHtml(url)}" target="_blank" rel="noopener">&#10003; <span class="wf-label">${escapeHtml(step.label)}</span><span class="wf-open" aria-hidden="true">&#8599;</span></a>`;
+      }
+      // A submitted evaluation response has no doc/link to open here (it's
+      // rows in client_evaluation_responses, not a file) -- clicking it
+      // opens the modal below with the same answers instead, so it behaves
+      // the same as the other three steps do (Greg, 8/25/26: "all the
+      // other workflow fields bring up a document... this should do the
+      // same").
+      if (extraFilled) {
+        return `<div class="wf-step ${colorClass} filled wf-eval-detail-btn">&#10003; <span class="wf-label">${escapeHtml(step.label)}</span><span class="wf-open" aria-hidden="true">&#8599;</span></div>`;
+      }
+      return `<div class="wf-step ${colorClass}">${escapeHtml(step.label)}</div>`;
+    }).join("");
+    $("workflow-tracker").querySelectorAll(".wf-doc-link").forEach((el) => {
+      el.addEventListener("click", (e) => { e.preventDefault(); openSignedDoc(el.dataset.path)(); });
+    });
+    $("workflow-tracker").querySelectorAll(".wf-eval-detail-btn").forEach((el) => {
+      el.addEventListener("click", () => openEvalResponseModal(w.evaluation_response));
+    });
+  }
+
+  const EVAL_RATING_LABELS = { very: "Very Useful", partial: "Partially Useful", not: "Not Useful" };
+
+  function openEvalResponseModal(r) {
+    if (!r) return;
+    const ratings = Array.isArray(r.question_ratings) ? r.question_ratings : [];
+    const referrals = (Array.isArray(r.referrals) ? r.referrals : []).filter((rr) => rr.name || rr.company || rr.contact);
+    const submittedDate = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : "";
+    $("eval-modal-body").innerHTML = `
+      <h2>Your Close-Out Evaluation</h2>
+      <div class="em-meta">Submitted ${escapeHtml(submittedDate)}${r.respondent_name ? " by " + escapeHtml(r.respondent_name) : ""} &mdash; ${r.very_useful_count} Very Useful, ${r.partially_useful_count} Partially Useful, ${r.not_useful_count} Not Useful (Weighted Score ${r.weighted_score}/${r.weighted_max})</div>
+      <div class="em-block">
+        <span class="em-label">Research Question Ratings</span>
+        <ul>
+          ${ratings.map((q) => `<li>${escapeHtml(q.question || "(no question text)")}: <strong>${escapeHtml(EVAL_RATING_LABELS[q.rating] || "—")}</strong></li>`).join("")}
+        </ul>
+      </div>
+      <div class="em-block"><span class="em-label">Explanation:</span> ${r.q1_explain ? escapeHtml(r.q1_explain) : "<em>None provided.</em>"}</div>
+      <div class="em-block"><span class="em-label">Adequately prepared?</span> ${r.prepared === "yes" ? "Yes" : r.prepared === "no" ? "No" : "—"}${r.prepared_explain ? " — " + escapeHtml(r.prepared_explain) : ""}</div>
+      <div class="em-block"><span class="em-label">What could we have done better:</span> ${r.improvement_suggestions ? escapeHtml(r.improvement_suggestions) : "<em>None provided.</em>"}</div>
+      <div class="em-block"><span class="em-label">Likelihood to recommend (1&ndash;10):</span> ${r.nps_score ?? "—"}${r.nps_explain ? " — " + escapeHtml(r.nps_explain) : ""}</div>
+      <div class="em-block"><span class="em-label">Referrals:</span> ${referrals.length ? `<ul>${referrals.map((rr) => `<li>${escapeHtml(rr.name || "")}${rr.company ? " — " + escapeHtml(rr.company) : ""}${rr.contact ? " (" + escapeHtml(rr.contact) + ")" : ""}</li>`).join("")}</ul>` : `<em>None provided.</em>`}</div>
+      <div class="em-block"><span class="em-label">Testimonial:</span> ${r.testimonial ? escapeHtml(r.testimonial) : "<em>None provided.</em>"}</div>
+    `;
+    $("eval-modal-overlay").classList.add("open");
+  }
+
+  function closeEvalResponseModal() {
+    $("eval-modal-overlay").classList.remove("open");
+  }
+  $("eval-modal-close").addEventListener("click", closeEvalResponseModal);
+  $("eval-modal-overlay").addEventListener("click", (e) => {
+    if (e.target.id === "eval-modal-overlay") closeEvalResponseModal();
+  });
+
+  // Each area is a list of { question, documents } entries from
+  // get_client_public_view(): the engagement's research questions (documents
+  // empty), then a trailing entry (question: null) carrying the area's
+  // documents, which aren't tagged to a specific question any more
+  // (client_research.html dropped that linkage 8/26/26).
+  //
+  // Questions were kept off this page entirely on 8/28/26 -- they are what
+  // the CEO close-out survey asks about. Greg (9/19/26) made that a per
+  // engagement choice instead: the switch on Add Research, off by default.
+  // The page needs no flag of its own -- with the switch off the payload
+  // simply carries no questions, so "render whatever questions arrive" is
+  // the whole rule.
+  function renderResearchAreaBody(entriesIn) {
+    const all = entriesIn || [];
+    // Greg (9/19/26): files sit under the question they answer. An entry with
+    // question text is that question and its files; the trailing entry
+    // (question: null) is whatever is not tied to one -- which, with the
+    // switch off, is every file in the area, exactly as before.
+    const questionEntries = all.filter((e) => e && typeof e.question === "string" && e.question.trim());
+    const looseEntries = all.filter((e) => e && !e.question && e.documents && e.documents.length);
+    if (!questionEntries.length && !looseEntries.length) return "";
+
+    const questionsHtml = questionEntries.length ? `
+      <div class="rc-questions">
+        <div class="rc-questions-label">Research questions</div>
+        ${questionEntries.map((e) => `
+          <div class="rc-question">${escapeHtml(e.question.trim())}</div>
+          ${e.documents && e.documents.length ? `<div class="rc-question-docs">${renderDocLinks(e.documents)}</div>` : ""}
+        `).join("")}
+      </div>
+    ` : "";
+
+    return questionsHtml + looseEntries.map((entry) => `
+      <div class="rc-question-block">
+        ${renderDocLinks(entry.documents)}
+      </div>
+    `).join("");
+  }
+
+  function renderResearchGrid(researchAreas) {
+    const data = researchAreas || {};
+    $("research-grid").innerHTML = RESEARCH_AREAS.map(([key, label, icon]) => `
+      <div class="research-card">
+        <div class="rc-header"><span>${icon}</span> ${escapeHtml(label)}</div>
+        <div class="rc-body">${renderResearchAreaBody(data[key])}</div>
+      </div>
+    `).join("");
+    wireDocLinks($("research-grid"));
+  }
+
+  function renderGeneralDocs(docs) {
+    if (!docs || !docs.length) return;
+    $("general-docs-card").classList.remove("hidden");
+    $("general-docs-body").innerHTML = renderDocLinks(docs);
+    wireDocLinks($("general-docs-body"));
+  }
+
+  function showError(message) {
+    $("loading-view").classList.add("hidden");
+    $("app-view").classList.add("hidden");
+    if (message) $("error-message").textContent = message;
+    $("error-view").classList.remove("hidden");
+  }
+
+  async function init() {
+    const slug = resolveSlug();
+    if (!slug) {
+      showError("No client was specified in this link. Please check the URL and try again.");
+      return;
+    }
+
+    const { data, error } = await sb.rpc("get_client_public_view", { p_slug: slug });
+    if (error || !data || !data.length) {
+      showError();
+      return;
+    }
+
+    const row = data[0];
+    const isFinalized = row.client_status === "finalized";
+
+    document.title = `${row.client_name} — Economic Gardening Dashboard`;
+    $("client-name").textContent = row.client_name;
+    $("status-line").textContent = STATUS_LABELS[row.client_status] || row.client_status;
+
+    // Once an engagement is finalized, this page IS the leave-behind — the
+    // permanent record the client keeps. Everything renders fully expanded
+    // (no clicking through accordions to see the whole archive) and gets a
+    // visible "Final Engagement Archive" badge next to the status line.
+    if (isFinalized) $("archive-badge-wrap").classList.remove("hidden");
+
+    renderBrandHeader(row);
+    renderCompany(row, isFinalized);
+    renderStatPills(row);
+    renderActionBars(row, isFinalized);
+    renderWorkflow(row.workflow);
+    renderResearchGrid(row.research_areas);
+    renderGeneralDocs(row.documents);
+
+    $("loading-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+  }
+
+  $("print-btn").addEventListener("click", () => window.print());
+
+  // Company Info's bar is static markup (not regenerated per row like the
+  // ACTION_BAR_DEFS ones), so it's wired once here instead of inside
+  // renderActionBars. Top Business Issues, NAICS/website/socials, and the
+  // stat pills all live inside its body now (Greg/Chris, 8/26/26) -- there's
+  // no separate Top Business Issues bar anymore.
+  $("bar-company_info").addEventListener("click", () => {
+    $("bar-company_info").classList.toggle("open");
+    $("bar-company_info-body").classList.toggle("open");
+  });
+
+  init();
+</script>
+</body>
+</html>
