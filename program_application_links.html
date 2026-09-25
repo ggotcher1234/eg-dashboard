@@ -188,6 +188,32 @@
   #link-menu-panel button:hover { background: #eef1f4; }
   #link-menu-panel button.copied { background: #e9f5ee; color: #24614a; }
   .empty-note { padding: 30px; text-align: center; color: var(--muted); font-size: 13.5px; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  #link-menu-panel button:disabled { color: var(--muted); font-weight: 600; cursor: not-allowed; }
+  #link-menu-panel button:disabled:hover { background: transparent; }
+  #link-menu-panel { width: 168px; }
+
+  /* Send Link composer (Greg, 9/25/26). Same idea as the Welcome Email on the
+     engagement page and for the same reason -- "Chris can review and send this
+     email." Nothing is sent from here: the draft is assembled, Chris reads it,
+     and it leaves from his own mail client so it comes from a person rather
+     than noreply@. */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 90; padding: 20px; }
+  .overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 10px; width: 660px; max-width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px 26px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
+  .modal h3 { margin: 0 0 4px; font-size: 16.5px; color: var(--navy); }
+  .modal .modal-hint { font-size: 12.5px; color: var(--muted); margin: 0 0 16px; }
+  .mail-field { margin-bottom: 11px; }
+  .mail-field label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); margin-bottom: 4px; }
+  .mail-field input, .mail-field textarea {
+    width: 100%; padding: 8px 11px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13.5px; font-family: inherit; color: var(--text); background: #fff;
+  }
+  .mail-field textarea { min-height: 300px; line-height: 1.5; resize: vertical; }
+  .mail-warn { font-size: 12.5px; color: #a9740f; background: #fdf5e6; border: 1px solid #e8d5ab; border-radius: 6px; padding: 8px 12px; margin-bottom: 14px; }
+  .modal-actions { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+  .modal-actions .spacer { flex: 1; }
 </style>
 </head>
 <body>
@@ -309,8 +335,27 @@
     <div id="link-menu-panel" class="hidden">
       <button type="button" id="lm-view">View Link</button>
       <button type="button" id="lm-copy">Copy Link</button>
+      <button type="button" id="lm-send">Send Link&hellip;</button>
     </div>
     <div id="empty-note" class="empty-note hidden">No programs match your search.</div>
+
+    <div id="send-overlay" class="overlay">
+      <div class="modal">
+        <h3 id="send-title">Send the application link</h3>
+        <p class="modal-hint">Addresses and the link are filled in from this Program &mdash; edit anything before you send. Nothing here is saved, and nothing is sent until you send it from your own email.</p>
+        <div id="send-warn" class="mail-warn hidden"></div>
+        <div class="mail-field"><label for="send-to">To</label><input type="text" id="send-to" /></div>
+        <div class="mail-field"><label for="send-cc">CC</label><input type="text" id="send-cc" /></div>
+        <div class="mail-field"><label for="send-subject">Subject</label><input type="text" id="send-subject" /></div>
+        <div class="mail-field"><label for="send-body">Message</label><textarea id="send-body" spellcheck="true"></textarea></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-primary" id="send-mailto">Open in email app</button>
+          <button type="button" class="btn-secondary" id="send-copy">Copy email</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn-secondary" id="send-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
     </div>
   </main>
 </div>
@@ -322,6 +367,9 @@
   const PUBLIC_SITE_BASE = "https://egdb.netlify.app/";
 
   const $ = (id) => document.getElementById(id);
+  // Who is signed in -- used only to keep the sender off the CC line of the
+  // note they are about to send.
+  let myEmail = "";
   const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
   // Which account am I signed in as? (Greg, 9/11/26 -- he holds three logins
   // with the same name: Super Admin, Team Lead and Specialist. The role pill
@@ -357,7 +405,7 @@
   async function afterSignIn() {
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return;
-    const { data: profile, error } = await sb.from("users").select("id, full_name, role, organization_id").eq("id", user.id).single();
+    const { data: profile, error } = await sb.from("users").select("id, full_name, role, organization_id, email").eq("id", user.id).single();
     if (error || !profile) { await sb.auth.signOut(); redirectToLogin(); return; }
 
     $("loading-view").classList.add("hidden");
@@ -377,6 +425,8 @@
       return;
     }
 
+    myEmail = (profile.email || "").trim();
+    await Promise.all([loadContacts(), loadCcAlways()]);
     await loadPartners();
   }
 
@@ -390,6 +440,121 @@
     allPartners = data;
     renderTable();
   }
+
+  // Who the Send Link email is addressed to, and who is copied.
+  //
+  // The Program's own contacts give us the "To": the Program Administrator,
+  // which is the role the Programs page already treats as the person who
+  // speaks for that Program. The EG side of the CC line comes from
+  // users.cc_on_client_email (128) rather than being typed in here, so
+  // whoever is on the CC line for client correspondence is on this one too,
+  // and stays right when that changes.
+  let allContacts = [];
+  let ccAlwaysEmails = [];
+
+  async function loadContacts() {
+    const { data, error } = await sb
+      .from("econ_dev_partner_contacts")
+      .select("id, partner_id, name, title, email, is_program_administrator, is_primary_contact")
+      .eq("active", true)
+      .order("sort_order");
+    if (error) { console.error("Couldn't load program contacts:", error.message); return; }
+    allContacts = data || [];
+  }
+
+  async function loadCcAlways() {
+    const { data, error } = await sb
+      .from("users")
+      .select("email")
+      .eq("cc_on_client_email", true)
+      .is("archived_at", null);
+    if (error) { console.error("Couldn't load the CC list:", error.message); return; }
+    ccAlwaysEmails = (data || []).map((u) => (u.email || "").trim()).filter(Boolean);
+  }
+
+  // The Program Administrator, or the nearest thing this Program has. Falls
+  // back rather than refusing: a Program whose roles were never ticked still
+  // has somebody with an email address, and an addressed draft that Chris
+  // corrects beats an empty one with an error on it.
+  function sendRecipients(partnerId) {
+    const mine = allContacts.filter((c) => c.partner_id === partnerId && (c.email || "").trim());
+    const pas = mine.filter((c) => c.is_program_administrator);
+    if (pas.length) return { people: pas, exact: true };
+    const primary = mine.filter((c) => c.is_primary_contact);
+    if (primary.length) return { people: primary, exact: false, why: "No Program Administrator is set for this Program, so this is addressed to its primary contact. Set the role on the Programs page." };
+    if (mine.length) return { people: [mine[0]], exact: false, why: "No Program Administrator or primary contact is set for this Program, so this is addressed to the first contact on file. Set the roles on the Programs page." };
+    return { people: [], exact: false, why: "This Program has no contact with an email address on file. Add one on the Programs page, or type an address in below." };
+  }
+
+  const firstName = (name) => String(name || "").trim().split(/\s+/)[0] || "";
+
+  // Pure, so the wording can be read and checked without a database behind it.
+  function sendLinkBody(greeting, programName, url) {
+    return `Hi ${greeting},
+
+We have automated the Economic Gardening application, and we have built a client application page just for ${programName}.
+
+Here is your Program's link:
+
+${url}
+
+From here on, all you have to do is send that link to a CEO you would like to invite. When they fill out the form and hit submit, an email goes to you and to the EG team letting everyone know the application has been submitted.
+
+Everything after that works the way it always has: EG reviews the application and gives the final approval, and you will get a notice when the engagement has been approved.
+
+The link is permanent and it is yours -- use it for every company you invite. There is nothing to request from us each time.
+
+Let me know if you have any questions.`;
+  }
+
+  function openSendComposer(partner) {
+    const url = applicationUrl(partner.code);
+    const { people, exact, why } = sendRecipients(partner.id);
+
+    $("send-title").textContent = `Send the application link — ${partner.name}`;
+    $("send-to").value = people.map((c) => c.email.trim()).join(", ");
+    // Chris is usually the one sending this, so he is not copied on his own
+    // note; everyone else on the standing CC list is.
+    $("send-cc").value = ccAlwaysEmails.filter((e) => e.toLowerCase() !== (myEmail || "").toLowerCase()).join(", ");
+    $("send-subject").value = `(${partner.code}) Your Economic Gardening application link`;
+    const greeting = people.length === 1 ? (firstName(people[0].name) || "there") : people.length > 1 ? "all" : "there";
+    $("send-body").value = sendLinkBody(greeting, partner.name, url);
+
+    const warn = $("send-warn");
+    warn.classList.toggle("hidden", exact);
+    if (!exact) warn.textContent = why;
+
+    $("send-overlay").classList.add("open");
+  }
+
+  $("send-cancel").addEventListener("click", () => $("send-overlay").classList.remove("open"));
+  $("send-overlay").addEventListener("click", (e) => {
+    if (e.target === $("send-overlay")) $("send-overlay").classList.remove("open");
+  });
+
+  $("send-mailto").addEventListener("click", () => {
+    const clean = (v) => v.split(",").map((x) => x.trim()).filter(Boolean).join(",");
+    const params = [];
+    const cc = clean($("send-cc").value);
+    if (cc) params.push("cc=" + encodeURIComponent(cc));
+    params.push("subject=" + encodeURIComponent($("send-subject").value));
+    params.push("body=" + encodeURIComponent($("send-body").value));
+    window.location.href = `mailto:${clean($("send-to").value)}?${params.join("&")}`;
+  });
+
+  $("send-copy").addEventListener("click", async () => {
+    const text = `To: ${$("send-to").value}\nCC: ${$("send-cc").value}\nSubject: ${$("send-subject").value}\n\n${$("send-body").value}`;
+    const btn = $("send-copy");
+    try {
+      await navigator.clipboard.writeText(text);
+      const was = btn.textContent;
+      btn.textContent = "Copied!";
+      setTimeout(() => { btn.textContent = was; }, 1500);
+    } catch (e) {
+      $("send-body").select();
+      showBanner("Couldn't copy automatically — the message is selected, copy it with Cmd+C.");
+    }
+  });
 
   // Greg (9/11/26): "the client application links are permanent and probably
   // worth creating a designer link that looks more professional."
@@ -428,7 +593,7 @@
             </div>
           </td>
           <td style="text-align:right;">
-            <button type="button" class="btn-secondary link-menu-btn" data-link-url="${escapeHtml(url)}">Link &#9662;</button>
+            <button type="button" class="btn-secondary link-menu-btn" data-link-url="${escapeHtml(url)}" data-partner-id="${escapeHtml(p.id)}">Link &#9662;</button>
           </td>
         </tr>
       `;
@@ -444,11 +609,13 @@
   // .table-scroll can't clip it, and one panel so there's nothing to leak
   // across re-renders.
   let linkMenuUrl = "";
+  let linkMenuPartnerId = "";
   function toggleLinkMenu(btn) {
     const panel = $("link-menu-panel");
     const sameBtn = linkMenuUrl === btn.dataset.linkUrl;
     if (sameBtn && !panel.classList.contains("hidden")) { closeLinkMenu(); return; }
     linkMenuUrl = btn.dataset.linkUrl;
+    linkMenuPartnerId = btn.dataset.partnerId;
     $("lm-copy").textContent = "Copy Link";
     $("lm-copy").classList.remove("copied");
     panel.classList.remove("hidden");
@@ -460,6 +627,11 @@
   }
   function closeLinkMenu() { $("link-menu-panel").classList.add("hidden"); }
 
+  $("lm-send").addEventListener("click", () => {
+    const partner = allPartners.find((p) => p.id === linkMenuPartnerId);
+    closeLinkMenu();
+    if (partner) openSendComposer(partner);
+  });
   $("lm-view").addEventListener("click", () => {
     if (linkMenuUrl) window.open(linkMenuUrl, "_blank", "noopener");
     closeLinkMenu();

@@ -267,9 +267,35 @@ Deno.serve(async (req: Request) => {
         .is("archived_at", null);
       if (adminsErr) throw new Error(`Couldn't look up admins: ${adminsErr.message}`);
 
+      // Greg (9/25/26), writing the Send Link note the Programs page now
+      // drafts for Chris: "When the CEO fills out the form and hits submit, it
+      // sends an email to the program manager and the appropriate EG team
+      // letting everyone know that the application has been submitted."
+      //
+      // The EG half has always been here; the Program half had not. The
+      // Program Administrator is the person the CEO was invited by, and until
+      // now they heard nothing until the engagement was approved -- so the
+      // note Chris is about to send would have promised something that did not
+      // happen. Same role the approval notice (admin-approve-application) and
+      // the Accept form's CC picker use, so one flag on the Programs page
+      // drives all three.
+      //
+      // Failing to find one is NOT fatal: a Program with no Administrator
+      // ticked still has an application to tell the EG admins about.
+      const { data: programContacts, error: contactsErr } = await adminClient
+        .from("econ_dev_partner_contacts")
+        .select("email")
+        .eq("partner_id", program.id)
+        .eq("is_program_administrator", true)
+        .eq("active", true);
+      if (contactsErr) console.error(`Couldn't look up the Program Administrator: ${contactsErr.message}`);
+
       const recipients = [...new Set(
-        (admins ?? [])
-          .map((u: { email: string | null }) => (u.email ?? "").trim())
+        [
+          ...(admins ?? []).map((u: { email: string | null }) => u.email ?? ""),
+          ...(programContacts ?? []).map((c: { email: string | null }) => c.email ?? ""),
+        ]
+          .map((e: string) => e.trim())
           .filter((e: string) => e.length > 0)
           .map((e: string) => e.toLowerCase()),
       )];
@@ -323,7 +349,7 @@ Deno.serve(async (req: Request) => {
               <strong>Program:</strong> ${escapeHtml(program.name)} (${escapeHtml(program.code)})<br/>
               <strong>Primary Contact:</strong> ${escapeHtml(officerName)}
             </p>
-            <p>It's waiting on the Applications tab for review -- assign a Team Lead and hours to accept it, or reject it.</p>
+            <p>The EG team reviews it from here -- approval, then a Team Lead and hours to start the engagement. No action is needed from the Program.</p>
           `,
         }),
       });
