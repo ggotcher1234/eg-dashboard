@@ -256,7 +256,15 @@ Deno.serve(async (req: Request) => {
       const { data: admins, error: adminsErr } = await adminClient
         .from("users")
         .select("email")
-        .eq("role", "super_admin");
+        .eq("role", "super_admin")
+        // Greg (9/25/26): "eliminate email to archived admins." Archiving
+        // (125_archive_roster_members.sql) bans the person's sign-in, but this
+        // function predates it and filtered on role alone -- so somebody who
+        // had left kept receiving application notifications they could no
+        // longer act on. hidden_from_roster is deliberately NOT filtered:
+        // hiding keeps an admin off the Roster and out of pick lists, it was
+        // never meant to stop them being told about a new application.
+        .is("archived_at", null);
       if (adminsErr) throw new Error(`Couldn't look up admins: ${adminsErr.message}`);
 
       const recipients = [...new Set(
@@ -275,20 +283,29 @@ Deno.serve(async (req: Request) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          // IMPORTANT, and the reason these emails have not been arriving:
-          // onboarding@resend.dev is Resend's shared TESTING domain, and it
-          // can only deliver to the email address on the Resend account
-          // itself. Any other recipient makes Resend reject the request with
-          // a 403 -- and it rejects the WHOLE send, so adding Chris and Rita
-          // to the list meant nobody got it, not even Greg.
+          // WHY THIS ADDRESS. Until 9/25/26 this said
+          // onboarding@resend.dev -- Resend's shared TESTING domain, which
+          // only delivers to the email address on the Resend account itself.
+          // Any other recipient got the whole send rejected with a 403, so
+          // adding Chris and Rita meant nobody received it, not even Greg.
           // https://resend.com/docs/knowledge-base/403-error-resend-dev-domain
           //
-          // The fix is not code: verify a real sending domain in the Resend
-          // dashboard and change the `from` below to an address on it (e.g.
-          // "EG Dashboard <noreply@economicgardening.org>"). Until then this
-          // send fails, which is exactly why the bell notification exists as
-          // the reliable channel -- see 073's header.
-          from: "EG Dashboard <onboarding@resend.dev>",
+          // send.economicgardening.org was verified in Resend on 9/22/26
+          // (DKIM TXT + the two sending CNAMEs, all green), so this now sends
+          // as a real EG address and can reach anyone. If this ever reverts to
+          // failing for everyone but Greg, check that domain's status first --
+          // that is the same symptom.
+          //
+          // A subdomain rather than the root: the root domain's own mail is
+          // untouched by any of this, so EG's day-to-day email cannot be
+          // affected by what the dashboard sends.
+          from: "EG Dashboard <noreply@send.economicgardening.org>",
+          // noreply@ has no mailbox behind it, so a reply would vanish.
+          // egdashboard@economicgardening.org is the forwarder Eric set up to
+          // Chris -- REPLIES BOUNCE IF THAT ADDRESS DOES NOT EXIST, so if the
+          // forwarder was never created, delete this one line rather than
+          // leaving it pointing at nothing.
+          reply_to: "egdashboard@economicgardening.org",
           to: recipients,
           // Greg (9/14/26): "apply naming convention (GRE) New Application
           // Recieved to internal emails as well" -- the same
@@ -313,6 +330,49 @@ Deno.serve(async (req: Request) => {
       if (!res.ok) {
         const errText = await res.text().catch(() => "");
         throw new Error(`Resend returned ${res.status}: ${errText}`);
+      }
+
+      // ---------- Confirmation to whoever submitted it ----------
+      // Greg (9/25/26): "send the submission sender a confirmation email."
+      // Until now an applicant filled in a long form, got a thank-you screen,
+      // and then heard nothing -- with no record in their own inbox that it
+      // had been received at all. A CEO notices that.
+      //
+      // Sent as its own request AFTER the admin notification, and its failure
+      // is swallowed rather than thrown: a confirmation that does not arrive
+      // is a disappointment, but it must never be reported as the application
+      // failing, and must never mask the admin notification having succeeded.
+      // It is also the one email here that goes to someone outside EG, so it
+      // says nothing about internal process.
+      const officerEmail = String(incomingData["f-p-email"] || "").trim();
+      if (officerEmail) {
+        try {
+          const confirmRes = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${resendKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              from: "EG Dashboard <noreply@send.economicgardening.org>",
+              reply_to: "egdashboard@economicgardening.org",
+              to: [officerEmail],
+              subject: `(${program.code}) Application Received - ${companyName}`,
+              html: `
+                <p>${officerName ? `Hi ${escapeHtml(officerName.split(" ")[0])},` : "Hello,"}</p>
+                <p>Thank you for applying to the Economic Gardening Program through ${escapeHtml(program.name)}. We have your application for <strong>${escapeHtml(companyName)}</strong>.</p>
+                <p>Our team reviews each application and will be in touch about next steps. If you have a question in the meantime, just reply to this email.</p>
+                <p>&mdash; The Economic Gardening Team</p>
+              `,
+            }),
+          });
+          if (!confirmRes.ok) {
+            const t = await confirmRes.text().catch(() => "");
+            console.error(`Applicant confirmation failed: ${confirmRes.status} ${t}`);
+          }
+        } catch (confirmErr) {
+          console.error("Applicant confirmation failed:", confirmErr instanceof Error ? confirmErr.message : String(confirmErr));
+        }
       }
     } catch (emailErr) {
       const detail = emailErr instanceof Error ? emailErr.message : String(emailErr);
