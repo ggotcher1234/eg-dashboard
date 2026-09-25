@@ -969,6 +969,17 @@
           <input type="checkbox" id="pf-cc-on-client-email" style="width:auto; margin-top:3px;" />
           <span>CC on client correspondence <span style="color:var(--muted);">— copies them on client emails composed in the app, on every engagement. Saved with the Save button.</span></span>
         </label>
+        <!-- Greg (9/25/26): "Chris needs to approve it... Only he can check
+             it." The checkbox on the Accept form reads its LABEL out of this
+             flag, so ticking it here is what puts a name on that box. Normally
+             exactly one person holds it; more than one just means the label
+             reads "A or B". Nobody holding it blocks every pending
+             application, which the Accept form says out loud rather than
+             failing quietly. -->
+        <label id="pf-approve-wrap" style="display:flex; align-items:flex-start; gap:8px; font-weight:400; text-transform:none; margin:10px 0 0;">
+          <input type="checkbox" id="pf-can-approve-applications" style="width:auto; margin-top:3px;" />
+          <span>Can approve applications <span style="color:var(--muted);">— they are the one who ticks "Approved by …" on an application, which is what unlocks the hours and Team Lead. Saved with the Save button.</span></span>
+        </label>
       </div>
 
       <div class="modal-actions">
@@ -1644,7 +1655,7 @@
   let rosterView = "active";
   async function loadUsers() {
     let usersQuery = sb.from("users")
-      .select("id, full_name, title, company_name, role, email, secondary_email, phone, address, time_zone, about, default_specialty, avatar_url, hidden_from_roster, archived_at, archived_by, cc_on_client_email")
+      .select("id, full_name, title, company_name, role, email, secondary_email, phone, address, time_zone, about, default_specialty, avatar_url, hidden_from_roster, archived_at, archived_by, cc_on_client_email, can_approve_applications")
       .order("full_name", { ascending: true });
     if (rosterView === "archived") {
       usersQuery = usersQuery.not("archived_at", "is", null);
@@ -2494,6 +2505,7 @@
     $("pf-standing-wrap").classList.toggle("hidden", !isSuperAdmin);
     $("pf-hidden-from-roster").checked = !!u.hidden_from_roster;
     $("pf-cc-on-client-email").checked = !!u.cc_on_client_email;
+    $("pf-can-approve-applications").checked = !!u.can_approve_applications;
 
     $("profile-save").classList.toggle("hidden", !canEdit);
     // Archive and Restore are the same decision in two directions, so only one
@@ -2659,6 +2671,7 @@
       // Admin-only, same as the two beside it -- who gets copied on client
       // correspondence is not something a specialist sets for themselves.
       payload.cc_on_client_email = $("pf-cc-on-client-email").checked;
+      payload.can_approve_applications = $("pf-can-approve-applications").checked;
     }
 
     const saveBtn = $("profile-save");

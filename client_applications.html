@@ -453,6 +453,34 @@
   .slug-preview strong { color: var(--navy); font-family: "SF Mono", Menlo, monospace; }
   .field-error { color: var(--danger); font-size: 12px; margin-top: 6px; display: none; }
 
+  /* Approval gate (Greg, 9/25/26): "a checkbox on the bottom of the form
+     where the hours/TL assignments are that says Approved by Chris Gibbons.
+     Only he can check it." White against the accept box's grey so it reads as
+     a distinct step rather than one more field, and a coloured left edge that
+     says at a glance which state it is in -- amber waiting, green approved. */
+  .approval-gate { margin: 18px 0 0; padding: 12px 15px; background: #fff;
+                   border: 1px solid var(--border); border-left: 3px solid var(--amber); border-radius: 7px; }
+  .approval-gate.is-approved { border-left-color: var(--accent); }
+  .approval-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .approval-row.is-locked { cursor: default; }
+  .approval-row input { margin: 0; width: auto; accent-color: var(--accent); transform: scale(1.15); }
+  .approval-label { font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .approval-note { font-size: 12.5px; color: var(--muted); margin: 6px 0 0 28px; }
+  /* Gated fields stay visible -- Rita needs to see what she will be filling
+     in -- but they must not look available. */
+  .accept-box input:disabled, .accept-box select:disabled {
+    background: #e3e8ee; color: #93a0af; border-color: #ccd5de; cursor: not-allowed;
+  }
+  /* Said once at the top as well. The checkbox is at the bottom of a tall box
+     because that is where Greg asked for it, but "why is nothing working" has
+     to be answerable from where the eye starts. */
+  .accept-waiting {
+    display: flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 8px 12px;
+    background: #fdf5e6; border: 1px solid #e8d5ab; border-radius: 6px;
+    font-size: 12.5px; font-weight: 600; color: var(--amber);
+  }
+  .accept-box .cc-row input:disabled { cursor: not-allowed; }
+
   .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 50; }
   .overlay.open { display: flex; }
   .modal { background: #fff; border-radius: 10px; width: 380px; max-width: 92vw; padding: 26px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
@@ -1000,6 +1028,12 @@
   let allPartners = [];
   let allUsers = [];
   let allPartnerContacts = [];
+  // Whoever may approve an application (129). Its own query rather than a
+  // filter over allUsers: allUsers deliberately excludes hidden_from_roster
+  // accounts, and the approver is an Admin, who is exactly the kind of
+  // account that is hidden. Reading it from allUsers would show an empty
+  // name on the checkbox for the one person it is about.
+  let approvers = [];
   let clientsByApp = {};   // application id -> { id, status, project_status } for accepted applications
   let activeTab = "pending"; // default filter when this page opens — Applications, since "All" is gone (Greg, 9/4/26)
   let reviewingAppId = null;
@@ -1241,7 +1275,7 @@
 
     const { data: profile, error: profileErr } = await sb
       .from("users")
-      .select("id, full_name, role, organization_id")
+      .select("id, full_name, role, organization_id, can_approve_applications")
       .eq("id", user.id)
       .single();
 
@@ -1266,7 +1300,7 @@
     // second header some pages render inside #not-admin-view.
     document.querySelectorAll("[data-super-admin-only]").forEach((el) => el.classList.toggle("hidden", profile.role !== "super_admin"));
 
-    await Promise.all([loadPartners(), loadUsers(), loadPartnerContacts()]);
+    await Promise.all([loadPartners(), loadUsers(), loadPartnerContacts(), loadApprovers()]);
     await loadApplications();
 
     // Greg (9/4/26): this page is deep-link-only now -- "the applications
@@ -1308,6 +1342,20 @@
     const { data, error } = await sb.from("econ_dev_partner_contacts").select("*").eq("active", true).order("sort_order");
     if (error) { showBanner("Couldn't load program contacts: " + error.message, "error"); return; }
     allPartnerContacts = data;
+  }
+
+  async function loadApprovers() {
+    const { data, error } = await sb
+      .from("users")
+      .select("id, full_name")
+      .eq("can_approve_applications", true)
+      .is("archived_at", null)
+      .order("full_name");
+    // Not fatal, and deliberately quiet: the approval box says plainly that
+    // nobody is set up to approve, which is more use than a red banner about
+    // a query.
+    if (error) { approvers = []; return; }
+    approvers = data || [];
   }
 
 
@@ -1835,6 +1883,7 @@
         <div class="accept-box">
           <h3>Accept this application</h3>
           <div class="desc">Creates the client, provisions their file, and assigns the Team Lead — Section 5.2.</div>
+          ${a.approved_at ? "" : `<div class="accept-waiting">Waiting on approval${approverLabel() ? ` from ${escapeHtml(approverLabel())}` : ""} — the fields below unlock once it is given.</div>`}
           <div class="grid-2">
             <div class="field">
               <label>Budget hours available <span class="required-star">*</span></label>
@@ -1873,6 +1922,7 @@
             <div class="slug-preview">Clients will reach their page at <strong id="slug-preview-text">${escapeHtml(suggestedSlug)}</strong>.egdashboardbuilder.com</div>
             <div class="field-error" id="slug-error">That address is already taken — try another.</div>
           </div>
+          ${approvalGateHtml(a)}
           <div class="form-actions">
             <button type="button" class="btn-secondary" id="reject-btn">Archive</button>
             <button type="button" class="btn-primary" id="accept-btn">Accept and Create Engagement</button>
@@ -1903,6 +1953,37 @@
         $("slug-preview-text").textContent = slugify(slugInput.value);
       });
       $("accept-btn").addEventListener("click", () => submitAccept(a.id));
+
+      applyApprovalGate(a);
+      const approveBox = $("accept-approved");
+      if (approveBox && !approveBox.disabled) {
+        approveBox.addEventListener("change", async () => {
+          const wanted = approveBox.checked;
+          const note = $("approval-note");
+          approveBox.disabled = true;
+          if (note) note.textContent = wanted ? "Approving, and letting everyone know…" : "Removing the approval…";
+          try {
+            const result = await callSetApproved(a.id, wanted);
+            a.approved_at = result.approved_at || null;
+            a.approved_by = result.approved_by || null;
+            if (result.warning) {
+              // The approval itself is saved; only the email failed. Said
+              // plainly, because somebody now has to tell the Program by hand.
+              showBanner(result.warning, "error");
+            } else if (wanted) {
+              showBanner("Approved. The Program Administrator and the EG Admins have been emailed.", "success");
+            } else {
+              showBanner("Approval removed. Nobody was emailed about it.", "success");
+            }
+            renderReview();
+          } catch (err) {
+            approveBox.checked = !wanted;
+            approveBox.disabled = false;
+            showBanner(err.message, "error");
+            renderReview();
+          }
+        });
+      }
       $("reject-btn").addEventListener("click", () => {
         pendingRejectId = a.id;
         $("reject-overlay").classList.add("open");
@@ -2187,6 +2268,83 @@
       </div>`;
   }
 
+  // ---------- Approval (Greg, 9/25/26) ----------
+  // Two decisions were sharing one form. "Is this company right for the
+  // program" is Chris's; "who runs it, with how many hours" is Rita's, and
+  // Greg wants the second one to wait on the first: "Then Rita will go in and
+  // add the hours and TL which will kick off the engagement."
+  //
+  // The label reads the approver's NAME out of users.can_approve_applications
+  // rather than having "Chris Gibbons" typed into it. Same reasoning as the CC
+  // flag one migration earlier -- it still says Chris on screen, because Chris
+  // is who holds the flag, but he can hand it over without a deploy.
+  function approverLabel() {
+    const names = approvers.map((u) => u.full_name).filter(Boolean);
+    return names.length ? names.join(" or ") : null;
+  }
+
+  function approvalGateHtml(a) {
+    const name = approverLabel();
+    const iMayApprove = !!(currentUser && currentUser.can_approve_applications);
+    const approved = !!a.approved_at;
+    const approvedBy = a.approved_by ? approvers.find((u) => u.id === a.approved_by) : null;
+
+    let note;
+    if (approved) {
+      note = `Approved on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}. Set the hours and Team Lead below to start the engagement.`;
+    } else if (!name) {
+      // The one state with no way forward from this page, so it says where to
+      // go instead of just refusing.
+      note = `No one is set up to approve applications yet, so the hours and Team Lead can't be set. Tick <strong>Can approve applications</strong> on the right profile in the Roster.`;
+    } else if (iMayApprove) {
+      note = `Budget hours, Team Lead and Accept stay locked until this is ticked. Ticking it emails the Program Administrator and the EG Admins that ${escapeHtml(a.company_name || "this applicant")} was approved today.`;
+    } else {
+      note = `Only ${escapeHtml(name)} can approve an application. Until then the hours and Team Lead can't be set.`;
+    }
+
+    return `
+      <div class="approval-gate${approved ? " is-approved" : ""}" id="approval-gate">
+        <label class="approval-row${iMayApprove && name ? "" : " is-locked"}" for="accept-approved">
+          <input type="checkbox" id="accept-approved"${approved ? " checked" : ""}${iMayApprove && name ? "" : " disabled"} />
+          <span class="approval-label">Approved by ${escapeHtml(name || "an approver")}</span>
+        </label>
+        <div class="approval-note" id="approval-note">${note}</div>
+      </div>`;
+  }
+
+  // Everything the Accept form can do EXCEPT approve it and archive it. Archive
+  // stays live on purpose: an application that should never have arrived
+  // shouldn't have to be approved first to be got rid of.
+  function applyApprovalGate(a) {
+    const locked = !a.approved_at;
+    ["accept-budget", "accept-tl", "accept-tl-hours", "accept-admin-hours", "accept-qc-hours", "accept-slug", "accept-btn"]
+      .forEach((id) => { const el = $(id); if (el) el.disabled = locked; });
+    document.querySelectorAll(".cc-check").forEach((el) => { el.disabled = locked; });
+  }
+
+  async function callSetApproved(appId, approved) {
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-approve-application`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`,
+        "apikey": SUPABASE_ANON_KEY,
+      },
+      // The zone, so the date in the email is the date the approver was
+      // looking at when they ticked the box -- an approval at 7pm Denver is
+      // already tomorrow in UTC.
+      body: JSON.stringify({
+        application_id: appId,
+        approved,
+        time_zone: (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || "UTC",
+      }),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(result.error || "Couldn't save the approval.");
+    return result;
+  }
+
   async function submitAccept(appId) {
     const budget = $("accept-budget").value;
     const teamLeadId = $("accept-tl").value;
@@ -2195,6 +2353,16 @@
     const qcHours = $("accept-qc-hours").value === "" ? 0 : Number($("accept-qc-hours").value);
     const slug = slugify($("accept-slug").value);
     $("slug-error").style.display = "none";
+
+    // The fields are disabled without an approval, so this is the backstop for
+    // a stale tab -- one left open from before the box was unticked, or from
+    // before this gate existed at all.
+    const app = allApplications.find((x) => x.id === appId);
+    if (app && !app.approved_at) {
+      showBanner(`This application hasn't been approved yet${approverLabel() ? " by " + approverLabel() : ""}, so it can't be accepted.`, "error");
+      renderReview();
+      return;
+    }
 
     if (!budget || !teamLeadId || !slug) {
       showBanner("Budget hours, Team Lead, and a client address are all required to accept.", "error");
