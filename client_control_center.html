@@ -1446,7 +1446,7 @@
       // dropdown, so take id/role/email too (Greg, 9/16/26 -- the NCEG Admin
       // house account is hidden and owns every Admin/QC row, and a select
       // whose value matches no option silently displays "Not assigned").
-      sb.from("users").select("id, full_name, role, email"),
+      sb.from("users").select("id, full_name, role, email, cc_on_client_email, archived_at"),
     ]);
     if (error) return;
     allUsers = data;
@@ -2683,8 +2683,17 @@
   // time for our discovery call."
   // Chris Gibbons is copied on every one of these. Matched against the roster
   // rather than hardcoded, so it follows his address if it ever changes.
-  const WELCOME_CC_MATCH = (u) =>
-    /^cgibbons@/i.test(u.email || "") || /\bchris(topher)?\b.*\bgibbons\b/i.test(u.full_name || "");
+  // Greg (9/25/26): "Rita requested to be copied on all client correspondence
+  // too." This used to be a regex on Chris's name and email -- a person
+  // compiled into a web page. Two people means it was always going to be
+  // three, so it is users.cc_on_client_email now
+  // (128_cc_on_client_email.sql), ticked on the Roster profile. Adding or
+  // removing someone is an Admin with a checkbox, not a deploy.
+  //
+  // Archived staff are excluded: their sign-in is revoked, so copying them on
+  // live client correspondence would be sending EG business to someone who has
+  // left.
+  const WELCOME_CC_MATCH = (u) => !!u.cc_on_client_email && !u.archived_at;
 
   function welcomeFirstNames(names) {
     const firsts = names.map((n) => String(n || "").trim().split(/\s+/)[0]).filter(Boolean);
@@ -2777,9 +2786,19 @@ ${teamLead}`;
     const toList = emailsOf(contacts);
     const ccList = [...emailsOf(ccRows), ...emailsOf(partnerCc)];
 
-    const chris = allUsersIncludingHidden.find(WELCOME_CC_MATCH);
-    if (chris && chris.email) ccList.push(chris.email.trim());
-    else notes.push("Chris Gibbons isn't on the roster with an email, so he couldn't be added to the CC line - add his address before you send.");
+    // Everyone who has asked to be kept in the loop, not just the first match
+    // -- the old code took one person because there only ever was one.
+    const alwaysCc = allUsersIncludingHidden.filter(WELCOME_CC_MATCH);
+    const alwaysCcEmails = alwaysCc.map((u) => (u.email || "").trim()).filter(Boolean);
+    ccList.push(...alwaysCcEmails);
+
+    const missingEmail = alwaysCc.filter((u) => !(u.email || "").trim()).map((u) => u.full_name);
+    if (missingEmail.length) {
+      notes.push(`${missingEmail.join(" and ")} ${missingEmail.length === 1 ? "is" : "are"} set to be copied on client correspondence but ${missingEmail.length === 1 ? "has" : "have"} no email on the roster, so ${missingEmail.length === 1 ? "they were" : "they were"} left off the CC line.`);
+    }
+    if (!alwaysCc.length) {
+      notes.push("Nobody is set to be copied on client correspondence. Tick \"CC on client correspondence\" on the Roster for anyone who should be.");
+    }
 
     // De-duplicate case-insensitively, and never CC somebody already on the To line.
     const seen = new Set(toList.map((e) => e.toLowerCase()));

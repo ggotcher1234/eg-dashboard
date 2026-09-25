@@ -957,6 +957,18 @@
           <input type="checkbox" id="pf-hidden-from-roster" style="width:auto; margin-top:3px;" />
           <span>Hide from Roster <span style="color:var(--muted);">— keeps their access and everything on this profile, but takes them off the Roster, every specialist / team-lead pick list, and global search. Saved with the Save button.</span></span>
         </label>
+        <!-- Greg (9/25/26): "Rita requested to be copied on all client
+             correspondence too." Chris used to be on that CC line because his
+             name was written into client_control_center.html; two people means
+             it needed to be a property of the person instead
+             (128_cc_on_client_email.sql). It sits with Hide rather than up
+             among the contact fields because it is the same kind of thing --
+             a decision about how this person takes part, not a detail about
+             them. -->
+        <label id="pf-cc-wrap" style="display:flex; align-items:flex-start; gap:8px; font-weight:400; text-transform:none; margin:10px 0 0;">
+          <input type="checkbox" id="pf-cc-on-client-email" style="width:auto; margin-top:3px;" />
+          <span>CC on client correspondence <span style="color:var(--muted);">— copies them on client emails composed in the app, on every engagement. Saved with the Save button.</span></span>
+        </label>
       </div>
 
       <div class="modal-actions">
@@ -1632,7 +1644,7 @@
   let rosterView = "active";
   async function loadUsers() {
     let usersQuery = sb.from("users")
-      .select("id, full_name, title, company_name, role, email, secondary_email, phone, address, time_zone, about, default_specialty, avatar_url, hidden_from_roster, archived_at, archived_by")
+      .select("id, full_name, title, company_name, role, email, secondary_email, phone, address, time_zone, about, default_specialty, avatar_url, hidden_from_roster, archived_at, archived_by, cc_on_client_email")
       .order("full_name", { ascending: true });
     if (rosterView === "archived") {
       usersQuery = usersQuery.not("archived_at", "is", null);
@@ -2481,6 +2493,7 @@
     // Non-admins see neither.
     $("pf-standing-wrap").classList.toggle("hidden", !isSuperAdmin);
     $("pf-hidden-from-roster").checked = !!u.hidden_from_roster;
+    $("pf-cc-on-client-email").checked = !!u.cc_on_client_email;
 
     $("profile-save").classList.toggle("hidden", !canEdit);
     // Archive and Restore are the same decision in two directions, so only one
@@ -2643,6 +2656,9 @@
     if (isSuperAdmin) {
       payload.role = $("pf-role").value;
       payload.hidden_from_roster = $("pf-hidden-from-roster").checked;
+      // Admin-only, same as the two beside it -- who gets copied on client
+      // correspondence is not something a specialist sets for themselves.
+      payload.cc_on_client_email = $("pf-cc-on-client-email").checked;
     }
 
     const saveBtn = $("profile-save");

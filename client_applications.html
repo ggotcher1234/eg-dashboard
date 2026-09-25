@@ -434,6 +434,12 @@
     align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; cursor: pointer;
   }
   .cc-row:hover { background: #fff; }
+  /* The Program Administrator row: on, and not yours to turn off. Held apart
+     from the choices rather than looking like one of them (Greg, 9/25/26). */
+  .cc-row-locked { background: #eef3f8; }
+  .cc-row-locked:hover { background: #eef3f8; cursor: default; }
+  .cc-tag { display: inline-block; margin-left: 7px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.4px; color: var(--navy); background: #dbe6f0; border-radius: 999px; padding: 1px 7px; vertical-align: middle; }
   .cc-row input { margin: 0; width: auto; accent-color: var(--navy); }
   .cc-name { font-size: 13px; font-weight: 600; color: var(--text); }
   .cc-meta { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2133,10 +2139,25 @@
       return `<div class="cc-picker"><div class="cc-picker-head">Copy on correspondence</div>
         <div class="cc-empty">This application isn't linked to a Program, so there are no contacts to choose from.</div></div>`;
     }
+    // Greg (9/25/26): "PA will always be copied on all customer
+    // correspondence... she does not need to select the PA as they will
+    // automatically be cc'd."
+    //
+    // Two groups, and the difference is the point. The Program Administrator
+    // is copied whether or not anyone ticks anything -- shown here so Rita can
+    // see who it will be, ticked and disabled so it cannot be turned off by
+    // accident. Everyone else offered is a contact flagged "CC" on the
+    // Programs page: people it would ever be reasonable to copy, which is a
+    // narrower and more deliberate list than "every Program Administrator, or
+    // every contact if there are none", which is what this offered before.
     const all = allPartnerContacts.filter((c) => c.partner_id === partner.id && (c.name || "").trim());
-    const admins = all.filter((c) => c.is_program_administrator);
-    const list = admins.length ? admins : all;
-    const fallback = !admins.length && all.length;
+    const pas = all.filter((c) => c.is_program_administrator);
+    const optional = all.filter((c) => c.include_on_cc && !c.is_program_administrator);
+    const list = [...pas, ...optional];
+    // Nobody flagged either way: fall back to the full list rather than an
+    // empty picker with no way forward, and say why.
+    const fallback = !list.length && all.length;
+    if (fallback) list.push(...all);
 
     if (!list.length) {
       return `<div class="cc-picker"><div class="cc-picker-head">Copy on correspondence</div>
@@ -2146,15 +2167,22 @@
       <div class="cc-picker">
         <div class="cc-picker-head">Copy on correspondence <span class="hint">— for this engagement only</span></div>
         <div class="desc" style="margin-bottom:10px;">${fallback
-          ? `No one at ${escapeHtml(partner.name)} is marked Program Administrator, so every contact is listed.`
-          : `Program Administrators at ${escapeHtml(partner.name)}. Tick the ones this engagement concerns.`}</div>
+          ? `No one at ${escapeHtml(partner.name)} is marked Program Administrator or CC, so every contact is listed. Set those flags on the Programs page to shorten this.`
+          : pas.length
+            ? `${pas.length === 1 ? "The Program Administrator is" : "Program Administrators are"} copied automatically. Tick anyone else this engagement concerns.`
+            : `No Program Administrator is set for ${escapeHtml(partner.name)}, so nobody is copied automatically. Tick whoever this engagement concerns.`}</div>
         <div class="cc-list">
-          ${list.map((c) => `
-            <label class="cc-row">
-              <input type="checkbox" class="cc-check" value="${c.id}" />
-              <span class="cc-name">${escapeHtml(c.name)}</span>
+          ${list.map((c) => {
+            // A disabled checkbox is not submitted by the DOM, so the PA rows
+            // also carry .cc-always -- submitAccept reads both.
+            const locked = !fallback && c.is_program_administrator;
+            return `
+            <label class="cc-row${locked ? " cc-row-locked" : ""}">
+              <input type="checkbox" class="${locked ? "cc-always" : "cc-check"}" value="${c.id}"${locked ? " checked disabled" : ""} />
+              <span class="cc-name">${escapeHtml(c.name)}${locked ? ` <span class="cc-tag">always copied</span>` : ""}</span>
               <span class="cc-meta">${escapeHtml([c.title, c.email].filter(Boolean).join(" · ") || "No email on file")}</span>
-            </label>`).join("")}
+            </label>`;
+          }).join("")}
         </div>
       </div>`;
   }
@@ -2204,7 +2232,14 @@
     // The CC picks, now that there's an engagement to hang them on. Done here
     // rather than inside accept_client_application() so the RPC keeps its
     // current signature -- same reasoning as the Team Lead hours below.
-    const ccIds = [...document.querySelectorAll(".cc-check:checked")].map((el) => el.value);
+    // .cc-always is the Program Administrator: checked and disabled, which
+    // means the browser leaves it out of any normal "checked" sweep. Read
+    // separately and merged, so the PA is stored on the engagement's CC list
+    // like everyone else rather than being a rule every email has to remember.
+    const ccIds = [...new Set([
+      ...[...document.querySelectorAll(".cc-always")].map((el) => el.value),
+      ...[...document.querySelectorAll(".cc-check:checked")].map((el) => el.value),
+    ])];
     if (ccIds.length) {
       const { error: ccErr } = await sb.from("client_cc_contacts").insert(
         ccIds.map((contactId) => ({ client_id: clientId, partner_contact_id: contactId }))
