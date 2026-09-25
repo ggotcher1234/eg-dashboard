@@ -146,6 +146,18 @@
   }
   .wf-step:first-child { margin-left: 0; clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%); }
   .wf-step.filled { cursor: pointer; }
+  /* Greg (9/25/26), on Chris: "it's not intuitively obvious that workflow
+     arrows are clickable with documents behind them if they have a
+     checkmark." The checkmark says DONE, which is not the same claim as
+     OPENS SOMETHING -- and the only other cue was a cursor change and a
+     slight darkening, both of which you have to already be hovering to
+     find. The fix reuses the vocabulary this page has already taught: every
+     document row in the four columns below carries a ↗, so by the time
+     anyone reaches the strip they know what it means. Two marks, two
+     meanings: ✓ = finished, ↗ = opens. */
+  .wf-step .wf-open { margin-left: 7px; font-size: 13px; opacity: 0.85; }
+  .wf-step.filled:hover .wf-label { text-decoration: underline; text-underline-offset: 2px; }
+  .wf-step.filled:hover .wf-open { opacity: 1; }
 
   /* Each step gets its own color, dimmed until its document/link is set,
      bright (and clickable) once it is -- Discovery blue, Controlling tan,
@@ -787,21 +799,32 @@
     // Client Contacts is Team-Lead-preview-only (?preview=1) -- the
     // client-facing dashboard drops it, they already have their own
     // contacts (Greg, 9/4/26).
-    ...(previewMode ? [{ key: "contacts", icon: "&#128100;", label: () => "Client Contacts" }] : []),
-    { key: "team", icon: "&#128101;", label: () => "Economic Gardening Team" },
-    { key: "resource_vault", icon: "&#128193;", label: () => "Resource Vault" },
+    // Greg (9/25/26): "the really wide green bars at the bottom have documents
+    // you will find when you click on them" -- and nothing said so. The count
+    // is the strongest hint that something is inside, and it was already being
+    // passed to these label functions and thrown away.
+    ...(previewMode ? [{ key: "contacts", icon: "&#128100;", label: (n) => `Client Contacts${n ? ` (${n})` : ""}` }] : []),
+    { key: "team", icon: "&#128101;", label: (n) => `Economic Gardening Team${n ? ` (${n})` : ""}` },
+    // Open on arrival. The welcome email tells every client to open the
+    // dashboard, click the Resource Vault and review six specific things --
+    // then they arrive and it is a shut green bar. Expanded by default, they
+    // land on exactly what they were told to read, and it still collapses.
+    { key: "resource_vault", icon: "&#128193;", label: (n) => `Resource Vault${n ? ` (${n})` : ""}`, openByDefault: true },
   ];
 
   function renderActionBars(row, expandAll) {
     const container = $("action-bars");
     container.innerHTML = ACTION_BAR_DEFS.map((def) => {
       const rows = row[def.key] || [];
+      // Nothing to show means nothing to open -- an empty section expanded on
+      // arrival just advertises that it is empty.
+      const open = expandAll || (def.openByDefault && rows.length > 0);
       return `
-        <div class="action-bar ${expandAll ? "open" : ""}" id="bar-${def.key}" data-target="${def.key}">
+        <div class="action-bar ${open ? "open" : ""}" id="bar-${def.key}" data-target="${def.key}">
           <span>${def.icon} ${escapeHtml(def.label(rows.length))}</span>
           <span class="ab-chevron">&#9656;</span>
         </div>
-        <div class="action-body ${expandAll ? "open" : ""}" id="bar-${def.key}-body">${renderActionBody(def.key, rows)}</div>
+        <div class="action-body ${open ? "open" : ""}" id="bar-${def.key}-body">${renderActionBody(def.key, rows)}</div>
       `;
     }).join("");
 
@@ -905,13 +928,13 @@
       // wins over an uploaded file or the internal editor self-link (Greg,
       // 9/1/26: "make the client dashboard showcase the link we send").
       if (clientLink) {
-        return `<a class="wf-step ${colorClass} filled" href="${escapeHtml(clientLink)}" target="_blank" rel="noopener">&#10003; ${escapeHtml(step.label)}</a>`;
+        return `<a class="wf-step ${colorClass} filled" href="${escapeHtml(clientLink)}" target="_blank" rel="noopener">&#10003; <span class="wf-label">${escapeHtml(step.label)}</span><span class="wf-open" aria-hidden="true">&#8599;</span></a>`;
       }
       if (path) {
-        return `<a class="wf-step ${colorClass} filled wf-doc-link" data-path="${escapeHtml(path)}" href="#">&#10003; ${escapeHtml(step.label)}</a>`;
+        return `<a class="wf-step ${colorClass} filled wf-doc-link" data-path="${escapeHtml(path)}" href="#">&#10003; <span class="wf-label">${escapeHtml(step.label)}</span><span class="wf-open" aria-hidden="true">&#8599;</span></a>`;
       }
       if (url) {
-        return `<a class="wf-step ${colorClass} filled" href="${escapeHtml(url)}" target="_blank" rel="noopener">&#10003; ${escapeHtml(step.label)}</a>`;
+        return `<a class="wf-step ${colorClass} filled" href="${escapeHtml(url)}" target="_blank" rel="noopener">&#10003; <span class="wf-label">${escapeHtml(step.label)}</span><span class="wf-open" aria-hidden="true">&#8599;</span></a>`;
       }
       // A submitted evaluation response has no doc/link to open here (it's
       // rows in client_evaluation_responses, not a file) -- clicking it
@@ -920,7 +943,7 @@
       // other workflow fields bring up a document... this should do the
       // same").
       if (extraFilled) {
-        return `<div class="wf-step ${colorClass} filled wf-eval-detail-btn">&#10003; ${escapeHtml(step.label)}</div>`;
+        return `<div class="wf-step ${colorClass} filled wf-eval-detail-btn">&#10003; <span class="wf-label">${escapeHtml(step.label)}</span><span class="wf-open" aria-hidden="true">&#8599;</span></div>`;
       }
       return `<div class="wf-step ${colorClass}">${escapeHtml(step.label)}</div>`;
     }).join("");
