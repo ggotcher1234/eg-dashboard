@@ -302,7 +302,10 @@
      fits its longest value at the same width, Title gains 48px, and Email is
      the one that will always truncate -- nothing short of a second line fits
      a 42-character address, and the prefix is what people read. */
-  .pd-row-people { grid-template-columns: 1fr 1fr 1fr 1fr 174px 46px 30px; }
+  /* 232px is the four role chips at their natural width plus the gaps -- Signer,
+     PA, Finance, CC -- with nothing to spare, so they stay on one line and the
+     name/title/email/phone fields keep the rest. */
+  .pd-row-people { grid-template-columns: 1fr 1fr 1fr 1fr 232px 46px 30px; }
   .pd-row-regional { grid-template-columns: 1.2fr 1.1fr 1fr 1.3fr 0.85fr 46px 30px; }
   .pd-row input[type="text"] {
     width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--border);
@@ -311,7 +314,9 @@
   .pd-row input[type="text"]:focus { outline: none; border-color: var(--navy-light); }
   .pd-row input[readonly] { background: var(--note-bg); color: var(--muted); }
 
-  .pd-roles { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  /* nowrap, deliberately: if a fifth role is ever added, this should break
+     visibly here rather than quietly wrapping again and going unnoticed. */
+  .pd-roles { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
   .pd-role { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text); cursor: pointer; white-space: nowrap; }
   .pd-role input { width: auto; margin: 0; accent-color: var(--navy); }
 
@@ -783,7 +788,12 @@
        and three cards per row is the whole point of it. The logo, title and
        Close button live in the shell rather than in program-detail-body so
        the close listener wires once at load instead of on every re-render. -->
-  <div class="modal" style="width:980px; max-width:96vw; max-height:88vh; overflow-y:auto;">
+  <!-- Greg (9/25/26): "adjust the width of this window or the fields in it so
+       that the checkboxes are all on one row." Both, in the end -- the CC
+       tickbox added the same day made four roles where the 174px column only
+       ever fit three, and simply widening that column would have squeezed the
+       email field, which was already truncating "terrell@advantageva...". -->
+  <div class="modal" style="width:1140px; max-width:96vw; max-height:88vh; overflow-y:auto;">
     <div class="pd-header">
       <div id="pd-logo-file"></div>
       <div class="pd-header-text">
@@ -1110,12 +1120,13 @@
         ${bind(r.field, c[r.field])}
         ${escapeHtml(r.short)}
       </label>`).join("");
-    // No CC tickbox here any more (Chris/Rita, 9/11/26). "Copy this person on
-    // everything this Program touches" is the behaviour Rita objected to -- a
-    // Team Lead emailing a Program about an engagement it has no part in. Who
-    // gets copied is now chosen per engagement when the application is
-    // accepted, and editable afterwards from Client Info
-    // (116_engagement_cc_contacts.sql).
+    // The CC tickbox came back on 9/25/26, but it does NOT mean what the one
+    // removed on 9/11/26 meant. That one said "copy this person on everything
+    // this Program touches" -- the behaviour Rita objected to, a Team Lead
+    // emailing a Program about an engagement it has no part in. This one only
+    // decides who is OFFERED in the per-engagement picker when an application
+    // is accepted (116_engagement_cc_contacts.sql). Who actually gets copied
+    // is still chosen per engagement, exactly as Rita asked.
     return `
         <div class="pd-roles">
           ${roles}
