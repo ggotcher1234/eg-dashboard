@@ -2273,10 +2273,16 @@
   // Greg wants the second one to wait on the first: "Then Rita will go in and
   // add the hours and TL which will kick off the engagement."
   //
-  // The label reads the approver's NAME out of users.can_approve_applications
-  // rather than having "Chris Gibbons" typed into it. Same reasoning as the CC
-  // flag one migration earlier -- it still says Chris on screen, because Chris
-  // is who holds the flag, but he can hand it over without a deploy.
+  // The box is labelled "Approved by NCEG", not by a person -- Chris
+  // (9/25/26, relayed by Greg): "Change approval by Chris Gibbons to approval
+  // by NCEG." The approval is the organisation's, and the individual who
+  // recorded it is a fact about the event rather than the name of the gate:
+  // it shows up afterwards in the stamp ("Approved on Sep 26 by Chris
+  // Gibbons") and in the notification email.
+  //
+  // approverLabel() still reads the name out of users.can_approve_applications,
+  // for the one sentence that has to say who is being waited on. Nobody's name
+  // is typed into this file.
   function approverLabel() {
     const names = approvers.map((u) => u.full_name).filter(Boolean);
     return names.length ? names.join(" or ") : null;
@@ -2293,27 +2299,28 @@
     //
     // Said in every state, not just the approver's. Ticking this box sends
     // mail to people outside EG the instant it is ticked, and that is not
-    // something anyone should discover afterwards -- Chris needs to know
-    // before he clicks, and Rita needs to know that the notice she is about
-    // to receive went to the Program too, so she does not send a second one.
+    // something anyone should discover afterwards -- the approver needs to
+    // know before clicking, and Rita needs to know that the notice she is
+    // about to receive went to the Program too, so she does not send a
+    // second one.
     let note;
     if (approved) {
-      note = `Approved on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}. The Program Administrator and all EG Admins were emailed automatically. Set the hours and Team Lead below to start the engagement.`;
+      note = `Approved on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}. The Program Administrator and all EG Admins were emailed automatically. Set the hours and Team Lead below to move this to an Engagement.`;
     } else if (!name) {
       // The one state with no way forward from this page, so it says where to
       // go instead of just refusing.
       note = `No one is set up to approve applications yet, so the hours and Team Lead can't be set. Tick <strong>Can approve applications</strong> on the right profile in the Roster.`;
     } else if (iMayApprove) {
-      note = `Ticking this automatically emails the Program Administrator and all EG Admins that ${escapeHtml(a.company_name || "this applicant")} has been approved, and unlocks the budget hours, Team Lead and Accept below.`;
+      note = `Ticking this approves ${escapeHtml(a.company_name || "this applicant")} for the program. It automatically emails the Program Administrator and all EG Admins, and unlocks the budget hours, Team Lead and CC list below.`;
     } else {
-      note = `Only ${escapeHtml(name)} can approve an application, and the hours and Team Lead stay locked until then. Ticking it automatically emails the Program Administrator and all EG Admins.`;
+      note = `Only ${escapeHtml(name)} can record this approval, and the hours, Team Lead and CC list stay locked until then. Ticking it automatically emails the Program Administrator and all EG Admins.`;
     }
 
     return `
       <div class="approval-gate${approved ? " is-approved" : ""}" id="approval-gate">
         <label class="approval-row${iMayApprove && name ? "" : " is-locked"}" for="accept-approved">
           <input type="checkbox" id="accept-approved"${approved ? " checked" : ""}${iMayApprove && name ? "" : " disabled"} />
-          <span class="approval-label">Approved by ${escapeHtml(name || "an approver")}</span>
+          <span class="approval-label">Approved by NCEG</span>
         </label>
         <div class="approval-note" id="approval-note">${note}</div>
       </div>`;
