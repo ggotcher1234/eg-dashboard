@@ -32,7 +32,7 @@
   input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
-  #loading-view, #invalid-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; text-align: center; padding: 20px; }
+  #loading-view, #invalid-view, #closed-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; text-align: center; padding: 20px; }
   .hidden { display: none !important; }
 
   .app-header {
@@ -145,6 +145,17 @@
   <div>
     <h2 style="color:var(--navy);">This application link isn't valid</h2>
     <p>Please double-check the URL your Program contact gave you, or reach out to them for a new link.</p>
+  </div>
+</div>
+
+<!-- A Program that has been archived (130, 9/25/26). Deliberately NOT the
+     same screen as an invalid link: this person was given a real link by a
+     real Program, and telling them to double-check the URL sends them
+     hunting for a mistake that is not theirs. -->
+<div id="closed-view" class="hidden">
+  <div>
+    <h2 style="color:var(--navy);">This program is no longer accepting applications</h2>
+    <p id="closed-detail">Please contact your Economic Gardening program administrator to find out what is available now.</p>
   </div>
 </div>
 
@@ -512,6 +523,16 @@
       $("invalid-view").classList.remove("hidden");
       return;
     }
+    // An archived Program still comes back from the lookup, flagged, so that
+    // this case can be told apart from a URL that never existed.
+    if (row.archived) {
+      $("closed-detail").textContent =
+        `${row.name} is no longer accepting Economic Gardening applications. Please contact your program administrator to find out what is available now.`;
+      $("loading-view").classList.add("hidden");
+      $("closed-view").classList.remove("hidden");
+      return;
+    }
+
     program = row;
     $("program-name").textContent = program.name;
     if (program.logo_url) {

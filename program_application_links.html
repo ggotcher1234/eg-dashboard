@@ -435,7 +435,15 @@
   });
 
   async function loadPartners() {
-    const { data, error } = await sb.from("econ_dev_companies").select("id, name, code").eq("active", true).order("name");
+    // Greg (9/25/26): "if we archive or delete a program the link goes away
+    // too." Delete already did that -- the row is gone and /apply/<code>
+    // reports an invalid link. Archive did not: it sets `archived`, and this
+    // query only ever looked at `active`, so a retired Program kept its row
+    // here, unmarked, with Send Link offered as though nothing had changed.
+    // 130_archived_programs_close_the_link.sql closes the public form to
+    // match; this is the half that stops us handing out the link in the
+    // first place. Unarchiving on the Programs page puts the row back.
+    const { data, error } = await sb.from("econ_dev_companies").select("id, name, code").eq("active", true).eq("archived", false).order("name");
     if (error) { console.error("Couldn't load programs:", error.message); return; }
     allPartners = data;
     renderTable();

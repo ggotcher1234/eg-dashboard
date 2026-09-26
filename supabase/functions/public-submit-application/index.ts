@@ -132,12 +132,24 @@ Deno.serve(async (req: Request) => {
 
     const { data: program, error: programErr } = await adminClient
       .from("econ_dev_companies")
-      .select("id, name, code, organization_id")
+      .select("id, name, code, organization_id, active, archived")
       .ilike("code", programCode)
       .maybeSingle();
 
     if (programErr) return jsonResponse({ error: programErr.message }, 400);
     if (!program) return jsonResponse({ error: "Unknown program link. Please double-check the URL you were given." }, 400);
+    // Greg (9/25/26): archiving a Program now closes its application form
+    // (130). The page checks this too and shows a proper "no longer
+    // accepting applications" screen -- this is the same check on the server,
+    // because the page is the polite half and anyone can POST here directly.
+    //
+    // `active` is checked for the same reason: get_public_program_by_code has
+    // always required it, so the form would refuse to load for an inactive
+    // Program while this function happily accepted a submission for one. That
+    // gap predates archiving and is closed in the same breath.
+    if (program.active === false || program.archived === true) {
+      return jsonResponse({ error: "This program is no longer accepting applications. Please contact your Economic Gardening program administrator." }, 400);
+    }
 
     const companyName = String(incomingData["f-company-name"]).trim();
 

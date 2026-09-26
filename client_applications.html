@@ -453,12 +453,20 @@
   .slug-preview strong { color: var(--navy); font-family: "SF Mono", Menlo, monospace; }
   .field-error { color: var(--danger); font-size: 12px; margin-top: 6px; display: none; }
 
-  /* Approval gate (Greg, 9/25/26): "a checkbox on the bottom of the form
-     where the hours/TL assignments are that says Approved by Chris Gibbons.
-     Only he can check it." White against the accept box's grey so it reads as
-     a distinct step rather than one more field, and a coloured left edge that
-     says at a glance which state it is in -- amber waiting, green approved. */
-  .approval-gate { margin: 18px 0 0; padding: 12px 15px; background: #fff;
+  /* Approval gate. Greg first asked for it "on the bottom of the form where
+     the hours/TL assignments are" (9/25/26); a day later, having seen it:
+     "move Chris's approval box up near the top of the section to show that he
+     has approved it, then scroll down and you can add the hours and assign
+     the TL." Which is the right shape -- approval is the FIRST step, not a
+     sign-off at the end, and Rita opening a tall form full of dead fields
+     needs the reason for that in the first thing she reads.
+     It also retired the separate amber "waiting on approval" band that used
+     to sit here: with the gate itself at the top, that band was saying the
+     same thing twice, twenty pixels apart.
+     White against the accept box's grey so it reads as a distinct step rather
+     than one more field, and a coloured left edge that says at a glance which
+     state it is in -- amber waiting, green approved. */
+  .approval-gate { margin: 0 0 18px; padding: 12px 15px; background: #fff;
                    border: 1px solid var(--border); border-left: 3px solid var(--amber); border-radius: 7px; }
   .approval-gate.is-approved { border-left-color: var(--accent); }
   .approval-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
@@ -470,14 +478,6 @@
      in -- but they must not look available. */
   .accept-box input:disabled, .accept-box select:disabled {
     background: #e3e8ee; color: #93a0af; border-color: #ccd5de; cursor: not-allowed;
-  }
-  /* Said once at the top as well. The checkbox is at the bottom of a tall box
-     because that is where Greg asked for it, but "why is nothing working" has
-     to be answerable from where the eye starts. */
-  .accept-waiting {
-    display: flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 8px 12px;
-    background: #fdf5e6; border: 1px solid #e8d5ab; border-radius: 6px;
-    font-size: 12.5px; font-weight: 600; color: var(--amber);
   }
   .accept-box .cc-row input:disabled { cursor: not-allowed; }
 
@@ -1883,7 +1883,7 @@
         <div class="accept-box">
           <h3>Accept this application</h3>
           <div class="desc">Creates the client, provisions their file, and assigns the Team Lead — Section 5.2.</div>
-          ${a.approved_at ? "" : `<div class="accept-waiting">Waiting on approval${approverLabel() ? ` from ${escapeHtml(approverLabel())}` : ""} — the fields below unlock once it is given.</div>`}
+          ${approvalGateHtml(a)}
           <div class="grid-2">
             <div class="field">
               <label>Budget hours available <span class="required-star">*</span></label>
@@ -1922,7 +1922,6 @@
             <div class="slug-preview">Clients will reach their page at <strong id="slug-preview-text">${escapeHtml(suggestedSlug)}</strong>.egdashboardbuilder.com</div>
             <div class="field-error" id="slug-error">That address is already taken — try another.</div>
           </div>
-          ${approvalGateHtml(a)}
           <div class="form-actions">
             <button type="button" class="btn-secondary" id="reject-btn">Archive</button>
             <button type="button" class="btn-primary" id="accept-btn">Accept and Create Engagement</button>
