@@ -2288,17 +2288,25 @@
     const approved = !!a.approved_at;
     const approvedBy = a.approved_by ? approvers.find((u) => u.id === a.approved_by) : null;
 
+    // Greg (9/26/26): "maybe note that Chris's approval will automatically
+    // send approval email to all Admins and PA's."
+    //
+    // Said in every state, not just the approver's. Ticking this box sends
+    // mail to people outside EG the instant it is ticked, and that is not
+    // something anyone should discover afterwards -- Chris needs to know
+    // before he clicks, and Rita needs to know that the notice she is about
+    // to receive went to the Program too, so she does not send a second one.
     let note;
     if (approved) {
-      note = `Approved on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}. Set the hours and Team Lead below to start the engagement.`;
+      note = `Approved on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}. The Program Administrator and all EG Admins were emailed automatically. Set the hours and Team Lead below to start the engagement.`;
     } else if (!name) {
       // The one state with no way forward from this page, so it says where to
       // go instead of just refusing.
       note = `No one is set up to approve applications yet, so the hours and Team Lead can't be set. Tick <strong>Can approve applications</strong> on the right profile in the Roster.`;
     } else if (iMayApprove) {
-      note = `Budget hours, Team Lead and Accept stay locked until this is ticked. Ticking it emails the Program Administrator and the EG Admins that ${escapeHtml(a.company_name || "this applicant")} was approved today.`;
+      note = `Ticking this automatically emails the Program Administrator and all EG Admins that ${escapeHtml(a.company_name || "this applicant")} has been approved, and unlocks the budget hours, Team Lead and Accept below.`;
     } else {
-      note = `Only ${escapeHtml(name)} can approve an application. Until then the hours and Team Lead can't be set.`;
+      note = `Only ${escapeHtml(name)} can approve an application, and the hours and Team Lead stay locked until then. Ticking it automatically emails the Program Administrator and all EG Admins.`;
     }
 
     return `
