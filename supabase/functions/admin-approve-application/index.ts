@@ -241,7 +241,12 @@ Deno.serve(async (req: Request) => {
       const programCode = program?.code ?? "";
       const companyName = app.company_name ?? "This application";
       const officerName = (app.primary_officer_name ?? "").trim();
-      const approverName = caller.full_name ?? "an Admin";
+      // The approver's name is deliberately NOT in this email. Chris
+      // (9/25/26, via Greg): the approval is NCEG's, and that is what the
+      // Program should see -- "Approved by: NCEG". Who actually recorded it
+      // is still kept, on client_applications.approved_by, and still shown on
+      // the Accept form ("Approved on Sep 26 by Chris Gibbons") where the
+      // question is who to ask about it. It simply does not go out.
       const dateLabel = formatApprovalDate(approvedAt, body.time_zone);
 
       const res = await fetch("https://api.resend.com/emails", {
@@ -267,9 +272,9 @@ Deno.serve(async (req: Request) => {
               <strong>Company:</strong> ${escapeHtml(companyName)}<br/>
               ${officerName ? `<strong>Primary Contact:</strong> ${escapeHtml(officerName)}<br/>` : ""}
               ${programName ? `<strong>Program:</strong> ${escapeHtml(programName)}${programCode ? ` (${escapeHtml(programCode)})` : ""}<br/>` : ""}
-              <strong>Approved by:</strong> ${escapeHtml(approverName)}
+              <strong>Approved by:</strong> NCEG
             </p>
-            <p>Next step: assign the budget hours and a Team Lead on the Applications tab. That accepts the application and starts the engagement for the EG team.</p>
+            <p>The EG team will assign the hours and a Team Lead from here, which starts the engagement. No action is needed from the Program.</p>
           `,
         }),
       });
