@@ -184,17 +184,18 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "The approval didn't save -- nothing was written." }, 500);
     }
 
-    // ---------- tell the people who act on it ----------
-    // Greg: "an email needs to go out to the PA and Rita." Two groups, and
-    // neither is a name in this file:
-    //   * the Program Administrator(s) on the Program this application came
-    //     through -- the flag set on the Programs page, same one the Accept
-    //     form's CC picker treats as always-copied;
-    //   * every active Admin account, which today is Chris, Rita and Greg.
-    //     Rita is who Greg named, and she is reached by being an Admin, so
-    //     this keeps working when the team changes.
-    // The approver is included rather than filtered out: a copy of what went
-    // to the Program is how Chris knows exactly what was said in his name.
+    // ---------- tell Rita it is her turn ----------
+    // THIS EMAIL IS INTERNAL. Until 9/27/26 it also went to the Program
+    // Administrator, which Chris's procedure moved: the Program is told once
+    // the engagement actually exists, by admin-notify-engagement-started,
+    // called from the Accept form. Announcing an engagement before anyone had
+    // been assigned to run it was announcing something that was not yet true.
+    //
+    // What is left is the handoff. Chris approves; Rita cannot touch the
+    // hours or the Team Lead until he has, and without this she would find
+    // out by checking the Applications tab, which is how a week goes by. So
+    // every active Admin gets a short note saying it is ready -- Rita by
+    // being an Admin, not by name, so it keeps working when the team changes.
     //
     // The approval is saved by this point. Nothing below is allowed to
     // report it as a failure.
@@ -203,17 +204,9 @@ Deno.serve(async (req: Request) => {
       const resendKey = Deno.env.get("RESEND_API_KEY");
       if (!resendKey) throw new Error("RESEND_API_KEY secret is not set.");
 
-      const [{ data: admins, error: adminsErr }, { data: contacts, error: contactsErr }, { data: program, error: programErr }] =
+      const [{ data: admins, error: adminsErr }, { data: program, error: programErr }] =
         await Promise.all([
           adminClient.from("users").select("email").eq("role", "super_admin").is("archived_at", null),
-          app.econ_dev_company_id
-            ? adminClient
-                .from("econ_dev_partner_contacts")
-                .select("name, email")
-                .eq("partner_id", app.econ_dev_company_id)
-                .eq("is_program_administrator", true)
-                .eq("active", true)
-            : Promise.resolve({ data: [], error: null }),
           app.econ_dev_company_id
             ? adminClient
                 .from("econ_dev_companies")
@@ -224,29 +217,23 @@ Deno.serve(async (req: Request) => {
         ]);
 
       if (adminsErr) throw new Error(`Couldn't look up admins: ${adminsErr.message}`);
-      if (contactsErr) throw new Error(`Couldn't look up the Program Administrator: ${contactsErr.message}`);
       if (programErr) throw new Error(`Couldn't look up the Program: ${programErr.message}`);
 
       const recipients = [...new Set(
-        [
-          ...(admins ?? []).map((u: { email: string | null }) => u.email ?? ""),
-          ...(contacts ?? []).map((c: { email: string | null }) => c.email ?? ""),
-        ]
-          .map((e: string) => e.trim().toLowerCase())
+        (admins ?? [])
+          .map((u: { email: string | null }) => (u.email ?? "").trim().toLowerCase())
           .filter((e: string) => e.length > 0),
       )];
-      if (recipients.length === 0) throw new Error("Nobody to notify -- no Admin or Program Administrator has an email address on file.");
+      if (recipients.length === 0) throw new Error("No Admin accounts with an email address on file.");
 
       const programName = program?.name ?? "";
       const programCode = program?.code ?? "";
       const companyName = app.company_name ?? "This application";
       const officerName = (app.primary_officer_name ?? "").trim();
-      // The approver's name is deliberately NOT in this email. Chris
-      // (9/25/26, via Greg): the approval is NCEG's, and that is what the
-      // Program should see -- "Approved by: NCEG". Who actually recorded it
-      // is still kept, on client_applications.approved_by, and still shown on
-      // the Accept form ("Approved on Sep 26 by Chris Gibbons") where the
-      // question is who to ask about it. It simply does not go out.
+      // Internal, so the approver IS named here -- the useful fact for an
+      // Admin reading it is who to go back to with a question. The outward
+      // letter says "Approved by: NCEG" instead.
+      const approverName = caller.full_name ?? "an Admin";
       const dateLabel = formatApprovalDate(approvedAt, body.time_zone);
 
       const res = await fetch("https://api.resend.com/emails", {
@@ -263,18 +250,23 @@ Deno.serve(async (req: Request) => {
           to: recipients,
           // The "(CODE) Subject" convention Greg set on 9/14/26, so everything
           // this app sends sorts together in an inbox.
+          // A different subject from the letter the Program gets at accept,
+          // on purpose -- two mails about the same company reading
+          // "(GRE) Application Approved" would be indistinguishable in an
+          // Admin's inbox, and only one of them is asking for anything.
           subject: programCode
-            ? `(${programCode}) Application Approved - ${companyName}`
-            : `Application Approved - ${companyName}`,
+            ? `(${programCode}) Ready for hours and Team Lead - ${companyName}`
+            : `Ready for hours and Team Lead - ${companyName}`,
           html: `
-            <p><strong>${escapeHtml(companyName)}</strong> was approved for the Economic Gardening Program on ${escapeHtml(dateLabel)}.</p>
+            <p><strong>${escapeHtml(companyName)}</strong> was approved for the Economic Gardening Program on ${escapeHtml(dateLabel)} and is ready for budget hours and a Team Lead.</p>
             <p>
               <strong>Company:</strong> ${escapeHtml(companyName)}<br/>
               ${officerName ? `<strong>Primary Contact:</strong> ${escapeHtml(officerName)}<br/>` : ""}
               ${programName ? `<strong>Program:</strong> ${escapeHtml(programName)}${programCode ? ` (${escapeHtml(programCode)})` : ""}<br/>` : ""}
-              <strong>Approved by:</strong> NCEG
+              <strong>Approved by:</strong> ${escapeHtml(approverName)}
             </p>
-            <p>The EG team will assign the hours and a Team Lead from here, which starts the engagement. No action is needed from the Program.</p>
+            <p>Open it on the Applications tab to set the hours, Team Lead and CC list. Accepting it creates the engagement and sends the approval letter to the Program Administrator.</p>
+            <p style="color:#6b7280; font-size:13px;">This note is internal to the EG team. The Program has not been told yet.</p>
           `,
         }),
       });

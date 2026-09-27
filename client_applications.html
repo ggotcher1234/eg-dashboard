@@ -2305,15 +2305,15 @@
     // second one.
     let note;
     if (approved) {
-      note = `Approved on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}. The Program Administrator and all EG Admins were emailed automatically. Set the hours and Team Lead below to move this to an Engagement.`;
+      note = `Approved on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}. Set the hours, Team Lead and CC list below — the Program Administrator is told when you accept, not before.`;
     } else if (!name) {
       // The one state with no way forward from this page, so it says where to
       // go instead of just refusing.
       note = `No one is set up to approve applications yet, so the hours and Team Lead can't be set. Tick <strong>Can approve applications</strong> on the right profile in the Roster.`;
     } else if (iMayApprove) {
-      note = `Ticking this approves ${escapeHtml(a.company_name || "this applicant")} for the program. It automatically emails the Program Administrator and all EG Admins, and unlocks the budget hours, Team Lead and CC list below.`;
+      note = `Ticking this approves ${escapeHtml(a.company_name || "this applicant")} for the program and unlocks the budget hours, Team Lead and CC list below. The EG Admins are emailed that it is ready; the Program Administrator is told later, once the Team Lead is assigned and the engagement is accepted.`;
     } else {
-      note = `Only ${escapeHtml(name)} can record this approval, and the hours, Team Lead and CC list stay locked until then. Ticking it automatically emails the Program Administrator and all EG Admins.`;
+      note = `Only ${escapeHtml(name)} can record this approval, and the hours, Team Lead and CC list stay locked until then. You will be emailed the moment it is approved.`;
     }
 
     return `
@@ -2454,9 +2454,52 @@
       }
     }
 
+    // ---------- tell the Program Administrator ----------
+    // Chris's order of operations (9/26/26, via Greg 9/27/26): the Program
+    // hears once there is an engagement and a Team Lead, not when Chris
+    // approves. So the approval letter is sent from HERE rather than from
+    // admin-approve-application -- by which point everything it claims is
+    // actually true.
+    //
+    // Deliberately last, and deliberately non-fatal. The engagement exists
+    // and is usable whatever happens to this email; a failure says so
+    // plainly, because somebody then has to tell the Program by hand.
+    let noticeWarning = "";
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-notify-engagement-started`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          application_id: appId,
+          time_zone: (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || "UTC",
+        }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || "the notification failed");
+    } catch (err) {
+      noticeWarning = ` The approval letter to the Program Administrator didn't send (${err.message}) — send it by hand.`;
+    }
+
+    if (noticeWarning) {
+      // Do NOT navigate. Every other message on this path is written and then
+      // immediately thrown away by the redirect a line later -- fine for
+      // "created successfully", useless for "somebody now has to send an
+      // email by hand". The engagement exists either way; the button is
+      // spent, so it says so rather than inviting a second accept.
+      btn.disabled = true;
+      btn.textContent = "Engagement created";
+      showBanner(`Client created at ${slug}.egdashboardbuilder.com.${noticeWarning} The engagement is on the Engagements page.`, "error");
+      return;
+    }
+
     btn.disabled = false;
     btn.textContent = "Accept and Create Engagement";
-    showBanner(`Client created at ${slug}.egdashboardbuilder.com.`, "success");
+    showBanner(`Client created at ${slug}.egdashboardbuilder.com. The Program Administrator has been emailed.`, "success");
     location.href = "index.html";
   }
 
