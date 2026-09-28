@@ -489,6 +489,12 @@
   .thresholds-count { font-size: 12px; font-weight: 700; color: var(--amber); }
   .thresholds.is-complete .thresholds-count { color: var(--accent-dark); }
   .thresholds-desc { font-size: 12.5px; color: var(--muted); margin: 0 0 10px; }
+  .th-rural { display: flex; align-items: flex-start; gap: 10px; padding: 8px 9px; margin: 0 0 8px;
+              background: #f4f7fa; border: 1px solid #dde5ee; border-radius: 6px; cursor: pointer; }
+  .th-rural.is-locked { cursor: default; opacity: 0.55; }
+  .th-rural input { margin: 2px 0 0; width: auto; accent-color: var(--navy); }
+  .th-rural-label { font-size: 12.5px; font-weight: 600; color: var(--text); }
+  .th-rural-label span { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 1px; }
   .th-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: start;
             gap: 10px; padding: 7px 8px; border-radius: 6px; cursor: pointer; }
   .th-row:hover { background: #f6f8fa; }
@@ -1961,8 +1967,8 @@
         <div class="accept-box">
           <h3>Accept this application</h3>
           <div class="desc">Creates the client, provisions their file, and assigns the Team Lead — Section 5.2.</div>
-          ${approvalGateHtml(a)}
           ${thresholdsHtml(a)}
+          ${approvalGateHtml(a)}
           <div class="grid-2">
             <div class="field">
               <label>Budget hours available <span class="required-star">*</span></label>
@@ -2087,6 +2093,37 @@
           if (e.key === "Escape") { e.preventDefault(); close(!existing); }
         });
       };
+
+      const ruralBox = $("accept-rural");
+      if (ruralBox && !ruralBox.disabled) {
+        ruralBox.addEventListener("change", async () => {
+          const wanted = ruralBox.checked;
+          ruralBox.disabled = true;
+          const { data, error } = await sb
+            .from("client_applications")
+            .update({ is_rural: wanted })
+            .eq("id", a.id)
+            .select("id, is_rural");
+          if (error || !data || data.length === 0) {
+            ruralBox.checked = !wanted;
+            ruralBox.disabled = false;
+            showBanner(`Couldn't save the rural setting: ${error ? error.message : "nothing was written"}`, "error");
+            return;
+          }
+          a.is_rural = data[0].is_rural;
+          // Changing the bar re-reads every threshold, and a tick recorded
+          // against the old bar is no longer evidence of anything -- so any
+          // that the new bar fails are dropped rather than left standing.
+          const stale = THRESHOLDS.filter((t) => thresholdTicked(a, t.key) && t.read(a).pass === false && !thresholdNote(a, t.key));
+          for (const t of stale) {
+            try { await saveThresholdCheck(a, t.key, false); } catch (e) { /* reported on the next tick */ }
+          }
+          if (stale.length) {
+            showBanner(`Rural bar applied. ${stale.length} confirmed threshold${stale.length === 1 ? "" : "s"} no longer met — re-check ${stale.length === 1 ? "it" : "them"}.`, "error");
+          }
+          renderReview();
+        });
+      }
 
       document.querySelectorAll(".th-check").forEach((box) => {
         box.addEventListener("change", async () => {
@@ -2465,6 +2502,22 @@
   // DATA says: true where the form answers it, false where the form
   // contradicts it, null where no field can settle it. The tick is Rita's
   // and is stored separately -- the data can suggest, it cannot confirm.
+  // Chris (9/28/26): "add another check box for 'rural'. We have different
+  // criteria: $650,000 and 6". Two of the five thresholds are judged against
+  // a different bar for a rural applicant, so every reading takes the flag.
+  //
+  // It is a stored tick rather than something derived: no field on the
+  // application says rural, county and postal code would only give a guess,
+  // and a guess that silently changes which financial bar a company is held
+  // to is worse than asking.
+  const RURAL_FTE = 6, STANDARD_FTE = 10;
+  const RURAL_SALES = 650000, STANDARD_SALES = 1000000;
+  const isRural = (a) => !!(a && a.is_rural);
+  // A threshold's label can depend on the bar, so it is read through here
+  // rather than off the object -- the letter to the Program has to name the
+  // bar the company was actually held to.
+  const thLabel = (t, rural) => (typeof t.label === "function" ? t.label(rural) : t.label);
+
   const THRESHOLDS = [
     {
       key: "contact_info",
@@ -2497,7 +2550,7 @@
     },
     {
       key: "employees_10_plus",
-      label: "10+ Employees",
+      label: (rural) => (rural ? `${RURAL_FTE}+ Employees` : `${STANDARD_FTE}+ Employees`),
       // The yes/no and the headcount can disagree, and one of the three
       // applications pending on 9/28/26 does exactly that -- answered yes to
       // 10-100 FTE and then reported 3 employees. Taking the yes/no as the
@@ -2506,14 +2559,30 @@
       // picking a winner. Either direction of disagreement goes amber with
       // both facts on show, and Rita decides.
       read: (a) => {
+        const rural = isRural(a);
+        const bar = rural ? RURAL_FTE : STANDARD_FTE;
         const fte = a.fte_2025 != null ? Number(a.fte_2025) : null;
         const said = a.fte_range_10_to_100;
+
         if (fte == null) {
-          return said === true
-            ? { pass: true,  detail: "Applicant answered yes to 10–100 FTE — no 2025 count given" }
-            : { pass: false, detail: "Applicant answered no to 10–100 FTE — no 2025 count given" };
+          // Nothing but the yes/no, and that question is always about 10-100
+          // regardless of the bar. A yes clears either bar. A no rules out
+          // the standard bar outright, but says nothing about 6 -- a rural
+          // company with 7 staff answers no and still qualifies.
+          if (said === true) return { pass: true, detail: `Applicant answered yes to 10–100 FTE — no 2025 count given` };
+          return rural
+            ? { pass: null,  detail: `Applicant answered no to 10–100 FTE, which does not settle the rural bar of ${RURAL_FTE} — no 2025 count given` }
+            : { pass: false, detail: `Applicant answered no to 10–100 FTE — no 2025 count given` };
         }
-        const qualifies = fte >= 10;
+
+        const qualifies = fte >= bar;
+        if (rural) {
+          // Under the rural bar the reported count is what decides; the
+          // form's 10-100 question cannot contradict a threshold of 6.
+          return qualifies
+            ? { pass: true,  detail: `${fte} FTE in 2025 — rural bar is ${RURAL_FTE}` }
+            : { pass: false, detail: `${fte} FTE in 2025 — below the rural bar of ${RURAL_FTE}` };
+        }
         if (said === true && qualifies)  return { pass: true,  detail: `Applicant answered yes to 10–100 FTE — ${fte} FTE in 2025` };
         if (said !== true && !qualifies) return { pass: false, detail: `Applicant answered no to 10–100 FTE — ${fte} FTE in 2025` };
         return { pass: null, detail: said === true
@@ -2523,17 +2592,27 @@
     },
     {
       key: "sales_1m_plus",
-      label: "$1M+ sales",
+      label: (rural) => (rural ? "$650K+ sales" : "$1M+ sales"),
       // Same treatment as the headcount above, for the same reason.
       read: (a) => {
+        const rural = isRural(a);
+        const bar = rural ? RURAL_SALES : STANDARD_SALES;
         const rev = a.revenue_2025 != null ? Number(a.revenue_2025) : null;
         const said = a.sales_1_to_50m;
+
         if (rev == null) {
-          return said === true
-            ? { pass: true,  detail: "Applicant answered yes to $1–50M — no 2025 revenue given" }
+          if (said === true) return { pass: true, detail: "Applicant answered yes to $1–50M — no 2025 revenue given" };
+          return rural
+            ? { pass: null,  detail: `Applicant answered no to $1–50M, which does not settle the rural bar of ${fmtMoney(RURAL_SALES)} — no 2025 revenue given` }
             : { pass: false, detail: "Applicant answered no to $1–50M — no 2025 revenue given" };
         }
-        const qualifies = rev >= 1000000;
+
+        const qualifies = rev >= bar;
+        if (rural) {
+          return qualifies
+            ? { pass: true,  detail: `${fmtMoney(rev)} in 2025 — rural bar is ${fmtMoney(RURAL_SALES)}` }
+            : { pass: false, detail: `${fmtMoney(rev)} in 2025 — below the rural bar of ${fmtMoney(RURAL_SALES)}` };
+        }
         if (said === true && qualifies)  return { pass: true,  detail: `Applicant answered yes to $1–50M — ${fmtMoney(rev)} in 2025` };
         if (said !== true && !qualifies) return { pass: false, detail: `Applicant answered no to $1–50M — ${fmtMoney(rev)} in 2025` };
         return { pass: null, detail: said === true
@@ -2561,7 +2640,17 @@
   const thresholdsTickedCount = (a) => THRESHOLDS.filter((t) => thresholdTicked(a, t.key)).length;
 
   function thresholdsHtml(a) {
-    const locked = !a.approved_at;
+    // Chris (9/28/26) put these FIRST: "Rita checks for five criteria, and
+    // checks box for NCEG approval." So the list is open from the moment the
+    // application lands, and it is the approval that waits on it -- the
+    // reverse of the order built on 9/25/26, when Chris was believed to be
+    // the first gate rather than the exception handler.
+    //
+    // Locked after approval, not before: unticking a criterion once the
+    // approval is recorded would leave the approval asserting something the
+    // record no longer supports. To change one, untick the approval first.
+    const locked = !!a.approved_at;
+    const rural = isRural(a);
     const done = thresholdsMet(a);
     const n = thresholdsTickedCount(a);
     return `
@@ -2571,10 +2660,16 @@
           <span class="thresholds-count">${n} of ${THRESHOLDS.length} confirmed</span>
         </div>
         <p class="thresholds-desc">${locked
-          ? "Available once NCEG has approved the application."
+          ? "Confirmed and locked by the NCEG approval below. Untick the approval to change one."
           : done
-            ? "All five confirmed. These are the thresholds the Program Administrator is shown in the approval letter."
-            : "Confirm each one. The applicant's own answers are shown; tick to record that they were checked. All five are needed before this can be accepted."}</p>
+            ? "All five confirmed — the NCEG approval below is now available."
+            : "Confirm each one. The applicant's own answers are shown; tick to record that they were checked. All five are needed before NCEG can approve."}</p>
+        <label class="th-rural${locked ? " is-locked" : ""}">
+          <input type="checkbox" id="accept-rural"${rural ? " checked" : ""}${locked ? " disabled" : ""} />
+          <span class="th-rural-label">Rural applicant
+            <span>Judges this company against the rural bar — ${fmtMoney(RURAL_SALES)} in sales and ${RURAL_FTE} employees, rather than ${fmtMoney(STANDARD_SALES)} and ${STANDARD_FTE}.</span>
+          </span>
+        </label>
         ${THRESHOLDS.map((t) => {
           const r = t.read(a);
           const ticked = thresholdTicked(a, t.key);
@@ -2590,7 +2685,7 @@
           return `
             <label class="th-row${locked ? " is-locked" : ""}" data-th-row="${t.key}">
               <input type="checkbox" class="th-check" data-th="${t.key}"${ticked ? " checked" : ""}${locked ? " disabled" : ""} />
-              <span class="th-label">${escapeHtml(t.label)}<span class="th-detail">${escapeHtml(r.detail)}</span></span>
+              <span class="th-label">${escapeHtml(thLabel(t, rural))}<span class="th-detail">${escapeHtml(r.detail)}</span></span>
               ${pill}
               ${note ? `<div class="th-note"><span class="th-note-label">Exception</span> — ${escapeHtml(note)}${locked ? "" : `<button type="button" class="th-edit-note" data-th-edit="${t.key}">Edit reason</button>`}</div>` : ""}
             </label>`;
@@ -2637,23 +2732,27 @@
     // know before clicking, and Rita needs to know that the notice she is
     // about to receive went to the Program too, so she does not send a
     // second one.
+    const met = thresholdsMet(a);
     let note;
     if (approved) {
-      note = `Approved on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}. Set the hours, Team Lead and CC list below — the Program Administrator is told when you accept, not before.`;
+      note = `Approved on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}, against all ${THRESHOLDS.length} review thresholds. Set the hours, Team Lead and CC list below.`;
     } else if (!name) {
       // The one state with no way forward from this page, so it says where to
       // go instead of just refusing.
-      note = `No one is set up to approve applications yet, so the hours and Team Lead can't be set. Tick <strong>Can approve applications</strong> on the right profile in the Roster.`;
-    } else if (iMayApprove) {
-      note = `Ticking this approves ${escapeHtml(a.company_name || "this applicant")} for the program and unlocks the budget hours, Team Lead and CC list below. The EG Admins are emailed that it is ready; the Program Administrator is told later, once the Team Lead is assigned and the engagement is accepted.`;
+      note = `No one is set up to approve applications yet, so this can't move forward. Tick <strong>Can approve applications</strong> on the right profile in the Roster.`;
+    } else if (!iMayApprove) {
+      note = `Only ${escapeHtml(name)} can record this approval, and the hours, Team Lead and CC list stay locked until then.`;
+    } else if (!met) {
+      const left = THRESHOLDS.length - thresholdsTickedCount(a);
+      note = `Confirm the ${left} remaining review threshold${left === 1 ? "" : "s"} above, then this becomes available.`;
     } else {
-      note = `Only ${escapeHtml(name)} can record this approval, and the hours, Team Lead and CC list stay locked until then. You will be emailed the moment it is approved.`;
+      note = `All ${THRESHOLDS.length} thresholds are confirmed. Ticking this approves ${escapeHtml(a.company_name || "this applicant")} for the program and unlocks the budget hours, Team Lead and CC list below.`;
     }
 
     return `
       <div class="approval-gate${approved ? " is-approved" : ""}" id="approval-gate">
-        <label class="approval-row${iMayApprove && name ? "" : " is-locked"}" for="accept-approved">
-          <input type="checkbox" id="accept-approved"${approved ? " checked" : ""}${iMayApprove && name ? "" : " disabled"} />
+        <label class="approval-row${iMayApprove && name && (met || approved) ? "" : " is-locked"}" for="accept-approved">
+          <input type="checkbox" id="accept-approved"${approved ? " checked" : ""}${iMayApprove && name && (met || approved) ? "" : " disabled"} />
           <span class="approval-label">Approved by NCEG</span>
         </label>
         <div class="approval-note" id="approval-note">${note}</div>
@@ -2663,24 +2762,38 @@
   // Everything the Accept form can do EXCEPT approve it and archive it. Archive
   // stays live on purpose: an application that should never have arrived
   // shouldn't have to be approved first to be got rid of.
+  // One chain, in the order Chris set on 9/28/26:
+  //   five thresholds  ->  NCEG approval  ->  hours, Team Lead, CC, Accept
+  // Each link opens the next. Either Chris or Rita can close the middle one;
+  // the thresholds and the engagement setup are open to any Admin.
   function applyApprovalGate(a) {
-    const locked = !a.approved_at;
+    const approved = !!a.approved_at;
+    const met = thresholdsMet(a);
+
+    // Thresholds and the rural bar: open until the approval is recorded,
+    // then frozen so the approval cannot outlive the review behind it.
+    document.querySelectorAll(".th-check").forEach((el) => { el.disabled = approved; });
+    const ruralBox = $("accept-rural");
+    if (ruralBox) ruralBox.disabled = approved;
+
+    // The approval waits on all five.
+    const approveBox = $("accept-approved");
+    if (approveBox) {
+      const mayApprove = !!(currentUser && currentUser.can_approve_applications) && !!approverLabel();
+      approveBox.disabled = !mayApprove || (!met && !approved);
+      approveBox.title = !mayApprove
+        ? "Only NCEG can record this approval"
+        : (!met && !approved) ? `Confirm all ${THRESHOLDS.length} review thresholds first` : "";
+    }
+
+    // Everything that turns it into an engagement waits on the approval.
     ["accept-budget", "accept-tl", "accept-tl-hours", "accept-admin-hours", "accept-qc-hours", "accept-slug"]
-      .forEach((id) => { const el = $(id); if (el) el.disabled = locked; });
-    document.querySelectorAll(".cc-check").forEach((el) => { el.disabled = locked; });
-    document.querySelectorAll(".th-check").forEach((el) => { el.disabled = locked; });
-    // Two gates, not one. NCEG's approval unlocks the form; Rita's five
-    // thresholds unlock the button at the end of it. She can fill everything
-    // in while she works through the list -- it is only the irreversible
-    // step that waits.
+      .forEach((id) => { const el = $(id); if (el) el.disabled = !approved; });
+    document.querySelectorAll(".cc-check").forEach((el) => { el.disabled = !approved; });
     const btn = $("accept-btn");
     if (btn) {
-      btn.disabled = locked || !thresholdsMet(a);
-      btn.title = locked
-        ? "Waiting on NCEG approval"
-        : !thresholdsMet(a)
-          ? `Confirm all ${THRESHOLDS.length} review thresholds first`
-          : "";
+      btn.disabled = !approved;
+      btn.title = approved ? "" : "Waiting on the NCEG approval above";
     }
   }
 
@@ -2843,14 +2956,14 @@
   // Pure, so the wording can be read and checked without a database behind
   // it, and so the threshold table cannot drift from the checklist Rita just
   // worked through -- both are built from THRESHOLDS.
-  function paLetterBody(paGreeting, engagementName, checkedKeys) {
+  function paLetterBody(paGreeting, engagementName, checkedKeys, rural) {
     // Rita's original is a two-column table, which Outlook renders from HTML.
     // A mailto: body is plain text, and padded columns only line up in a
     // monospaced font -- in Outlook's default they come out ragged, which
     // looks worse than not attempting columns at all. So the same five rows,
     // as a list that cannot misalign.
     const rows = THRESHOLDS.map((t, i) =>
-      `${i + 1}. ${t.label} — ${checkedKeys.includes(t.key) ? "Yes" : "—"}`
+      `${i + 1}. ${thLabel(t, rural)} — ${checkedKeys.includes(t.key) ? "Yes" : "—"}`
     ).join("\n");
     return `Hello ${paGreeting},
 
@@ -2904,7 +3017,7 @@ Have a great day!!`;
 
     // Set through .value rather than in the markup: the body carries
     // newlines, and a textarea's initial content is HTML.
-    $("pa-body").value = paLetterBody(greeting, a.company_name || "this", checked);
+    $("pa-body").value = paLetterBody(greeting, a.company_name || "this", checked, isRural(a));
     box.scrollIntoView({ behavior: "smooth", block: "center" });
 
     $("pa-mailto").addEventListener("click", () => {
