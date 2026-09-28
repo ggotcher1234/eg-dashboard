@@ -474,6 +474,52 @@
   .approval-row input { margin: 0; width: auto; accent-color: var(--accent); transform: scale(1.15); }
   .approval-label { font-size: 13.5px; font-weight: 600; color: var(--text); }
   .approval-note { font-size: 12.5px; color: var(--muted); margin: 6px 0 0 28px; }
+
+  /* Rita's five thresholds (9/28/26), taken from the email she sends the
+     Program Administrator. Four of the five are already answered by the
+     application -- the public form asks the FTE, sales and external-markets
+     questions outright and requires the officer's contact details -- so each
+     row shows what the applicant said and pre-ticks where the data supports
+     it. Rita is confirming a reading, not recalling one. */
+  .thresholds { margin: 0 0 18px; padding: 12px 15px; background: #fff;
+                border: 1px solid var(--border); border-left: 3px solid var(--amber); border-radius: 7px; }
+  .thresholds.is-complete { border-left-color: var(--accent); }
+  .thresholds-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+  .thresholds-head h4 { margin: 0; font-size: 13.5px; font-weight: 700; color: var(--text); }
+  .thresholds-count { font-size: 12px; font-weight: 700; color: var(--amber); }
+  .thresholds.is-complete .thresholds-count { color: var(--accent-dark); }
+  .thresholds-desc { font-size: 12.5px; color: var(--muted); margin: 0 0 10px; }
+  .th-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: start;
+            gap: 10px; padding: 7px 8px; border-radius: 6px; cursor: pointer; }
+  .th-row:hover { background: #f6f8fa; }
+  .th-row.is-locked, .th-row.is-locked:hover { cursor: default; background: transparent; opacity: 0.55; }
+  .th-row input { margin: 2px 0 0; width: auto; accent-color: var(--accent); }
+  .th-label { font-size: 13px; font-weight: 600; color: var(--text); }
+  .th-detail { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 1px; }
+  .th-pill { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+             border-radius: 999px; padding: 2px 8px; white-space: nowrap; margin-top: 1px; }
+  .th-pill.ok    { color: var(--accent-dark); background: #e6efe0; }
+  .th-pill.check { color: var(--amber);       background: #fdf0d8; }
+  .th-pill.fail  { color: var(--danger);      background: #f6e2e1; }
+
+  /* The letter Rita sends the Program Administrator. A composer, not a
+     sender: it carries her signature and asks the Program to act, so it has
+     to leave from her own address. Same pattern as the engagement Welcome
+     Email. */
+  .pa-letter { margin-top: 18px; padding: 16px 18px; background: #fff;
+               border: 1px solid var(--border); border-left: 3px solid var(--navy); border-radius: 8px; }
+  .pa-letter h4 { margin: 0 0 3px; font-size: 14px; color: var(--navy); }
+  .pa-letter .desc { font-size: 12.5px; color: var(--muted); margin: 0 0 13px; }
+  .pa-field { margin-bottom: 10px; }
+  .pa-field label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase;
+                    letter-spacing: 0.4px; color: var(--muted); margin-bottom: 4px; }
+  .pa-field input, .pa-field textarea {
+    width: 100%; padding: 8px 11px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13.5px; font-family: inherit; color: var(--text); background: #fff;
+  }
+  .pa-field textarea { min-height: 330px; line-height: 1.5; resize: vertical; }
+  .pa-actions { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+  .pa-actions .spacer { flex: 1; }
   /* Gated fields stay visible -- Rita needs to see what she will be filling
      in -- but they must not look available. */
   .accept-box input:disabled, .accept-box select:disabled {
@@ -1034,6 +1080,13 @@
   // account that is hidden. Reading it from allUsers would show an empty
   // name on the checkbox for the one person it is about.
   let approvers = [];
+  // EG staff who are copied on client correspondence (128). Used on the
+  // letter to the Program Administrator, so that whoever is on the CC line
+  // everywhere else in the app is on this one too.
+  let ccAlwaysEmails = [];
+  // Who is signed in -- only to keep the sender off the CC line of the
+  // letter they are about to send.
+  let myEmail = "";
   let clientsByApp = {};   // application id -> { id, status, project_status } for accepted applications
   let activeTab = "pending"; // default filter when this page opens — Applications, since "All" is gone (Greg, 9/4/26)
   let reviewingAppId = null;
@@ -1275,7 +1328,7 @@
 
     const { data: profile, error: profileErr } = await sb
       .from("users")
-      .select("id, full_name, role, organization_id, can_approve_applications")
+      .select("id, full_name, role, organization_id, email, can_approve_applications")
       .eq("id", user.id)
       .single();
 
@@ -1287,6 +1340,7 @@
 
     currentUser = profile;
     isSuperAdmin = profile.role === "super_admin";
+    myEmail = (profile.email || "").trim();
 
     $("loading-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
@@ -1300,7 +1354,7 @@
     // second header some pages render inside #not-admin-view.
     document.querySelectorAll("[data-super-admin-only]").forEach((el) => el.classList.toggle("hidden", profile.role !== "super_admin"));
 
-    await Promise.all([loadPartners(), loadUsers(), loadPartnerContacts(), loadApprovers()]);
+    await Promise.all([loadPartners(), loadUsers(), loadPartnerContacts(), loadApprovers(), loadCcAlways()]);
     await loadApplications();
 
     // Greg (9/4/26): this page is deep-link-only now -- "the applications
@@ -1342,6 +1396,16 @@
     const { data, error } = await sb.from("econ_dev_partner_contacts").select("*").eq("active", true).order("sort_order");
     if (error) { showBanner("Couldn't load program contacts: " + error.message, "error"); return; }
     allPartnerContacts = data;
+  }
+
+  async function loadCcAlways() {
+    const { data, error } = await sb
+      .from("users")
+      .select("email")
+      .eq("cc_on_client_email", true)
+      .is("archived_at", null);
+    if (error) { ccAlwaysEmails = []; return; }
+    ccAlwaysEmails = (data || []).map((u) => (u.email || "").trim()).filter(Boolean);
   }
 
   async function loadApprovers() {
@@ -1884,6 +1948,7 @@
           <h3>Accept this application</h3>
           <div class="desc">Creates the client, provisions their file, and assigns the Team Lead — Section 5.2.</div>
           ${approvalGateHtml(a)}
+          ${thresholdsHtml(a)}
           <div class="grid-2">
             <div class="field">
               <label>Budget hours available <span class="required-star">*</span></label>
@@ -1954,6 +2019,23 @@
       $("accept-btn").addEventListener("click", () => submitAccept(a.id));
 
       applyApprovalGate(a);
+
+      document.querySelectorAll(".th-check").forEach((box) => {
+        box.addEventListener("change", async () => {
+          const key = box.dataset.th;
+          const wanted = box.checked;
+          box.disabled = true;
+          try {
+            await saveThresholdCheck(a, key, wanted);
+            renderReview();
+          } catch (err) {
+            box.checked = !wanted;
+            box.disabled = false;
+            showBanner(`Couldn't save that threshold: ${err.message}`, "error");
+          }
+        });
+      });
+
       const approveBox = $("accept-approved");
       if (approveBox && !approveBox.disabled) {
         approveBox.addEventListener("change", async () => {
@@ -2288,6 +2370,131 @@
     return names.length ? names.join(" or ") : null;
   }
 
+  // ---------- Rita's five thresholds (9/28/26) ----------
+  // Straight from the table in the email she sends the Program
+  // Administrator, in her order and close to her words -- so that what she
+  // ticks here and what the Program reads are recognisably the same list.
+  //
+  // Each one carries its own read of the application. `pass` is what the
+  // DATA says: true where the form answers it, false where the form
+  // contradicts it, null where no field can settle it. The tick is Rita's
+  // and is stored separately -- the data can suggest, it cannot confirm.
+  const THRESHOLDS = [
+    {
+      key: "contact_info",
+      label: "Full Contact Info",
+      read: (a) => {
+        const missing = [];
+        if (!(a.primary_officer_name || "").trim())  missing.push("name");
+        if (!(a.primary_officer_title || "").trim()) missing.push("title");
+        if (!(a.primary_officer_email || "").trim()) missing.push("email");
+        if (!(a.primary_officer_phone || "").trim()) missing.push("phone");
+        const addr = a.address || {};
+        if (!(addr.street || "").trim() || !(addr.city || "").trim() || !(addr.state || "").trim()) missing.push("address");
+        return missing.length
+          ? { pass: false, detail: `Missing: ${missing.join(", ")}` }
+          : { pass: true, detail: "Name, title, email, phone and address all on file" };
+      },
+    },
+    {
+      key: "ceo_listed",
+      label: "CEO Listed",
+      // The one no query can settle. A title match is a hint, not an answer
+      // -- President, Owner and Managing Partner are all the person Rita is
+      // looking for, and "VP Operations" is not, so this shows the title and
+      // lets her decide.
+      read: (a) => {
+        const title = (a.primary_officer_title || "").trim();
+        if (!title) return { pass: false, detail: "No title on the primary officer" };
+        return { pass: null, detail: `Primary officer: ${a.primary_officer_name || "—"}, ${title}` };
+      },
+    },
+    {
+      key: "employees_10_plus",
+      label: "10+ Employees",
+      read: (a) => {
+        const fte = a.fte_2025 != null ? Number(a.fte_2025) : null;
+        const said = a.fte_range_10_to_100;
+        const counted = fte != null ? `${fte} FTE in 2025` : "no 2025 count given";
+        if (said === true) return { pass: true, detail: `Applicant answered yes to 10–100 FTE — ${counted}` };
+        if (fte != null && fte >= 10) return { pass: true, detail: `Applicant answered no to 10–100 FTE, but reported ${fte} FTE in 2025` };
+        return { pass: false, detail: `Applicant answered no to 10–100 FTE — ${counted}` };
+      },
+    },
+    {
+      key: "sales_1m_plus",
+      label: "$1M+ sales",
+      read: (a) => {
+        const rev = a.revenue_2025 != null ? Number(a.revenue_2025) : null;
+        const said = a.sales_1_to_50m;
+        const counted = rev != null ? fmtMoney(rev) + " in 2025" : "no 2025 revenue given";
+        if (said === true) return { pass: true, detail: `Applicant answered yes to $1–50M — ${counted}` };
+        if (rev != null && rev >= 1000000) return { pass: true, detail: `Applicant answered no to $1–50M, but reported ${fmtMoney(rev)} in 2025` };
+        return { pass: false, detail: `Applicant answered no to $1–50M — ${counted}` };
+      },
+    },
+    {
+      key: "external_markets",
+      label: "Sell to external markets",
+      read: (a) => a.sales_primarily_external === true
+        ? { pass: true, detail: "Applicant answered yes — sales primarily outside the city" }
+        : { pass: false, detail: "Applicant answered no to selling primarily outside the city" },
+    },
+  ];
+
+  const thresholdChecks = (a) => (a && a.threshold_checks) || {};
+  const thresholdTicked = (a, key) => thresholdChecks(a)[key] === true;
+  const thresholdsMet = (a) => THRESHOLDS.every((t) => thresholdTicked(a, t.key));
+  const thresholdsTickedCount = (a) => THRESHOLDS.filter((t) => thresholdTicked(a, t.key)).length;
+
+  function thresholdsHtml(a) {
+    const locked = !a.approved_at;
+    const done = thresholdsMet(a);
+    const n = thresholdsTickedCount(a);
+    return `
+      <div class="thresholds${done ? " is-complete" : ""}" id="thresholds-box">
+        <div class="thresholds-head">
+          <h4>Review thresholds</h4>
+          <span class="thresholds-count">${n} of ${THRESHOLDS.length} confirmed</span>
+        </div>
+        <p class="thresholds-desc">${locked
+          ? "Available once NCEG has approved the application."
+          : done
+            ? "All five confirmed. These are the thresholds the Program Administrator is shown in the approval letter."
+            : "Confirm each one. The applicant's own answers are shown; tick to record that they were checked. All five are needed before this can be accepted."}</p>
+        ${THRESHOLDS.map((t) => {
+          const r = t.read(a);
+          const ticked = thresholdTicked(a, t.key);
+          const pill = r.pass === true ? `<span class="th-pill ok">From the form</span>`
+                     : r.pass === false ? `<span class="th-pill fail">Form says no</span>`
+                     : `<span class="th-pill check">Needs a look</span>`;
+          return `
+            <label class="th-row${locked ? " is-locked" : ""}">
+              <input type="checkbox" class="th-check" data-th="${t.key}"${ticked ? " checked" : ""}${locked ? " disabled" : ""} />
+              <span class="th-label">${escapeHtml(t.label)}<span class="th-detail">${escapeHtml(r.detail)}</span></span>
+              ${pill}
+            </label>`;
+        }).join("")}
+      </div>`;
+  }
+
+  // Ticks are saved one at a time rather than batched at accept: Rita may
+  // work through a borderline application over two sittings, and a half-done
+  // review that survives a closed tab is worth more than one round-trip
+  // saved. .select() so an RLS-shaped silent success can't look like a save.
+  async function saveThresholdCheck(a, key, value) {
+    const next = { ...thresholdChecks(a) };
+    if (value) next[key] = true; else delete next[key];
+    const { data, error } = await sb
+      .from("client_applications")
+      .update({ threshold_checks: next })
+      .eq("id", a.id)
+      .select("id, threshold_checks");
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) throw new Error("nothing was written");
+    a.threshold_checks = data[0].threshold_checks || next;
+  }
+
   function approvalGateHtml(a) {
     const name = approverLabel();
     const iMayApprove = !!(currentUser && currentUser.can_approve_applications);
@@ -2331,9 +2538,23 @@
   // shouldn't have to be approved first to be got rid of.
   function applyApprovalGate(a) {
     const locked = !a.approved_at;
-    ["accept-budget", "accept-tl", "accept-tl-hours", "accept-admin-hours", "accept-qc-hours", "accept-slug", "accept-btn"]
+    ["accept-budget", "accept-tl", "accept-tl-hours", "accept-admin-hours", "accept-qc-hours", "accept-slug"]
       .forEach((id) => { const el = $(id); if (el) el.disabled = locked; });
     document.querySelectorAll(".cc-check").forEach((el) => { el.disabled = locked; });
+    document.querySelectorAll(".th-check").forEach((el) => { el.disabled = locked; });
+    // Two gates, not one. NCEG's approval unlocks the form; Rita's five
+    // thresholds unlock the button at the end of it. She can fill everything
+    // in while she works through the list -- it is only the irreversible
+    // step that waits.
+    const btn = $("accept-btn");
+    if (btn) {
+      btn.disabled = locked || !thresholdsMet(a);
+      btn.title = locked
+        ? "Waiting on NCEG approval"
+        : !thresholdsMet(a)
+          ? `Confirm all ${THRESHOLDS.length} review thresholds first`
+          : "";
+    }
   }
 
   async function callSetApproved(appId, approved) {
@@ -2374,6 +2595,14 @@
     const app = allApplications.find((x) => x.id === appId);
     if (app && !app.approved_at) {
       showBanner(`This application hasn't been approved yet${approverLabel() ? " by " + approverLabel() : ""}, so it can't be accepted.`, "error");
+      renderReview();
+      return;
+    }
+
+    // Backstop for a stale tab, same reasoning as the approval check above.
+    if (app && !thresholdsMet(app)) {
+      const left = THRESHOLDS.length - thresholdsTickedCount(app);
+      showBanner(`${left} review threshold${left === 1 ? "" : "s"} still to confirm before this can be accepted.`, "error");
       renderReview();
       return;
     }
@@ -2454,53 +2683,126 @@
       }
     }
 
-    // ---------- tell the Program Administrator ----------
-    // Chris's order of operations (9/26/26, via Greg 9/27/26): the Program
-    // hears once there is an engagement and a Team Lead, not when Chris
-    // approves. So the approval letter is sent from HERE rather than from
-    // admin-approve-application -- by which point everything it claims is
-    // actually true.
+    // ---------- hand Rita the letter to the Program Administrator ----------
+    // Chris's order of operations (9/26/26, via Greg): the Program hears once
+    // there is an engagement and a Team Lead. Greg then supplied the letter
+    // Rita actually sends (9/28/26) -- signed "Rita Benson, Administrator",
+    // with the NCEG address block, and asking the PA to send the acceptance
+    // notification on to the company.
     //
-    // Deliberately last, and deliberately non-fatal. The engagement exists
-    // and is usable whatever happens to this email; a failure says so
-    // plainly, because somebody then has to tell the Program by hand.
-    let noticeWarning = "";
-    try {
-      const { data: { session } } = await sb.auth.getSession();
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-notify-engagement-started`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`,
-          "apikey": SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          application_id: appId,
-          time_zone: (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || "UTC",
-        }),
-      });
-      const result = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(result.error || "the notification failed");
-    } catch (err) {
-      noticeWarning = ` The approval letter to the Program Administrator didn't send (${err.message}) — send it by hand.`;
-    }
+    // WHICH IS WHY THIS IS A COMPOSER AND NOT AN AUTOMATIC SEND. An email
+    // from the dashboard leaves as noreply@send.economicgardening.org: it
+    // cannot carry her signature, a reply to it goes nowhere, and a request
+    // to go and do something reads oddly from a machine. So the app writes
+    // the letter and hands it to her mail client -- out from her address,
+    // into her Sent folder, and editable first. Same pattern as the
+    // engagement Welcome Email, for the same reasons.
+    //
+    // It also means NOT redirecting to the Engagements page the moment the
+    // engagement exists, which is what this did until today. There is a step
+    // left, so the page stays put and shows it.
+    btn.disabled = true;
+    btn.textContent = "Engagement created";
+    showBanner(`Client created at ${slug}.egdashboardbuilder.com.`, "success");
+    renderPaLetter(appId, clientId);
+  }
 
-    if (noticeWarning) {
-      // Do NOT navigate. Every other message on this path is written and then
-      // immediately thrown away by the redirect a line later -- fine for
-      // "created successfully", useless for "somebody now has to send an
-      // email by hand". The engagement exists either way; the button is
-      // spent, so it says so rather than inviting a second accept.
-      btn.disabled = true;
-      btn.textContent = "Engagement created";
-      showBanner(`Client created at ${slug}.egdashboardbuilder.com.${noticeWarning} The engagement is on the Engagements page.`, "error");
-      return;
-    }
+  // ---------- The approval letter to the Program Administrator ----------
+  // Greg supplied Rita's template verbatim on 9/28/26. Kept close to her
+  // words, with the five thresholds as the table she already sends, because
+  // a PA who has had a dozen of these should not be able to tell that this
+  // one was assembled rather than typed.
+  //
+  // Pure, so the wording can be read and checked without a database behind
+  // it, and so the threshold table cannot drift from the checklist Rita just
+  // worked through -- both are built from THRESHOLDS.
+  function paLetterBody(paGreeting, engagementName, checkedKeys) {
+    // Rita's original is a two-column table, which Outlook renders from HTML.
+    // A mailto: body is plain text, and padded columns only line up in a
+    // monospaced font -- in Outlook's default they come out ragged, which
+    // looks worse than not attempting columns at all. So the same five rows,
+    // as a list that cannot misalign.
+    const rows = THRESHOLDS.map((t, i) =>
+      `${i + 1}. ${t.label} — ${checkedKeys.includes(t.key) ? "Yes" : "—"}`
+    ).join("\n");
+    return `Hello ${paGreeting},
 
-    btn.disabled = false;
-    btn.textContent = "Accept and Create Engagement";
-    showBanner(`Client created at ${slug}.egdashboardbuilder.com. The Program Administrator has been emailed.`, "success");
-    location.href = "index.html";
+NCEG has reviewed the ${engagementName} application and found that the following thresholds have been met and the application is approved.
+
+Thresholds passed:
+${rows}
+
+Please proceed with sending the acceptance notification.
+
+Have a great day!!`;
+  }
+
+  function renderPaLetter(appId, clientId) {
+    const a = allApplications.find((x) => x.id === appId);
+    if (!a) return;
+    const partner = partnersById()[a.econ_dev_company_id];
+    const pas = allPartnerContacts.filter(
+      (c) => partner && c.partner_id === partner.id && c.is_program_administrator && (c.email || "").trim()
+    );
+    // Everyone at EG who is on the standing CC list, minus whoever is
+    // sending -- nobody needs a copy of their own letter.
+    const ccEmails = ccAlwaysEmails.filter((e) => e.toLowerCase() !== (myEmail || "").toLowerCase());
+    const checked = THRESHOLDS.filter((t) => thresholdTicked(a, t.key)).map((t) => t.key);
+    const greeting = pas.length === 1
+      ? (String(pas[0].name || "").trim().split(/\s+/)[0] || "there")
+      : pas.length > 1 ? "all" : "there";
+
+    const box = document.createElement("div");
+    box.className = "pa-letter";
+    box.id = "pa-letter";
+    box.innerHTML = `
+      <h4>Next step — tell the Program Administrator</h4>
+      <p class="desc">${pas.length
+        ? "Filled in from this engagement. It goes out from your own email, with your signature — edit anything first. Nothing here is saved."
+        : `${partner ? escapeHtml(partner.name) : "This Program"} has nobody marked Program Administrator with an email address, so the To line is empty. Add one on the Programs page, or type an address in.`}</p>
+      <div class="pa-field"><label for="pa-to">To</label><input type="text" id="pa-to" value="${escapeHtml(pas.map((c) => c.email.trim()).join(", "))}" /></div>
+      <div class="pa-field"><label for="pa-cc">CC</label><input type="text" id="pa-cc" value="${escapeHtml(ccEmails.join(", "))}" /></div>
+      <div class="pa-field"><label for="pa-subject">Subject</label><input type="text" id="pa-subject" value="${escapeHtml(`${partner && partner.code ? `(${partner.code}) ` : ""}${a.company_name} — Application Approved`)}" /></div>
+      <div class="pa-field"><label for="pa-body">Message</label><textarea id="pa-body" spellcheck="true"></textarea></div>
+      <div class="pa-actions">
+        <button type="button" class="btn-primary" id="pa-mailto">Open in email app</button>
+        <button type="button" class="btn-secondary" id="pa-copy">Copy email</button>
+        <span class="spacer"></span>
+        <a class="btn-secondary" id="pa-done" href="index.html" style="text-decoration:none; display:inline-block;">Go to Engagements →</a>
+      </div>`;
+
+    const acceptBox = document.querySelector(".accept-box");
+    if (acceptBox) acceptBox.insertAdjacentElement("afterend", box);
+    else $("review-content").appendChild(box);
+
+    // Set through .value rather than in the markup: the body carries
+    // newlines, and a textarea's initial content is HTML.
+    $("pa-body").value = paLetterBody(greeting, a.company_name || "this", checked);
+    box.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    $("pa-mailto").addEventListener("click", () => {
+      const clean = (v) => v.split(",").map((x) => x.trim()).filter(Boolean).join(",");
+      const params = [];
+      const cc = clean($("pa-cc").value);
+      if (cc) params.push("cc=" + encodeURIComponent(cc));
+      params.push("subject=" + encodeURIComponent($("pa-subject").value));
+      params.push("body=" + encodeURIComponent($("pa-body").value));
+      window.location.href = `mailto:${clean($("pa-to").value)}?${params.join("&")}`;
+    });
+
+    $("pa-copy").addEventListener("click", async () => {
+      const text = `To: ${$("pa-to").value}\nCC: ${$("pa-cc").value}\nSubject: ${$("pa-subject").value}\n\n${$("pa-body").value}`;
+      const b = $("pa-copy");
+      try {
+        await navigator.clipboard.writeText(text);
+        const was = b.textContent;
+        b.textContent = "Copied!";
+        setTimeout(() => { b.textContent = was; }, 1500);
+      } catch (e) {
+        $("pa-body").select();
+        showBanner("Couldn't copy automatically — the message is selected, copy it with Cmd+C.", "error");
+      }
+    });
   }
 
   $("reject-cancel").addEventListener("click", () => {
