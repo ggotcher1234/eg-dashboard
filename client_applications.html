@@ -2412,25 +2412,47 @@
     {
       key: "employees_10_plus",
       label: "10+ Employees",
+      // The yes/no and the headcount can disagree, and one of the three
+      // applications pending on 9/28/26 does exactly that -- answered yes to
+      // 10-100 FTE and then reported 3 employees. Taking the yes/no as the
+      // answer would show that green, which is the one outcome worth
+      // avoiding: a contradiction the applicant made, hidden by the form
+      // picking a winner. Either direction of disagreement goes amber with
+      // both facts on show, and Rita decides.
       read: (a) => {
         const fte = a.fte_2025 != null ? Number(a.fte_2025) : null;
         const said = a.fte_range_10_to_100;
-        const counted = fte != null ? `${fte} FTE in 2025` : "no 2025 count given";
-        if (said === true) return { pass: true, detail: `Applicant answered yes to 10–100 FTE — ${counted}` };
-        if (fte != null && fte >= 10) return { pass: true, detail: `Applicant answered no to 10–100 FTE, but reported ${fte} FTE in 2025` };
-        return { pass: false, detail: `Applicant answered no to 10–100 FTE — ${counted}` };
+        if (fte == null) {
+          return said === true
+            ? { pass: true,  detail: "Applicant answered yes to 10–100 FTE — no 2025 count given" }
+            : { pass: false, detail: "Applicant answered no to 10–100 FTE — no 2025 count given" };
+        }
+        const qualifies = fte >= 10;
+        if (said === true && qualifies)  return { pass: true,  detail: `Applicant answered yes to 10–100 FTE — ${fte} FTE in 2025` };
+        if (said !== true && !qualifies) return { pass: false, detail: `Applicant answered no to 10–100 FTE — ${fte} FTE in 2025` };
+        return { pass: null, detail: said === true
+          ? `Answers disagree: yes to 10–100 FTE, but only ${fte} FTE reported for 2025`
+          : `Answers disagree: no to 10–100 FTE, but ${fte} FTE reported for 2025` };
       },
     },
     {
       key: "sales_1m_plus",
       label: "$1M+ sales",
+      // Same treatment as the headcount above, for the same reason.
       read: (a) => {
         const rev = a.revenue_2025 != null ? Number(a.revenue_2025) : null;
         const said = a.sales_1_to_50m;
-        const counted = rev != null ? fmtMoney(rev) + " in 2025" : "no 2025 revenue given";
-        if (said === true) return { pass: true, detail: `Applicant answered yes to $1–50M — ${counted}` };
-        if (rev != null && rev >= 1000000) return { pass: true, detail: `Applicant answered no to $1–50M, but reported ${fmtMoney(rev)} in 2025` };
-        return { pass: false, detail: `Applicant answered no to $1–50M — ${counted}` };
+        if (rev == null) {
+          return said === true
+            ? { pass: true,  detail: "Applicant answered yes to $1–50M — no 2025 revenue given" }
+            : { pass: false, detail: "Applicant answered no to $1–50M — no 2025 revenue given" };
+        }
+        const qualifies = rev >= 1000000;
+        if (said === true && qualifies)  return { pass: true,  detail: `Applicant answered yes to $1–50M — ${fmtMoney(rev)} in 2025` };
+        if (said !== true && !qualifies) return { pass: false, detail: `Applicant answered no to $1–50M — ${fmtMoney(rev)} in 2025` };
+        return { pass: null, detail: said === true
+          ? `Answers disagree: yes to $1–50M, but ${fmtMoney(rev)} reported for 2025`
+          : `Answers disagree: no to $1–50M, but ${fmtMoney(rev)} reported for 2025` };
       },
     },
     {
