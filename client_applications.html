@@ -501,6 +501,20 @@
   .th-pill.ok    { color: var(--accent-dark); background: #e6efe0; }
   .th-pill.check { color: var(--amber);       background: #fdf0d8; }
   .th-pill.fail  { color: var(--danger);      background: #f6e2e1; }
+  .th-pill.exception { color: #7a4a06; background: #fbe8cc; }
+  /* The reason behind a judgment call, sitting under the row it belongs to.
+     Indented to the label column so it reads as part of that threshold and
+     not as a new one. */
+  .th-note { grid-column: 2 / -1; margin: 4px 0 0; font-size: 12px; color: #7a4a06;
+             background: #fdf6ea; border: 1px solid #f0dfc2; border-radius: 6px; padding: 6px 9px; }
+  .th-note .th-note-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; font-size: 10px; }
+  .th-note button { background: none; border: none; padding: 0 0 0 8px; font-size: 11.5px;
+                    font-weight: 700; color: var(--navy-light); cursor: pointer; text-decoration: underline; }
+  .th-editor { grid-column: 2 / -1; margin: 6px 0 0; display: flex; gap: 8px; align-items: flex-start; }
+  .th-editor input { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid #e0c79a; border-radius: 6px;
+                     font-size: 12.5px; font-family: inherit; background: #fffdf8; }
+  .th-editor .th-editor-hint { grid-column: 2 / -1; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+  .th-editor button { padding: 7px 12px; font-size: 12.5px; }
 
   /* The letter Rita sends the Program Administrator. A composer, not a
      sender: it carries her signature and asks the Program to act, so it has
@@ -2020,10 +2034,72 @@
 
       applyApprovalGate(a);
 
+      // Ticking a threshold the application FAILS is a judgment call, so it
+      // asks for one line saying why before it will save. Everything else is
+      // one click, unchanged -- the friction lands only where the judgment
+      // was actually made.
+      //
+      // The editor is grafted into the row rather than being part of the
+      // render, so asking for a reason does not rebuild the list underneath
+      // the person typing.
+      const askForReason = (box, key, existing) => {
+        const row = box.closest("[data-th-row]");
+        if (!row || row.querySelector(".th-editor")) return;
+        const ed = document.createElement("div");
+        ed.className = "th-editor";
+        ed.innerHTML = `
+          <input type="text" class="th-reason" maxlength="300" placeholder="Why is this acceptable? (e.g. seasonal — 14 FTE at peak)" />
+          <button type="button" class="btn-primary th-reason-save">Save</button>
+          <button type="button" class="btn-secondary th-reason-cancel">Cancel</button>`;
+        row.appendChild(ed);
+        const input = ed.querySelector(".th-reason");
+        input.value = existing || "";
+        // The row is a <label>, so a click anywhere inside it activates the
+        // checkbox -- including on the editor's own buttons. Cancel would
+        // untick, the label would immediately re-tick, and the change
+        // handler would open a second editor on top of the first.
+        // stopPropagation is not enough: re-ticking is the label's DEFAULT
+        // action, so it has to be preventDefault as well.
+        ed.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); });
+        ed.addEventListener("mousedown", (e) => e.stopPropagation());
+        input.focus();
+
+        const close = (restore) => {
+          ed.remove();
+          if (restore) { box.checked = false; box.disabled = false; }
+        };
+        const commit = async () => {
+          const note = input.value.trim();
+          if (!note) { input.focus(); showBanner("Add a short reason, or cancel to leave it unticked.", "error"); return; }
+          box.disabled = true;
+          try {
+            await saveThresholdCheck(a, key, true, note);
+            renderReview();
+          } catch (err) {
+            close(true);
+            showBanner(`Couldn't save that threshold: ${err.message}`, "error");
+          }
+        };
+        ed.querySelector(".th-reason-save").addEventListener("click", commit);
+        ed.querySelector(".th-reason-cancel").addEventListener("click", () => close(!existing));
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { e.preventDefault(); commit(); }
+          if (e.key === "Escape") { e.preventDefault(); close(!existing); }
+        });
+      };
+
       document.querySelectorAll(".th-check").forEach((box) => {
         box.addEventListener("change", async () => {
           const key = box.dataset.th;
           const wanted = box.checked;
+          const def = THRESHOLDS.find((t) => t.key === key);
+          // Only a row the data outright fails needs a reason. "Needs a
+          // look" means no field can settle it -- there the tick IS the
+          // judgment, which is the whole point of the row.
+          if (wanted && def && def.read(a).pass === false) {
+            askForReason(box, key, "");
+            return;
+          }
           box.disabled = true;
           try {
             await saveThresholdCheck(a, key, wanted);
@@ -2033,6 +2109,16 @@
             box.disabled = false;
             showBanner(`Couldn't save that threshold: ${err.message}`, "error");
           }
+        });
+      });
+
+      document.querySelectorAll(".th-edit-note").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const key = btn.dataset.thEdit;
+          const box = document.querySelector(`.th-check[data-th="${key}"]`);
+          if (box) askForReason(box, key, thresholdNote(a, key));
         });
       });
 
@@ -2465,6 +2551,11 @@
   ];
 
   const thresholdChecks = (a) => (a && a.threshold_checks) || {};
+  const thresholdExceptions = (a) => (a && a.threshold_exceptions) || {};
+  const thresholdNote = (a, key) => {
+    const n = thresholdExceptions(a)[key];
+    return typeof n === "string" && n.trim() ? n.trim() : "";
+  };
   const thresholdTicked = (a, key) => thresholdChecks(a)[key] === true;
   const thresholdsMet = (a) => THRESHOLDS.every((t) => thresholdTicked(a, t.key));
   const thresholdsTickedCount = (a) => THRESHOLDS.filter((t) => thresholdTicked(a, t.key)).length;
@@ -2487,14 +2578,21 @@
         ${THRESHOLDS.map((t) => {
           const r = t.read(a);
           const ticked = thresholdTicked(a, t.key);
-          const pill = r.pass === true ? `<span class="th-pill ok">From the form</span>`
+          const note = thresholdNote(a, t.key);
+          // An exception is a threshold the application's own answers FAIL,
+          // confirmed anyway. It gets its own pill, so a judgment call never
+          // reads as a clean pass at a glance.
+          const isException = ticked && r.pass === false;
+          const pill = isException ? `<span class="th-pill exception">NCEG exception</span>`
+                     : r.pass === true ? `<span class="th-pill ok">From the form</span>`
                      : r.pass === false ? `<span class="th-pill fail">Form says no</span>`
                      : `<span class="th-pill check">Needs a look</span>`;
           return `
-            <label class="th-row${locked ? " is-locked" : ""}">
+            <label class="th-row${locked ? " is-locked" : ""}" data-th-row="${t.key}">
               <input type="checkbox" class="th-check" data-th="${t.key}"${ticked ? " checked" : ""}${locked ? " disabled" : ""} />
               <span class="th-label">${escapeHtml(t.label)}<span class="th-detail">${escapeHtml(r.detail)}</span></span>
               ${pill}
+              ${note ? `<div class="th-note"><span class="th-note-label">Exception</span> — ${escapeHtml(note)}${locked ? "" : `<button type="button" class="th-edit-note" data-th-edit="${t.key}">Edit reason</button>`}</div>` : ""}
             </label>`;
         }).join("")}
       </div>`;
@@ -2504,17 +2602,24 @@
   // work through a borderline application over two sittings, and a half-done
   // review that survives a closed tab is worth more than one round-trip
   // saved. .select() so an RLS-shaped silent success can't look like a save.
-  async function saveThresholdCheck(a, key, value) {
+  // `note` is the reason a threshold the data fails was confirmed anyway.
+  // Unticking clears it: an exception with nothing confirmed behind it is
+  // just a stale sentence waiting to confuse somebody.
+  async function saveThresholdCheck(a, key, value, note) {
     const next = { ...thresholdChecks(a) };
+    const nextEx = { ...thresholdExceptions(a) };
     if (value) next[key] = true; else delete next[key];
+    if (value && note && note.trim()) nextEx[key] = note.trim();
+    else delete nextEx[key];
     const { data, error } = await sb
       .from("client_applications")
-      .update({ threshold_checks: next })
+      .update({ threshold_checks: next, threshold_exceptions: nextEx })
       .eq("id", a.id)
-      .select("id, threshold_checks");
+      .select("id, threshold_checks, threshold_exceptions");
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) throw new Error("nothing was written");
     a.threshold_checks = data[0].threshold_checks || next;
+    a.threshold_exceptions = data[0].threshold_exceptions || nextEx;
   }
 
   function approvalGateHtml(a) {
