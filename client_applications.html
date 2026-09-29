@@ -2180,11 +2180,18 @@
               // plainly, because somebody now has to tell the Program by hand.
               showBanner(result.warning, "error");
             } else if (wanted) {
-              showBanner("Approved. The Program Administrator and the EG Admins have been emailed.", "success");
+              showBanner("Approved. Send the Program Administrator the notice below.", "success");
             } else {
               showBanner("Approval removed. Nobody was emailed about it.", "success");
             }
-            renderReview();
+            // AWAITED. renderReview() is async and replaces the panel's
+            // innerHTML partway through; calling renderPaLetter() without
+            // waiting inserts the letter into a DOM that is about to be
+            // thrown away, and it silently never appears.
+            await renderReview();
+            // The letter opens on approval rather than waiting to be asked
+            // for -- Greg, 9/28/26.
+            if (wanted) renderPaLetter(a.id);
           } catch (err) {
             approveBox.checked = !wanted;
             approveBox.disabled = false;
@@ -2738,20 +2745,26 @@
     // about to receive went to the Program too, so she does not send a
     // second one.
     const met = thresholdsMet(a);
+    // Greg (9/28/26): "we all know that only Chris and Rita can approve. What
+    // this should advise is upon approval an email to the PA will open
+    // advising them of the approval so that they can notify their client."
+    //
+    // So the note stopped saying who is allowed -- the disabled checkbox
+    // already says that to anyone who is not -- and says what ticking it
+    // DOES. That is the part nobody can see coming: an email to someone
+    // outside NCEG opens the moment the box goes on.
     let note;
     if (approved) {
-      note = `Approved on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}, against all ${THRESHOLDS.length} review thresholds. Set the hours, Team Lead and CC list below.`;
+      note = `Approved on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}, against all ${THRESHOLDS.length} review thresholds. Send the Program Administrator the approval notice below so they can notify their client, then set the hours, Team Lead and CC list.`;
     } else if (!name) {
       // The one state with no way forward from this page, so it says where to
       // go instead of just refusing.
       note = `No one is set up to approve applications yet, so this can't move forward. Tick <strong>Can approve applications</strong> on the right profile in the Roster.`;
-    } else if (!iMayApprove) {
-      note = `Only ${escapeHtml(name)} can record this approval, and the hours, Team Lead and CC list stay locked until then.`;
     } else if (!met) {
       const left = THRESHOLDS.length - thresholdsTickedCount(a);
-      note = `Confirm the ${left} remaining review threshold${left === 1 ? "" : "s"} above, then this becomes available.`;
+      note = `Confirm the ${left} remaining review threshold${left === 1 ? "" : "s"} above first. Approving then opens an email to the Program Administrator so they can notify their client.`;
     } else {
-      note = `All ${THRESHOLDS.length} thresholds are confirmed. Ticking this approves ${escapeHtml(a.company_name || "this applicant")} for the program and unlocks the budget hours, Team Lead and CC list below.`;
+      note = `Approving opens an email to the Program Administrator telling them ${escapeHtml(a.company_name || "this applicant")} is approved, so they can notify their client. It also unlocks the hours, Team Lead and CC list below.`;
     }
 
     return `
