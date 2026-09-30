@@ -252,6 +252,11 @@
   .pd-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
   .pd-block-head h3 { margin: 0; font-size: 14px; color: var(--navy); }
   .pd-block-hint { font-size: 12px; color: var(--muted); }
+  .pd-pa-warn {
+    font-size: 12.5px; color: #8a5a00; background: #fdf4e3; border: 1px solid #f0dcb4;
+    border-radius: 6px; padding: 7px 11px; margin: 0 0 9px;
+  }
+  .pd-pa-warn strong { color: #6f4800; }
 
   .pd-fields { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
   .pd-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -1194,6 +1199,29 @@
     </div>`;
   }
 
+  // Chris (9/28/26, via Greg): "Every program has only one program
+  // administrator. Refer to everyone else as the 'cc list.'"
+  //
+  // The table cell only ever showed contactsForRole(...)[0], so a Program
+  // with six people ticked PA looked exactly like a Program with one, and a
+  // PA with no email address looked exactly like a PA who could be written
+  // to. Rita hit the second of those on 9/30/26 -- Advantage Valley's PA row
+  // carried the flag and no address -- and the only clue was an error message
+  // on a different page. Say it here, where it can be fixed.
+  function paWarning(pid) {
+    const pas = peopleFor(pid).filter((c) => c.is_program_administrator);
+    if (!pas.length) {
+      return `<div class="pd-pa-warn">No <strong>Program Administrator</strong> is marked. Approval notices for this Program have nobody to go to — tick PA on whoever it is.</div>`;
+    }
+    if (pas.length > 1) {
+      return `<div class="pd-pa-warn">${pas.length} people are marked <strong>Program Administrator</strong>: ${pas.map((c) => escapeHtml(c.name || "(no name)")).join(", ")}. A Program has one — tick the right person and the rest clear automatically. Everyone else belongs on the cc list.</div>`;
+    }
+    if (!String(pas[0].email || "").trim()) {
+      return `<div class="pd-pa-warn"><strong>${escapeHtml(pas[0].name || "The Program Administrator")}</strong> is the Program Administrator but has no email address, so approval notices go out with an empty To line. Add one below.</div>`;
+    }
+    return "";
+  }
+
   function renderPeopleBlock(p) {
     const people = peopleFor(p.id);
     const rows = people.length
@@ -1203,8 +1231,9 @@
       <div class="pd-block">
         <div class="pd-block-head">
           <h3>People</h3>
-          <span class="pd-block-hint">Tick every role a person holds &mdash; one line per person.</span>
+          <span class="pd-block-hint">Tick every role a person holds &mdash; one line per person. PA is one person per Program.</span>
         </div>
+        ${paWarning(p.id)}
         <div class="pd-rows">${rows}</div>
         ${isSuperAdmin ? `<div class="pd-add"><button type="button" class="btn-secondary btn-sm" data-add-person="${p.id}">+ Add Person</button></div>` : ""}
       </div>`;
@@ -1670,6 +1699,38 @@
         const field = box.dataset.contactCheck;
         const value = box.checked;
         const c = allContacts.find((x) => x.id === contactId);
+
+        // One Program Administrator per Program. Ticking PA on someone takes
+        // it off whoever held it -- it is a single seat, not a role several
+        // people can share, and leaving the old holder ticked is how a
+        // Program quietly ends up with six of them. Clear the others FIRST:
+        // if that half fails there is no moment where two people hold it.
+        if (field === "is_program_administrator" && value) {
+          const pid = c ? c.partner_id : partnerId;
+          const others = allContacts.filter(
+            (x) => x.partner_id === pid && x.id !== contactId && x.is_program_administrator
+          );
+          if (others.length) {
+            const ids = others.map((x) => x.id);
+            const { data: cleared, error: clearErr } = await sb
+              .from("econ_dev_partner_contacts")
+              .update({ is_program_administrator: false })
+              .in("id", ids)
+              .select("id");
+            if (clearErr || !cleared || cleared.length !== ids.length) {
+              showBanner(
+                clearErr
+                  ? "Couldn't move the Program Administrator: " + clearErr.message
+                  : "Couldn't take Program Administrator off the previous holder, so nothing was changed.",
+                "error"
+              );
+              box.checked = false;
+              return;
+            }
+            others.forEach((x) => { x.is_program_administrator = false; });
+          }
+        }
+
         const { error } = await sb.from("econ_dev_partner_contacts").update({ [field]: value }).eq("id", contactId);
         if (error) {
           showBanner("Couldn't update that role: " + error.message, "error");
