@@ -815,12 +815,17 @@
 
 <!-- Delete confirm modal -->
 <div class="overlay" id="delete-overlay">
-  <div class="modal" style="width:380px;">
-    <h3>Remove program?</h3>
-    <p style="font-size:13.5px; color:var(--muted);">
-      This removes <strong id="delete-name"></strong> from the program list. Existing clients already
-      attributed to this program keep their history — this only affects future assignments.
-    </p>
+  <div class="modal" style="width:440px;">
+    <h3 id="delete-title">Remove program?</h3>
+    <p style="font-size:13.5px; color:var(--muted);" id="delete-text"></p>
+    <!-- Greg (9/30/26): clicked the X on EG Training, the dialog closed, and
+         the row was still there. The delete HAD been refused -- an engagement
+         still points at that program -- and the page said so, in a banner at
+         the very top of a long table he was scrolled well past. The message
+         was real and invisible, which is indistinguishable from nothing
+         happening. It lands in the dialog now. -->
+    <div id="delete-error" style="display:none; font-size:12.5px; color:var(--danger);
+         background:#f9ecec; border:1px solid #e8cdcb; border-radius:6px; padding:8px 11px; margin-bottom:4px;"></div>
     <div class="modal-actions">
       <button type="button" class="btn-secondary" id="delete-cancel">Cancel</button>
       <button type="button" class="btn-danger" id="delete-confirm">Remove</button>
@@ -835,6 +840,11 @@
 
   let currentUser = null;   // { id, full_name, role, organization_id }
   let allPartners = [];
+  // How many engagements and applications point at each program. Both foreign
+  // keys are ON DELETE NO ACTION, so a program with either cannot be deleted
+  // -- Postgres refuses with 23503. Counting them up front means the dialog
+  // can say so instead of offering a button that is going to fail.
+  let partnerRefCounts = {};
   let allContacts = [];     // econ_dev_partner_contacts, all partners
   let isSuperAdmin = false;
   let pendingDeleteId = null;
@@ -970,6 +980,25 @@
   // down into the toolbar with Export/Import.
   $("std-print-btn").addEventListener("click", () => window.print());
 
+  // Two id-only reads rather than a count per program: a dozen programs would
+  // otherwise be two dozen round trips on every page load.
+  async function loadPartnerRefCounts() {
+    const counts = {};
+    const bump = (rows, key) => (rows || []).forEach((r) => {
+      const id = r.econ_dev_company_id;
+      if (!id) return;
+      counts[id] = counts[id] || { clients: 0, applications: 0 };
+      counts[id][key] += 1;
+    });
+    const [{ data: cl }, { data: ap }] = await Promise.all([
+      sb.from("clients").select("econ_dev_company_id"),
+      sb.from("client_applications").select("econ_dev_company_id"),
+    ]);
+    bump(cl, "clients");
+    bump(ap, "applications");
+    partnerRefCounts = counts;
+  }
+
   async function loadPartners() {
     const { data, error } = await sb
       .from("econ_dev_companies")
@@ -981,7 +1010,7 @@
       return;
     }
     allPartners = data;
-    await loadContacts();
+    await Promise.all([loadContacts(), loadPartnerRefCounts()]);
     renderTable();
     applyProgramDeepLink();
     applyActionDeepLink();
@@ -1915,7 +1944,37 @@
     const p = allPartners.find((x) => x.id === id);
     if (!p) return;
     pendingDeleteId = id;
-    $("delete-name").textContent = `${p.name} (${p.code})`;
+
+    const refs = partnerRefCounts[id] || { clients: 0, applications: 0 };
+    const blocked = refs.clients > 0 || refs.applications > 0;
+    const err = $("delete-error");
+    err.style.display = "none";
+    err.textContent = "";
+
+    if (blocked) {
+      // Deleting would take an engagement's history with it, which is why the
+      // database refuses. Archive is the action that was wanted anyway: the
+      // program comes off the list and its history stays.
+      const bits = [];
+      if (refs.clients) bits.push(`${refs.clients} engagement${refs.clients === 1 ? "" : "s"}`);
+      if (refs.applications) bits.push(`${refs.applications} application${refs.applications === 1 ? "" : "s"}`);
+      $("delete-title").textContent = "This program can't be removed";
+      $("delete-text").innerHTML =
+        `<strong>${escapeHtml(p.name)} (${escapeHtml(p.code)})</strong> still has ${bits.join(" and ")} attached to it. ` +
+        `Deleting it would take that history with it, so it is not allowed.` +
+        `<br><br>Use <strong>Archive</strong> instead — the program drops off this list and off the Application Links page, ` +
+        `its link stops accepting applications, and everything it has done is kept. Unarchive puts it back.`;
+      $("delete-confirm").style.display = "none";
+      $("delete-cancel").textContent = "Close";
+    } else {
+      $("delete-title").textContent = "Remove program?";
+      $("delete-text").innerHTML =
+        `This permanently deletes <strong>${escapeHtml(p.name)} (${escapeHtml(p.code)})</strong> and its contacts. ` +
+        `Nothing is attached to it, so nothing else is affected. This can't be undone — ` +
+        `<strong>Archive</strong> is the reversible option.`;
+      $("delete-confirm").style.display = "";
+      $("delete-cancel").textContent = "Cancel";
+    }
     $("delete-overlay").classList.add("open");
   };
 
@@ -1926,20 +1985,37 @@
 
   $("delete-confirm").addEventListener("click", async () => {
     if (!pendingDeleteId) return;
-    const { error } = await sb.from("econ_dev_companies").delete().eq("id", pendingDeleteId);
-    $("delete-overlay").classList.remove("open");
-    if (error) {
-      showBanner(
-        error.code === "23503"
-          ? "Can't delete — one or more clients still reference this program."
-          : "Couldn't delete: " + error.message,
-        "error"
-      );
-    } else {
-      showBanner("Program removed.", "success");
-      await loadPartners();
+    const btn = $("delete-confirm");
+    btn.disabled = true;
+    btn.textContent = "Removing…";
+    // .select() so a delete that removes nothing -- RLS, or a row already
+    // gone -- is caught rather than reported as a success the list then
+    // contradicts.
+    const { data, error } = await sb
+      .from("econ_dev_companies")
+      .delete()
+      .eq("id", pendingDeleteId)
+      .select("id");
+    btn.disabled = false;
+    btn.textContent = "Remove";
+
+    if (error || !data || data.length === 0) {
+      // Stays open. A dialog that closes on failure leaves the row sitting
+      // there with no explanation anywhere the eye is.
+      const err = $("delete-error");
+      err.textContent = error
+        ? (error.code === "23503"
+            ? "Can't delete — an engagement or application still references this program. Close this and use Archive instead."
+            : `Couldn't delete: ${error.message}`)
+        : "Nothing was deleted. Close this and reload the page; if it persists, the program may already be gone.";
+      err.style.display = "block";
+      return;
     }
+
+    $("delete-overlay").classList.remove("open");
+    showBanner("Program removed.", "success");
     pendingDeleteId = null;
+    await loadPartners();
   });
 
   // Close modals on overlay click (not on the modal card itself)
