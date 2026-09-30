@@ -3002,26 +3002,68 @@ Have a great day!!`;
     const existing = document.getElementById("pa-letter");
     if (existing) existing.remove();
     const partner = partnersById()[a.econ_dev_company_id];
-    const pas = allPartnerContacts.filter(
-      (c) => partner && c.partner_id === partner.id && c.is_program_administrator && (c.email || "").trim()
-    );
+
+    // Rita, 9/30/26: "it is saying that there is no PA marked in the Advantage
+    // Valley program. However, if you look in the Advantage Valley program
+    // file Adam is marked as the PA which is correct."
+    //
+    // She was right and so was the app, about different things. Advantage
+    // Valley has TWO Adam Phillips rows: the one flagged Program
+    // Administrator ("Program Admin.") carries no email address, and the one
+    // that carries aphillips@wceda.org is flagged cc. The old filter wanted
+    // the flag AND an address on the same row, found none, and reported it as
+    // "nobody marked Program Administrator" -- which reads as a missing flag
+    // when the flag was there all along and the address was what was missing.
+    //
+    // So: separate the two failures, say which one happened and name the
+    // person, and where the same person's address sits on another row of the
+    // same Program, offer it rather than leaving her to go and find it. The
+    // note says where it came from -- borrowed, not assumed.
+    const programContacts = allPartnerContacts.filter((c) => partner && c.partner_id === partner.id);
+    const nameKey = (v) => String(v || "").toLowerCase().replace(/[^a-z]+/g, " ").trim();
+    const resolvedPas = programContacts
+      .filter((c) => c.is_program_administrator)
+      .map((c) => {
+        const own = (c.email || "").trim();
+        if (own) return { name: c.name, email: own, borrowedFrom: null };
+        const alt = programContacts.find(
+          (o) => o !== c && (o.email || "").trim() && nameKey(o.name) && nameKey(o.name) === nameKey(c.name)
+        );
+        return {
+          name: c.name,
+          email: alt ? alt.email.trim() : "",
+          borrowedFrom: alt ? (String(alt.title || "").trim() || "their other entry") : null,
+        };
+      });
+    const pas = resolvedPas.filter((r) => r.email);
+    const paNoEmail = resolvedPas.filter((r) => !r.email);
+    const borrowed = pas.filter((r) => r.borrowedFrom);
+    const programLabel = partner ? escapeHtml(partner.name) : "This Program";
+    const paDesc = !resolvedPas.length
+      ? `${programLabel} has nobody marked Program Administrator, so the To line is empty. Mark one on the Programs page, or type an address in.`
+      : paNoEmail.length && !pas.length
+        ? `${paNoEmail.map((r) => `<strong>${escapeHtml(r.name || "The Program Administrator")}</strong>`).join(" and ")} ${paNoEmail.length === 1 ? "is" : "are"} marked Program Administrator for ${programLabel}, but ${paNoEmail.length === 1 ? "has" : "have"} no email address on file, so the To line is empty. Add the address on the Programs page, or type it in.`
+        : borrowed.length
+          ? `${borrowed.map((r) => `<strong>${escapeHtml(r.name || "The Program Administrator")}</strong>`).join(" and ")} ${borrowed.length === 1 ? "is" : "are"} marked Program Administrator for ${programLabel}, but the Program Administrator entry has no email address — the To line uses the address from ${escapeHtml(borrowed.map((r) => r.borrowedFrom).join(" / "))} on the same Program. Check it before sending, and add it to the Program Administrator entry on the Programs page.`
+          : "Filled in from this engagement. It goes out from your own email, with your signature — edit anything first. Nothing here is saved.";
     // Everyone at EG who is on the standing CC list, minus whoever is
     // sending -- nobody needs a copy of their own letter.
     const ccEmails = ccAlwaysEmails.filter((e) => e.toLowerCase() !== (myEmail || "").toLowerCase());
     const checked = THRESHOLDS.filter((t) => thresholdTicked(a, t.key)).map((t) => t.key);
-    const greeting = pas.length === 1
-      ? (String(pas[0].name || "").trim().split(/\s+/)[0] || "there")
-      : pas.length > 1 ? "all" : "there";
+    // Greet whoever is marked Program Administrator, whether or not the app
+    // could find their address -- Rita types the address in, she should not
+    // have to type their name in after it.
+    const greeting = resolvedPas.length === 1
+      ? (String(resolvedPas[0].name || "").trim().split(/\s+/)[0] || "there")
+      : resolvedPas.length > 1 ? "all" : "there";
 
     const box = document.createElement("div");
     box.className = "pa-letter";
     box.id = "pa-letter";
     box.innerHTML = `
       <h4>Next step — tell the Program Administrator that NCEG has approved this</h4>
-      <p class="desc">${pas.length
-        ? "Filled in from this engagement. It goes out from your own email, with your signature — edit anything first. Nothing here is saved."
-        : `${partner ? escapeHtml(partner.name) : "This Program"} has nobody marked Program Administrator with an email address, so the To line is empty. Add one on the Programs page, or type an address in.`}</p>
-      <div class="pa-field"><label for="pa-to">To</label><input type="text" id="pa-to" value="${escapeHtml(pas.map((c) => c.email.trim()).join(", "))}" /></div>
+      <p class="desc">${paDesc}</p>
+      <div class="pa-field"><label for="pa-to">To</label><input type="text" id="pa-to" value="${escapeHtml(pas.map((r) => r.email).join(", "))}" /></div>
       <div class="pa-field"><label for="pa-cc">CC</label><input type="text" id="pa-cc" value="${escapeHtml(ccEmails.join(", "))}" /></div>
       <div class="pa-field"><label for="pa-subject">Subject</label><input type="text" id="pa-subject" value="${escapeHtml(`${partner && partner.code ? `(${partner.code}) ` : ""}${a.company_name} — Application Approved`)}" /></div>
       <div class="pa-field"><label for="pa-body">Message</label><textarea id="pa-body" spellcheck="true"></textarea></div>
