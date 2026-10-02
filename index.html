@@ -362,6 +362,22 @@
      pushed every other row's height around and buried the reason in the
      one place the eye had already left. */
   .cr-overdue-reason { font-size: 11.5px; color: var(--danger-dark); line-height: 1.35; min-width: 0; }
+  /* Greg (10/2/26): "when the overdue button pops up on the engagements
+     page, we need an editable field below it where the TL can type in the
+     answer." Below, not beside -- the badge and the answer to it read as
+     one thing, and a field on the same line as the flag would be squeezed
+     into whatever the badge left over. */
+  .cr-overdue-cell { flex-direction: column; align-items: flex-start; }
+  .cr-overdue-input {
+    width: 100%; font-size: 11.5px; font-family: inherit; color: var(--text);
+    padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+    background: #fff; box-sizing: border-box; resize: vertical;
+    min-height: 28px; line-height: 1.35;
+  }
+  .cr-overdue-input::placeholder { color: var(--muted); }
+  .cr-overdue-input:focus { outline: none; border-color: var(--danger); }
+  .cr-overdue-input.saving { opacity: 0.6; }
+  .cr-overdue-saved { font-size: 10.5px; color: var(--accent-dark); }
   .empty-note { padding: 26px; text-align: center; color: var(--muted); font-size: 13.5px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
   @media (max-width: 720px) {
     .client-row { display: block; }
@@ -1902,6 +1918,13 @@
     return `<span class="status-dot status-dot-${tier}" title="${label} — in Progress for ${days} day${days === 1 ? "" : "s"}"></span>`;
   }
 
+  // The Team Lead is the one being asked, so the Team Lead can answer --
+  // plus Admins, who are the ones chasing the answer and who used to keep
+  // this in a spreadsheet. Everyone else sees whatever was written.
+  function canExplainDelay(c) {
+    return isSuperAdminUser || myTeamLeadClientIds.has(c.id);
+  }
+
   function clientRowHtml(c) {
     const teamLead = teamLeadByClient[c.id];
     const teamLeadAvatar = teamLeadAvatarByClient[c.id];
@@ -1948,15 +1971,77 @@
         </div>
         <div class="cr-start-date">${startDateText}</div>
         <div class="cr-days-in-progress">${lastCellHtml}</div>
-        <div class="cr-overdue-cell">${overdue ? '<span class="overdue-badge">Overdue</span>' : ""}${overdueReason ? `<span class="cr-overdue-reason">${escapeHtml(overdueReason)}</span>` : ""}</div>
+        <div class="cr-overdue-cell">${overdue ? `
+          <span class="overdue-badge">Overdue</span>
+          ${canExplainDelay(c)
+            ? `<textarea class="cr-overdue-input" rows="1" maxlength="300" data-delay-for="${c.id}"
+                 placeholder="Why is it taking longer than expected?"
+                 title="Visible to the engagement team and on this list.">${escapeHtml(c.delay_reason || "")}</textarea>
+               <span class="cr-overdue-saved" data-delay-saved-for="${c.id}" style="display:none;">Saved</span>`
+            : (overdueReason ? `<span class="cr-overdue-reason">${escapeHtml(overdueReason)}</span>` : "")}
+        ` : ""}</div>
       </div>
     `;
   }
 
   function wireClientRows(container) {
     container.querySelectorAll(".client-row").forEach((row) => {
-      row.addEventListener("click", () => {
+      row.addEventListener("click", (e) => {
+        // The whole row opens the engagement, so a field inside it has to
+        // say so explicitly -- otherwise the first click into the note
+        // navigates away mid-sentence.
+        if (e.target.closest(".cr-overdue-input")) return;
         window.location.href = `client_control_center.html?client=${row.dataset.clientId}`;
+      });
+    });
+
+    container.querySelectorAll("[data-delay-for]").forEach((el) => {
+      const id = el.dataset.delayFor;
+      const savedMark = container.querySelector(`[data-delay-saved-for="${id}"]`);
+      let onFocus = el.value;
+
+      // Grow with the text rather than scrolling a one-line box -- these
+      // answers are a sentence, and a note you cannot read back is a note
+      // nobody trusts.
+      const autosize = () => { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; };
+      autosize();
+
+      el.addEventListener("click", (e) => e.stopPropagation());
+      el.addEventListener("focus", () => { onFocus = el.value; });
+      el.addEventListener("input", () => {
+        autosize();
+        if (savedMark) savedMark.style.display = "none";
+      });
+      // Enter commits rather than adding a line -- it is one answer, not a
+      // document. Shift+Enter still breaks the line.
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); el.blur(); }
+        if (e.key === "Escape") { el.value = onFocus; autosize(); el.blur(); }
+      });
+
+      el.addEventListener("blur", async () => {
+        if (el.value === onFocus) return;
+        const reason = el.value.trim();
+        el.classList.add("saving");
+        // .select() -- this note is the record of why an engagement is late,
+        // so a write the database refuses must not come back as "Saved".
+        const { data, error } = await sb.from("clients")
+          .update({ delay_reason: reason || null })
+          .eq("id", id)
+          .select("id");
+        el.classList.remove("saving");
+        if (error || !data || !data.length) {
+          showBanner(error ? "Couldn't save that note: " + error.message
+                           : "That note wasn't saved — reload the page and try again.", "error");
+          return;
+        }
+        const row = allClients.find((x) => x.id === id);
+        if (row) row.delay_reason = reason || null;
+        onFocus = el.value;
+        if (savedMark) {
+          savedMark.style.display = "";
+          setTimeout(() => { savedMark.style.display = "none"; }, 1800);
+        }
       });
     });
   }
