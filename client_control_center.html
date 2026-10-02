@@ -958,7 +958,6 @@
                 <div class="hdr-note-foot hidden" id="cm-delay-actions">
                   <textarea id="cm-delay-reason" maxlength="300" placeholder="Add a note for the team&hellip;" title="This note is visible to your engagement team."></textarea>
                   <span class="delay-note-saved" id="cm-delay-saved">Saved</span>
-                  <button type="button" class="hdr-note-save" id="cm-delay-save">Save</button>
                 </div>
               </div>
             </div>
@@ -1035,7 +1034,7 @@
                from him. Nothing here is saved -- edits survive switching panes
                within a visit and reset on reload. -->
           <div id="cc-pane-welcome" class="cc-pane-inner hidden">
-            <h3 class="welcome-title">Welcome Email</h3>
+            <h3 class="welcome-title">Scheduling Letter</h3>
             <div class="welcome-hint">What you send a new client once you're assigned Team Lead. Addresses, the dashboard link and the assigned Team Lead's name are filled in from this engagement &mdash; edit anything before you send. Nothing on this screen is saved.</div>
             <div class="welcome-note" id="welcome-note"></div>
             <div class="welcome-field"><label for="welcome-to">To</label><input type="text" id="welcome-to" /></div>
@@ -1524,7 +1523,9 @@
       </svg>
     `;
     const programText = document.createElement("span");
-    programText.textContent = `Partner: ${partner ? partner.name : "—"}`;
+    // Chris (10/2/26): "Partner" is not a word the team uses -- this line
+    // names the Program funding the engagement, so it says Program.
+    programText.textContent = `Program: ${partner ? partner.name : "—"}`;
     $("cm-program").append(programText);
 
     const { data: assignRows } = await sb
@@ -1593,8 +1594,13 @@
   const DOC_GROUP_ITEMS = [
     { key: "discovery", label: "Discovery Document" },
     { key: "controlling", label: "Controlling Document" },
-    { key: "review", label: "Research Review" },
-    { key: "eval", label: "Close-Out Document" },
+    // Chris (10/2/26): the app should use the names the team already uses
+    // out loud. "Research Review" is a Debriefing, and the "Close-Out
+    // Document" is the Evaluation Sheet. Internal labels only -- what the
+    // client sees on their own dashboard and on the survey itself is
+    // unchanged until Chris says so.
+    { key: "review", label: "Debriefing" },
+    { key: "eval", label: "Evaluation Sheet" },
   ];
 
   // Breadcrumb label per nav row. Deliberately its own map rather than a
@@ -1607,7 +1613,7 @@
     team: "Team & Hours",
     cumulative: "Cumulative Hours",
     application: "View Application",
-    welcome: "Welcome Email",
+    welcome: "Scheduling Letter",
     research: "Add Research",
     setup: "Company Info",
   };
@@ -1676,7 +1682,10 @@
       // hidden here for the same reason as the two above: the row itself is
       // injected at the top of the Attachments list below, and this entry only
       // exists so setActivePane can resolve the key.
-      { key: "welcome", label: "Welcome Email", hidden: true },
+      // Chris (10/2/26): "Welcome Letter" -> "Scheduling Letter". Its job is
+      // to get the Discovery Call on the calendar, which is what the name
+      // should say.
+      { key: "welcome", label: "Scheduling Letter", hidden: true },
       {
         key: "workflow", label: "Documents", group: true,
         docs: DOC_GROUP_ITEMS.map((d) => ({ ...d, src: `client_workflow_files.html?client=${client.id}&embed=1&doc=${d.key}` })),
@@ -1748,7 +1757,7 @@
         // 9/6/26).
         const subHtml = `<button type="button" class="cc-nav-subbtn" data-pane="application">${navIconSvg("application")}<span>View Application</span></button>` +
           `<div class="cc-nav-section">Attachments</div>` +
-          `<button type="button" class="cc-nav-subbtn" data-pane="welcome">${navIconSvg("welcome")}<span>Welcome Email</span></button>` +
+          `<button type="button" class="cc-nav-subbtn" data-pane="welcome">${navIconSvg("welcome")}<span>Scheduling Letter</span></button>` +
           item.docs.map((d) => `
             <button type="button" class="cc-nav-subbtn" data-pane="${item.key}" data-doc="${d.key}">${navIconSvg(d.key)}<span>${d.label}</span></button>
           ` + (d.key === "controlling" ? researchRow : "")).join("");
@@ -2186,21 +2195,51 @@
     downloadCsv(`${activeClient.name.replace(/[^a-z0-9]+/gi, "-")}-team-hours-${new Date().toISOString().slice(0, 10)}.csv`, rows);
   });
 
-  $("cm-delay-save").addEventListener("click", async () => {
+  // Chris (10/2/26): drop the Save button, make the field directly editable.
+  //
+  // It saves when you click away, which is how every other field in the app
+  // behaves -- and a Save button on a note that is the only thing in its box
+  // was asking for a confirmation nobody wanted to give. Typing in it marks
+  // it unsaved so there is no chance of reading a stale "Saved" next to text
+  // that has since been changed.
+  //
+  // Unchanged text does not write: reopening an engagement and clicking past
+  // the note should not count as an edit, which matters more once this note
+  // carries a date.
+  let delayReasonOnFocus = "";
+
+  $("cm-delay-reason").addEventListener("focus", () => {
+    delayReasonOnFocus = $("cm-delay-reason").value;
+  });
+
+  $("cm-delay-reason").addEventListener("input", () => {
+    $("cm-delay-saved").style.display = "none";
+  });
+
+  $("cm-delay-reason").addEventListener("blur", async () => {
     if (!activeClient) return;
-    const reason = $("cm-delay-reason").value.trim();
-    const btn = $("cm-delay-save");
-    btn.disabled = true;
-    btn.textContent = "Saving…";
-    const { error } = await sb.from("clients").update({ delay_reason: reason || null }).eq("id", activeClient.id);
-    btn.disabled = false;
-    btn.textContent = "Save";
-    if (error) {
-      showBanner("Couldn't save that note: " + error.message, "error");
+    const el = $("cm-delay-reason");
+    if (el.value === delayReasonOnFocus) return;
+    const reason = el.value.trim();
+    const saved = $("cm-delay-saved");
+    saved.textContent = "Saving…";
+    saved.style.display = "inline";
+    // .select() so a write the database quietly refuses is not reported as
+    // saved -- the note is the record of why an engagement is late, and a
+    // lost one is worse than an obvious failure.
+    const { data, error } = await sb.from("clients")
+      .update({ delay_reason: reason || null })
+      .eq("id", activeClient.id)
+      .select("id");
+    if (error || !data || !data.length) {
+      saved.style.display = "none";
+      showBanner(error ? "Couldn't save that note: " + error.message
+                       : "That note wasn't saved — reload the page and try again.", "error");
       return;
     }
     activeClient.delay_reason = reason || null;
-    $("cm-delay-saved").style.display = "inline";
+    delayReasonOnFocus = el.value;
+    saved.textContent = "Saved";
   });
 
   // ---------- Team & Hours (ported from client_workspace.html's
