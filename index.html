@@ -720,8 +720,18 @@
       </div>
       <div class="nav-item-dropdown nav-split-item">
         <a href="index.html" class="nav-link active">Engagements</a>
-        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Engagements menu"><span class="nav-caret">&#9662;</span></button>
-        <div class="nav-submenu" data-super-admin-only>
+        <!-- Greg (10/2/26): "a TL or specialist may need to look back at a
+             previous but closed engagement to grab a file they did for a
+             past client." They always could, in the sense that permissions
+             allow it -- the row-level rules go by who is assigned, not by
+             whether the engagement is finished -- but this menu and the
+             view behind it were Admin-only, so there was no route to it
+             short of someone sending them the link. Opened to everyone;
+             the list is still scoped the same way the live list is, so a
+             specialist sees the closed engagements they worked on and no
+             others. -->
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" aria-label="Engagements menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu">
           <a href="index.html?status=closed">Closed Engagements</a>
         </div>
       </div>
@@ -1334,7 +1344,7 @@
     // "we no longer use accepted. If a team lead is added it goes right into
     // In Progress" (Greg, 9/7/26) -- so closed is the only archive there is,
     // and the only value this accepts.
-    if (isSuperAdminUser && requestedStatus === "closed") {
+    if (requestedStatus === "closed") {
       archiveStatus = "closed";
       engagementStatusFilter = "closed";
       applyArchiveViewChrome();
@@ -2127,7 +2137,13 @@
     const list = $("engagements-list");
     const desc = $("eng-panel-desc");
     if (desc) {
-      desc.textContent = `Engagements currently ${archiveStatus ? "Closed" : "In Progress"}, ${GROUPBY_DESC[engagementGroupBy]}. Click one to open its Engagement Workspace.`;
+      // The closed view's own description carries the way back out of it.
+      // Rewriting this line on every regroup used to drop that link --
+      // applyArchiveViewChrome sets it once at load, and the first group-by
+      // render overwrote it, stranding anyone who had switched grouping.
+      desc.innerHTML =
+        `Engagements currently ${archiveStatus ? "Closed" : "In Progress"}, ${GROUPBY_DESC[engagementGroupBy]}. Click one to open its Engagement Workspace.`
+        + (archiveStatus ? ' <a href="index.html" class="eng-back-link">&larr; Back to In Progress</a>' : "");
     }
     // Closed (and Accepted/On Hold) engagements are done or not-yet-started
     // work -- they'd just be dead weight in a "what do I need to look at"
