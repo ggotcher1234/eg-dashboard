@@ -1036,7 +1036,7 @@
                within a visit and reset on reload. -->
           <div id="cc-pane-welcome" class="cc-pane-inner hidden">
             <h3 class="welcome-title">Welcome Email</h3>
-            <div class="welcome-hint">What you send a new client once you're assigned Team Lead. Addresses, the dashboard link and your name are filled in from this engagement &mdash; edit anything before you send. Nothing on this screen is saved.</div>
+            <div class="welcome-hint">What you send a new client once you're assigned Team Lead. Addresses, the dashboard link and the assigned Team Lead's name are filled in from this engagement &mdash; edit anything before you send. Nothing on this screen is saved.</div>
             <div class="welcome-note" id="welcome-note"></div>
             <div class="welcome-field"><label for="welcome-to">To</label><input type="text" id="welcome-to" /></div>
             <div class="welcome-field"><label for="welcome-cc">CC</label><input type="text" id="welcome-cc" /></div>
@@ -2819,9 +2819,25 @@ ${teamLead}`;
     const dashboardUrl = c.slug ? new URL(`c/${encodeURIComponent(c.slug)}`, PUBLIC_SITE_BASE).href : null;
     if (!dashboardUrl) notes.push("This engagement has no dashboard link yet (no slug on the client record), so the link in the message is a placeholder.");
 
-    const teamLead = (teamLeadContact && teamLeadContact.name)
-      || (usersById()[currentUser.id] || {}).full_name
-      || "";
+    // Greg (10/2/26): "The signature should be from the assigned Team Lead,
+    // not necessarily Greg Gotcher."
+    //
+    // This used to fall back to whoever was signed in. The letter is written
+    // in the first person -- "I'll be your EG Team Lead for this engagement"
+    // -- so the name under it is a claim about who is running the
+    // engagement, not a byline on a document. With no Team Lead assigned
+    // that fallback quietly signed an Admin's name to that claim, and an
+    // Admin opening someone else's engagement to check the wording got a
+    // letter that read as if they were about to run it.
+    //
+    // So: the assigned Team Lead, or a placeholder that can't be mistaken
+    // for a name. Both cases say so in the note above the fields.
+    const teamLead = (teamLeadContact && teamLeadContact.name) || "";
+    if (!teamLead) {
+      notes.push("No Team Lead is assigned to this engagement yet, so the signature is a placeholder — assign one under Team & Hours and reopen this, or type a name in.");
+    } else if (!isTeamLeadHere) {
+      notes.push(`Signed as ${teamLead}, the assigned Team Lead — the message is written in their voice, so it should go out from them.`);
+    }
 
     $("welcome-to").value = toList.join(", ");
     $("welcome-cc").value = ccUnique.join(", ");
@@ -2829,7 +2845,7 @@ ${teamLead}`;
     $("welcome-body").value = welcomeEmailBody(
       welcomeFirstNames(contacts.map((r) => r.name)),
       dashboardUrl || "[dashboard link]",
-      teamLead
+      teamLead || "[Team Lead]"
     );
     $("welcome-note").textContent = notes.join(" ");
   }
