@@ -188,6 +188,15 @@
   .wf-item-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .wf-item-header .wf-item-title { margin-bottom: 0; }
   .wf-item-hint { font-size: 12.5px; color: var(--muted); margin: 2px 0 10px; line-height: 1.5; }
+  /* Greg (10/2/26): "all attachments should have the two buttons on the
+     same row. starting with the doc button and then the email button."
+     The document button and the email button were stacked with the hint
+     text wedged between them, and the Evaluation Sheet put its email
+     button up in the header instead -- three rows with three different
+     arrangements of the same two actions. One row, same order, every
+     time: open the document, then write the email about it. */
+  .wf-action-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .wf-action-row > div { display: contents; }
   .wf-btn {
     display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--navy-light);
     border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 7px 16px;
@@ -612,7 +621,7 @@
                 <div id="wf-discovery-actions"></div>
               </div>
               <div class="wf-item-hint">A file or link attached from the Discovery Call. Or, use the fillable form and it shows up here automatically too -- same slot, either way in.</div>
-              <div id="wf-discovery-file"></div>
+              <div class="wf-action-row"><div id="wf-discovery-file"></div></div>
             </div>
           </div>
           <div class="wf-item-row hidden" id="wf-row-controlling">
@@ -622,9 +631,11 @@
                 <div class="wf-item-title">Controlling Document</div>
                 <div id="wf-controlling-actions"></div>
               </div>
-              <div id="wf-controlling-file"></div>
-              <div class="wf-item-hint" style="margin-top:12px;">Email the client a link to review the Controlling Document -- they rank each research question and add notes or changes, and it posts back here (and the bell tells the team the CD is finalized).</div>
-              <div id="wf-controlling-client"></div>
+              <div class="wf-item-hint">Email the client a link to review the Controlling Document -- they rank each research question and add notes or changes, and it posts back here (and the bell tells the team the CD is finalized).</div>
+              <div class="wf-action-row">
+                <div id="wf-controlling-file"></div>
+                <div id="wf-controlling-client"></div>
+              </div>
             </div>
           </div>
           <div class="wf-item-row hidden" id="wf-row-review">
@@ -634,9 +645,11 @@
                 <div class="wf-item-title">Debriefing Video/Notes</div>
                 <div id="wf-review-actions"></div>
               </div>
-              <div id="wf-review-file"></div>
-              <div class="wf-item-hint" style="margin-top:12px;">Tell the client the research is finished and ask for time to walk them through it. Goes to the CEO, copying the EG team and this engagement&rsquo;s CC list.</div>
-              <div id="wf-review-client"></div>
+              <div class="wf-item-hint">Tell the client the research is finished and ask for time to walk them through it. Goes to the CEO, copying the EG team and this engagement&rsquo;s CC list.</div>
+              <div class="wf-action-row">
+                <div id="wf-review-file"></div>
+                <div id="wf-review-client"></div>
+              </div>
             </div>
           </div>
           <div class="wf-item-row hidden" id="wf-row-eval">
@@ -644,10 +657,13 @@
             <div class="wf-item-body">
               <div class="wf-item-header">
                 <div class="wf-item-title">Evaluation Sheet -- Send Evaluation Email (to the CEO, from the Team Lead)</div>
+              </div>
+              <div class="wf-item-hint">Write a short note to the CEO with a link to the Evaluation Sheet. Review and send the email. You'll get their reply right here.</div>
+              <div class="wf-action-row">
+                <div id="wf-eval-link"></div>
                 <div id="wf-eval-actions"></div>
               </div>
-              <div class="wf-item-hint">Write a short note to the CEO with a link to the Close-Out Evaluation form. Review and send the email. You'll get their reply right here.</div>
-              <div id="wf-eval-link"></div>
+              <div id="wf-eval-response"></div>
             </div>
           </div>
         </div>
@@ -1714,8 +1730,11 @@
       <div class="wf-file-cell">
         <button type="button" class="btn-primary wf-open-btn" id="eval-open-btn">&#128279; Open Evaluation Sheet &#8599;</button>
       </div>
-      ${responseHtml}
     `;
+    // The submitted response is a block of its own, below the two buttons --
+    // inside the action row it would be laid out beside them.
+    const responseBox = $("wf-eval-response");
+    if (responseBox) responseBox.innerHTML = responseHtml;
     container.querySelector("#eval-open-btn").addEventListener("click", async (e) => {
       const btn = e.currentTarget;
       // Greg (9/4/26): "open close out document goes to a blank webpage" --
@@ -1746,8 +1765,9 @@
 
     if (!evalResponse) return;
 
-    const toggleBtn = container.querySelector("#eval-response-toggle-btn");
-    const detail = container.querySelector("#eval-response-detail");
+    // The response block lives in #wf-eval-response now, not in container.
+    const toggleBtn = $("eval-response-toggle-btn");
+    const detail = $("eval-response-detail");
     toggleBtn.addEventListener("click", () => {
       const isHidden = detail.classList.contains("hidden");
       if (isHidden) {
@@ -1760,7 +1780,7 @@
       }
     });
 
-    const deleteBtn = container.querySelector("#eval-response-delete-btn");
+    const deleteBtn = $("eval-response-delete-btn");
     if (deleteBtn) deleteBtn.addEventListener("click", deleteEvalResponse);
   }
 
