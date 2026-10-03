@@ -661,10 +661,6 @@
      engagements" escape hatch would strand the reader inside an iframe. */
   body.embed-mode #eng-detail-back { display: none !important; }
 
-  /* Money is Invoicing's business, not the engagement team's (Greg, 9/18/26). */
-  body.embed-mode #ed-dollars-section,
-  body.embed-mode #ed-rate-wrap { display: none !important; }
-
   body.embed-mode main { padding: 0; }
   body.embed-mode .tab-panel-frame,
   body.embed-mode .card { border: none; box-shadow: none; padding: 0; margin: 0; background: transparent; }
@@ -1028,10 +1024,6 @@
                   <label>Closed</label>
                   <div class="meta-static" id="ed-closed">—</div>
                 </div>
-                <div class="eng-detail-field" id="ed-rate-wrap">
-                  <label>Hourly Rate (Pay)</label>
-                  <div class="meta-static" id="ed-rate">—</div>
-                </div>
               </div>
             </div>
 
@@ -1048,25 +1040,16 @@
               <div id="ed-hours-empty" class="empty-note hidden">No specialists are assigned to this engagement yet.</div>
             </div>
 
-            <!-- Greg (9/18/26): "on the cumulative report that the Team Leads and
-                 Specialists can see i'd like to remove the dollar amount section
-                 but keep it as is on the Invoicing tab." Both views are this one
-                 page, so embed=1 -- which is only ever how the Engagement
-                 Workspace loads it -- is what tells them apart. The hourly Pay
-                 rate in the header above goes with it: leaving it would hand
-                 back the same figure the table was hiding, one multiplication
-                 away. -->
-            <div class="eng-detail-section" id="ed-dollars-section">
-              <h3>Cumulative Value by Specialist</h3>
-              <div class="card-hint">Same hours, priced at the Pay rate above.</div>
-              <div class="table-scroll">
-                <table class="cum-table" id="ed-dollars-table">
-                  <thead><tr id="ed-dollars-thead"></tr></thead>
-                  <tbody id="ed-dollars-tbody"></tbody>
-                  <tfoot><tr id="ed-dollars-tfoot"></tr></tfoot>
-                </table>
-              </div>
-            </div>
+            <!-- Chris (10/3/26, via Greg): the Cumulative Value table is gone
+                 from this engagement view entirely. It had been hidden from
+                 Team Leads and Specialists since 9/18/26 and kept on the
+                 Invoicing tab; now neither shows it. The Hourly Rate (Pay)
+                 field went with it, for the reason the old note gave -- left
+                 on its own beside the hours it is the same figure, one
+                 multiplication away.
+                 Invoicing itself is unaffected: Program Invoicing prices off
+                 the Program's billing rate, and the payroll tabs below still
+                 use the Pay rate, which is what they are for. -->
           </div>
         </div>
       </div>
@@ -2060,10 +2043,6 @@
     } else {
       $("ed-closed-wrap").style.display = "none";
     }
-    // Not rendered at all when embedded -- hours are on screen beside it, so a
-    // pay rate left in the DOM is the value table one multiplication away.
-    $("ed-rate").textContent = IS_EMBED ? "" : money(hourlyRate) + "/hr";
-
     // Union of every calendar month with real logged hours anywhere in this
     // engagement -- same rule client_cumulative_hours.html used: empty
     // months just aren't columns at all.
@@ -2097,7 +2076,6 @@
     });
 
     renderEdHoursTable(detailRows, activeMonths);
-    if (!IS_EMBED) renderEdDollarsTable(detailRows, activeMonths);
   }
 
   function renderEdHoursTable(rows, activeMonths) {
@@ -2108,7 +2086,6 @@
     if (!rows.length) {
       $("ed-hours-table").classList.add("hidden");
       $("ed-hours-empty").classList.remove("hidden");
-      $("ed-dollars-table").classList.add("hidden");
       return;
     }
     $("ed-hours-table").classList.remove("hidden");
@@ -2150,52 +2127,6 @@
       ${activeMonths.map((m) => `<td>${totalsByMonth[m]}</td>`).join("")}
       <td>${grandTotal}</td>
       <td${grandRemaining < 0 ? ' class="remaining-negative"' : ""}>${grandRemaining}</td>
-    `;
-  }
-
-  function renderEdDollarsTable(rows, activeMonths) {
-    if (!rows.length) return;
-    $("ed-dollars-table").classList.remove("hidden");
-    const theadRow = $("ed-dollars-thead");
-    const tbody = $("ed-dollars-tbody");
-    const tfootRow = $("ed-dollars-tfoot");
-
-    theadRow.innerHTML = `
-      <th>Specialty</th>
-      <th>Allotted</th>
-      ${activeMonths.map((m) => `<th>${escapeHtml(monthLabelFor(m))}</th>`).join("")}
-      <th>Total</th>
-      <th>Remaining</th>
-    `;
-
-    tbody.innerHTML = rows.map((r) => `
-      <tr>
-        <td>
-          <div class="ed-specialty-name">${escapeHtml(r.role)}</div>
-          <div class="ed-person-name">${escapeHtml(r.specialistName || "Unassigned")}</div>
-        </td>
-        <td>${money(r.hoursAllotted * hourlyRate)}</td>
-        ${activeMonths.map((m) => {
-          const v = r.byMonth[m];
-          return v ? `<td>${money(v * hourlyRate)}</td>` : `<td class="blank-cell">—</td>`;
-        }).join("")}
-        <td>${money(r.total * hourlyRate)}</td>
-        <td${r.remaining < 0 ? ' class="remaining-negative"' : ""}>${money(r.remaining * hourlyRate)}</td>
-      </tr>
-    `).join("");
-
-    const totalsByMonth = {};
-    activeMonths.forEach((m) => { totalsByMonth[m] = round2(rows.reduce((s, r) => s + (r.byMonth[m] || 0), 0)) * hourlyRate; });
-    const grandAllotted = round2(rows.reduce((s, r) => s + r.hoursAllotted, 0)) * hourlyRate;
-    const grandTotal = round2(rows.reduce((s, r) => s + r.total, 0)) * hourlyRate;
-    const grandRemaining = grandAllotted - grandTotal;
-
-    tfootRow.innerHTML = `
-      <td>Grand Total</td>
-      <td>${money(grandAllotted)}</td>
-      ${activeMonths.map((m) => `<td>${money(totalsByMonth[m])}</td>`).join("")}
-      <td>${money(grandTotal)}</td>
-      <td${grandRemaining < 0 ? ' class="remaining-negative"' : ""}>${money(grandRemaining)}</td>
     `;
   }
 
