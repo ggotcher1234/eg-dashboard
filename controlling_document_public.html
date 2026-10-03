@@ -238,6 +238,16 @@
     catch (e) { return null; }
   }
 
+  // A number typed into the question text back when that was the convention
+  // would otherwise print twice -- once in the "Question 3" label and again
+  // in the sentence. Only a leading number that matches the real one is
+  // dropped; anything else is left exactly as written.
+  function stripTypedNumber(text, number) {
+    if (!number) return text;
+    const m = /^\s*(\d+)\s*[.)]\s+/.exec(text);
+    return m && Number(m[1]) === Number(number) ? text.slice(m[0].length) : text;
+  }
+
   function renderSections(draft) {
     const host = $("sections");
     host.innerHTML = "";
@@ -251,7 +261,14 @@
       sec.innerHTML = `<div class="section-title">${escapeHtml(meta.label)}</div>` +
         (meta.desc ? `<div class="section-desc">${escapeHtml(meta.desc)}</div>` : "");
       rows.forEach((q) => {
+        // Before 10/3/26 this counted cards 1..n down the page, so the number
+        // a client saw here depended on which area a question sat in and
+        // disagreed with the number on their dashboard and close-out survey.
+        // It now shows the number the Team Lead picked on the Controlling
+        // Document, which is the same one everywhere. The running count is
+        // kept only as a fallback for a question nobody numbered.
         n += 1;
+        const qnum = q.question_number == null ? n : q.question_number;
         const d = draft && draft.q && draft.q[q.id];
         const rankVal = d ? d.ranking : (q.ranking || "");
         const notesVal = d ? d.notes : (q.customer_notes || "");
@@ -260,8 +277,8 @@
         card.className = "q-card";
         card.dataset.qid = q.id;
         card.innerHTML = `
-          <span class="q-num">Question ${n}</span>
-          <div class="q-text">${escapeHtml(q.question || "")}</div>
+          <span class="q-num">Question ${qnum}</span>
+          <div class="q-text">${escapeHtml(stripTypedNumber(q.question || "", q.question_number))}</div>
           <span class="q-bg-label">Background</span>
           <div class="q-bg">${bgHtml || '<span class="q-bg-empty">No background provided.</span>'}</div>
           <div class="q-inputs">

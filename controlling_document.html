@@ -142,6 +142,27 @@
   .cd-q-row:not(.collapsed) .cd-q-preview { display: none; }
   .cd-q-row.collapsed .cd-q-field,
   .cd-q-row.collapsed .cd-q-rank-row { display: none; }
+  /* Question number (punch list #1, 10/3/26). Greg: "add a question #
+     dropdown next to question with 1-9 as we never have more than 9
+     questions." It sits beside the QUESTION label because the number belongs
+     to the question, not to the card; whatever is saved here is the number
+     that question carries on the client dashboard, the client-facing
+     Controlling Document and the Evaluation Sheet. Outside the toggle button
+     -- a <select> inside a <button> is invalid and would swallow its own
+     clicks. */
+  .cd-q-numwrap { flex-shrink: 0; display: flex; align-items: center; gap: 5px; }
+  .cd-q-numhash { font-size: 11px; font-weight: 700; color: var(--muted); }
+  .cd-q-num { height: 26px; padding: 0 4px 0 6px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--navy); cursor: pointer; }
+  /* A number used twice is the one mistake this picker makes easy, so the
+     form says so rather than letting two questions answer to "3". */
+  .cd-q-num.dupe { border-color: var(--danger); color: var(--danger); background: #fdecea; }
+  .cd-q-dupe-note { font-size: 11.5px; color: var(--danger); font-weight: 600; }
+  /* Printed, the picker is just the number in front of the question. */
+  .cd-q-numprint { display: none; font-size: 11px; font-weight: 700; color: #000; }
+  @media print {
+    .cd-q-numwrap { display: none; }
+    .cd-q-numprint { display: inline; }
+  }
   .cd-q-del { flex-shrink: 0; width: 30px; height: 30px; border: 1.5px solid var(--border); background: #fff; color: var(--danger); border-radius: 6px; font-size: 17px; line-height: 1; cursor: pointer; font-family: inherit; }
   .cd-q-del:hover { background: #fdecea; }
   .cd-q-field { margin-bottom: 12px; }
@@ -242,7 +263,8 @@
            (Greg, 8/31/26: "The Catagory and the questions will flow
            through to the Questions on EG Research Reports Page"). ===== -->
       <div class="card">
-        <div class="field-hint" style="margin:0;">Each question has a <strong>Question</strong>, its <strong>Background</strong> context, a customer <strong style="color:#1a56db;">Priority</strong> (A/B/C) and <strong style="color:#1a56db;">Customer Notes</strong>. All of it saves to this engagement; the Question also appears on the EG Research Reports page.</div>
+        <div class="field-hint" style="margin:0;">Each question has a <strong>Question</strong>, its <strong>Background</strong> context, a customer <strong style="color:#1a56db;">Priority</strong> (A/B/C) and <strong style="color:#1a56db;">Customer Notes</strong>. All of it saves to this engagement; the Question also appears on the EG Research Reports page. Give each question a <strong>#</strong> from 1&ndash;9 &mdash; that number is what the client's dashboard, the client-facing Controlling Document and the Evaluation Sheet will call it.</div>
+        <div class="field-hint no-print" id="cd-dupe-note" hidden style="margin:6px 0 0; color:#b42318; font-weight:600;">Two questions share the same number. Give each one its own before saving.</div>
       </div>
       <div class="card">
         <div class="card-head">
@@ -397,6 +419,8 @@
       rowEls.forEach((el, idx) => {
         const row = rows[idx];
         if (!row) return;
+        const numEl = el.querySelector(".cd-q-num");
+        if (numEl) row.question_number = numEl.value;
         row.question = el.querySelector(".cd-q-question").value;
         row.background = bgHtmlToText(el.querySelector(".cd-q-bg-editor"));
         row.ranking = el.querySelector(".cd-q-rank").value;
@@ -503,6 +527,14 @@
         return `
           <div class="cd-q-row${row.collapsed ? " collapsed" : ""}" data-area="${area}" data-idx="${idx}">
             <div class="cd-q-head">
+              <span class="cd-q-headlabel">Question</span><span class="cd-q-numprint">${row.question_number ? " " + row.question_number : ""}</span>
+              <span class="cd-q-numwrap no-print">
+                <span class="cd-q-numhash">#</span>
+                <select class="cd-q-num" aria-label="Question number">
+                  <option value="">&mdash;</option>
+                  ${[1,2,3,4,5,6,7,8,9].map((n) => `<option value="${n}"${String(row.question_number) === String(n) ? " selected" : ""}>${n}</option>`).join("")}
+                </select>
+              </span>
               <button type="button" class="cd-q-toggle" aria-expanded="${row.collapsed ? "false" : "true"}">
                 <!-- Greg (9/19/26), in three passes on the same card header:
                      the trailing number went first (it numbered cards 1..n
@@ -516,7 +548,6 @@
                      to that line. inline with the X to delete. make the word
                      question font black"). So this is the card's only QUESTION
                      label, and the head is still the toggle that collapses it. -->
-                <span class="cd-q-headlabel">Question</span>
                 <span class="cd-q-preview${qprev ? "" : " cd-q-preview-empty"}">${escapeHtml(qprevText)}</span>
               </button>
               <button type="button" class="cd-q-del no-print" title="Remove question">&times;</button>
@@ -552,10 +583,28 @@
           </div>`;
       }).join("");
     });
+    flagDuplicateNumbers();
+  }
+
+  // Numbers run 1-9 across the WHOLE document, not per area, so a duplicate
+  // is found by looking at every picker on the page at once.
+  function flagDuplicateNumbers() {
+    const sels = [...document.querySelectorAll(".cd-q-num")];
+    const counts = {};
+    sels.forEach((el) => { if (el.value) counts[el.value] = (counts[el.value] || 0) + 1; });
+    sels.forEach((el) => {
+      const dupe = !!el.value && counts[el.value] > 1;
+      el.classList.toggle("dupe", dupe);
+      el.title = dupe ? "Another question already uses number " + el.value : "Question number";
+    });
+    const note = document.getElementById("cd-dupe-note");
+    const any = Object.keys(counts).some((k) => counts[k] > 1);
+    if (note) note.hidden = !any;
+    return any;
   }
 
   function blankQuestion() {
-    return { question: "", background: "", ranking: "", customer_notes: "", collapsed: false };
+    return { question: "", background: "", ranking: "", customer_notes: "", question_number: "", collapsed: false };
   }
 
   function addQuestionRow(area) {
@@ -583,6 +632,20 @@
     if (rows.length === 0) rows.push(blankQuestion());
     renderQuestions();
   }
+
+  document.addEventListener("change", (e) => {
+    const numEl = e.target.closest ? e.target.closest(".cd-q-num") : null;
+    if (!numEl) return;
+    // Write straight to the model so the value survives the next add/delete
+    // re-render, then re-check the whole document for a shared number.
+    const rowEl = numEl.closest(".cd-q-row");
+    if (rowEl) {
+      const rows = questionsByArea[rowEl.dataset.area] || [];
+      const row = rows[parseInt(rowEl.dataset.idx, 10)];
+      if (row) row.question_number = numEl.value;
+    }
+    flagDuplicateNumbers();
+  });
 
   document.addEventListener("click", (e) => {
     const addBtn = e.target.closest("[data-cd-add]");
@@ -680,6 +743,7 @@
           background: q.background || "",
           ranking: q.ranking || "",
           customer_notes: q.customer_notes || "",
+          question_number: q.question_number == null ? "" : String(q.question_number),
           sort_order: q.sort_order,
           collapsed: false, // every row starts expanded on load
         }));
@@ -689,6 +753,15 @@
 
   async function submitResearchQuestions() {
     syncQuestionModelFromDom();
+
+    // Blocked at save rather than at edit: renumbering four questions passes
+    // through states where two briefly share a number, and refusing those
+    // keystroke by keystroke would make the form unusable. By the time Save
+    // is pressed the renumber is finished, and this is the last point where
+    // a duplicate can be stopped before it reaches the client.
+    if (flagDuplicateNumbers()) {
+      throw new Error("Two questions share the same number. Give each question its own # from 1-9, then save again.");
+    }
 
     for (const id of pendingQuestionDeletes) {
       const { error } = await sb.from("client_research_questions").delete().eq("id", id);
@@ -705,16 +778,21 @@
         const bg = (row.background || "").trim();
         const rank = (row.ranking || "").trim();
         const notes = (row.customer_notes || "").trim();
+        // "" -> null: an unnumbered question is stored unnumbered rather than
+        // as 0, which the 1-9 check constraint would reject anyway.
+        const qnum = row.question_number === "" || row.question_number == null
+          ? null : parseInt(row.question_number, 10);
         if (row.id) {
           const original = areaAll.find((q) => q.id === row.id);
           const changed = !original
             || value !== (original.question || "")
             || bg !== (original.background || "")
             || rank !== (original.ranking || "")
-            || notes !== (original.customer_notes || "");
+            || notes !== (original.customer_notes || "")
+            || qnum !== (original.question_number == null ? null : Number(original.question_number));
           if (changed) {
             const { error } = await sb.from("client_research_questions")
-              .update({ question: value || null, background: bg || null, ranking: rank || null, customer_notes: notes || null })
+              .update({ question: value || null, background: bg || null, ranking: rank || null, customer_notes: notes || null, question_number: qnum })
               .eq("id", row.id);
             if (error) throw new Error(error.message);
           }
@@ -726,6 +804,7 @@
             background: bg || null,
             ranking: rank || null,
             customer_notes: notes || null,
+            question_number: qnum,
             sort_order: nextSort++,
           });
           if (error) throw new Error(error.message);

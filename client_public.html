@@ -211,7 +211,11 @@
   /* No bullets and no hanging indent (Greg, 9/19/26): "if i want a bullet
      i'll add it in the controlling document." The questions arrive numbered
      from there -- "1.", "2." -- and a bullet in front of a number is two
-     markers for one item. */
+     markers for one item. As of 10/3/26 the number is a real field chosen
+     from the Controlling Document's # picker rather than text somebody typed
+     into the question, so it is rendered here instead of being part of the
+     sentence. */
+  .rc-qnum { font-weight: 700; color: var(--muted); }
   .rc-question { font-size: 12.5px; line-height: 1.45; color: var(--text); margin-bottom: 5px; }
   .rc-question:last-child { margin-bottom: 0; }
   /* The files answering the question directly above them (Greg, 9/19/26) --
@@ -1011,6 +1015,17 @@
   // The page needs no flag of its own -- with the switch off the payload
   // simply carries no questions, so "render whatever questions arrive" is
   // the whole rule.
+  // Before 10/3/26 the number was typed into the question text. Those have
+  // been cleaned up in the data, but an older engagement re-saved from a
+  // cached page could still carry one, and "3. 3. Who should we pursue?" is
+  // worse than either alone -- so a leading number matching the real one is
+  // dropped on the way to the screen.
+  function stripTypedNumber(text, number) {
+    if (!number) return text;
+    const m = /^\s*(\d+)\s*[.)]\s+/.exec(text);
+    return m && Number(m[1]) === Number(number) ? text.slice(m[0].length) : text;
+  }
+
   function renderResearchAreaBody(entriesIn) {
     const all = entriesIn || [];
     // Greg (9/19/26): files sit under the question they answer. An entry with
@@ -1025,7 +1040,7 @@
       <div class="rc-questions">
         <div class="rc-questions-label">Research questions</div>
         ${questionEntries.map((e) => `
-          <div class="rc-question">${escapeHtml(e.question.trim())}</div>
+          <div class="rc-question">${e.number ? `<span class="rc-qnum">${escapeHtml(String(e.number))}.</span> ` : ""}${escapeHtml(stripTypedNumber(e.question.trim(), e.number))}</div>
           ${e.documents && e.documents.length ? `<div class="rc-question-docs">${renderDocLinks(e.documents)}</div>` : ""}
         `).join("")}
       </div>
