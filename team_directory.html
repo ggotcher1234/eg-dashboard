@@ -257,6 +257,21 @@
   tbody td { padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover { background: #fafbfc; }
+  /* Chris (10/3/26): an x on the right of each roster row. It archives --
+     reversible, and the same confirm the profile's Archive Member opens --
+     never the hard delete Greg retired on 9/23/26. */
+  .row-archive-btn {
+    border: none; background: transparent; color: var(--muted); cursor: pointer;
+    font-size: 17px; line-height: 1; padding: 2px 7px; border-radius: 5px;
+    opacity: 0.5; transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+  }
+  /* Visible at rest, not just on hover: Chris asked to have an x there, and
+     a control you have to find by hovering is not one you have been given. */
+  tbody tr:hover .row-archive-btn, .row-archive-btn:focus-visible { opacity: 1; }
+  .row-archive-btn:hover { background: #f6e6e5; color: var(--danger); }
+  .row-archive-btn.restore { font-size: 13px; font-weight: 700; }
+  .row-archive-btn.restore:hover { background: #e9f0e2; color: var(--accent-dark); }
+  td.row-actions { width: 44px; text-align: right; padding-left: 0; }
 
   .member-name { font-weight: 700; color: var(--navy); font-size: 13.5px; line-height: 1.3; }
   .member-role-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
@@ -781,6 +796,7 @@
           <th class="sortable" data-sort="address" id="th-address">Address<span class="sort-arrow"></span></th>
           <th style="width:150px; white-space:nowrap;">Phone</th>
           <th>Email</th>
+          <th style="width:44px;"><span class="sr-only-th" style="position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0);">Remove</span></th>
         </tr>
       </thead>
       <tbody id="team-tbody"></tbody>
@@ -1886,14 +1902,27 @@
       const canEditThis = isSuperAdmin || u.id === currentUser.id;
       const phoneDisplay = formatPhoneDisplay(u.phone);
 
-      // Greg (9/19/26): "remove the edit and view buttons as they are
-      // redundant. clicking on the name opens for edits already", then "remove
-      // the x's that delete and put them in the profile." So the row carries
-      // no controls at all now -- the name opens the profile (it underlines on
-      // hover to say so), and Remove from Roster lives inside that profile,
-      // next to the Save it sits beside in every other admin flow. A delete
-      // one stray click from a whole column of rows was the riskiest button on
-      // the page; behind a profile it takes two deliberate steps.
+      // Greg (9/19/26) took the row controls off: "remove the x's that
+      // delete and put them in the profile." The reason was good -- a
+      // DELETE one stray click away from a whole column of rows was the
+      // riskiest button on the page.
+      //
+      // Chris (10/3/26, via Greg) wants an x back on the right. It is safe
+      // to give him one now because the thing it does has changed: the hard
+      // delete was retired on 9/23/26, so this x archives, which is
+      // reversible, goes through the same confirm dialog as the profile's
+      // Archive Member, and leaves every assignment and logged hour intact.
+      //
+      // Admins only, and never on your own row -- archiving the login you
+      // are signed in with locks you out of undoing it. In the Archived
+      // view it becomes a restore instead.
+      const canArchiveThis = isSuperAdmin && u.id !== currentUser.id;
+      const archived = !!u.archived_at;
+      const actionCell = !canArchiveThis
+        ? '<td class="row-actions"></td>'
+        : archived
+          ? `<td class="row-actions"><button type="button" class="row-archive-btn restore" onclick="openArchive('${u.id}', false)" title="Restore ${escapeHtml(u.full_name)} to the roster" aria-label="Restore ${escapeHtml(u.full_name)}">&#8630;</button></td>`
+          : `<td class="row-actions"><button type="button" class="row-archive-btn" onclick="openArchive('${u.id}', true)" title="Remove ${escapeHtml(u.full_name)} from the roster (archive -- reversible)" aria-label="Remove ${escapeHtml(u.full_name)} from the roster">&times;</button></td>`;
 
       tr.innerHTML = `
         <td>
@@ -1912,6 +1941,7 @@
           ? `<a class="contact-link" href="${telHref(u.phone)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>${escapeHtml(phoneDisplay)}</a>`
           : '<span class="cell-muted">Not provided</span>'}</td>
         <td><a class="contact-link" href="mailto:${escapeHtml(u.email)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M22 6l-10 7L2 6"/></svg>${escapeHtml(u.email)}</a></td>
+        ${actionCell}
       `;
       tbody.appendChild(tr);
     }
