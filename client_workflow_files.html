@@ -637,6 +637,7 @@
               <div class="wf-action-row">
                 <div id="wf-discovery-file"></div>
                 <div id="wf-discovery-actions"></div>
+                <div id="wf-discovery-client"></div>
               </div>
             </div>
           </div>
@@ -773,6 +774,57 @@
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
         <button type="button" class="btn-secondary btn-sm" id="eem-copy-btn">Copy Email Text</button>
         <a class="btn-primary btn-sm" id="eem-mailto-btn" href="#">Open in Email App &rarr;</a>
+      </div>
+      <div style="font-size:11.5px; color:var(--muted); margin-top:8px;">
+        Opens a new message in your default email app with everything filled in. If it doesn&rsquo;t open, use Copy Email Text and paste it in by hand.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Greg (10/2/26): "the discovery document needs a create email button."
+     The fourth customer email on this page and the earliest one in the
+     engagement: the notes from the Discovery Call go back to the client to
+     be checked before the Controlling Document is written from them. Built
+     exactly like the other three -- customerSubject() for the subject,
+     customerCcList() for the Cc, a mailto so it leaves from the Team Lead's
+     own address. -->
+<div class="eem-overlay" id="dd-email-overlay">
+  <div class="eem-modal">
+    <div class="eem-modal-header">
+      <div>
+        <h3>Discovery Call Notes &mdash; Review Email</h3>
+        <div class="eem-modal-meta">Review and edit, then open it in your email app &mdash; nothing is sent until you send it there.</div>
+      </div>
+      <button class="eem-modal-close" id="ddem-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="ddem-body">
+      <div class="field">
+        <label>To</label>
+        <input type="text" id="ddem-to" />
+      </div>
+      <div id="ddem-no-contact" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
+        No contact emails on file for this client &mdash; add them in Company Contacts, or type them in above.
+      </div>
+      <div class="field">
+        <label>Cc</label>
+        <textarea id="ddem-cc" rows="3"></textarea>
+        <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">The Program&rsquo;s Administrators, this engagement&rsquo;s CC list, Chris and Rita. Edit freely before sending.</div>
+      </div>
+      <div class="field">
+        <label>Subject</label>
+        <input type="text" id="ddem-subject" />
+      </div>
+      <div class="field">
+        <label>Body</label>
+        <textarea id="ddem-body-text" class="eem-body-text" rows="14"></textarea>
+      </div>
+      <div id="ddem-no-dashboard" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
+        This engagement has no client dashboard link yet, so the email doesn&rsquo;t include one. Set the slug on Company Info and create the email again.
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <button type="button" class="btn-secondary btn-sm" id="ddem-copy-btn">Copy Email Text</button>
+        <a class="btn-primary btn-sm" id="ddem-mailto-btn" href="#">Open in Email App &rarr;</a>
       </div>
       <div style="font-size:11.5px; color:var(--muted); margin-top:8px;">
         Opens a new message in your default email app with everything filled in. If it doesn&rsquo;t open, use Copy Email Text and paste it in by hand.
@@ -1498,6 +1550,7 @@
     workflowData = data || {};
     WORKFLOW_FIELDS.forEach(renderWorkflowFileField);
     renderEvalLinkField();
+    renderDiscoveryClientField();
     renderControllingClientField();
     renderReviewClientField();
   }
@@ -2181,6 +2234,88 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     autosizeEmailBody($("cdem-body-text"));
     revealEmailModal($("cd-email-overlay"));
   }
+
+  // ---------- Discovery Call Notes email (Greg, 10/2/26) ----------
+  // "the discovery document needs a create email button."
+  //
+  // The earliest customer email in the engagement: the notes from the
+  // Discovery Call go back to the client to be checked, because the
+  // Controlling Document is written from them and a misheard number or a
+  // missed competitor is far cheaper to fix now than after the research.
+  // That is the one thing this email has to ask for, so it asks for it
+  // plainly and says what happens next.
+  //
+  // The EG team is NOT copied here, unlike the Research Complete email --
+  // that one proposes a meeting they have to attend; this one is between
+  // the Team Lead and the client.
+  function renderDiscoveryClientField() {
+    const container = $("wf-discovery-client");
+    if (!container) return;
+    container.innerHTML = `<button type="button" class="wf-btn wf-btn-icon-email" id="dd-email-create-btn">Create Email</button>`;
+    container.querySelector("#dd-email-create-btn").addEventListener("click", openDiscoveryEmailModal);
+  }
+
+  function openDiscoveryEmailModal() {
+    const recipients = clientContacts();
+    const teamRows = listData.team || [];
+    const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
+    const teamLeadName = leadRow && leadRow.users.full_name ? leadRow.users.full_name : "";
+    const teamLeadFirstName = teamLeadName ? teamLeadName.split(" ")[0] : "";
+
+    $("ddem-to").value = recipients.map((c) => c.email.trim()).join(", ");
+    $("ddem-no-contact").classList.toggle("hidden", recipients.length > 0);
+    $("ddem-cc").value = customerCcList($("ddem-to").value);
+    $("ddem-subject").value = customerSubject("Discovery Call Notes", "for review");
+
+    const url = clientDashboardUrl();
+    $("ddem-no-dashboard").classList.toggle("hidden", !!url);
+    // Same reasoning as the Research Complete email: the colon only makes
+    // sense when a link follows it, so the no-slug variant ends the
+    // sentence instead of pointing at nothing.
+    const dashboardBlock = url
+      ? `They are on your Economic Gardening dashboard:\n\n${url}`
+      : `They are on your Economic Gardening dashboard.`;
+
+    $("ddem-body-text").value = `Hi ${greetingNames(recipients)},
+
+Thank you for the time on our Discovery Call. I\u2019ve written up the notes from our conversation for ${currentClient.name}.
+
+${dashboardBlock}
+
+Please read through them and tell me anything I got wrong or left out \u2014 a number, a competitor, a market, a goal. These notes are what the research is built on, so it is much easier to correct them now than after the work has started.
+
+Once you are happy with them, I\u2019ll put together the Controlling Document: the set of research questions your engagement will answer. You will get that to rank and comment on before any research begins.
+
+Thanks,
+${teamLeadFirstName || "Your EG Team Lead"}`;
+
+    updateDiscoveryEmailMailto();
+    $("dd-email-overlay").classList.add("open");
+    autosizeEmailBody($("ddem-body-text"));
+    revealEmailModal($("dd-email-overlay"));
+  }
+
+  function updateDiscoveryEmailMailto() {
+    const cc = addressParam($("ddem-cc").value);
+    $("ddem-mailto-btn").href = `mailto:${addressParam($("ddem-to").value)}?${cc ? `cc=${cc}&` : ""}subject=${encodeURIComponent($("ddem-subject").value)}&body=${encodeURIComponent($("ddem-body-text").value)}`;
+  }
+
+  $("ddem-close").addEventListener("click", () => closeEmailOverlay("dd-email-overlay"));
+  $("dd-email-overlay").addEventListener("click", (e) => {
+    if (e.target === $("dd-email-overlay")) closeEmailOverlay("dd-email-overlay");
+  });
+  ["ddem-to", "ddem-cc", "ddem-subject", "ddem-body-text"].forEach((id) =>
+    $(id).addEventListener("input", updateDiscoveryEmailMailto));
+  $("ddem-body-text").addEventListener("input", () => autosizeEmailBody($("ddem-body-text")));
+  $("ddem-copy-btn").addEventListener("click", async () => {
+    const text = `To: ${$("ddem-to").value}\nCc: ${$("ddem-cc").value}\nSubject: ${$("ddem-subject").value}\n\n${$("ddem-body-text").value}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      showBanner("Email text copied -- paste it into your email client.", "success");
+    } catch (e) {
+      showBanner("Couldn't copy automatically -- select the text below and copy manually.", "error");
+    }
+  });
 
   // ---------- Research Complete email (Greg, 9/14/26) ----------
   // "i want a 'Create Email' button here to the client, EG Team and CC list.
