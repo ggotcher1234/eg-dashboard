@@ -793,7 +793,7 @@
   <div class="eem-modal">
     <div class="eem-modal-header">
       <div>
-        <h3>Discovery Call Notes &mdash; Review Email</h3>
+        <h3>Discovery Call Email</h3>
         <div class="eem-modal-meta">Review and edit, then open it in your email app &mdash; nothing is sent until you send it there.</div>
       </div>
       <button class="eem-modal-close" id="ddem-close" aria-label="Close">&times;</button>
@@ -2238,12 +2238,13 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
   // ---------- Discovery Call Notes email (Greg, 10/2/26) ----------
   // "the discovery document needs a create email button."
   //
-  // The earliest customer email in the engagement: the notes from the
-  // Discovery Call go back to the client to be checked, because the
-  // Controlling Document is written from them and a misheard number or a
-  // missed competitor is far cheaper to fix now than after the research.
-  // That is the one thing this email has to ask for, so it asks for it
-  // plainly and says what happens next.
+  // The earliest customer email in the engagement. Greg (10/2/26) on what
+  // it should say: "i would just give them a link to the dashboard and let
+  // them know that the discovery notes are available on the dashboard."
+  // So it does that and stops. The first draft asked them to check the
+  // notes for errors and explained what the Controlling Document was --
+  // true, but it turns the note into homework, and the client is about to
+  // be asked to rank every research question anyway.
   //
   // The EG team is NOT copied here, unlike the Research Complete email --
   // that one proposes a meeting they have to attend; this one is between
@@ -2265,26 +2266,29 @@ ${teamLeadFirstName || "Your EG Team Lead"}`;
     $("ddem-to").value = recipients.map((c) => c.email.trim()).join(", ");
     $("ddem-no-contact").classList.toggle("hidden", recipients.length > 0);
     $("ddem-cc").value = customerCcList($("ddem-to").value);
-    $("ddem-subject").value = customerSubject("Discovery Call Notes", "for review");
+    $("ddem-subject").value = customerSubject("Discovery Call", "now on your dashboard");
 
     const url = clientDashboardUrl();
     $("ddem-no-dashboard").classList.toggle("hidden", !!url);
     // Same reasoning as the Research Complete email: the colon only makes
     // sense when a link follows it, so the no-slug variant ends the
     // sentence instead of pointing at nothing.
+    // Greg (10/2/26): "it can also be a video zoom recording from some Team
+    // Leads." So the sentence cannot say "notes" -- for half the engagements
+    // that would be describing something the client does not find when they
+    // get there. "Everything from our Discovery Call" is true of written
+    // notes, a Zoom recording, or both.
     const dashboardBlock = url
-      ? `They are on your Economic Gardening dashboard:\n\n${url}`
-      : `They are on your Economic Gardening dashboard.`;
+      ? `Everything from it is now on your Economic Gardening dashboard:\n\n${url}`
+      : `Everything from it is now on your Economic Gardening dashboard.`;
 
     $("ddem-body-text").value = `Hi ${greetingNames(recipients)},
 
-Thank you for the time on our Discovery Call. I\u2019ve written up the notes from our conversation for ${currentClient.name}.
+Thank you for the time on our Discovery Call.
 
 ${dashboardBlock}
 
-Please read through them and tell me anything I got wrong or left out \u2014 a number, a competitor, a market, a goal. These notes are what the research is built on, so it is much easier to correct them now than after the work has started.
-
-Once you are happy with them, I\u2019ll put together the Controlling Document: the set of research questions your engagement will answer. You will get that to rank and comment on before any research begins.
+Let me know if you have any questions.
 
 Thanks,
 ${teamLeadFirstName || "Your EG Team Lead"}`;
