@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>EGDB Punch List</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  /* Moved off claude.ai so Chris and Rita need no account (Greg, 10/3/26).
+     Same board, same groups, now backed by punchlist_items /
+     punchlist_comments and the publishable key the other public pages use.
+     NCEG's palette so it reads as part of the dashboard it is about. */
+  :root {
+    --bg: #a3b9aa;
+    --page: #eef1ea;
+    --surface: #ffffff;
+    --surface-2: #f6f8f3;
+    --ink: #1d2b1f;
+    --ink-soft: #5d6b5c;
+    --rule: #d8e0d1;
+    --navy: #14304d;
+    --sage: #5c7248;
+    --sage-deep: #3f5230;
+    --amber: #a9740f;
+    --slate: #4a6076;
+    --slate-bg: #eaf0f5;
+    --go: #4a6b35;
+    --done: #76856f;
+    --done-bg: #f0f2ee;
+    --danger: #a33c35;
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  .sheet { max-width: 940px; margin: 0 auto; background: var(--page); min-height: 100vh; padding: 28px 16px 72px; }
+
+  header.masthead { margin-bottom: 20px; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sage-deep); }
+  h1 { font-size: 28px; line-height: 1.15; margin: 6px 0 8px; font-weight: 700; }
+  .lede { color: var(--ink-soft); max-width: 62ch; margin: 0; font-size: 14.5px; }
+
+  .whoami { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 16px 0 0; font-size: 13px; color: var(--ink-soft); }
+  .who-btn { border: 1px solid var(--rule); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 14px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .who-btn:hover { background: var(--surface-2); }
+  .who-btn.on { background: var(--sage); border-color: var(--sage); color: #fff; }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 18px 0 24px; }
+  .tally { display: flex; align-items: baseline; gap: 7px; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 9px 13px; font-size: 12.5px; color: var(--ink-soft); }
+  .tally b { font-family: var(--mono); font-size: 17px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .tally.is-decide b { color: var(--amber); }
+  .tally.is-ready b { color: var(--go); }
+  .spacer { flex: 1 1 auto; }
+
+  button { font-family: inherit; }
+  .btn { border: 1px solid var(--rule); background: var(--surface); color: var(--ink); border-radius: 8px; padding: 9px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn:hover { background: var(--surface-2); }
+  .btn-primary { background: var(--sage); border-color: var(--sage); color: #fff; }
+  .btn-primary:hover { background: var(--sage-deep); border-color: var(--sage-deep); }
+  .btn:disabled { opacity: 0.55; cursor: default; }
+  .btn-sm { padding: 6px 11px; font-size: 12.5px; }
+
+  .newform { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px; margin-bottom: 24px; display: grid; gap: 10px; }
+  .newform label { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); display: block; margin-bottom: 4px; }
+  .newform input[type="text"], .newform textarea, .newform select {
+    width: 100%; font-family: inherit; font-size: 14px; padding: 8px 10px;
+    border: 1px solid var(--rule); border-radius: 7px; background: var(--surface-2); color: var(--ink); resize: vertical;
+  }
+  .newform .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .newform .actions { display: flex; gap: 8px; align-items: center; }
+  .formerr { color: var(--danger); font-size: 12.5px; }
+
+  section.group { margin-bottom: 28px; }
+  .group-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
+  .group-head h2 { font-size: 13px; font-weight: 700; margin: 0; letter-spacing: 0.06em; text-transform: uppercase; }
+  .group-head .n { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .group-note { font-size: 13px; color: var(--ink-soft); margin: 0 0 12px; max-width: 64ch; }
+  .g-decide h2 { color: var(--amber); }
+  .g-waiting h2 { color: var(--slate); }
+  .g-ready   h2 { color: var(--go); }
+  .g-data    h2 { color: var(--navy); }
+  .g-done    h2 { color: var(--done); }
+
+  .items { display: flex; flex-direction: column; gap: 8px; }
+  .item { background: var(--surface); border: 1px solid var(--rule); border-radius: 9px; padding: 13px 15px; }
+  .item.is-done { background: var(--done-bg); }
+  .item-top { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; }
+  .item-main { min-width: 0; }
+  .item-title { font-weight: 600; font-size: 14.5px; margin: 0 0 3px; }
+  .item.is-done .item-title { color: var(--ink-soft); }
+  .item-note { margin: 0; font-size: 13px; color: var(--ink-soft); white-space: pre-wrap; }
+  .item-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
+  .chip { font-size: 11px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; padding: 2.5px 8px; border-radius: 999px; white-space: nowrap; }
+  .chip-owner { background: var(--slate-bg); color: var(--slate); }
+  .chip-src { background: var(--surface-2); color: var(--ink-soft); border: 1px solid var(--rule); }
+
+  .item-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  select.status { font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--ink); background: var(--surface-2); border: 1px solid var(--rule); border-radius: 7px; padding: 6px 9px; cursor: pointer; max-width: 180px; }
+  select.status:focus-visible { outline: 2px solid var(--sage); outline-offset: 1px; }
+  .saved { font-size: 11px; color: var(--go); font-family: var(--mono); }
+
+  .thread-toggle { margin-top: 10px; border: none; background: transparent; padding: 2px 0; font-size: 12.5px; font-weight: 600; color: var(--sage-deep); cursor: pointer; }
+  .thread-toggle:hover { text-decoration: underline; }
+  .thread { margin-top: 10px; border-top: 1px solid var(--rule); padding-top: 10px; display: grid; gap: 10px; }
+  .comment { font-size: 13.5px; }
+  .comment-head { font-size: 11.5px; color: var(--ink-soft); margin-bottom: 2px; }
+  .comment-head b { color: var(--ink); font-weight: 600; }
+  .comment-body { white-space: pre-wrap; }
+  .comment-del { border: none; background: transparent; color: var(--ink-soft); cursor: pointer; font-size: 12px; padding: 0 2px; margin-left: 6px; }
+  .comment-del:hover { color: var(--danger); }
+  .thread-form { display: grid; gap: 7px; }
+  .thread-form textarea { width: 100%; font-family: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 7px; background: var(--surface-2); color: var(--ink); resize: vertical; min-height: 40px; }
+
+  .state { background: var(--surface); border: 1px dashed var(--rule); border-radius: 10px; padding: 22px; text-align: center; color: var(--ink-soft); font-size: 14px; }
+  .banner { border-radius: 8px; padding: 10px 14px; font-size: 13.5px; margin-bottom: 14px; display: none; }
+  .banner.err { display: block; background: #f9ecec; border: 1px solid #e8cdcb; color: var(--danger); }
+  footer.foot { margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--rule); font-size: 12.5px; color: var(--ink-soft); }
+
+  @media (max-width: 560px) {
+    .item-top { grid-template-columns: 1fr; }
+    .item-side { align-items: flex-start; }
+    .newform .two { grid-template-columns: 1fr; }
+    h1 { font-size: 23px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header class="masthead">
+    <div class="eyebrow">EG Dashboard &middot; review punch list</div>
+    <h1>What's left from Chris and Rita</h1>
+    <p class="lede">Everything still open from the October 2 call and Rita's seven questions, plus what the review turned up along the way. Change a status, add a comment or add a punch &mdash; it saves for everyone, straight away.</p>
+    <div class="whoami" id="whoami"></div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+
+  <div class="toolbar">
+    <div id="tallies" style="display:contents;"></div>
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-primary" id="add-toggle">+ Add a punch</button>
+  </div>
+
+  <form class="newform" id="newform" hidden>
+    <div>
+      <label for="nf-title">What needs doing</label>
+      <input type="text" id="nf-title" maxlength="300" placeholder="Short and specific" autocomplete="off" />
+    </div>
+    <div>
+      <label for="nf-note">Detail <span style="text-transform:none; font-weight:400;">(optional)</span></label>
+      <textarea id="nf-note" rows="3" maxlength="4000" placeholder="Anything whoever picks this up would need to know"></textarea>
+    </div>
+    <div class="two">
+      <div>
+        <label for="nf-owner">Who owns it <span style="text-transform:none; font-weight:400;">(optional)</span></label>
+        <input type="text" id="nf-owner" maxlength="80" placeholder="Greg, Chris, Rita&hellip;" autocomplete="off" />
+      </div>
+      <div>
+        <label for="nf-status">Where it sits</label>
+        <select id="nf-status"></select>
+      </div>
+    </div>
+    <div class="actions">
+      <button type="submit" class="btn btn-primary btn-sm" id="nf-save">Add it</button>
+      <button type="button" class="btn btn-sm" id="nf-cancel">Cancel</button>
+      <span class="formerr" id="nf-error" hidden></span>
+    </div>
+  </form>
+
+  <div id="board"><div class="state">Loading the list&hellip;</div></div>
+
+  <footer class="foot">
+    Anything marked <strong>Needs a decision</strong> is waiting on an answer, not on build time.
+    Everything here saves for all three of us the moment you change it.
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+(function () {
+  var SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  var SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  var GROUPS = [
+    { key: "decide",  cls: "g-decide",  label: "Needs a decision",
+      note: "Each of these is one answer away from being buildable. Nothing here is waiting on effort." },
+    { key: "waiting", cls: "g-waiting", label: "Waiting on someone else",
+      note: "Blocked until the material arrives." },
+    { key: "ready",   cls: "g-ready",   label: "Ready to build",
+      note: "No blockers. Roughly in the order Greg would take them." },
+    { key: "data",    cls: "g-data",    label: "Program data to fix",
+      note: "Found while chasing the Advantage Valley report. Each needs someone to say which person is right." },
+    { key: "done",    cls: "g-done",    label: "Done", note: "" }
+  ];
+  var LABELS = {
+    decide: "Needs a decision", waiting: "Waiting on someone else",
+    ready: "Ready to build", data: "Program data to fix", done: "Done"
+  };
+  var PEOPLE = ["Chris", "Rita", "Greg"];
+  var WHO_KEY = "egdb_punchlist_who";
+
+  var board = document.getElementById("board");
+  var talliesEl = document.getElementById("tallies");
+  var bannerEl = document.getElementById("banner");
+  var items = [], comments = [], openThreads = {}, drafts = {};
+  var who = "";
+
+  try { who = localStorage.getItem(WHO_KEY) || ""; } catch (e) { who = ""; }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+  function fail(msg) { bannerEl.textContent = msg; bannerEl.className = "banner err"; }
+  function clearFail() { bannerEl.className = "banner"; }
+
+  function ago(iso) {
+    var then = Date.parse(iso);
+    if (!then) return "";
+    var mins = Math.round((Date.now() - then) / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return mins + "m ago";
+    var hrs = Math.round(mins / 60);
+    if (hrs < 24) return hrs + "h ago";
+    var days = Math.round(hrs / 24);
+    if (days < 8) return days + "d ago";
+    return new Date(then).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  // ---------- who am I ----------
+  // No sign-in, so a comment is signed by whoever says they are writing it.
+  // Remembered in this browser; the picker stays on screen so it can be
+  // changed on a shared machine.
+  function renderWho() {
+    document.getElementById("whoami").innerHTML =
+      "<span>" + (who ? "You're commenting as" : "Who are you?") + "</span>" +
+      PEOPLE.map(function (p) {
+        return '<button type="button" class="who-btn' + (p === who ? " on" : "") + '" data-who="' + esc(p) + '">' + esc(p) + "</button>";
+      }).join("");
+    document.querySelectorAll("[data-who]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        who = b.dataset.who;
+        try { localStorage.setItem(WHO_KEY, who); } catch (e) {}
+        renderWho();
+        render();
+      });
+    });
+  }
+
+  function commentsFor(id) {
+    return comments.filter(function (c) { return c.item_id === id; });
+  }
+
+  function renderTallies() {
+    var n = function (k) { return items.filter(function (i) { return i.status === k; }).length; };
+    talliesEl.innerHTML =
+      '<span class="tally"><b>' + items.filter(function (i) { return i.status !== "done"; }).length + "</b> open</span>" +
+      '<span class="tally is-decide"><b>' + n("decide") + "</b> need a decision</span>" +
+      '<span class="tally is-ready"><b>' + n("ready") + "</b> ready to build</span>" +
+      '<span class="tally"><b>' + n("done") + "</b> done</span>";
+  }
+
+  function threadHtml(it) {
+    var list = commentsFor(it.id);
+    var open = !!openThreads[it.id];
+    var toggle = '<button type="button" class="thread-toggle" data-toggle="' + esc(it.id) + '">' +
+      (open ? "Hide" : (list.length ? "Comments (" + list.length + ")" : "Add a comment")) + "</button>";
+    if (!open) return toggle;
+
+    var body = list.map(function (c) {
+      var mine = who && c.author === who;
+      return '<div class="comment">' +
+        '<div class="comment-head"><b>' + esc(c.author || "Someone") + "</b> &middot; " + esc(ago(c.created_at)) +
+          (mine ? '<button type="button" class="comment-del" data-del="' + esc(c.id) + '" title="Delete this comment">&times;</button>' : "") +
+        "</div><div class=\"comment-body\">" + esc(c.body) + "</div></div>";
+    }).join("");
+
+    var form = who
+      ? '<div class="thread-form">' +
+          '<textarea data-draft="' + esc(it.id) + '" rows="2" maxlength="4000" placeholder="Add a comment as ' + esc(who) + '&hellip;">' + esc(drafts[it.id] || "") + "</textarea>" +
+          '<div><button type="button" class="btn btn-sm btn-primary" data-post="' + esc(it.id) + '">Post</button></div>' +
+        "</div>"
+      : '<div class="comment-head">Pick your name at the top to add a comment.</div>';
+
+    return toggle + '<div class="thread">' + (body || '<div class="comment-head">No comments yet.</div>') + form + "</div>";
+  }
+
+  function render() {
+    renderTallies();
+    if (!items.length) {
+      board.innerHTML = '<div class="state">Nothing on the list yet. Use <strong>Add a punch</strong> to put the first one on.</div>';
+      return;
+    }
+    var html = "";
+    GROUPS.forEach(function (g) {
+      var rows = items.filter(function (i) { return i.status === g.key; });
+      if (!rows.length) return;
+      html += '<section class="group ' + g.cls + '">' +
+        '<div class="group-head"><h2>' + esc(g.label) + '</h2><span class="n">' + rows.length + "</span></div>" +
+        (g.note ? '<p class="group-note">' + esc(g.note) + "</p>" : "") + '<div class="items">';
+      rows.forEach(function (it) {
+        html += '<article class="item' + (it.status === "done" ? " is-done" : "") + '">' +
+          '<div class="item-top"><div class="item-main">' +
+            '<p class="item-title">' + esc(it.title) + "</p>" +
+            (it.note ? '<p class="item-note">' + esc(it.note) + "</p>" : "") +
+            '<div class="item-meta">' +
+              (it.owner ? '<span class="chip chip-owner">' + esc(it.owner) + "</span>" : "") +
+              (it.source ? '<span class="chip chip-src">' + esc(it.source) + "</span>" : "") +
+            "</div></div>" +
+            '<div class="item-side">' +
+              '<select class="status" data-id="' + esc(it.id) + '" aria-label="Status for ' + esc(it.title) + '">' +
+                Object.keys(LABELS).map(function (k) {
+                  return '<option value="' + k + '"' + (k === it.status ? " selected" : "") + ">" + esc(LABELS[k]) + "</option>";
+                }).join("") +
+              "</select>" +
+              '<span class="saved" data-saved="' + esc(it.id) + '" hidden>Saved</span>' +
+            "</div>" +
+          "</div>" + threadHtml(it) +
+        "</article>";
+      });
+      html += "</div></section>";
+    });
+    board.innerHTML = html;
+    wire();
+  }
+
+  function wire() {
+    board.querySelectorAll("select.status").forEach(function (sel) {
+      sel.addEventListener("change", function () { setStatus(sel.dataset.id, sel.value); });
+    });
+    board.querySelectorAll("[data-toggle]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.dataset.toggle;
+        openThreads[id] = !openThreads[id];
+        render();
+        if (openThreads[id]) {
+          var ta = board.querySelector('[data-draft="' + id + '"]');
+          if (ta) ta.focus();
+        }
+      });
+    });
+    // Keep what someone has typed across the re-render a status change or
+    // a refresh causes.
+    board.querySelectorAll("[data-draft]").forEach(function (ta) {
+      ta.addEventListener("input", function () { drafts[ta.dataset.draft] = ta.value; });
+      ta.addEventListener("keydown", function (e) {
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); postComment(ta.dataset.draft); }
+      });
+    });
+    board.querySelectorAll("[data-post]").forEach(function (b) {
+      b.addEventListener("click", function () { postComment(b.dataset.post); });
+    });
+    board.querySelectorAll("[data-del]").forEach(function (b) {
+      b.addEventListener("click", function () { deleteComment(b.dataset.del); });
+    });
+  }
+
+  // ---------- writes ----------
+  // Every write is verified with .select(): an open page with no sign-in
+  // must never show "Saved" over something the database refused.
+  async function setStatus(id, status) {
+    var it = items.find(function (x) { return x.id === id; });
+    if (!it) return;
+    var before = it.status;
+    it.status = status;
+    render();
+    var res = await sb.from("punchlist_items").update({ status: status }).eq("id", id).select("id");
+    if (res.error || !res.data || !res.data.length) {
+      it.status = before;
+      render();
+      fail("That status didn't save. Check your connection and try again.");
+      return;
+    }
+    clearFail();
+    var mark = board.querySelector('[data-saved="' + id + '"]');
+    if (mark) { mark.hidden = false; setTimeout(function () { mark.hidden = true; }, 1600); }
+  }
+
+  async function postComment(itemId) {
+    var text = (drafts[itemId] || "").trim();
+    if (!text || !who) return;
+    var btn = board.querySelector('[data-post="' + itemId + '"]');
+    if (btn) { btn.disabled = true; btn.textContent = "Posting…"; }
+    var res = await sb.from("punchlist_comments")
+      .insert({ item_id: itemId, author: who, body: text }).select("id");
+    if (btn) { btn.disabled = false; btn.textContent = "Post"; }
+    if (res.error || !res.data || !res.data.length) { fail("That comment didn't post. Try again."); return; }
+    clearFail();
+    drafts[itemId] = "";
+    await loadAll();
+  }
+
+  async function deleteComment(id) {
+    var res = await sb.from("punchlist_comments").delete().eq("id", id).select("id");
+    if (res.error) { fail("Couldn't delete that comment."); return; }
+    clearFail();
+    await loadAll();
+  }
+
+  // ---------- add a punch ----------
+  var form = document.getElementById("newform");
+  var nfStatus = document.getElementById("nf-status");
+  nfStatus.innerHTML = Object.keys(LABELS).map(function (k) {
+    return '<option value="' + k + '"' + (k === "ready" ? " selected" : "") + ">" + esc(LABELS[k]) + "</option>";
+  }).join("");
+
+  document.getElementById("add-toggle").addEventListener("click", function () {
+    form.hidden = !form.hidden;
+    if (!form.hidden) document.getElementById("nf-title").focus();
+  });
+  document.getElementById("nf-cancel").addEventListener("click", function () {
+    form.hidden = true; form.reset(); nfStatus.value = "ready";
+  });
+
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var err = document.getElementById("nf-error");
+    var title = document.getElementById("nf-title").value.trim();
+    err.hidden = true;
+    if (!title) { err.textContent = "Give it a title first."; err.hidden = false; return; }
+    var save = document.getElementById("nf-save");
+    save.disabled = true; save.textContent = "Adding…";
+    // New punches sort after everything already on the board, so an
+    // existing order nobody chose is not disturbed by one.
+    var maxOrder = items.reduce(function (m, i) { return Math.max(m, i.sort_order || 0); }, 0);
+    var res = await sb.from("punchlist_items").insert({
+      title: title,
+      note: document.getElementById("nf-note").value.trim() || null,
+      owner: document.getElementById("nf-owner").value.trim() || null,
+      source: who ? "Added by " + who : "Added here",
+      status: nfStatus.value,
+      sort_order: maxOrder + 10,
+      created_by: who || null,
+    }).select("id");
+    save.disabled = false; save.textContent = "Add it";
+    if (res.error || !res.data || !res.data.length) {
+      err.textContent = "That couldn't be saved. Try again.";
+      err.hidden = false;
+      return;
+    }
+    form.reset(); nfStatus.value = "ready"; form.hidden = true;
+    await loadAll();
+  });
+
+  // ---------- load ----------
+  async function loadAll() {
+    var r1 = await sb.from("punchlist_items").select("*").order("sort_order", { ascending: true });
+    if (r1.error) {
+      board.innerHTML = '<div class="state">Couldn\'t load the list. Reload the page to try again.</div>';
+      return;
+    }
+    items = r1.data || [];
+    var r2 = await sb.from("punchlist_comments").select("*").order("created_at", { ascending: true });
+    comments = r2.error ? [] : (r2.data || []);
+    render();
+  }
+
+  renderWho();
+  loadAll();
+  // Someone else's change shows up without a reload. Only when the tab is
+  // visible, and never while a comment is half-typed into an open thread.
+  setInterval(function () {
+    if (document.hidden) return;
+    var typing = Object.keys(drafts).some(function (k) { return (drafts[k] || "").trim(); });
+    if (typing) return;
+    loadAll();
+  }, 20000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) loadAll(); });
+})();
+</script>
+</body>
+</html>
