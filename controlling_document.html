@@ -240,7 +240,15 @@
         </div>
         <div class="letterhead-title">
           <h1>Controlling Document</h1>
-          <div class="subtitle">National Center for Economic Gardening</div>
+          <!-- Greg (10/3/26): the organisation's name was here and is
+               redundant -- the logo beside it already says NCEG. The line now
+               carries the sponsoring Program instead, in the same
+               "(CODE) Name" shape the system's emails and invoices use, so a
+               printed Controlling Document identifies both the Program
+               paying for the engagement and the engagement itself. Hidden
+               outright when an engagement has no Program on file, rather than
+               printing an empty "()". -->
+          <div class="subtitle" id="lh-program" hidden></div>
           <div class="company-name" id="lh-company-name"></div>
         </div>
       </div>
@@ -979,18 +987,29 @@
     }
     currentClient = client;
 
-    const [{ data: content }, { data: team }] = await Promise.all([
+    const [{ data: content }, { data: team }, programRes] = await Promise.all([
       sb.from("client_content").select("*").eq("client_id", clientId).maybeSingle(),
       sb.from("client_assignments").select("id, is_team_lead, users(full_name, email)").eq("client_id", clientId).not("user_id", "is", null).order("is_team_lead", { ascending: false }),
+      // Same guarded lookup discovery_call_notes.html uses -- an engagement
+      // with no Program yet resolves to null rather than failing the load.
+      client.econ_dev_company_id
+        ? sb.from("econ_dev_companies").select("code, name").eq("id", client.econ_dev_company_id).single()
+        : Promise.resolve({ data: null }),
     ]);
+    const program = (programRes && programRes.data) || null;
+    const programCode = program && (program.code || "").trim();
+    const programName = program && (program.name || "").trim();
+    const programLabel = [programCode ? `(${programCode})` : "", programName].filter(Boolean).join(" ");
     contentRow = content || {};
 
     const leadRow = (team || []).find((r) => r.is_team_lead && r.users && r.users.full_name);
     const teamLead = leadRow ? [leadRow.users.full_name, leadRow.users.email].filter(Boolean).join(", ") : "";
 
     $("back-link").href = `client_workflow_files.html?client=${client.id}&doc=controlling`;
+    $("lh-program").textContent = programLabel;
+    $("lh-program").hidden = !programLabel;
     $("lh-company-name").textContent = client.name || "";
-    document.title = `Controlling Document — ${client.name || ""}`;
+    document.title = [`Controlling Document`, [programCode ? `(${programCode})` : "", client.name || ""].filter(Boolean).join(" ")].filter(Boolean).join(" — ");
     $("ov-company-name").textContent = client.name || "";
     $("ov-team-lead").textContent = teamLead || "—";
 
