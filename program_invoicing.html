@@ -283,6 +283,16 @@
   .month-nav-btn { background: #eef1f4; color: var(--text); padding: 8px 10px; border-radius: 6px; font-size: 15px; line-height: 1; }
   .month-nav-btn:hover { background: #e2e6ea; }
 
+  /* Billed summary (Greg, 10/3/26, for Rita): "how much we billed a
+     program for any month, for MTD and for YTD." */
+  .bs-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .bs-controls .bs-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 600; }
+  .bs-controls input[type="month"] { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13.5px; font-family: inherit; }
+  .bs-this-month { background: #eef1f4; color: var(--text); padding: 8px 13px; border-radius: 6px; font-size: 13px; font-weight: 600; }
+  .bs-this-month:hover { background: #e2e6ea; }
+  .bs-total-row td { font-weight: 700; background: #f4f7fa; border-top: 2px solid var(--border); }
+  .bs-zero { color: var(--muted); }
+
   .rate-input-wrap { display: flex; align-items: center; gap: 6px; }
   .rate-input-wrap .rate-prefix { color: var(--muted); font-size: 13.5px; }
   .rate-input-wrap input {
@@ -672,6 +682,40 @@
         </div>
         <div id="preview-empty" class="empty-note hidden">Pick a Program and month to preview billable activity.</div>
       </div>
+    </div>
+
+    <!-- Greg (10/3/26): "what if we add a section like this on the Program
+         Invoices. That way Rita could see how much we billed a program for
+         any month, for MTD and for YTD."
+         Built from the invoices themselves rather than from hours: what was
+         BILLED is what went out on an invoice, and recomputing it from
+         logged hours would quietly disagree with the paperwork the moment
+         anything was adjusted by hand. Voided invoices are excluded, which
+         is the only reading of "billed" that stays true after a void.
+         No new query -- loadPastInvoices() already holds every invoice with
+         its Program, so this is a rollup of what is in memory. -->
+    <div id="billed-summary-section" class="card">
+      <h2>Billed by Program</h2>
+      <div class="card-hint">What each Program was invoiced. Voided invoices are not counted.</div>
+      <div class="bs-controls">
+        <span class="bs-label">Month</span>
+        <button type="button" class="month-nav-btn" id="bs-month-prev" title="Previous month" aria-label="Previous month">&#8249;</button>
+        <input type="month" id="bs-month" />
+        <button type="button" class="month-nav-btn" id="bs-month-next" title="Next month" aria-label="Next month">&#8250;</button>
+        <button type="button" class="bs-this-month" id="bs-this-month">This Month</button>
+      </div>
+      <div class="table-scroll">
+        <table class="pi-table" id="billed-summary-table">
+          <thead><tr>
+            <th>Program</th>
+            <th class="num" id="bs-col-month">This Month</th>
+            <th class="num" id="bs-col-ytd">Year to Date</th>
+            <th class="num">All Time</th>
+          </tr></thead>
+          <tbody id="billed-summary-tbody"></tbody>
+        </table>
+      </div>
+      <div id="billed-summary-empty" class="empty-note hidden">No Program invoices have been generated yet.</div>
     </div>
 
     <div id="past-invoices-section" class="card">
@@ -1130,6 +1174,15 @@
     $("pi-setup-fee").addEventListener("change", saveSetupFeeForSelectedProgram);
     wireSplitCountyField();
     $("pi-month").addEventListener("change", refreshPreview);
+    $("bs-month").value = thisMonthValue();
+    $("bs-month").addEventListener("change", renderBilledSummary);
+    $("bs-month-prev").addEventListener("click", () => shiftBilledMonth(-1));
+    $("bs-month-next").addEventListener("click", () => shiftBilledMonth(1));
+    $("bs-this-month").addEventListener("click", () => {
+      $("bs-month").value = thisMonthValue();
+      renderBilledSummary();
+    });
+
     $("pi-month-prev").addEventListener("click", () => shiftMonth(-1));
     $("pi-month-next").addEventListener("click", () => shiftMonth(1));
     $("pi-generate-btn").addEventListener("click", openConfirmModal);
@@ -1614,6 +1667,92 @@
     if (error) { showBanner("Couldn't load past invoices: " + error.message, "error"); return; }
     pastInvoices = data || [];
     renderPastInvoicesTable();
+    renderBilledSummary();
+  }
+
+  // ---------- Billed by Program (Greg, 10/3/26, for Rita) ----------
+  //
+  // Three columns, because "for any month, for MTD and for YTD" is two
+  // questions, not three: for an invoice, month-to-date and "that month"
+  // are the same figure unless the month chosen is the current one. So the
+  // month column answers both -- it is headed "Month to Date" while the
+  // current month is selected and named outright ("September 2026") for any
+  // other -- and Year to Date runs January through the selected month of
+  // that year. All Time is there because it costs nothing and is the
+  // question that follows.
+  //
+  // Billing month, not invoice date: an invoice raised in October for
+  // September's work belongs to September, which is how Rita reconciles.
+  function billedMonthValue() {
+    var el = $("bs-month");
+    return (el && el.value) || thisMonthValue();
+  }
+
+  function thisMonthValue() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+  }
+
+  function renderBilledSummary() {
+    var tbody = $("billed-summary-tbody");
+    if (!tbody) return;
+    var month = billedMonthValue();
+    var year = month.slice(0, 4);
+    var isThisMonth = month === thisMonthValue();
+
+    $("bs-col-month").textContent = isThisMonth ? "Month to Date" : monthLongLabel(month);
+    $("bs-col-ytd").textContent = "Year to Date " + year;
+
+    var live = pastInvoices.filter(function (inv) { return !inv.voided; });
+    $("billed-summary-table").classList.toggle("hidden", !live.length);
+    $("billed-summary-empty").classList.toggle("hidden", !!live.length);
+    if (!live.length) { tbody.innerHTML = ""; return; }
+
+    var byProgram = {};
+    live.forEach(function (inv) {
+      var p = inv.econ_dev_companies;
+      var name = (p && p.name) || "Unknown Program";
+      var bm = inv.billing_month || "";
+      var amt = Number(inv.total_due) || 0;
+      var row = byProgram[name] || (byProgram[name] = { name: name, month: 0, ytd: 0, all: 0 });
+      row.all += amt;
+      if (bm === month) row.month += amt;
+      // Year to date means January through the selected month, so a later
+      // month of the same year is not in it -- looking back at March should
+      // not sweep in what was billed in November.
+      if (bm.slice(0, 4) === year && bm <= month) row.ytd += amt;
+    });
+
+    var rows = Object.keys(byProgram).map(function (k) { return byProgram[k]; })
+      .sort(function (a, b) { return b.ytd - a.ytd || a.name.localeCompare(b.name); });
+
+    var cell = function (n) {
+      return n ? money(n) : '<span class="bs-zero">&mdash;</span>';
+    };
+
+    tbody.innerHTML = rows.map(function (r) {
+      return "<tr>" +
+        "<td>" + escapeHtml(r.name) + "</td>" +
+        '<td class="num">' + cell(r.month) + "</td>" +
+        '<td class="num">' + cell(r.ytd) + "</td>" +
+        '<td class="num">' + cell(r.all) + "</td>" +
+      "</tr>";
+    }).join("");
+
+    var sum = function (f) { return rows.reduce(function (t, r) { return t + r[f]; }, 0); };
+    tbody.innerHTML += '<tr class="bs-total-row">' +
+      "<td>All Programs</td>" +
+      '<td class="num">' + cell(sum("month")) + "</td>" +
+      '<td class="num">' + cell(sum("ytd")) + "</td>" +
+      '<td class="num">' + cell(sum("all")) + "</td>" +
+    "</tr>";
+  }
+
+  function shiftBilledMonth(delta) {
+    var parts = billedMonthValue().split("-").map(Number);
+    var d = new Date(parts[0], parts[1] - 1 + delta, 1);
+    $("bs-month").value = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    renderBilledSummary();
   }
 
   // Invoice # sorts as {year, sequence} rather than plain text, so
