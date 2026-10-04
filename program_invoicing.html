@@ -295,6 +295,12 @@
 
   .rate-input-wrap { display: flex; align-items: center; gap: 6px; }
   .rate-input-wrap .rate-prefix { color: var(--muted); font-size: 13.5px; }
+  /* Punch list #10 (10/4/26). A Program with no billing rate of its own
+     still shows $115 in the box, because that is what it will be invoiced
+     at -- but an assumed default and a contracted rate looked identical,
+     which is the whole hazard that item was about. This says which one you
+     are looking at. */
+  .rate-default-note { margin-top: 5px; font-size: 11.5px; line-height: 1.35; color: #8a6400; background: #fdf6e3; border: 1px solid #f0e0b0; border-radius: 5px; padding: 5px 8px; max-width: 230px; }
   .rate-input-wrap input {
     width: 84px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13.5px; font-family: inherit; color: var(--text); background: #fff;
   }
@@ -635,6 +641,9 @@
             <div class="rate-input-wrap">
               <span class="rate-prefix">$</span>
               <input type="number" id="pi-rate" min="0" step="0.01" disabled />
+            </div>
+            <div class="rate-default-note" id="pi-rate-default-note" hidden>
+              No rate saved for this Program &mdash; invoicing at the $115 default. Type the contracted rate to set it.
             </div>
           </div>
           <!-- Greg (9/2/26): the Setup Fee is a property of the PROGRAM --
@@ -1000,9 +1009,15 @@
     const programId = $("pi-program").value;
     const program = programs.find((p) => p.id === programId);
     $("pi-rate").disabled = !program;
+    const usingDefault = !!program && program.billing_hourly_rate == null;
     $("pi-rate").value = program
-      ? (program.billing_hourly_rate != null ? Number(program.billing_hourly_rate) : DEFAULT_BILLING_RATE)
+      ? (usingDefault ? DEFAULT_BILLING_RATE : Number(program.billing_hourly_rate))
       : "";
+    // Punch list #10: the number in the box is the number that will be
+    // invoiced either way, so the box alone cannot tell Rita whether this
+    // Program has a rate on file or is riding the default. Saying so is the
+    // difference between a deliberate $115 and nobody having set one.
+    $("pi-rate-default-note").hidden = !usingDefault;
   }
 
   async function saveRateForSelectedProgram() {
