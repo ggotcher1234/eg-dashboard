@@ -88,3 +88,16 @@ select c.id, btrim(c.delay_reason), null, coalesce(c.updated_at, now())
 from clients c
 where coalesce(btrim(c.delay_reason), '') <> ''
   and not exists (select 1 from client_delay_notes n where n.client_id = c.id);
+
+-- ---------- 139 amendment (10/4/26) ----------
+-- Greg, on the first cut: "there is no way to edit the comment I was
+-- writing." The save fired on blur, so switching to a calendar to look up a
+-- date committed a half-written note and nothing could then be done about
+-- it. Saving is an explicit button now, which is the real fix, but a log
+-- where a mistake is permanent is still too sharp an edge: an author can
+-- remove their own note, and a super admin any of them.
+--
+-- Altered in place rather than dropped and recreated -- alter policy is not
+-- a destructive statement and does not hang on this connection.
+alter policy client_delay_notes_delete on client_delay_notes
+  using (is_super_admin() or author_id = auth.uid());
