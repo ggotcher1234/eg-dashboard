@@ -348,10 +348,38 @@
      bubble, no pointer and no hover, and cannot be mistaken for the
      control. */
   .overdue-badge {
-    display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 5px;
+    display: inline-flex; align-items: center; gap: 7px; padding: 2px 9px; border-radius: 5px;
     background: var(--danger); color: #fff; font-size: 10.5px; font-weight: 800;
     text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0;
+    border: none; font-family: inherit; cursor: pointer;
   }
+  .overdue-badge:hover { background: var(--danger-dark); }
+  .overdue-badge:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+  .ob-comments { display: inline-flex; align-items: center; gap: 3px; padding-left: 7px; border-left: 1px solid rgba(255,255,255,0.35); font-size: 10px; letter-spacing: 0; }
+  .ob-comments svg { display: block; }
+
+  /* The comments dialog, the same one the Engagements list opens. Both
+     pages read and write client_delay_notes, so a comment written in
+     either shows in both. */
+  .dm-modal { background: #fff; border-radius: 12px; width: 560px; max-width: 100%; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 16px 40px rgba(0,0,0,0.22); }
+  .dm-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 22px 14px; border-bottom: 1px solid var(--border); }
+  .dm-head h3 { margin: 0 0 2px; font-size: 16px; }
+  .dm-head .dm-sub { font-size: 12.5px; color: var(--muted); }
+  .dm-x { background: none; border: none; font-size: 20px; line-height: 1; color: var(--muted); cursor: pointer; padding: 4px; }
+  .dm-list { padding: 16px 22px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; }
+  .dm-empty { margin: 0; color: var(--muted); font-size: 13.5px; font-style: italic; }
+  .dm-note-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+  .dm-when { font-size: 11.5px; font-weight: 700; color: var(--text); }
+  .dm-who { font-size: 11.5px; color: var(--muted); }
+  .dm-del { margin-left: auto; border: none; background: none; padding: 0 4px; font-size: 14px; line-height: 1; color: var(--muted); cursor: pointer; border-radius: 4px; }
+  .dm-del:hover { color: var(--danger); background: #fdecea; }
+  .dm-body { font-size: 13.5px; line-height: 1.45; white-space: pre-wrap; }
+  .dm-foot { padding: 14px 22px 18px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+  .dm-foot textarea { width: 100%; box-sizing: border-box; min-height: 68px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 7px; font-family: inherit; font-size: 13.5px; line-height: 1.45; resize: vertical; }
+  .dm-foot textarea:focus { outline: none; border-color: var(--navy-light); }
+  .dm-actions { display: flex; align-items: center; gap: 10px; }
+  .dm-status { font-size: 12px; color: var(--muted); }
+  .dm-status.error { color: var(--danger); }
   /* The overdue note's question, back as visible text rather than the
      textarea placeholder it briefly became -- a placeholder disappears the
      moment someone types, taking the prompt with it (Greg, 9/6/26). This
@@ -1081,6 +1109,31 @@
      because picking a name again undoes it. -->
 
 <!-- Log hours -->
+<!-- Why-overdue comments. The same dialog the Engagements list opens, on
+     the same client_delay_notes rows, so a comment written on either page
+     shows on both. Saved by the Save button only -- never on blur, which is
+     what stored a half-written note when a calendar took the focus. -->
+<div class="overlay" id="delay-overlay">
+  <div class="dm-modal" role="dialog" aria-modal="true" aria-labelledby="delay-title">
+    <div class="dm-head">
+      <div>
+        <h3 id="delay-title">Why overdue</h3>
+        <div class="dm-sub" id="delay-sub"></div>
+      </div>
+      <button type="button" class="dm-x" id="delay-close">&times;</button>
+    </div>
+    <div class="dm-list" id="delay-list"></div>
+    <div class="dm-foot" id="delay-foot">
+      <textarea id="delay-new" maxlength="300" placeholder="Add a comment&hellip;"></textarea>
+      <div class="dm-actions">
+        <button type="button" class="btn-primary" id="delay-save">Save comment</button>
+        <button type="button" class="btn-secondary" id="delay-cancel">Cancel</button>
+        <span class="dm-status" id="delay-status"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="tw-log-hours-overlay">
   <div class="modal" style="width:360px;">
     <h3>Log hours</h3>
@@ -1560,6 +1613,12 @@
     }
     $("cm-team-lead").textContent = `Team Lead: ${teamLead || "—"}`;
     isTeamLeadHere = (assignRows || []).some((r) => r.is_team_lead && r.user_id === currentUser.id);
+    // The Overdue pill carries a comment count, so it is drawn once more
+    // when the comments arrive. Not awaited: the header is already on
+    // screen by now and should not wait on a count to finish rendering.
+    // renderStatusAge also needs isTeamLeadHere, which is only known here,
+    // so this second pass settles the tooltip as well.
+    loadDelayNotes().then(() => { if (activeClient) renderStatusAge(activeClient); });
     renderStatusToggle(client);
 
     renderNav(client);
@@ -2068,6 +2127,153 @@
     });
   }
 
+  // ---------- Why-overdue comments (shared with the Engagements list) ----------
+  // Same table, same dialog, same rules. A comment written here shows on the
+  // Engagements list and the other way round -- there is one history per
+  // engagement, not one per page.
+  let delayNotes = []; // this engagement's comments, newest first
+
+  const COMMENT_ICON = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
+
+  function canExplainDelay() { return isSuperAdmin || isTeamLeadHere; }
+
+  async function loadDelayNotes() {
+    delayNotes = [];
+    if (!activeClient) return;
+    const { data, error } = await sb
+      .from("client_delay_notes")
+      .select("id, body, created_at, author_id, users(full_name)")
+      .eq("client_id", activeClient.id)
+      .order("created_at", { ascending: false });
+    if (error) return; // the dialog still opens; only the history is missing
+    delayNotes = (data || []).map((n) => ({
+      id: n.id,
+      body: n.body,
+      created_at: n.created_at,
+      author: (n.users && n.users.full_name) || "",
+      canDelete: isSuperAdmin || (!!currentUser && n.author_id === currentUser.id),
+    }));
+  }
+
+  function delayNoteDate(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return "";
+    const sameYear = d.getFullYear() === new Date().getFullYear();
+    return d.toLocaleDateString(undefined,
+      sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  function delayBadgeHtml() {
+    const n = delayNotes.length;
+    const title = n
+      ? `Why overdue — ${n} comment${n === 1 ? "" : "s"}`
+      : (canExplainDelay() ? "Why overdue — add a comment" : "Why overdue — no comments yet");
+    return `<button type="button" class="overdue-badge" id="cm-overdue-badge" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">` +
+      `Overdue<span class="ob-comments">${COMMENT_ICON}${n || ""}</span></button>`;
+  }
+
+  function renderDelayList() {
+    const host = $("delay-list");
+    if (!delayNotes.length) { host.innerHTML = '<p class="dm-empty">No comments yet.</p>'; return; }
+    host.innerHTML = delayNotes.map((n) => `
+      <div class="dm-note">
+        <div class="dm-note-head">
+          <span class="dm-when">${escapeHtml(delayNoteDate(n.created_at))}</span>
+          ${n.author ? `<span class="dm-who">${escapeHtml(n.author)}</span>` : ""}
+          ${n.canDelete ? `<button type="button" class="dm-del" data-delay-del="${n.id}" title="Remove this comment">&times;</button>` : ""}
+        </div>
+        <div class="dm-body">${escapeHtml(n.body)}</div>
+      </div>`).join("");
+  }
+
+  function refreshOverdueBadge() {
+    const badge = document.getElementById("cm-overdue-badge");
+    if (!badge) return;
+    const holder = document.createElement("div");
+    holder.innerHTML = delayBadgeHtml();
+    badge.replaceWith(holder.firstElementChild);
+  }
+
+  function openDelayModal() {
+    if (!activeClient) return;
+    $("delay-sub").textContent = activeClient.name || "";
+    $("delay-new").value = "";
+    $("delay-status").textContent = "";
+    $("delay-status").classList.remove("error");
+    $("delay-foot").style.display = canExplainDelay() ? "" : "none";
+    renderDelayList();
+    $("delay-overlay").classList.add("open");
+    if (canExplainDelay()) $("delay-new").focus();
+  }
+  function closeDelayModal() {
+    // Unsaved text is discarded, which is only safe because nothing here
+    // saves by itself.
+    $("delay-overlay").classList.remove("open");
+  }
+
+  document.addEventListener("click", (e) => {
+    if (e.target.closest && e.target.closest("#cm-overdue-badge")) openDelayModal();
+  });
+
+  document.addEventListener("click", async (e) => {
+    const del = e.target.closest ? e.target.closest("[data-delay-del]") : null;
+    if (!del || !activeClient) return;
+    if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Remove?"; return; }
+    del.disabled = true;
+    const noteId = del.dataset.delayDel;
+    const { error } = await sb.from("client_delay_notes").delete().eq("id", noteId);
+    if (error) {
+      del.disabled = false;
+      $("delay-status").classList.add("error");
+      $("delay-status").textContent = "Couldn't remove: " + error.message;
+      return;
+    }
+    delayNotes = delayNotes.filter((n) => n.id !== noteId);
+    const newest = delayNotes[0];
+    await sb.from("clients").update({ delay_reason: newest ? newest.body : null }).eq("id", activeClient.id);
+    activeClient.delay_reason = newest ? newest.body : null;
+    renderDelayList();
+    refreshOverdueBadge();
+  });
+
+  $("delay-close").addEventListener("click", closeDelayModal);
+  $("delay-cancel").addEventListener("click", closeDelayModal);
+  $("delay-overlay").addEventListener("click", (e) => { if (e.target.id === "delay-overlay") closeDelayModal(); });
+
+  $("delay-save").addEventListener("click", async () => {
+    const body = $("delay-new").value.trim();
+    if (!body || !activeClient) return;
+    const btn = $("delay-save");
+    btn.disabled = true;
+    $("delay-status").classList.remove("error");
+    $("delay-status").textContent = "Saving…";
+    // .select() -- a write the database refuses must not read back as saved.
+    const { data, error } = await sb.from("client_delay_notes")
+      .insert({ client_id: activeClient.id, body, author_id: currentUser ? currentUser.id : null })
+      .select("id, created_at");
+    if (error || !data || !data.length) {
+      btn.disabled = false;
+      $("delay-status").classList.add("error");
+      $("delay-status").textContent = error ? "Couldn't save: " + error.message : "Not saved — try again.";
+      return;
+    }
+    await sb.from("clients").update({ delay_reason: body }).eq("id", activeClient.id);
+    activeClient.delay_reason = body;
+    delayNotes.unshift({
+      id: data[0].id,
+      body,
+      created_at: data[0].created_at || new Date().toISOString(),
+      author: (currentUser && currentUser.full_name) || "",
+      canDelete: true,
+    });
+    $("delay-new").value = "";
+    btn.disabled = false;
+    $("delay-status").textContent = "Saved.";
+    setTimeout(() => { if ($("delay-status").textContent === "Saved.") $("delay-status").textContent = ""; }, 2000);
+    renderDelayList();
+    refreshOverdueBadge();
+  });
+
   function daysSince(iso) {
     if (!iso) return 0;
     return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24)));
@@ -2126,12 +2332,12 @@
       dot.title = `In Progress for ${dayWord} — Overdue`;
       note.classList.remove("tier-amber");
       note.classList.add("tier-red");
-      // innerHTML rather than textContent: the status word is now the same
-      // red pill the Engagements list flags the engagement with, so the two
-      // pages read as one thing. dayWord is built from a number here, so
-      // there is nothing in it to escape.
+      // innerHTML rather than textContent: the status word is the same red
+      // pill the Engagements list uses, and the same control -- it carries
+      // the comment count and opens the comments dialog. dayWord is built
+      // from a number, so there is nothing in it to escape.
       $("cm-delay-note-label").innerHTML =
-        `<span>In Progress for ${dayWord}</span><span class="overdue-badge">Overdue</span>`;
+        `<span>In Progress for ${dayWord}</span>${delayBadgeHtml()}`;
       // The question that used to sit here is asked on the Engagements list
       // now, where it can be answered on the spot.
       $("cm-delay-note-sub").classList.add("hidden");
