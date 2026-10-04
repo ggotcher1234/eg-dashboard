@@ -680,6 +680,7 @@
   .inv-modal-body { padding: 22px 24px; }
   .inv-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
   .inv-field { flex: 1; min-width: 150px; }
+  .inv-cc-field { margin: 14px 0 0; }
   .inv-field label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 4px; }
   .inv-field input, .inv-field select { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; font-size: 13.5px; font-family: inherit; }
   .inv-field input:focus, .inv-field select:focus { outline: none; border-color: var(--navy-light); }
@@ -994,6 +995,14 @@
         <span>Total</span>
         <span id="inv-total">$0.00</span>
       </div>
+    </div>
+    <!-- Punch list #15 (10/4/26): this was the one live composer with no CC
+         line. "Email to Rita" sent to Rita and nobody else, with no way to
+         copy anyone from here -- you had to send it and then forward it.
+         Remembered between invoices like the rest of the letterhead. -->
+    <div class="inv-field inv-cc-field">
+      <label for="inv-cc">CC <span style="text-transform:none; font-weight:400;">(optional)</span></label>
+      <input type="text" id="inv-cc" placeholder="Separate several addresses with commas" />
     </div>
     <div class="inv-actions">
       <button type="button" class="btn-secondary" id="inv-copy">Copy for Outlook</button>
@@ -2497,6 +2506,7 @@
     $("inv-from-website").value = prefs.fromWebsite ?? "";
 
     $("inv-to").value = prefs.billTo ?? "National Center for Economic Gardening";
+    $("inv-cc").value = prefs.cc ?? "";
 
     $("inv-status").textContent = "";
     $("inv-status").classList.remove("error");
@@ -2714,6 +2724,7 @@
       fromPhone: $("inv-from-phone").value.trim(),
       fromWebsite: $("inv-from-website").value.trim(),
       billTo: $("inv-to").value.trim(),
+      cc: $("inv-cc").value.trim(),
       terms: $("inv-terms").value.trim(),
       nextNumber: bumped || current,
     });
@@ -2746,7 +2757,11 @@
     if (!invRitaEmail) return;
     const subject = `Invoice ${$("inv-number").value.trim()} — ${invoiceMonthLabel($("inv-month").value)}`;
     persistInvoicePrefsOnSend();
-    window.location.href = `mailto:${encodeURIComponent(invRitaEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(buildInvoicePlainText())}`;
+    // Each address encoded on its own: encodeURIComponent on the whole
+    // string would turn the separating commas into %2C and mail clients
+    // then read the lot as one malformed address.
+    const cc = $("inv-cc").value.split(",").map((x) => x.trim()).filter(Boolean).map(encodeURIComponent).join(",");
+    window.location.href = `mailto:${encodeURIComponent(invRitaEmail)}?${cc ? `cc=${cc}&` : ""}subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(buildInvoicePlainText())}`;
   });
 
   $("inv-close").addEventListener("click", () => $("inv-overlay").classList.remove("open"));
