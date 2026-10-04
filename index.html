@@ -387,19 +387,32 @@
   .cr-overdue-input:focus { outline: none; border-color: var(--danger); }
   .cr-overdue-input.saving { opacity: 0.6; }
   .cr-overdue-saved { font-size: 10.5px; color: var(--accent-dark); }
-  /* Punch list #13 (10/4/26): the answers already given, newest first. Set
-     back from the red of the live input -- these are the record, not the
-     thing being filled in. */
-  .cr-delay-history { display: flex; flex-direction: column; gap: 3px; width: 100%; min-width: 0; }
-  .cr-delay-note { font-size: 11.5px; line-height: 1.35; color: var(--text); }
-  .cr-delay-when { font-weight: 700; color: var(--muted); }
-  .cr-delay-more { align-self: flex-start; border: none; background: none; padding: 0; font-family: inherit; font-size: 10.5px; font-weight: 700; color: var(--muted); cursor: pointer; text-decoration: underline; }
-  .cr-delay-more:hover { color: var(--text); }
-  .cr-delay-older { display: flex; flex-direction: column; gap: 3px; }
-  /* A class with display: flex outranks the browser's own [hidden] rule, so
-     without this the "earlier" notes are never actually hidden. Same trap
-     that left the punch list's add form open on load. */
-  .cr-delay-older[hidden] { display: none; }
+  /* Punch list #13, second pass (10/4/26). Greg: "it makes the rows too
+     wide... all that shows is Overdue and the text Comments which is a link
+     to a popup." The history and the writing box both moved into a dialog,
+     so the column is back to a badge and one short link whatever the
+     engagement's history looks like. */
+  .cr-delay-link { border: none; background: none; padding: 0; font-family: inherit; font-size: 11.5px; font-weight: 700; color: var(--danger-dark); cursor: pointer; text-decoration: underline; text-align: left; }
+  .cr-delay-link:hover { color: var(--text); }
+
+  .dm-modal { background: #fff; border-radius: 12px; width: 560px; max-width: 100%; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 16px 40px rgba(0,0,0,0.22); }
+  .dm-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 22px 14px; border-bottom: 1px solid var(--border); }
+  .dm-head h3 { margin: 0 0 2px; font-size: 16px; }
+  .dm-head .dm-sub { font-size: 12.5px; color: var(--muted); }
+  .dm-list { padding: 16px 22px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; }
+  .dm-empty { margin: 0; color: var(--muted); font-size: 13.5px; font-style: italic; }
+  .dm-note-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+  .dm-when { font-size: 11.5px; font-weight: 700; color: var(--text); }
+  .dm-who { font-size: 11.5px; color: var(--muted); }
+  .dm-del { margin-left: auto; border: none; background: none; padding: 0 4px; font-size: 14px; line-height: 1; color: var(--muted); cursor: pointer; border-radius: 4px; }
+  .dm-del:hover { color: var(--danger); background: #fdecea; }
+  .dm-body { font-size: 13.5px; line-height: 1.45; white-space: pre-wrap; }
+  .dm-foot { padding: 14px 22px 18px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+  .dm-foot textarea { width: 100%; box-sizing: border-box; min-height: 68px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 7px; font-family: inherit; font-size: 13.5px; line-height: 1.45; resize: vertical; }
+  .dm-foot textarea:focus { outline: none; border-color: var(--navy-light); }
+  .dm-actions { display: flex; align-items: center; gap: 10px; }
+  .dm-status { font-size: 12px; color: var(--muted); }
+  .dm-status.error { color: var(--danger); }
   .empty-note { padding: 26px; text-align: center; color: var(--muted); font-size: 13.5px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
   @media (max-width: 720px) {
     .client-row { display: block; }
@@ -922,6 +935,32 @@
 </div>
 
 <!-- Create Invoice -->
+<!-- Why-overdue comments. A dialog rather than fields in the row: the
+     history belongs somewhere it can be read in full, and -- the reason it
+     moved -- the note is saved by pressing Save, never by the box losing
+     focus. The first version committed on blur, so opening a calendar in
+     another window stored a half-written sentence. -->
+<div class="overlay" id="delay-overlay">
+  <div class="dm-modal" role="dialog" aria-modal="true" aria-labelledby="delay-title">
+    <div class="dm-head">
+      <div>
+        <h3 id="delay-title">Why overdue</h3>
+        <div class="dm-sub" id="delay-sub"></div>
+      </div>
+      <button type="button" class="inv-modal-close" id="delay-close">&times;</button>
+    </div>
+    <div class="dm-list" id="delay-list"></div>
+    <div class="dm-foot" id="delay-foot">
+      <textarea id="delay-new" maxlength="300" placeholder="Add a comment&hellip;"></textarea>
+      <div class="dm-actions">
+        <button type="button" class="btn-primary" id="delay-save">Save comment</button>
+        <button type="button" class="btn-secondary" id="delay-cancel">Cancel</button>
+        <span class="dm-status" id="delay-status"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="inv-overlay">
   <div class="inv-modal">
     <div class="inv-modal-header">
@@ -1528,7 +1567,7 @@
     delayNotesByClient = {};
     const { data, error } = await sb
       .from("client_delay_notes")
-      .select("id, client_id, body, created_at, users(full_name)")
+      .select("id, client_id, body, created_at, author_id, users(full_name)")
       .order("created_at", { ascending: false });
     if (error) return; // the input still works; only the history is missing
     for (const n of data || []) {
@@ -1537,6 +1576,10 @@
         body: n.body,
         created_at: n.created_at,
         author: (n.users && n.users.full_name) || "",
+        // Your own comment, or anything at all if you are an admin. The
+        // database enforces the same rule; this only decides whether the
+        // × is drawn.
+        canDelete: isSuperAdminUser || (!!currentUser && n.author_id === currentUser.id),
       });
     }
   }
@@ -1549,26 +1592,20 @@
       sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
   }
 
-  // Newest first, with everything older folded behind a count. One answer
-  // is the common case and shows on its own; a slipping engagement with
-  // four months of explanations is exactly the history Chris wanted kept,
-  // but it cannot be allowed to push the row open by default.
+  // Every note, newest first, for the Comments popup. Nothing is folded away
+  // here: the popup exists precisely so the whole history can be read.
   function delayHistoryHtml(clientId) {
     const notes = delayNotesByClient[clientId] || [];
-    if (!notes.length) return "";
-    const line = (n) => `<div class="cr-delay-note">` +
-        `<span class="cr-delay-when">${escapeHtml(delayNoteDate(n.created_at))}` +
-        (n.author ? ` &middot; ${escapeHtml(n.author)}` : "") + `</span> ` +
-        `${escapeHtml(n.body)}</div>`;
-    const older = notes.slice(1);
-    return `<div class="cr-delay-history" data-delay-history-for="${clientId}">` +
-      line(notes[0]) +
-      (older.length
-        ? `<button type="button" class="cr-delay-more" data-delay-more-for="${clientId}">` +
-            `${older.length} earlier</button>` +
-          `<div class="cr-delay-older" data-delay-older-for="${clientId}" hidden>${older.map(line).join("")}</div>`
-        : "") +
-    `</div>`;
+    if (!notes.length) return `<p class="dm-empty">No comments yet.</p>`;
+    return notes.map((n) => `
+      <div class="dm-note">
+        <div class="dm-note-head">
+          <span class="dm-when">${escapeHtml(delayNoteDate(n.created_at))}</span>
+          ${n.author ? `<span class="dm-who">${escapeHtml(n.author)}</span>` : ""}
+          ${n.canDelete ? `<button type="button" class="dm-del" data-delay-del="${n.id}" title="Remove this comment">&times;</button>` : ""}
+        </div>
+        <div class="dm-body">${escapeHtml(n.body)}</div>
+      </div>`).join("");
   }
 
   // Start Date column (Chris, 9/4/26) -- the date the intake application
@@ -2068,18 +2105,11 @@
         <div class="cr-days-in-progress">${lastCellHtml}</div>
         <div class="cr-overdue-cell">${overdue ? `
           <span class="overdue-badge">Overdue</span>
-          ${delayHistoryHtml(c.id)}
-          ${canExplainDelay(c)
-            // Punch list #13: the box starts EMPTY and adds an entry. It
-            // used to open pre-filled with the previous answer, which made
-            // overwriting it the path of least resistance -- you had to
-            // delete last month's words to type this month's.
-            ? `<textarea class="cr-overdue-input" rows="1" maxlength="300" data-delay-for="${c.id}"
-                 placeholder="${(delayNotesByClient[c.id] || []).length ? "Add an update&hellip;" : "Why is it taking longer than expected?"}"
-                 title="Dated and signed with your name. Earlier notes are kept."></textarea>
-               <span class="cr-overdue-saved" data-delay-saved-for="${c.id}" style="display:none;">Saved</span>`
-            : ((delayNotesByClient[c.id] || []).length ? "" :
-               (overdueReason ? `<span class="cr-overdue-reason">${escapeHtml(overdueReason)}</span>` : ""))}
+          <button type="button" class="cr-delay-link" data-delay-open="${c.id}">${
+            (delayNotesByClient[c.id] || []).length
+              ? `Comments (${(delayNotesByClient[c.id] || []).length})`
+              : (canExplainDelay(c) ? "Add a comment" : "No comments")
+          }</button>
         ` : ""}</div>
       </div>
     `;
@@ -2096,100 +2126,7 @@
       });
     });
 
-    container.querySelectorAll("[data-delay-for]").forEach((el) => {
-      const id = el.dataset.delayFor;
-      const savedMark = container.querySelector(`[data-delay-saved-for="${id}"]`);
-      let onFocus = el.value;
-
-      // Grow with the text rather than scrolling a one-line box -- these
-      // answers are a sentence, and a note you cannot read back is a note
-      // nobody trusts.
-      const autosize = () => { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; };
-      autosize();
-
-      el.addEventListener("click", (e) => e.stopPropagation());
-      el.addEventListener("focus", () => { onFocus = el.value; });
-      el.addEventListener("input", () => {
-        autosize();
-        if (savedMark) savedMark.style.display = "none";
-      });
-      // Enter commits rather than adding a line -- it is one answer, not a
-      // document. Shift+Enter still breaks the line.
-      el.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); el.blur(); }
-        if (e.key === "Escape") { el.value = ""; autosize(); el.blur(); }
-      });
-
-      el.addEventListener("blur", async () => {
-        const reason = el.value.trim();
-        // An empty box is not an edit. Clearing the field no longer erases
-        // anything either -- the history lives in its own rows now, so
-        // there is nothing here to blank out.
-        if (!reason) { el.value = ""; autosize(); return; }
-        el.classList.add("saving");
-        // .select() -- this note is the record of why an engagement is late,
-        // so a write the database refuses must not come back as "Saved".
-        const { data, error } = await sb.from("client_delay_notes")
-          .insert({ client_id: id, body: reason, author_id: currentUser ? currentUser.id : null })
-          .select("id, created_at");
-        if (error || !data || !data.length) {
-          el.classList.remove("saving");
-          showBanner(error ? "Couldn't save that note: " + error.message
-                           : "That note wasn't saved — reload the page and try again.", "error");
-          return;
-        }
-        // Mirror the newest answer onto the client row as well, so anything
-        // still reading clients.delay_reason shows the current one. Its
-        // failure is not the note failing -- the note is already stored.
-        await sb.from("clients").update({ delay_reason: reason }).eq("id", id);
-        el.classList.remove("saving");
-
-        const row = allClients.find((x) => x.id === id);
-        if (row) row.delay_reason = reason;
-        (delayNotesByClient[id] = delayNotesByClient[id] || []).unshift({
-          id: data[0].id,
-          body: reason,
-          created_at: data[0].created_at || new Date().toISOString(),
-          author: (currentUser && currentUser.full_name) || "",
-        });
-        el.value = "";
-        onFocus = "";
-        autosize();
-        // Put the new entry on screen next to the ones before it. Re-render
-        // the one cell rather than the list: rebuilding every row here would
-        // throw away another Team Lead's half-typed note elsewhere on the page.
-        const cell = el.closest(".cr-overdue-cell");
-        const oldHistory = cell && cell.querySelector("[data-delay-history-for]");
-        if (cell) {
-          const holder = document.createElement("div");
-          holder.innerHTML = delayHistoryHtml(id);
-          const fresh = holder.firstElementChild;
-          if (fresh) {
-            if (oldHistory) cell.replaceChild(fresh, oldHistory);
-            else cell.insertBefore(fresh, el);
-          }
-          el.placeholder = "Add an update…";
-        }
-        if (savedMark) {
-          savedMark.style.display = "";
-          setTimeout(() => { savedMark.style.display = "none"; }, 1800);
-        }
-      });
-    });
   }
-
-  // Delegated: the history block is replaced whenever a note is added, so a
-  // listener bound to the button itself would not survive the first save.
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest ? e.target.closest("[data-delay-more-for]") : null;
-    if (!btn) return;
-    e.stopPropagation(); // the whole row is a link to the engagement
-    const older = document.querySelector(`[data-delay-older-for="${btn.dataset.delayMoreFor}"]`);
-    if (!older) return;
-    older.hidden = !older.hidden;
-    const n = older.querySelectorAll(".cr-delay-note").length;
-    btn.textContent = older.hidden ? `${n} earlier` : "Hide earlier";
-  });
 
   function setEngagementScope(scope) {
     engagementScope = scope;
