@@ -387,6 +387,19 @@
   .cr-overdue-input:focus { outline: none; border-color: var(--danger); }
   .cr-overdue-input.saving { opacity: 0.6; }
   .cr-overdue-saved { font-size: 10.5px; color: var(--accent-dark); }
+  /* Punch list #13 (10/4/26): the answers already given, newest first. Set
+     back from the red of the live input -- these are the record, not the
+     thing being filled in. */
+  .cr-delay-history { display: flex; flex-direction: column; gap: 3px; width: 100%; min-width: 0; }
+  .cr-delay-note { font-size: 11.5px; line-height: 1.35; color: var(--text); }
+  .cr-delay-when { font-weight: 700; color: var(--muted); }
+  .cr-delay-more { align-self: flex-start; border: none; background: none; padding: 0; font-family: inherit; font-size: 10.5px; font-weight: 700; color: var(--muted); cursor: pointer; text-decoration: underline; }
+  .cr-delay-more:hover { color: var(--text); }
+  .cr-delay-older { display: flex; flex-direction: column; gap: 3px; }
+  /* A class with display: flex outranks the browser's own [hidden] rule, so
+     without this the "earlier" notes are never actually hidden. Same trap
+     that left the punch list's add form open on load. */
+  .cr-delay-older[hidden] { display: none; }
   .empty-note { padding: 26px; text-align: center; color: var(--muted); font-size: 13.5px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
   @media (max-width: 720px) {
     .client-row { display: block; }
@@ -1002,6 +1015,7 @@
   let isSuperAdminUser = false;
   let isTeamLeadUser = false;
   let allClients = [];
+  let delayNotesByClient = {}; // client id -> dated overdue notes, newest first
   let teamLeadByClient = {};
   let consultantsByClient = {};
   let unreadNotifications = [];
@@ -1330,7 +1344,7 @@
     // one job, showing every active engagement's current next step, is now
     // covered directly by the Next Step column on the list above.)
 
-    await Promise.all([loadClients(), loadApplicationSubmittedDates(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex()]);
+    await Promise.all([loadClients(), loadApplicationSubmittedDates(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex(), loadDelayNotes()]);
     await loadMyBillableTasks(); // needs allClients + myAssignmentRows, both settled above
     buildTasksDueItems();
     // "Mine" is the default for Team Leads and Specialists -- their own
@@ -1493,6 +1507,59 @@
     const { data, error } = await sb.from("clients").select("*, econ_dev_companies(code, name, bill_admin_qc_upfront)").order("name");
     if (error) { showBanner("Couldn't load clients: " + error.message, "error"); return; }
     allClients = data;
+  }
+
+  // Punch list #13 (10/4/26). The overdue note used to be one column that
+  // each save overwrote, so September's answer vanished when October's was
+  // typed. Answers are now rows in client_delay_notes -- dated, attributed,
+  // and never overwritten -- and this loads the lot in one go. The table is
+  // tiny (one row per answer ever given, and only overdue engagements get
+  // answers), so there is no reason to fetch it per engagement.
+  async function loadDelayNotes() {
+    delayNotesByClient = {};
+    const { data, error } = await sb
+      .from("client_delay_notes")
+      .select("id, client_id, body, created_at, users(full_name)")
+      .order("created_at", { ascending: false });
+    if (error) return; // the input still works; only the history is missing
+    for (const n of data || []) {
+      (delayNotesByClient[n.client_id] = delayNotesByClient[n.client_id] || []).push({
+        id: n.id,
+        body: n.body,
+        created_at: n.created_at,
+        author: (n.users && n.users.full_name) || "",
+      });
+    }
+  }
+
+  function delayNoteDate(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return "";
+    const sameYear = d.getFullYear() === new Date().getFullYear();
+    return d.toLocaleDateString(undefined,
+      sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  // Newest first, with everything older folded behind a count. One answer
+  // is the common case and shows on its own; a slipping engagement with
+  // four months of explanations is exactly the history Chris wanted kept,
+  // but it cannot be allowed to push the row open by default.
+  function delayHistoryHtml(clientId) {
+    const notes = delayNotesByClient[clientId] || [];
+    if (!notes.length) return "";
+    const line = (n) => `<div class="cr-delay-note">` +
+        `<span class="cr-delay-when">${escapeHtml(delayNoteDate(n.created_at))}` +
+        (n.author ? ` &middot; ${escapeHtml(n.author)}` : "") + `</span> ` +
+        `${escapeHtml(n.body)}</div>`;
+    const older = notes.slice(1);
+    return `<div class="cr-delay-history" data-delay-history-for="${clientId}">` +
+      line(notes[0]) +
+      (older.length
+        ? `<button type="button" class="cr-delay-more" data-delay-more-for="${clientId}">` +
+            `${older.length} earlier</button>` +
+          `<div class="cr-delay-older" data-delay-older-for="${clientId}" hidden>${older.map(line).join("")}</div>`
+        : "") +
+    `</div>`;
   }
 
   // Start Date column (Chris, 9/4/26) -- the date the intake application
@@ -1992,12 +2059,18 @@
         <div class="cr-days-in-progress">${lastCellHtml}</div>
         <div class="cr-overdue-cell">${overdue ? `
           <span class="overdue-badge">Overdue</span>
+          ${delayHistoryHtml(c.id)}
           ${canExplainDelay(c)
+            // Punch list #13: the box starts EMPTY and adds an entry. It
+            // used to open pre-filled with the previous answer, which made
+            // overwriting it the path of least resistance -- you had to
+            // delete last month's words to type this month's.
             ? `<textarea class="cr-overdue-input" rows="1" maxlength="300" data-delay-for="${c.id}"
-                 placeholder="Why is it taking longer than expected?"
-                 title="Visible to the engagement team and on this list.">${escapeHtml(c.delay_reason || "")}</textarea>
+                 placeholder="${(delayNotesByClient[c.id] || []).length ? "Add an update&hellip;" : "Why is it taking longer than expected?"}"
+                 title="Dated and signed with your name. Earlier notes are kept."></textarea>
                <span class="cr-overdue-saved" data-delay-saved-for="${c.id}" style="display:none;">Saved</span>`
-            : (overdueReason ? `<span class="cr-overdue-reason">${escapeHtml(overdueReason)}</span>` : "")}
+            : ((delayNotesByClient[c.id] || []).length ? "" :
+               (overdueReason ? `<span class="cr-overdue-reason">${escapeHtml(overdueReason)}</span>` : ""))}
         ` : ""}</div>
       </div>
     `;
@@ -2035,28 +2108,59 @@
       // document. Shift+Enter still breaks the line.
       el.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); el.blur(); }
-        if (e.key === "Escape") { el.value = onFocus; autosize(); el.blur(); }
+        if (e.key === "Escape") { el.value = ""; autosize(); el.blur(); }
       });
 
       el.addEventListener("blur", async () => {
-        if (el.value === onFocus) return;
         const reason = el.value.trim();
+        // An empty box is not an edit. Clearing the field no longer erases
+        // anything either -- the history lives in its own rows now, so
+        // there is nothing here to blank out.
+        if (!reason) { el.value = ""; autosize(); return; }
         el.classList.add("saving");
         // .select() -- this note is the record of why an engagement is late,
         // so a write the database refuses must not come back as "Saved".
-        const { data, error } = await sb.from("clients")
-          .update({ delay_reason: reason || null })
-          .eq("id", id)
-          .select("id");
-        el.classList.remove("saving");
+        const { data, error } = await sb.from("client_delay_notes")
+          .insert({ client_id: id, body: reason, author_id: currentUser ? currentUser.id : null })
+          .select("id, created_at");
         if (error || !data || !data.length) {
+          el.classList.remove("saving");
           showBanner(error ? "Couldn't save that note: " + error.message
                            : "That note wasn't saved — reload the page and try again.", "error");
           return;
         }
+        // Mirror the newest answer onto the client row as well, so anything
+        // still reading clients.delay_reason shows the current one. Its
+        // failure is not the note failing -- the note is already stored.
+        await sb.from("clients").update({ delay_reason: reason }).eq("id", id);
+        el.classList.remove("saving");
+
         const row = allClients.find((x) => x.id === id);
-        if (row) row.delay_reason = reason || null;
-        onFocus = el.value;
+        if (row) row.delay_reason = reason;
+        (delayNotesByClient[id] = delayNotesByClient[id] || []).unshift({
+          id: data[0].id,
+          body: reason,
+          created_at: data[0].created_at || new Date().toISOString(),
+          author: (currentUser && currentUser.full_name) || "",
+        });
+        el.value = "";
+        onFocus = "";
+        autosize();
+        // Put the new entry on screen next to the ones before it. Re-render
+        // the one cell rather than the list: rebuilding every row here would
+        // throw away another Team Lead's half-typed note elsewhere on the page.
+        const cell = el.closest(".cr-overdue-cell");
+        const oldHistory = cell && cell.querySelector("[data-delay-history-for]");
+        if (cell) {
+          const holder = document.createElement("div");
+          holder.innerHTML = delayHistoryHtml(id);
+          const fresh = holder.firstElementChild;
+          if (fresh) {
+            if (oldHistory) cell.replaceChild(fresh, oldHistory);
+            else cell.insertBefore(fresh, el);
+          }
+          el.placeholder = "Add an update…";
+        }
         if (savedMark) {
           savedMark.style.display = "";
           setTimeout(() => { savedMark.style.display = "none"; }, 1800);
@@ -2064,6 +2168,19 @@
       });
     });
   }
+
+  // Delegated: the history block is replaced whenever a note is added, so a
+  // listener bound to the button itself would not survive the first save.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest ? e.target.closest("[data-delay-more-for]") : null;
+    if (!btn) return;
+    e.stopPropagation(); // the whole row is a link to the engagement
+    const older = document.querySelector(`[data-delay-older-for="${btn.dataset.delayMoreFor}"]`);
+    if (!older) return;
+    older.hidden = !older.hidden;
+    const n = older.querySelectorAll(".cr-delay-note").length;
+    btn.textContent = older.hidden ? `${n} earlier` : "Hide earlier";
+  });
 
   function setEngagementScope(scope) {
     engagementScope = scope;
