@@ -336,7 +336,22 @@
   }
   .hdr-note-icon svg { width: 18px; height: 18px; }
   .hdr-note-head { flex: 1; min-width: 0; }
-  .hdr-note-title { font-size: 14px; font-weight: 700; color: var(--navy); line-height: 1.3; }
+  .hdr-note-title { font-size: 14px; font-weight: 700; color: var(--navy); line-height: 1.3; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  /* Greg (10/4/26): "instead of using the text Overdue, replace the text
+     with the same red button as on the engagements page so that there is a
+     visual connection between the ccc and the engagement page." Same
+     geometry, colour and type as .overdue-badge on index.html.
+     Deliberately NOT the clickable form: there the pill carries a comment
+     count and opens the comments dialog, and the giveaway that it does is
+     the speech bubble. This one is a label -- the editor was taken out of
+     this header on 10/2 and lives on the Engagements list -- so it has no
+     bubble, no pointer and no hover, and cannot be mistaken for the
+     control. */
+  .overdue-badge {
+    display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 5px;
+    background: var(--danger); color: #fff; font-size: 10.5px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0;
+  }
   /* The overdue note's question, back as visible text rather than the
      textarea placeholder it briefly became -- a placeholder disappears the
      moment someone types, taking the prompt with it (Greg, 9/6/26). This
@@ -2111,7 +2126,12 @@
       dot.title = `In Progress for ${dayWord} — Overdue`;
       note.classList.remove("tier-amber");
       note.classList.add("tier-red");
-      $("cm-delay-note-label").textContent = `In Progress for ${dayWord}: Overdue`;
+      // innerHTML rather than textContent: the status word is now the same
+      // red pill the Engagements list flags the engagement with, so the two
+      // pages read as one thing. dayWord is built from a number here, so
+      // there is nothing in it to escape.
+      $("cm-delay-note-label").innerHTML =
+        `<span>In Progress for ${dayWord}</span><span class="overdue-badge">Overdue</span>`;
       // The question that used to sit here is asked on the Engagements list
       // now, where it can be answered on the spot.
       $("cm-delay-note-sub").classList.add("hidden");
