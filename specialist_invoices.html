@@ -277,6 +277,12 @@
   .email-meta-row { display: flex; gap: 8px; padding: 2px 0; }
   .email-meta-row .em-label { width: 56px; flex-shrink: 0; color: var(--muted); font-weight: 700; }
   .email-meta-row .em-value { color: var(--text); }
+  /* Sits in the header block as a line of text, not an obvious form field --
+     it is one of four header rows and should read like the other three. */
+  .em-input { flex: 1; min-width: 0; border: 1px solid transparent; border-radius: 4px; padding: 1px 4px; margin: -1px 0 -1px -4px; font-family: inherit; font-size: inherit; color: var(--text); background: transparent; }
+  .em-input:hover { border-color: var(--border); }
+  .em-input:focus { outline: none; border-color: var(--navy-light); background: #fff; }
+  .em-input::placeholder { color: var(--muted); }
   .email-body { padding: 18px 20px; font-size: 13.5px; line-height: 1.55; }
   .email-body p { margin: 0 0 12px; }
   .email-body table { margin: 10px 0 14px; }
@@ -524,6 +530,15 @@
       <div class="email-frame">
         <div class="email-meta-block">
           <div class="email-meta-row"><span class="em-label">To:</span><span class="em-value" id="email-to"></span></div>
+          <!-- Punch list #15 (10/4/26). Every other composer in the app lets
+               whoever is sending see and change who gets copied before it
+               goes; this preview had no CC at all. Editable rather than a
+               static line even though nothing sends yet, so the address is
+               already set when sending is switched on. Defaults to the
+               signed-in admin -- payroll is sent by Greg or Rita, and the
+               sender keeping a copy is the normal case. Remembered per
+               browser. -->
+          <div class="email-meta-row"><span class="em-label">Cc:</span><input type="text" class="em-input" id="email-cc" placeholder="Nobody" title="Who is copied when this statement is sent." /></div>
           <div class="email-meta-row"><span class="em-label">From:</span><span class="em-value">EG Dashboard &lt;payroll@economicgardening.org&gt; (not yet configured)</span></div>
           <div class="email-meta-row"><span class="em-label">Subject:</span><span class="em-value" id="email-subject"></span></div>
         </div>
@@ -563,6 +578,18 @@
   // Read from the auth session rather than the users row, because the profile
   // query on each page selects a different set of columns and most don't ask
   // for email. The session always has it.
+  // Punch list #15: who gets copied on a pay statement is a standing
+  // choice, not something to retype for each specialist, so it is kept per
+  // browser. localStorage can throw in a locked-down browser and the row
+  // has to keep working when it does.
+  const PAY_CC_KEY = "eg_pay_statement_cc";
+  function loadPayCc() {
+    try { return localStorage.getItem(PAY_CC_KEY); } catch (e) { return null; }
+  }
+  function savePayCc(value) {
+    try { localStorage.setItem(PAY_CC_KEY, value); } catch (e) { /* nothing to do */ }
+  }
+
   async function showSignedInEmail() {
     const el = document.getElementById("user-email");
     if (!el) return;
@@ -570,6 +597,13 @@
       const { data } = await sb.auth.getUser();
       const email = data && data.user && data.user.email;
       if (email) el.textContent = email;
+      // Seed the pay statement Cc with the signed-in admin the first time
+      // only. A saved value -- including one deliberately emptied -- wins.
+      const ccEl = document.getElementById("email-cc");
+      if (ccEl) {
+        const saved = loadPayCc();
+        ccEl.value = saved === null ? (email || "") : saved;
+      }
     } catch (e) { /* non-essential -- the name and role pill still show */ }
   }
 
@@ -984,6 +1018,8 @@
   }
 
   $("preview-close").addEventListener("click", () => $("preview-overlay").classList.remove("open"));
+  $("email-cc").addEventListener("input", (e) => savePayCc(e.target.value));
+
   $("preview-close-btn").addEventListener("click", () => $("preview-overlay").classList.remove("open"));
   $("preview-overlay").addEventListener("click", (e) => {
     if (e.target === $("preview-overlay")) $("preview-overlay").classList.remove("open");
