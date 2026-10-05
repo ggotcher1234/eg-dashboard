@@ -895,6 +895,52 @@
         <p style="color:var(--muted); font-size:13px; margin:0 0 18px;">Open one from the <strong>Applications</strong> menu above.</p>
         <a class="btn-secondary" href="index.html">&larr; Back to Engagements</a>
       </div>
+
+      <!-- ============================================================
+           TEMPORARY -- TEST DATA TOOL. Greg (10/5/26): "i need a
+           temporary way (until we go live) to add test engagements as if
+           they have an approved application on file."
+
+           Makes one application that is already past review: every
+           threshold confirmed, approved, waiting on a Team Lead and
+           hours. From there the normal Accept button on the review view
+           turns it into an engagement, so what gets tested is the real
+           path and not a shortcut around it.
+
+           TO REMOVE AT GO-LIVE: set TEST_TOOLS = false just below the
+           script's opening line to hide it, or delete this block and the
+           one marked the same way in the script. Every row it writes is
+           tagged "TEST DATA" and named with a "TEST --" prefix, and
+           141_remove_test_data.sql clears them out along with any
+           engagements they became.
+           ============================================================ -->
+      <div class="card" id="test-tools" data-super-admin-only hidden
+           style="margin-top:18px; border:1px dashed var(--border); background:#fffdf5;">
+        <div style="font-size:11px; font-weight:800; letter-spacing:0.4px; text-transform:uppercase; color:#8a6400;">Temporary &middot; test data</div>
+        <h3 style="margin:6px 0 4px; font-size:15px;">Add a test application</h3>
+        <p style="color:var(--muted); font-size:13px; margin:0 0 14px; max-width:60ch;">
+          Creates an application that is already approved and ready for a Team Lead and hours, so you can
+          walk the rest of the workflow without filling in the public form. Everything it makes is tagged
+          <strong>TEST DATA</strong> and gets cleared out before go-live.
+        </p>
+        <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+          <div class="field" style="flex:1 1 220px; margin:0;">
+            <label for="tt-name">Company name</label>
+            <input type="text" id="tt-name" placeholder="Leave blank for a generated name" />
+          </div>
+          <div class="field" style="flex:1 1 220px; margin:0;">
+            <label for="tt-program">Program</label>
+            <select id="tt-program"></select>
+          </div>
+          <div class="field" style="flex:0 0 auto; margin:0;">
+            <label style="display:flex; align-items:center; gap:7px; font-weight:400;">
+              <input type="checkbox" id="tt-approved" checked style="width:auto;" /> Already approved
+            </label>
+          </div>
+          <button type="button" class="btn-primary" id="tt-create">Create</button>
+        </div>
+        <div id="tt-status" style="margin-top:10px; font-size:12.5px; color:var(--muted);"></div>
+      </div>
     </div>
 
     <!-- ===== REVIEW VIEW ===== -->
@@ -1387,6 +1433,8 @@
     // both always name one specific application. Landing here with
     // neither just leaves the default "No application selected" state
     // (#view-none) showing, exactly as it renders in the markup.
+    wireTestTools(); // TEMPORARY -- test data tool, remove at go-live
+
     const deepLinkClientId = new URLSearchParams(location.search).get("client");
     const deepLinkApp = deepLinkClientId ? allApplications.find((a) => a.client_id === deepLinkClientId) : null;
     const deepLinkAppId = new URLSearchParams(location.search).get("application");
@@ -1508,6 +1556,98 @@
       showNothingSelected();
     }
   });
+
+  // ============================================================
+  // TEMPORARY -- TEST DATA TOOL (Greg, 10/5/26). See the matching block
+  // in the markup. Flip TEST_TOOLS to false to switch it off without
+  // removing anything, or delete both blocks at go-live.
+  // ============================================================
+  const TEST_TOOLS = true;
+  const TEST_TAG = "TEST DATA";
+
+  function wireTestTools() {
+    const panel = $("test-tools");
+    if (!panel) return;
+    // Super admins only, and only while the flag is on.
+    panel.hidden = !(TEST_TOOLS && isSuperAdmin);
+    if (panel.hidden) return;
+
+    $("tt-program").innerHTML = allPartners
+      .map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.code ? `(${p.code}) ${p.name}` : p.name)}</option>`)
+      .join("");
+
+    $("tt-create").addEventListener("click", createTestApplication);
+  }
+
+  async function createTestApplication() {
+    const btn = $("tt-create");
+    const status = $("tt-status");
+    const programId = $("tt-program").value;
+    if (!programId) { status.textContent = "Pick a program first."; return; }
+
+    const stamp = new Date().toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    const typed = $("tt-name").value.trim();
+    // The prefix is deliberate and not optional: a test engagement that
+    // reads like a real one is how test data survives go-live.
+    const name = `TEST -- ${typed || `Sample Co (${stamp})`}`;
+    const approved = $("tt-approved").checked;
+
+    btn.disabled = true;
+    status.textContent = "Creating…";
+
+    // Figures chosen to clear every threshold on their own, so the review
+    // view agrees with the stored threshold_checks rather than showing a
+    // pass that the numbers behind it contradict.
+    const row = {
+      organization_id: currentUser.organization_id,
+      econ_dev_company_id: programId,
+      company_name: name,
+      status: "pending",
+      tags: [TEST_TAG],
+      address: { street: "1 Test Street", city: "Springfield", state: "OH", zip: "45502" },
+      country: "United States",
+      phone: "(555) 010-0100",
+      website: "https://example.com",
+      year_founded: 2009,
+      naics_code: "333514",
+      is_private: true,
+      primary_officer_name: "Dana Testerman",
+      primary_officer_title: "CEO",
+      primary_officer_email: "dana@example.com",
+      primary_officer_phone: "(555) 010-0101",
+      secondary_officer_name: "Robin Example",
+      secondary_officer_title: "CFO",
+      secondary_officer_email: "robin@example.com",
+      fte_2022: 24, fte_2023: 28, fte_2024: 31, fte_2025: 34,
+      revenue_2022: 4200000, revenue_2023: 5100000, revenue_2024: 6400000, revenue_2025: 7300000,
+      sales_1_to_50m: true,
+      sales_primarily_external: true,
+      fte_range_10_to_100: true,
+      pct_employees_in_state: 90,
+      top_business_issues: "Test engagement — created from the temporary test data tool.",
+      threshold_checks: approved
+        ? { contact_info: true, ceo_listed: true, employees_10_plus: true, sales_1m_plus: true, external_markets: true }
+        : {},
+      approved_at: approved ? new Date().toISOString() : null,
+      approved_by: approved ? currentUser.id : null,
+    };
+
+    // .select() -- an insert RLS refuses comes back as success with no
+    // rows, and "Created" over nothing is the worst possible outcome here.
+    const { data, error } = await sb.from("client_applications").insert(row).select("id").single();
+    btn.disabled = false;
+    if (error || !data) {
+      status.textContent = error ? `Couldn't create it: ${error.message}` : "Not created — try again.";
+      return;
+    }
+    status.textContent = "Created. Opening it…";
+    // Straight to the review view, where Accept assigns the Team Lead and
+    // hours and makes the engagement the normal way.
+    location.href = `client_applications.html?application=${data.id}`;
+  }
+  // ============================================================
+  // END TEMPORARY TEST DATA TOOL
+  // ============================================================
 
   function showNothingSelected() {
     $("view-review").classList.add("hidden");
