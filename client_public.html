@@ -120,7 +120,7 @@
      href and shows on hover via the title attribute. */
   .mini-table td:nth-child(2) a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  /* Close-Out Evaluation has no document to open like the other three
+  /* The Evaluation Sheet has no document to open like the other three
      workflow steps do -- it's rows in client_evaluation_responses, not a
      file -- so clicking it once submitted opens this modal with the same
      answers instead (Greg, 8/25/26: "all the other workflow fields bring
@@ -171,7 +171,7 @@
 
   /* Each step gets its own color, dimmed until its document/link is set,
      bright (and clickable) once it is -- Discovery blue, Controlling tan,
-     Research Review sage, Close-Out slate. */
+     Debriefing sage, Evaluation Sheet slate. */
   .wf-step-0 { background: #7fa4c4; }
   .wf-step-0.filled { background: #2f6fb0; }
   .wf-step-0.filled:hover { background: #255a8f; }
@@ -408,7 +408,7 @@
   </main>
 </div>
 
-<!-- Close-Out Evaluation detail modal -- shows the CEO their own submitted
+<!-- Evaluation Sheet detail modal -- shows the CEO their own submitted
      answers when they click the completed workflow step (there's no
      document to open like the other three steps have). Placed before the
      script block below so its elements exist in the DOM before that
@@ -922,8 +922,16 @@
   const WORKFLOW_STEPS = [
     { urlKey: "discovery_doc_url", pathKey: "discovery_doc_storage_path", label: "Discovery Call Notes" },
     { urlKey: "controlling_doc_url", pathKey: "controlling_doc_storage_path", label: "Controlling Document", clientLinkKey: "controlling_doc_link_url" },
-    { urlKey: "research_review_url", pathKey: "research_review_storage_path", label: "Research Review" },
-    { urlKey: "closeout_survey_url", pathKey: "closeout_survey_storage_path", label: "Close-Out Evaluation", extraFilledKey: "evaluation_submitted_at" },
+    // Punch list #6 (10/5/26). Greg: "Change client dashboard to
+    // 'Debriefing' and 'Evaluation Sheet'." These were the last two places
+    // still showing the old names to a client -- the rest of the app was
+    // renamed on 10/2, so a CEO saw "Research Review" on their dashboard
+    // and "Debriefing" in the email their Team Lead sent about it.
+    // The column names underneath (research_review_*, closeout_survey_*)
+    // are unchanged on purpose: renaming storage would touch the uploader,
+    // the workflow page and the public view function for no gain.
+    { urlKey: "research_review_url", pathKey: "research_review_storage_path", label: "Debriefing" },
+    { urlKey: "closeout_survey_url", pathKey: "closeout_survey_storage_path", label: "Evaluation Sheet", extraFilledKey: "evaluation_submitted_at" },
   ];
 
   function renderWorkflow(workflow) {
@@ -977,7 +985,7 @@
     const referrals = (Array.isArray(r.referrals) ? r.referrals : []).filter((rr) => rr.name || rr.company || rr.contact);
     const submittedDate = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : "";
     $("eval-modal-body").innerHTML = `
-      <h2>Your Close-Out Evaluation</h2>
+      <h2>Your Evaluation Sheet</h2>
       <div class="em-meta">Submitted ${escapeHtml(submittedDate)}${r.respondent_name ? " by " + escapeHtml(r.respondent_name) : ""} &mdash; ${r.very_useful_count} Very Useful, ${r.partially_useful_count} Partially Useful, ${r.not_useful_count} Not Useful (Weighted Score ${r.weighted_score}/${r.weighted_max})</div>
       <div class="em-block">
         <span class="em-label">Research Question Ratings</span>
