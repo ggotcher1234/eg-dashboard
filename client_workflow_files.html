@@ -1892,6 +1892,8 @@
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button type="button" class="btn-secondary btn-sm" id="eval-response-toggle-btn">View Full Response</button>
+          ${evalResponse.pdf_url ? `<button type="button" class="btn-secondary btn-sm" id="eval-response-pdf-btn">&#128196; Download PDF</button>` : ""}
+          ${isSuperAdmin ? `<button type="button" class="btn-secondary btn-sm" id="eval-response-rebuild-btn">${evalResponse.pdf_url ? "Rebuild PDF" : "Build PDF"}</button>` : ""}
           ${isSuperAdmin ? `<button type="button" class="btn-danger btn-sm" id="eval-response-delete-btn">Delete Response</button>` : ""}
         </div>
         <div id="eval-response-detail" class="hidden" style="margin-top:10px;"></div>
@@ -1960,8 +1962,55 @@
       }
     });
 
+    const pdfBtn = $("eval-response-pdf-btn");
+    if (pdfBtn) pdfBtn.addEventListener("click", () => {
+      const win = window.open("about:blank", "_blank");
+      if (win) { win.opener = null; win.location = evalResponse.pdf_url; }
+    });
+
+    const rebuildBtn = $("eval-response-rebuild-btn");
+    if (rebuildBtn) rebuildBtn.addEventListener("click", rebuildEvalPdf);
+
     const deleteBtn = $("eval-response-delete-btn");
     if (deleteBtn) deleteBtn.addEventListener("click", deleteEvalResponse);
+  }
+
+  // Super-Admin only. Rebuilds the completed-sheet PDF from the response
+  // already in the database and repoints pdf_url at it -- the attachment
+  // only, never the answers. This exists because the submit function's PDF
+  // and email step is deliberately best-effort: a CEO's answers must commit
+  // even if the logo fetch, a font or Resend fails, so a response can
+  // legitimately sit there with no PDF behind it and nothing to download.
+  // Clippard's was the first -- recovered by hand before that function
+  // generated PDFs at all. It also re-renders an older response after the
+  // form layout changes.
+  async function rebuildEvalPdf() {
+    if (!evalResponse) return;
+    const btn = $("eval-response-rebuild-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Building\u2026"; }
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/regenerate-evaluation-pdf`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ responseId: evalResponse.id }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || "Couldn't build the PDF.");
+      evalResponse.pdf_url = result.pdfUrl;
+      if (workflowData && workflowData.evaluation_response) workflowData.evaluation_response.pdf_url = result.pdfUrl;
+      // Re-renders the block, so the button this handler was attached to is
+      // replaced rather than re-enabled -- nothing to reset on this path.
+      renderEvalLinkField();
+      showBanner("Completed sheet rebuilt. Open Download PDF to check it.", "success");
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = "Rebuild PDF"; }
+      showBanner(e.message || "Couldn't build the PDF.", "error");
+    }
   }
 
   // Super-Admin only (081) -- clears a test/duplicate submission so the
