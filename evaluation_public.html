@@ -771,8 +771,24 @@ function applySubmittedMode(r){
   form.querySelectorAll('.radio-opt, .nps-btn, #npsTrack, #researchBody').forEach(el => {
     el.style.pointerEvents = 'none';
   });
+  // Hiding the whole footer took "Save a PDF Copy" with it -- and a
+  // completed sheet is exactly when someone wants to keep a copy. Submit and
+  // its instructions go; the print button stays, re-enabled after the
+  // blanket disable above.
   const footer = document.getElementById('footer-submit');
-  if(footer) footer.style.display = 'none';
+  if(footer){
+    footer.innerHTML =
+      '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">' +
+        '<span style="font-family:\'Merriweather\',serif;font-size:0.98rem;font-weight:700;color:var(--green-dark);">' +
+          '&#9989; Submitted \u2014 thank you.' +
+        '</span>' +
+        '<button type="button" id="printPdfBtn" style="font-size:0.9rem;color:var(--green-mid);font-weight:600;font-family:inherit;background:var(--white);border:1.5px solid var(--green-mid);border-radius:8px;padding:13px 20px;cursor:pointer;">' +
+          '&#128424; Save a PDF Copy' +
+        '</button>' +
+      '</div>';
+    const pb = document.getElementById('printPdfBtn');
+    if(pb){ pb.disabled = false; pb.addEventListener('click', printForm); }
+  }
   // "Responses auto-saved in this browser" and a Clear Form button are both
   // lies on a submitted sheet -- nothing is being saved and nothing can be
   // cleared. Clear Form was already disabled with everything else, but a

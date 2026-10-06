@@ -137,6 +137,12 @@
   .eval-modal ul { margin: 4px 0 0 18px; padding: 0; }
 
   .workflow-tracker { display: flex; margin: 4px 0; }
+  #workflow-pdf-link:empty { display: none; }
+  .wf-pdf-link {
+    display: inline-block; margin: 8px 0 2px; font-size: 12.5px; font-weight: 600;
+    color: var(--navy-light); text-decoration: underline; text-underline-offset: 3px;
+  }
+  .wf-pdf-link:hover { color: var(--navy); }
   .wf-step {
     flex: 1; padding: 12px 20px 12px 32px; color: #fff; font-size: 12px; font-weight: 700;
     text-align: center; text-transform: uppercase; letter-spacing: 0.3px; position: relative;
@@ -354,6 +360,7 @@
          ahead of Company Info / Top Business Issues and everything else. -->
     <div class="card">
       <div class="workflow-tracker" id="workflow-tracker"></div>
+      <div id="workflow-pdf-link"></div>
     </div>
 
     <div class="research-grid" id="research-grid"></div>
@@ -1021,6 +1028,18 @@
       }
       return `<div class="wf-step ${colorClass}">${escapeHtml(step.label)}</div>`;
     }).join("");
+    // Greg (10/6/26): "...available to download on the Clippard Dashboard."
+    // The step itself opens the live, filled-in sheet -- that is what Greg
+    // signed off on -- so the saved PDF gets its own small link beneath the
+    // strip rather than taking the step over.
+    const pdfUrl = w.evaluation_pdf_url;
+    const pdfRow = $("workflow-pdf-link");
+    if (pdfRow) {
+      pdfRow.innerHTML = pdfUrl
+        ? `<a href="${escapeHtml(pdfUrl)}" target="_blank" rel="noopener" class="wf-pdf-link">&#128190; Download the completed Evaluation Sheet (PDF)</a>`
+        : "";
+    }
+
     $("workflow-tracker").querySelectorAll(".wf-doc-link").forEach((el) => {
       el.addEventListener("click", (e) => { e.preventDefault(); openSignedDoc(el.dataset.path)(); });
     });
