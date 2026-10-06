@@ -946,7 +946,7 @@
     // are unchanged on purpose: renaming storage would touch the uploader,
     // the workflow page and the public view function for no gain.
     { urlKey: "research_review_url", pathKey: "research_review_storage_path", label: "Debriefing" },
-    { urlKey: "closeout_survey_url", pathKey: "closeout_survey_storage_path", label: "Evaluation Sheet", extraFilledKey: "evaluation_submitted_at" },
+    { urlKey: "closeout_survey_url", pathKey: "closeout_survey_storage_path", label: "Evaluation Sheet", extraFilledKey: "evaluation_submitted_at", formUrlKey: "evaluation_form_url", opensAfterKeys: ["controlling_doc_link_url", "controlling_doc_storage_path", "controlling_doc_url"] },
   ];
 
   function renderWorkflow(workflow) {
@@ -957,6 +957,32 @@
       const clientLink = step.clientLinkKey ? w[step.clientLinkKey] : null;
       const extraFilled = step.extraFilledKey ? w[step.extraFilledKey] : null;
       const colorClass = `wf-step-${i}`;
+      // Greg (10/6/26): "make the client evaluation sheet available to open
+      // from the client dashboard as soon as the controlling document is
+      // submitted. That way the client can view it from their dashboard, fill
+      // it out and submit it. Only after submission should it show the
+      // checkmark and link to the final document."
+      //
+      // So this step has a third state the other three do not: OPEN. It is
+      // live and clickable, and it carries no check mark -- the check is a
+      // claim about what the client has done, and at this point they have not
+      // done it yet. It goes first, ahead of every "done" branch, but it only
+      // fires when none of those apply, so an evaluation that has been
+      // submitted (or whose signed sheet was uploaded by an admin instead)
+      // still renders exactly as it did before.
+      //
+      // "Submitted" is read as either a response row OR an attached close-out
+      // document, not the response row alone: an admin who uploads a filled-in
+      // sheet on the client's behalf leaves no evaluation_submitted_at, and
+      // keying the check mark on that alone would have left their step looking
+      // permanently undone.
+      if (step.formUrlKey && !path && !url && !extraFilled) {
+        const opensNow = (step.opensAfterKeys || []).some((k) => w[k]);
+        const formUrl = w[step.formUrlKey];
+        if (opensNow && formUrl) {
+          return `<a class="wf-step ${colorClass} filled wf-step-open" href="${escapeHtml(formUrl)}" target="_blank" rel="noopener" title="Open your Evaluation Sheet \u2014 fill it out and submit it here"><span class="wf-label">${escapeHtml(step.label)}</span></a>`;
+        }
+      }
       // A checkmark marks "done" explicitly -- the color shift alone (esp.
       // step 3's slate-on-slate) was too subtle for Greg to tell filled
       // from unfilled at a glance (8/25/26).
