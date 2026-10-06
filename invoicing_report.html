@@ -471,7 +471,7 @@
   .eng-detail-back { margin-bottom: 14px; }
 
   .cum-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .cum-table th { text-align: right; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); background: #eef2f6; padding: 10px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .cum-table th { text-align: right; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--accent-dark); background: #e8eee3; padding: 10px 14px; border-bottom: 1px solid #d3e0ca; white-space: nowrap; }
   .cum-table th:first-child, .cum-table th:nth-child(2) { text-align: left; }
   .cum-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; text-align: right; white-space: nowrap; }
   .cum-table td:first-child, .cum-table td:nth-child(2) { text-align: left; }
@@ -483,8 +483,19 @@
   .cum-table tfoot td { padding: 12px 14px; font-size: 13.5px; font-weight: 700; border-top: 2px solid var(--border); background: #eef2f6; text-align: right; }
   .cum-table tfoot td:first-child { text-align: left; }
   .eng-detail-section { margin-top: 22px; }
-  .eng-detail-section h3 { margin: 0 0 4px; font-size: 14.5px; }
-  .eng-detail-section .card-hint { margin: 0 0 12px; }
+  /* Greg (10/6/26): "change the color of the 3rd row to match the other
+     heading rows. the lighter green." In embed mode the cards go
+     transparent, so this heading was showing the Workspace's own darker
+     sage straight through. Giving it the same #e8eee3 as the table header
+     below it and the Engagements list's group headers makes it read as a
+     heading rather than as a gap in the page. */
+  .eng-detail-sechead {
+    background: #e8eee3; color: var(--accent-dark);
+    border-top: 1px solid #d3e0ca; border-bottom: 1px solid #d3e0ca;
+    padding: 10px 14px; margin-bottom: 12px;
+  }
+  .eng-detail-section h3 { margin: 0; font-size: 14.5px; color: var(--accent-dark); }
+  .eng-detail-sechead .card-hint { margin: 2px 0 0; color: var(--accent-dark); opacity: 0.75; }
 
   .remaining-value { font-size: 13.5px; font-weight: 700; white-space: nowrap; }
   .remaining-value.negative { color: var(--danger-dark); }
@@ -659,7 +670,8 @@
   body.embed-mode #panel-payroll-ytd,
   /* The picker is fixed to this engagement here, so its "back to all
      engagements" escape hatch would strand the reader inside an iframe. */
-  body.embed-mode #eng-detail-back { display: none !important; }
+  body.embed-mode #eng-detail-back,
+  body.embed-mode #ed-identity { display: none !important; }
 
   body.embed-mode main { padding: 0; }
   body.embed-mode .tab-panel-frame,
@@ -1011,7 +1023,15 @@
           <div id="engagement-detail-wrap" class="hidden">
             <button type="button" class="btn-ghost eng-detail-back" id="eng-detail-back">&larr; All Engagements</button>
             <div class="eng-detail-header">
-              <div>
+              <!-- Greg (10/6/26): "remove the redundant second row." Inside the
+                   Engagement Workspace the header right above this already
+                   names the engagement, so repeating the name and address is
+                   a second title for the same thing. Hidden in embed mode
+                   only -- opened standalone from the Invoicing report, this
+                   is the only thing saying which engagement you are reading.
+                   Opened/Closed stays either way: that date appears nowhere
+                   else on the Workspace. -->
+              <div id="ed-identity">
                 <div class="eng-detail-name" id="ed-name"></div>
                 <div class="eng-detail-address" id="ed-address"></div>
               </div>
@@ -1028,8 +1048,10 @@
             </div>
 
             <div class="eng-detail-section">
-              <h3>Cumulative Hours by Specialist</h3>
-              <div class="card-hint">Only months with logged hours are shown.</div>
+              <div class="eng-detail-sechead">
+                <h3>Cumulative Hours by Specialist</h3>
+                <div class="card-hint">Only months with logged hours are shown.</div>
+              </div>
               <div class="table-scroll">
                 <table class="cum-table" id="ed-hours-table">
                   <thead><tr id="ed-hours-thead"></tr></thead>
