@@ -465,9 +465,6 @@
   .eng-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-bottom: 16px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
   .eng-detail-name { font-size: 19px; font-weight: 700; color: var(--navy); margin: 0; }
   .eng-detail-address { font-size: 13px; color: var(--muted); margin-top: 2px; }
-  .eng-detail-meta-row { display: flex; gap: 26px; flex-wrap: wrap; }
-  .eng-detail-field label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 3px; }
-  .eng-detail-field .meta-static { font-size: 14px; color: var(--text); font-weight: 600; }
   .eng-detail-back { margin-bottom: 14px; }
 
   .cum-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
@@ -1040,16 +1037,13 @@
                 <div class="eng-detail-name" id="ed-name"></div>
                 <div class="eng-detail-address" id="ed-address"></div>
               </div>
-              <div class="eng-detail-meta-row">
-                <div class="eng-detail-field">
-                  <label>Opened</label>
-                  <div class="meta-static" id="ed-opened">—</div>
-                </div>
-                <div class="eng-detail-field" id="ed-closed-wrap" style="display:none;">
-                  <label>Closed</label>
-                  <div class="meta-static" id="ed-closed">—</div>
-                </div>
-              </div>
+              <!-- Greg (10/6/26): "remove the date row from the cummulative
+                   hours as it adds no value." Opened read created_at -- the
+                   moment Accept was pressed -- which was a third date
+                   competing with the Engagements list's Start Date and the
+                   Workspace header's day count, on a report about hours.
+                   Closed went with it: it was the same row, and a closed
+                   engagement's hours do not depend on the date. -->
             </div>
 
             <div class="eng-detail-section">
@@ -2061,15 +2055,6 @@
 
     $("ed-name").textContent = client.name || "Untitled Engagement";
     $("ed-address").textContent = client.address || "";
-    $("ed-opened").textContent = client.created_at
-      ? new Date(client.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-      : "—";
-    if (client.date_closed) {
-      $("ed-closed-wrap").style.display = "";
-      $("ed-closed").textContent = new Date(client.date_closed).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-    } else {
-      $("ed-closed-wrap").style.display = "none";
-    }
     // Union of every calendar month with real logged hours anywhere in this
     // engagement -- same rule client_cumulative_hours.html used: empty
     // months just aren't columns at all.

@@ -1391,7 +1391,7 @@
     // one job, showing every active engagement's current next step, is now
     // covered directly by the Next Step column on the list above.)
 
-    await Promise.all([loadClients(), loadApplicationSubmittedDates(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex(), loadDelayNotes()]);
+    await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex(), loadDelayNotes()]);
     await loadMyBillableTasks(); // needs allClients + myAssignmentRows, both settled above
     buildTasksDueItems();
     // "Mine" is the default for Team Leads and Specialists -- their own
@@ -1615,19 +1615,6 @@
         </div>
         <div class="dm-body">${escapeHtml(n.body)}</div>
       </div>`).join("");
-  }
-
-  // Start Date column (Chris, 9/4/26) -- the date the intake application
-  // was *submitted*, not the date the engagement went In Progress (that's
-  // still the "Started: ..." line in the meta text below the name, a
-  // different milestone). One row per accepted application, keyed by the
-  // client it became.
-  let submittedAtByClient = {};
-  async function loadApplicationSubmittedDates() {
-    const { data, error } = await sb.from("client_applications").select("client_id, submitted_at").not("client_id", "is", null);
-    if (error) { console.error("Couldn't load application submitted dates:", error.message); return; }
-    submittedAtByClient = {};
-    (data || []).forEach((a) => { if (a.client_id) submittedAtByClient[a.client_id] = a.submitted_at; });
   }
 
   // Lightweight index for the global search bar's "specialists" and
@@ -2091,7 +2078,15 @@
     // progress" is always meaningful here; it reuses the same
     // first_in_progress_at/status_since clock -- and the same green/
     // yellow/red aging dot -- the old status badge's dot already used.
-    const startDateText = submittedAtByClient[c.id] ? formatLastActivity(submittedAtByClient[c.id]) : "—";
+    // Greg (10/6/26): "the start date is the date the application converted
+    // to in progress. make that the start date everywhere." This column used
+    // to show the application's submitted_at, a different milestone, which
+    // left the product with three answers to "when did this start" -- this
+    // column, the day count beside it, and Opened on the hours report. It is
+    // now the same first_in_progress_at the day count and the overdue clock
+    // already run on, so the column and the number next to it agree.
+    const startAnchor = c.first_in_progress_at || c.status_since;
+    const startDateText = startAnchor ? formatLastActivity(startAnchor) : "—";
     const daysInProgress = daysSince(c.first_in_progress_at || c.status_since);
     const daysInProgressText = Number.isFinite(daysInProgress) ? `${daysInProgress} day${daysInProgress === 1 ? "" : "s"}` : "—";
     // In the closed view the same cell carries the closing date. status_since
