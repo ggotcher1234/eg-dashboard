@@ -204,15 +204,25 @@
      to do with the document itself on the left, the one thing you send to
      the client on the right -- so the email button takes the slack between
      them rather than sitting shoulder to shoulder with the file controls. */
-  .wf-action-row > [id$="-client"] > :first-child,
-  .wf-action-row > #wf-eval-actions > :first-child { margin-left: auto; }
+  .wf-action-row > [id$="-client"] > :first-child { margin-left: auto; }
   /* At phone width the row wraps and the email button lands on its own
      line; pushed right there it would float away from everything, so it
      goes back to the left edge. */
   @media (max-width: 520px) {
-    .wf-action-row > [id$="-client"] > :first-child,
-    .wf-action-row > #wf-eval-actions > :first-child { margin-left: 0; }
+    .wf-action-row > [id$="-client"] > :first-child { margin-left: 0; }
   }
+  /* Greg (10/6/26): "when you click on the evaluation sheet in the left menu
+     have it open up in the right column window." The sheet renders in place
+     instead of only behind an Open button. It is the &preview=1 view on
+     purpose: preview refuses to submit, and submitting closes the engagement
+     (091) -- a Team Lead looking at the form must not be one stray click from
+     closing it on the client's behalf. */
+  #wf-eval-embed { margin: 12px 0 2px; }
+  .wf-embed-frame {
+    width: 100%; height: min(70vh, 760px); min-height: 420px; border: 1px solid var(--border);
+    border-radius: 10px; background: #fff; display: block;
+  }
+  @media print { .wf-embed-frame { height: auto; min-height: 0; } }
   .wf-btn {
     display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--navy-light);
     border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 7px 16px;
@@ -700,12 +710,13 @@
             <div class="wf-item-body">
               <div class="wf-item-header">
                 <div class="wf-item-title">Evaluation Sheet -- Send Evaluation Email (to the CEO, from the Team Lead)</div>
+                <div id="wf-eval-header-actions"></div>
               </div>
-              <div class="wf-item-hint">Write a short note to the CEO with a link to the Evaluation Sheet. Review and send the email. You'll get their reply right here.</div>
+              <div class="wf-item-hint">The sheet the CEO fills in is below. Use Create Email to send it to them, or Get Link to grab the URL and write your own note. Their reply comes back right here.</div>
               <div class="wf-action-row">
                 <div id="wf-eval-link"></div>
-                <div id="wf-eval-actions"></div>
               </div>
+              <div id="wf-eval-embed"></div>
               <div id="wf-eval-response"></div>
             </div>
           </div>
@@ -1783,9 +1794,52 @@
   // always available), and once a response has come back, "View Full
   // Response" becomes the prominent primary action in the body -- same
   // wf-open-btn treatment as "Open Document" on the other three rows.
+  // The dropdown trigger doubles as the busy indicator while
+  // ensureEvalLinkUrl() runs, so its label lives in one place.
+  const EVAL_TRIGGER_LABEL = "Create Email &#9662;";
+
+  // Greg (10/6/26): "...or just grab the link to the Evaluation Sheet and
+  // write their own email." This hands over the REAL link, not the preview
+  // one -- it is the URL the client is meant to receive, so it goes through
+  // ensureEvalLinkUrl() exactly as Create Email does: same research-document
+  // gate, and saved to client_content.evaluation_link_url so the dashboard
+  // and the email agree on one URL.
+  async function copyEvalLink() {
+    const btn = document.querySelector("#eval-email-create-btn");
+    if (btn) { btn.disabled = true; btn.innerHTML = "Preparing&hellip;"; }
+    const url = await ensureEvalLinkUrl();
+    if (btn) { btn.disabled = false; btn.innerHTML = EVAL_TRIGGER_LABEL; }
+    if (!url) return;
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(url);
+      copied = true;
+    } catch (e) {
+      // Clipboard access is refused in plenty of ordinary situations (an
+      // insecure origin, a permission the browser never granted, the page
+      // not being focused at the moment of the call). Falling back to the
+      // old execCommand path covers most of them.
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        copied = document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch (e2) { copied = false; }
+    }
+    // Never just say "copied" -- if it failed, the Team Lead needs the URL
+    // itself, not a cheerful lie.
+    showBanner(copied ? "Evaluation Sheet link copied to your clipboard." : "Couldn't reach your clipboard. Here's the link: " + url,
+               copied ? "success" : "error");
+  }
+
   function renderEvalLinkField() {
     const container = $("wf-eval-link");
-    const actions = $("wf-eval-actions");
+    const actions = $("wf-eval-header-actions");
     if (!container || !actions) return;
 
     // Greg (8/25/26): "instead of putting a button on the dashboard that
@@ -1794,10 +1848,24 @@
     // the old checkbox/"live on the dashboard" toggle and CEO-facing CTA
     // button entirely -- there's no dashboard button anymore (removed from
     // client_public.html), just this one button that drafts the email.
+    // Greg (10/6/26): "Move the create email up into the header and make it
+    // have a dropdown that says get link so that a TL can either create an
+    // email or just grab the link to the Evaluation Sheet and write their own
+    // email." Same .wf-change-wrap / .wf-menu dropdown the other three rows
+    // use for Change, so it opens, closes and keys the same way.
     actions.innerHTML = `
-      <button type="button" class="wf-btn wf-btn-icon-email" id="eval-email-create-btn">Create Email</button>
+      <div class="wf-change-wrap">
+        <button type="button" class="wf-btn wf-btn-icon-email" id="eval-email-create-btn" data-wf-change>${EVAL_TRIGGER_LABEL}</button>
+        <div class="wf-menu hidden">
+          <button type="button" data-eval-email>Create Email</button>
+          <button type="button" data-eval-get-link>Get Link</button>
+        </div>
+      </div>
     `;
-    actions.querySelector("#eval-email-create-btn").addEventListener("click", openEvalEmailModal);
+    wireWfChangeMenu(actions, [
+      { sel: "[data-eval-email]", fn: openEvalEmailModal },
+      { sel: "[data-eval-get-link]", fn: copyEvalLink },
+    ]);
 
     // Greg (9/4/26): "we have the link in the email. can't we just have an
     // open Close-Out Document button that goes to this link" -- same
@@ -1826,6 +1894,15 @@
         <button type="button" class="btn-primary wf-open-btn" id="eval-open-btn">&#128279; Open Evaluation Sheet &#8599;</button>
       </div>
     `;
+    // The sheet itself, in the right column, rather than only behind the
+    // button above -- which stays, because a full-tab read beats a 70vh
+    // scroller when you actually want to study it.
+    const embedBox = $("wf-eval-embed");
+    if (embedBox) {
+      embedBox.innerHTML = `
+        <iframe class="wf-embed-frame" title="Evaluation Sheet preview" loading="lazy" src="${escapeHtml(evalPreviewUrl())}"></iframe>
+      `;
+    }
     // The submitted response is a block of its own, below the two buttons --
     // inside the action row it would be laid out beside them.
     const responseBox = $("wf-eval-response");
@@ -1962,9 +2039,9 @@
   // pasting it in by hand instead.
   async function openEvalEmailModal() {
     const createBtn = document.querySelector("#eval-email-create-btn");
-    if (createBtn) { createBtn.disabled = true; createBtn.textContent = "Preparing…"; }
+    if (createBtn) { createBtn.disabled = true; createBtn.innerHTML = "Preparing&hellip;"; }
     const url = await ensureEvalLinkUrl();
-    if (createBtn) { createBtn.disabled = false; createBtn.textContent = "Create Email"; }
+    if (createBtn) { createBtn.disabled = false; createBtn.innerHTML = EVAL_TRIGGER_LABEL; }
     if (!url) return;
 
     const contacts = listData.contacts || [];
