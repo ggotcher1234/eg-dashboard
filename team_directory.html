@@ -8,6 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="role_view.js"></script>
 <style>
   :root {
     --navy: #14304d;
@@ -1353,9 +1354,23 @@
   // already returns "Team Lead" for them -- this just also covers Admins,
   // who have no specialties at all.)
   function primaryCategoryLabel(u) {
-    if (u.role === "super_admin") return "Admin";
+    // Greg (10/6/26): "my Roster account needs to say Team Lead even though i
+    // have admin capability." Consolidating his three logins into one made his
+    // account super_admin, and this line returned "Admin" for every
+    // super_admin -- which also contradicted the comment right above it, that
+    // the Admin label is for people "who have no specialties at all".
+    //
+    // So the fallback behaves like one. What someone DOES on engagements wins
+    // over what they are permitted to do, and Admin is what is left when they
+    // do nothing in particular (the NCEG house account). Team Lead comes ahead
+    // of the other specialties because it is a position on the engagement
+    // rather than a discipline -- without this it would lose the alphabetical
+    // sort to Digital Marketing.
+    const specialties = u.specialties || [];
+    if (specialties.includes("team_lead")) return SPECIALTY_LABELS.team_lead || "Team Lead";
     const labels = specialtyLabelsForDisplay(u);
-    return labels.length ? labels[0] : "";
+    if (labels.length) return labels[0];
+    return u.role === "super_admin" ? "Admin" : "";
   }
   // Sortable/searchable flat string -- specialties joined alphabetically,
   // e.g. a person tagged Digital Marketing + GIS sorts/searches as
@@ -1519,6 +1534,13 @@
       .select("id, full_name, role, organization_id")
       .eq("id", user.id)
       .single();
+    // Greg (10/6/26): "i need to have one login - Admin, but i need to change
+    // my view to TL or Specialist to see what they see." This one line, placed
+    // before anything reads profile.role, is what makes every isSuperAdmin
+    // check and every [data-super-admin-only] toggle on this page follow the
+    // override. The database enforces the same override independently (145b),
+    // so the interface and the policies cannot disagree. See role_view.js.
+    if (profile) await EGRoleView.mount(sb, profile);
 
     if (profileErr || !profile) {
       await sb.auth.signOut();
@@ -2953,7 +2975,10 @@
     try {
       const { data: { session } } = await sb.auth.getSession();
       if (!session) return;
-      const { data: profile } = await sb.from("users").select("role").eq("id", session.user.id).maybeSingle();
+      // Same override as everything else -- an Admin viewing as a Team
+      // Lead should not still be shown the Applications menu.
+      const { data: effRole } = await sb.rpc("my_effective_role");
+      const profile = effRole ? { role: effRole } : null;
       if (!profile || profile.role !== "super_admin") return;
 
       const { data: apps } = await sb
@@ -3039,7 +3064,10 @@
       try {
         const { data: { session } } = await sb.auth.getSession();
         if (!session) return;
-        const { data: profile } = await sb.from("users").select("role").eq("id", session.user.id).maybeSingle();
+        // Same override as everything else -- an Admin viewing as a Team
+        // Lead should not still be shown the Applications menu.
+        const { data: effRole } = await sb.rpc("my_effective_role");
+        const profile = effRole ? { role: effRole } : null;
         if (!profile || profile.role !== "super_admin") return;
 
         wrap.classList.remove("hidden");

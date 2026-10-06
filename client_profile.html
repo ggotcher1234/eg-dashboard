@@ -8,6 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="role_view.js"></script>
 <style>
   :root {
     --navy: #14304d;
@@ -1598,6 +1599,13 @@
       .select("id, full_name, role, organization_id")
       .eq("id", user.id)
       .single();
+    // Greg (10/6/26): "i need to have one login - Admin, but i need to change
+    // my view to TL or Specialist to see what they see." This one line, placed
+    // before anything reads profile.role, is what makes every isSuperAdmin
+    // check and every [data-super-admin-only] toggle on this page follow the
+    // override. The database enforces the same override independently (145b),
+    // so the interface and the policies cannot disagree. See role_view.js.
+    if (profile) await EGRoleView.mount(sb, profile);
 
     if (profileErr || !profile) {
       await sb.auth.signOut();
@@ -3699,7 +3707,10 @@
     try {
       const { data: { session } } = await sb.auth.getSession();
       if (!session) return;
-      const { data: profile } = await sb.from("users").select("role").eq("id", session.user.id).maybeSingle();
+      // Same override as everything else -- an Admin viewing as a Team
+      // Lead should not still see the Applications menu.
+      const { data: effRole } = await sb.rpc("my_effective_role");
+      const profile = effRole ? { role: effRole } : null;
       if (!profile || profile.role !== "super_admin") return;
 
       const { data: apps } = await sb
@@ -3785,7 +3796,10 @@
       try {
         const { data: { session } } = await sb.auth.getSession();
         if (!session) return;
-        const { data: profile } = await sb.from("users").select("role").eq("id", session.user.id).maybeSingle();
+        // Same override as everything else -- an Admin viewing as a Team
+        // Lead should not still see the Applications menu.
+        const { data: effRole } = await sb.rpc("my_effective_role");
+        const profile = effRole ? { role: effRole } : null;
         if (!profile || profile.role !== "super_admin") return;
 
         wrap.classList.remove("hidden");
