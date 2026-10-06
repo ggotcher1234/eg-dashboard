@@ -389,6 +389,12 @@
   .hidden { display: none !important; }
   /* Chris/Greg (9/2/26): retire the header Ask AI drawer, and drop the name/role chip (the account menu stays). */
   .ask-ai-wrap, .ai-drawer, .ai-drawer-overlay, .ai-nudge { display: none !important; }
+  /* Greg (10/6/26): the Roster page was the one page whose nav was not
+     role-gated -- a Team Lead or Specialist opening it saw the Invoicing
+     menu and the admin-only Programs/Roster submenus that every other
+     page hides. Same gate as elsewhere: two classes, so this beats the
+     .nav-submenu { display: block !important } mobile rule below. */
+  [data-super-admin-only].hidden { display: none !important; }
   #user-name { display: none !important; }
   /* Chris (9/4/26): breadcrumb moved out of the dark header (where it sat
      jammed against the logo) into its own light bar below, matching
@@ -567,20 +573,20 @@
       <a href="index.html" class="nav-link">Engagements</a>
       <div class="nav-item-dropdown nav-split-item">
         <a href="econ_dev_partners_admin.html" class="nav-link">Programs</a>
-        <button type="button" class="nav-link-dropdown-btn nav-caret-only" aria-label="Programs menu"><span class="nav-caret">&#9662;</span></button>
-        <div class="nav-submenu">
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Programs menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
           <a href="econ_dev_partners_admin.html?action=add">Add Program</a>
-          <a href="program_application_links.html">Application Links</a>
+          <a href="program_application_links.html" data-super-admin-only>Application Links</a>
         </div>
       </div>
       <div class="nav-item-dropdown nav-split-item">
         <a href="team_directory.html" class="nav-link active">Roster</a>
-        <button type="button" class="nav-link-dropdown-btn nav-caret-only" aria-label="Roster menu"><span class="nav-caret">&#9662;</span></button>
-        <div class="nav-submenu">
+        <button type="button" class="nav-link-dropdown-btn nav-caret-only" data-super-admin-only aria-label="Roster menu"><span class="nav-caret">&#9662;</span></button>
+        <div class="nav-submenu" data-super-admin-only>
           <a href="team_directory.html?action=add">Add Roster Member</a>
         </div>
       </div>
-      <div class="nav-item-dropdown">
+      <div class="nav-item-dropdown" data-super-admin-only>
         <button type="button" class="nav-link nav-link-dropdown-btn">Invoicing <span class="nav-caret">&#9662;</span></button>
         <div class="nav-submenu">
           <a href="invoicing_report.html">Time Sheets</a>
@@ -1501,6 +1507,7 @@
     maybeShowAiNudge();
     $("user-name").textContent = profile.full_name;
     $("user-role").textContent = roleLabel(profile.role);
+    document.querySelectorAll("[data-super-admin-only]").forEach((el) => el.classList.toggle("hidden", profile.role !== "super_admin"));
     $("import-menu-btn").classList.toggle("hidden", !isSuperAdmin);
     $("roster-import-btn").classList.toggle("hidden", !isSuperAdmin);
     $("workload-section").classList.toggle("hidden", !isSuperAdmin);
