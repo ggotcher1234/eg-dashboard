@@ -329,15 +329,21 @@ Deno.serve(async (req: Request) => {
             reply_to: "egdashboard@economicgardening.org",
             to: [target.email],
             cc,
-            subject: "Your EG Dashboard sign-in",
+            subject: "Welcome to the EG Dashboard",
             html: `
               <p>Hi ${escapeHtml(firstName)},</p>
-              <p>You have been added to the EG Dashboard, where Economic Gardening engagements are run.</p>
+              <p>Welcome aboard &mdash; you have been added to the EG Dashboard, where we run our
+                 Economic Gardening engagements. Your account is ready; you just need a password.</p>
               <p><a href="${escapeHtml(actionLink)}">Set your password and sign in</a></p>
-              <p>That link is good for one use and expires in 24 hours. If it has run out by the time you
-                 get to it, go to <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a> and use
-                 "Forgot your password?" with this address &mdash; it does the same thing.</p>
-              <p>Your sign-in address is <strong>${escapeHtml(String(target.email))}</strong>.</p>
+              <p>That link gets you in the first time. It works once and expires in 24 hours.</p>
+              <p>Once you are in, <strong>bookmark
+                 <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a></strong> &mdash; that is
+                 the dashboard itself, and it is where you will go from then on.</p>
+              <p>You will sign in with this address: <strong>${escapeHtml(String(target.email))}</strong></p>
+              <p>If the link has already expired by the time you get to it, no problem &mdash; go to
+                 <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a>, choose "Forgot your
+                 password?" and enter this address. It does exactly the same thing.</p>
+              <p>Glad to have you with us.</p>
             `,
           }),
         });
