@@ -746,9 +746,16 @@
              "Show hidden" widens the active list, this swaps the list for the
              archived one. Admin-only, same as the checkbox beside it. -->
         <button type="button" class="btn-secondary hidden" id="view-archived-btn">View Archived</button>
-        <!-- "+ Add Roster Member" moved into the top-nav Roster dropdown
-             (Greg, 9/6/26) so it's reachable from any page; removed here to
-             avoid the same action existing in two places. -->
+        <!-- "+ Add Roster Member" lived here, moved into the top-nav Roster
+             dropdown on 9/6/26 so it was reachable from any page, and is back
+             on 10/6/26: Greg asked for "a button on the Roster page to Add New
+             roster member", not knowing the action still existed at all. An
+             action nobody can find is the same as one that is not there, and
+             the page it belongs to is where it gets looked for. The nav entry
+             stays -- both call openAddMember, so there is one action with two
+             doors rather than two implementations. Admin-only, like View
+             Archived beside it. -->
+        <button type="button" class="btn-primary hidden" id="add-member-btn">&#43; Add Roster Member</button>
       </div>
     </div>
 
@@ -1496,6 +1503,11 @@
     $("workload-section").classList.toggle("hidden", !isSuperAdmin);
     $("show-hidden-wrap").classList.toggle("hidden", !isSuperAdmin);
     $("view-archived-btn").classList.toggle("hidden", !isSuperAdmin);
+    // Greg: "admin's only of course." Creating a member mints a real login,
+    // so this follows the same rule as the edge function behind it, which
+    // refuses anybody who is not a super admin regardless of what the page
+    // shows.
+    $("add-member-btn").classList.toggle("hidden", !isSuperAdmin);
 
     await loadUsers();
     if (isSuperAdmin) await loadTeamLeadWorkload();
@@ -2023,6 +2035,8 @@
     $("add-error").style.display = "none";
     $("add-overlay").classList.add("open");
   }
+
+  $("add-member-btn").addEventListener("click", openAddMember);
 
   function applyActionDeepLink() {
     const action = new URLSearchParams(location.search).get("action");
