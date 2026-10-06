@@ -689,6 +689,92 @@ async function submitEvaluation(){
 // Submitting writes a real evaluation response AND closes the engagement
 // (091_close_engagement_on_evaluation.sql), so preview must not be able to
 // reach it -- the button is disabled rather than merely hidden.
+// ── ALREADY-SUBMITTED MODE ────────────────────────────────────────────────
+// 148's get_submitted_evaluation(). Holding the client id is the capability
+// here, same as get_evaluation_form_data -- that id IS the link.
+async function fetchSubmittedResponse(){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_submitted_evaluation`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ p_client_id: CLIENT_ID }),
+    });
+    if(!res.ok) return null;
+    const rows = await res.json().catch(() => []);
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    return (row && row.submitted_at) ? row : null;
+  }catch(e){
+    // A read failure must never block the sheet. Worst case the client sees
+    // a blank form, which is what they saw before this existed.
+    return null;
+  }
+}
+
+function fillFromSubmitted(r){
+  state.date        = r.respondent_date || '';
+  state.nameTitle   = r.respondent_name || '';
+  state.company     = r.company_name || state.company;
+  state.sponsor     = r.sponsor_name || state.sponsor;
+  state.q1Explain   = r.q1_explain || '';
+  state.q3          = r.prepared || '';
+  state.q3Explain   = r.prepared_explain || '';
+  state.q4          = r.improvement_suggestions || '';
+  state.q5          = (r.nps_score === null || r.nps_score === undefined) ? '' : String(r.nps_score);
+  state.q5Explain   = r.nps_explain || '';
+  state.testimonial = r.testimonial || '';
+
+  // Match each saved rating to the question it was given for, by text --
+  // the client's research questions can be edited after a submission, and
+  // lining up by position would then put ratings against the wrong rows.
+  // Anything that no longer matches falls back to its original position.
+  const saved = Array.isArray(r.question_ratings) ? r.question_ratings : [];
+  const byText = new Map(saved.filter(x => x && x.question).map(x => [String(x.question).trim(), x.rating || '']));
+  state.q1Rows = state.q1Rows.map((row, i) => ({
+    q: row.q,
+    rating: byText.has(String(row.q).trim())
+      ? byText.get(String(row.q).trim())
+      : ((saved[i] && saved[i].rating) || '')
+  }));
+
+  // Questions that were rated but are no longer on the form still belong on
+  // a record of what they answered, so they are appended rather than lost.
+  const live = new Set(state.q1Rows.map(x => String(x.q).trim()));
+  saved.forEach(x => {
+    if(x && x.question && !live.has(String(x.question).trim())){
+      state.q1Rows.push({ q: x.question, rating: x.rating || '' });
+    }
+  });
+
+  const refs = Array.isArray(r.referrals) ? r.referrals : [];
+  state.q6Rows = refs.length
+    ? refs.map(x => ({ name: x.name || '', company: x.company || '', contact: x.contact || '' }))
+    : [{name:'',company:'',contact:''}];
+}
+
+function applySubmittedMode(r){
+  const when = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '';
+  const who  = r.respondent_name ? ' by ' + esc(r.respondent_name) : '';
+  const banner = document.createElement('div');
+  banner.style.cssText = 'margin:0 0 18px;padding:12px 18px;background:#eef3ea;border:1px solid #9bb089;border-radius:8px;color:#33471f;font-size:0.9rem;';
+  banner.innerHTML = '<strong>Submitted' + (when ? ' ' + esc(when) : '') + who + '.</strong> ' +
+    'This is your completed Evaluation Sheet. It is read-only now \u2014 contact your EG team if anything needs changing.';
+  const form = document.getElementById('clientForm');
+  form.insertBefore(banner, form.firstChild);
+
+  // Lock every control. The custom rating dots and NPS buttons are not form
+  // fields, so disabling inputs alone would still leave them clickable.
+  form.querySelectorAll('input, textarea, select, button').forEach(el => { el.disabled = true; });
+  form.querySelectorAll('.radio-opt, .nps-btn, #npsTrack, #researchBody').forEach(el => {
+    el.style.pointerEvents = 'none';
+  });
+  const footer = document.getElementById('footer-submit');
+  if(footer) footer.style.display = 'none';
+}
+
 function applyPreviewMode(){
   const banner = document.createElement('div');
   banner.style.cssText = 'margin:0 0 18px;padding:12px 18px;background:#fff8e1;border:1px solid #e6cf8b;border-radius:8px;color:#6b5312;font-size:0.9rem;';
@@ -748,11 +834,22 @@ async function init(){
   state.sponsor = formData.sponsor_name || '';
   state.q1Rows = (formData.questions || []).map(q => ({ q, rating: '' }));
 
-  loadState();
+  // Greg (10/6/26), opening Clippard's sheet from their dashboard: "i want
+  // the real form filled out with the information that was in their pdf."
+  // If this client has already submitted, their link now shows the sheet
+  // they filled in rather than a blank one. Every control on this page is
+  // built from `state`, so filling `state` first is all it takes.
+  //
+  // It also closes a hole: before this, reopening the link after submitting
+  // gave you an empty form and a live Submit button, so a second response
+  // could be filed over the first.
+  const submitted = await fetchSubmittedResponse();
+  if(submitted) fillFromSubmitted(submitted);
+  else loadState();
 
   document.getElementById('loading-view').classList.add('hidden');
   document.getElementById('clientForm').classList.remove('hidden');
-  if(IS_PREVIEW) applyPreviewMode();
+  if(IS_PREVIEW && !submitted) applyPreviewMode();
 
   buildResearchRows();
   buildRefRows();
@@ -761,7 +858,9 @@ async function init(){
   restoreFields();
   restoreQ3();
   restoreQ5();
-  autosaveIntervalId = setInterval(saveState, 4000);
+  // No autosave over a submitted sheet -- nothing on it can change.
+  if(submitted) applySubmittedMode(submitted);
+  else autosaveIntervalId = setInterval(saveState, 4000);
 
   updateProgress();
 }
