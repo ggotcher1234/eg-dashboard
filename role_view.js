@@ -28,18 +28,27 @@
   "use strict";
 
   var LABEL = { super_admin: "Admin", team_lead: "Team Lead", consultant: "Specialist" };
-  var HOURS = 2;
+  // Greg (10/6/26): "i will rarely use the team lead and specialist views.
+  // just for a few troubleshooting or to create training videos." A short
+  // timer was protection against a forgotten override -- but a deliberate,
+  // occasional switch is far likelier to be interrupted by the clock than
+  // saved by it, and admin menus reappearing halfway through a recording is
+  // worse than the thing the timer was guarding. The real protection was
+  // never the clock: it is the RLS rule that lets you clear your own
+  // override whatever role you are wearing.
+  var HOURS = 12;
 
   function styles() {
     if (document.getElementById("rv-styles")) return;
     var css = document.createElement("style");
     css.id = "rv-styles";
     css.textContent = [
-      ".rv-bar{position:sticky;top:0;z-index:200;display:flex;align-items:center;justify-content:center;",
-      "gap:14px;flex-wrap:wrap;padding:8px 16px;background:#a9740f;color:#fff;font-size:13px;font-weight:600;}",
-      ".rv-bar button{background:#fff;color:#7a5c17;border:none;border-radius:999px;padding:5px 14px;",
-      "font:inherit;font-weight:700;cursor:pointer;}",
-      ".rv-bar button:hover{background:#fdf3e0;}",
+      ".rv-chip{display:inline-flex;align-items:center;gap:7px;background:#a9740f;color:#fff;",
+      "border-radius:999px;padding:3px 5px 3px 11px;font-size:11.5px;font-weight:700;",
+      "letter-spacing:.2px;white-space:nowrap;flex-shrink:0;}",
+      ".rv-chip button{background:rgba(255,255,255,.22);color:#fff;border:none;border-radius:999px;",
+      "width:18px;height:18px;line-height:1;font:inherit;font-size:12px;cursor:pointer;padding:0;}",
+      ".rv-chip button:hover{background:#fff;color:#7a5c17;}",
       ".pd-viewas{padding:6px 10px 8px;border-bottom:1px solid var(--border,#e2e8f0);margin-bottom:4px;}",
       ".pd-viewas-label{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;",
       "color:var(--muted,#64748b);margin-bottom:5px;}",
@@ -47,22 +56,34 @@
       "border:none;background:none;font:inherit;font-size:12.5px;color:var(--text,#0f172a);cursor:pointer;}",
       ".pd-viewas button:hover{background:#eef1f4;}",
       ".pd-viewas button[aria-current=\"true\"]{font-weight:700;background:#eef1f4;}",
-      "@media print{.rv-bar{display:none;}}"
+      "@media print{.rv-chip{display:none;}}"
     ].join("");
     document.head.appendChild(css);
   }
 
-  function banner(sb, viewing, onExit) {
-    var bar = document.createElement("div");
-    bar.className = "rv-bar no-print";
-    bar.innerHTML = '<span>Viewing as <strong>' + (LABEL[viewing] || viewing) +
-      '</strong> — this is what they see, for real. Your Admin rights are off until you exit.</span>';
-    var btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = "Exit and go back to Admin";
-    btn.addEventListener("click", onExit);
-    bar.appendChild(btn);
-    document.body.insertBefore(bar, document.body.firstChild);
+  // A chip rather than the full-width bar it started as. Greg records
+  // training videos in these views, and a banner reading "your Admin rights
+  // are off" would sit in every frame of a video whose whole point is to look
+  // like an ordinary Team Lead's screen. Small, in the header beside the
+  // account menu, with its own exit -- still impossible to miss if you look,
+  // easy to ignore on camera.
+  function chip(viewing, onExit) {
+    if (document.querySelector(".rv-chip")) return;
+    var el = document.createElement("span");
+    el.className = "rv-chip no-print";
+    el.title = "You are viewing the dashboard as a " + (LABEL[viewing] || viewing) +
+               ". Your Admin rights are off until you exit.";
+    el.appendChild(document.createTextNode("Viewing as " + (LABEL[viewing] || viewing)));
+    var x = document.createElement("button");
+    x.type = "button";
+    x.setAttribute("aria-label", "Exit this view and go back to Admin");
+    x.innerHTML = "&times;";
+    x.addEventListener("click", onExit);
+    el.appendChild(x);
+    // #userbox is the header's right-hand cluster and exists on every page.
+    var box = document.getElementById("userbox") || document.getElementById("userbox2");
+    if (box) box.insertBefore(el, box.firstChild);
+    else document.body.insertBefore(el, document.body.firstChild);
   }
 
   function menu(current, realRole, onPick) {
@@ -124,7 +145,7 @@
     }
 
     menu(effective, realRole, set);
-    if (effective !== realRole) banner(sb, effective, clear);
+    if (effective !== realRole) chip(effective, clear);
     return profile;
   }
 
