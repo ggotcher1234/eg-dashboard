@@ -2614,8 +2614,22 @@
     // Was u.title with specialties as the fallback; Title left the form on
     // 9/19/26, so the specialties are the line.
     $("pf-title-display").textContent = specialtyLabelsForDisplay(u).join(", ");
-    $("pf-role-badge").textContent = ROLE_LABELS[u.role] || u.role;
-    $("pf-role-badge").className = "role-badge " + u.role;
+    // Greg (10/6/26): "my Roster account needs to say Team Lead even though i
+    // have admin capability." The list line was changed for that, but this
+    // badge still read the permission level, so opening his record undid it
+    // one click later. The badge now says the same thing the list says -- what
+    // someone does on engagements -- and the Role field below is where the
+    // permission level is stated, for the admins who can act on it.
+    //
+    // The colour follows the label rather than the real role; a badge that
+    // says Team Lead in the Admin colour would just leak the same thing more
+    // quietly.
+    const badgeText = primaryCategoryLabel(u) || (ROLE_LABELS[u.role] || u.role);
+    const badgeTone = badgeText === "Admin" ? "super_admin"
+                    : badgeText === (SPECIALTY_LABELS.team_lead || "Team Lead") ? "team_lead"
+                    : "consultant";
+    $("pf-role-badge").textContent = badgeText;
+    $("pf-role-badge").className = "role-badge " + badgeTone;
 
     $("pf-id").value = u.id;
     $("pf-company").value = u.company_name || "";
@@ -2635,8 +2649,17 @@
     $("pf-phone").disabled = !canEdit;
     $("pf-address").disabled = !canEdit;
     $("pf-timezone").disabled = !canEdit;
+    // The Role field is a permissions control, and it was the last thing on
+    // this panel still announcing the permission level to people who cannot
+    // change it -- shown disabled, which is still perfectly readable. Hidden
+    // outright for non-admins now. It stays disabled as well, so a hidden
+    // field can never be submitted (the save path already ignores it for
+    // non-admins; this is the second lock, not the first).
     $("pf-role").disabled = !canEditRole;
-    $("pf-role-lock-note").textContent = canEditRole ? "" : "(Admin only)";
+    $("pf-role").classList.toggle("hidden", !canEditRole);
+    const roleLabelEl = document.querySelector('label[for="pf-role"]');
+    if (roleLabelEl) roleLabelEl.classList.toggle("hidden", !canEditRole);
+    $("pf-role-lock-note").textContent = "";
 
     // The strip holds Hide; Archive/Restore sit in the row directly beneath it.
     // Non-admins see neither.
