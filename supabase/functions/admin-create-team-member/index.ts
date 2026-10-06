@@ -90,6 +90,14 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, PATCH, OPTIONS",
 };
 
+// The invite body interpolates a name, an address and a signed URL. Only the
+// URL is trusted, and a name with an ampersand in it would break the markup
+// around it even without anyone trying.
+function escapeHtml(s: string) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -247,6 +255,97 @@ Deno.serve(async (req: Request) => {
         }
 
         return jsonResponse({ ok: true, archived: false });
+      }
+
+      // ---- Invite ----
+      // Greg (10/6/26): "Is there a way to invite a Roster member to join the
+      // team... i'd hate to have to open Supabase." Adding somebody already
+      // creates their auth account, but nothing ever told them, so the only
+      // way in was for an Admin to type a password here and pass it along out
+      // of band. This mints a set-your-own-password link and emails it.
+      //
+      // generateLink rather than inviteUserByEmail, and Resend rather than
+      // Supabase's own sender, for the reason the note at the top of this file
+      // already gives: the built-in relay is rate-limited to a few messages an
+      // hour and is not meant for real mail. generateLink only mints the link;
+      // it sends nothing itself, so the send is ours to make.
+      //
+      // Type "recovery", not "invite": the account already exists with
+      // email_confirm true, and an invite link for an existing confirmed user
+      // is refused. Recovery lands on reset_password.html, which already picks
+      // the token out of the URL and swaps it for a set-password form.
+      if (body.invite === true) {
+        if (!targetId) {
+          return jsonResponse({ error: "user_id is required." }, 400);
+        }
+        const resendKey = Deno.env.get("RESEND_API_KEY");
+        if (!resendKey) {
+          return jsonResponse({ error: "RESEND_API_KEY is not set, so the invite cannot be sent." }, 500);
+        }
+
+        const { data: target, error: targetErr } = await adminClient
+          .from("users")
+          .select("email, full_name, archived_at")
+          .eq("id", targetId)
+          .single();
+        if (targetErr || !target) {
+          return jsonResponse({ error: "Couldn't find that roster member." }, 404);
+        }
+        if (!target.email) {
+          return jsonResponse({ error: "That person has no email address on file." }, 400);
+        }
+        if (target.archived_at) {
+          return jsonResponse({ error: "That person is archived. Restore them before inviting." }, 400);
+        }
+
+        const siteUrl = (Deno.env.get("PUBLIC_SITE_URL") || "https://egdb.netlify.app").replace(/\/+$/, "");
+        const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
+          type: "recovery",
+          email: target.email,
+          options: { redirectTo: `${siteUrl}/reset_password.html` },
+        });
+        const actionLink = linkData?.properties?.action_link;
+        if (linkErr || !actionLink) {
+          return jsonResponse({ error: linkErr?.message || "Couldn't generate the sign-in link." }, 400);
+        }
+
+        // Greg: "and cc's admins." Same set every other internal notice from
+        // this system uses -- active super admins -- so whoever did not press
+        // the button still sees that it went out, and to which address.
+        const { data: admins } = await adminClient
+          .from("users").select("email").eq("role", "super_admin").is("archived_at", null);
+        const cc = [...new Set(
+          (admins ?? [])
+            .map((u: { email: string | null }) => (u.email ?? "").trim().toLowerCase())
+            .filter((e: string) => e && e !== String(target.email).toLowerCase()),
+        )];
+
+        const firstName = String(target.full_name || "").trim().split(/\s+/)[0] || "there";
+        const inviteRes = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from: "EG Dashboard <noreply@send.economicgardening.org>",
+            reply_to: "egdashboard@economicgardening.org",
+            to: [target.email],
+            cc,
+            subject: "Your EG Dashboard sign-in",
+            html: `
+              <p>Hi ${escapeHtml(firstName)},</p>
+              <p>You have been added to the EG Dashboard, where Economic Gardening engagements are run.</p>
+              <p><a href="${escapeHtml(actionLink)}">Set your password and sign in</a></p>
+              <p>That link is good for one use and expires in 24 hours. If it has run out by the time you
+                 get to it, go to <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a> and use
+                 "Forgot your password?" with this address &mdash; it does the same thing.</p>
+              <p>Your sign-in address is <strong>${escapeHtml(String(target.email))}</strong>.</p>
+            `,
+          }),
+        });
+        if (!inviteRes.ok) {
+          const errText = await inviteRes.text().catch(() => "");
+          return jsonResponse({ error: `The link was created but the email failed to send: ${errText}` }, 502);
+        }
+        return jsonResponse({ ok: true, invited: target.email, cc });
       }
 
       // ---- Set password ----
