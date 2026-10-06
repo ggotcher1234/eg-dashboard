@@ -1,0 +1,52 @@
+-- 147_evaluation_submit_wrong_function.sql (10/6/26)   [NO SQL -- INCIDENT NOTE]
+--
+-- Greg: "i just had the evaluation call with Clippard and they were unable to
+-- submit the evaluation sheet from the link we sent them and had to send me a
+-- pdf of their response."
+--
+-- ROOT CAUSE
+-- The Edge Function deployed under the slug "public-submit-evaluation" was
+-- running the SOURCE OF public-submit-application. The wrong file had been
+-- pasted into the function in the Supabase dashboard; its first line was
+-- literally "// public-submit-application". That code reads body.programCode
+-- and answers 400 "Missing program." when it is absent -- and the evaluation
+-- page has never sent a programCode, because it has no program to send.
+--
+-- So EVERY evaluation submission, from any client, returned 400. The page
+-- then showed its fallback: 'Couldn't submit: ... Please try again, or use
+-- "Save a PDF Copy" and email it instead.' Which is exactly what Clippard did.
+--
+-- TIMELINE
+--   2026-08-25         function created; two real submissions succeeded that
+--                      day (their notifications are still in the table; the
+--                      response rows were test data Greg deleted later)
+--   2026-08-30 00:46   version 3 deployed -- the application function's code
+--   2026-08-30 onward  every submission 400s
+--   2026-10-06 19:32   Clippard tries, gets the 400, emails a PDF
+--   2026-10-06         version 4 deployed with the correct source
+--
+-- client_evaluation_responses stood at ZERO rows for the whole period. That
+-- is the tell: this was never an edge case, nobody could ever have submitted.
+-- Worth remembering as a diagnostic -- an empty table for a feature that is
+-- supposedly in use is a stronger signal than any error message.
+--
+-- FIX
+-- supabase/functions/public-submit-evaluation/index.ts redeployed to its own
+-- slug (v4), verify_jwt left true as before. One hardening change while in
+-- there: respondent_date now passes through a clampDate() that drops anything
+-- which is not a plain YYYY-MM-DD, because that column is a DATE and a
+-- malformed value would have failed the insert and read, to a CEO, as the
+-- form being broken.
+--
+-- Verified after deploying, without writing anything: a real client id with
+-- no ratings returns "Please answer at least one research question", an
+-- unknown id returns "Unknown client link", a missing id returns "Missing
+-- client". Then Clippard's own answers were posted through the live endpoint
+-- and came back 200 {"ok":true}.
+--
+-- NOT A CODE CHANGE TO THE DATABASE. This file exists so the next person
+-- finds the incident next to the migrations rather than only in a commit
+-- message.
+--
+-- WORTH DOING SEPARATELY: nothing detects this class of failure. A submission
+-- that 400s is invisible unless a client happens to tell their Team Lead.
