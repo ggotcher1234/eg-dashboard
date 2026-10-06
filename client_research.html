@@ -1057,6 +1057,36 @@
   // touched, so checking `error` alone reports a save that never happened --
   // which is exactly what it did for an engagement this login doesn't lead.
   // The returned row is the only honest proof, so an empty result is failure.
+  // Greg (10/6/26), hitting this on Extremis Systems while the page above it
+  // said "Team Lead: Greg Gotcher": three Roster entries share that name, and
+  // the engagement was led by a different one of his accounts than the one he
+  // was signed in as. "Only this engagement's Team Lead" then reads as a
+  // contradiction rather than an instruction -- the message named a role, and
+  // the whole problem was that the role and the name did not identify a single
+  // person. So name the account, and say which one you are using.
+  //
+  // The lookup is best-effort: RLS may refuse it for the very user who just
+  // got refused the write, and that is fine -- the original sentence is still
+  // true, it is just less helpful.
+  async function teamLeadRefusalMessage() {
+    const generic = "Couldn't save that \u2014 only this engagement's Team Lead or an Admin can change what its dashboard shows.";
+    try {
+      const { data, error } = await sb
+        .from("client_assignments")
+        .select("users(full_name, email)")
+        .eq("client_id", currentClient.id)
+        .eq("is_team_lead", true)
+        .limit(1);
+      const lead = (!error && data && data.length) ? data[0].users : null;
+      if (!lead || !lead.email) return generic;
+      const name = lead.full_name ? lead.full_name + " (" + lead.email + ")" : lead.email;
+      const me = currentUser && currentUser.email ? " You're signed in as " + currentUser.email + "." : "";
+      return "Couldn't save that \u2014 only " + name + " or an Admin can change what this engagement's dashboard shows." + me;
+    } catch (e) {
+      return generic;
+    }
+  }
+
   $("show-questions").addEventListener("change", async () => {
     if (!currentClient) return;
     const box = $("show-questions");
@@ -1075,7 +1105,7 @@
     }
     if (!data || !data.length) {
       box.checked = !next;
-      showBanner("Couldn't save that \u2014 only this engagement's Team Lead or an Admin can change what its dashboard shows.", "error");
+      showBanner(await teamLeadRefusalMessage(), "error");
       return;
     }
     currentClient.show_research_questions = data[0].show_research_questions;
