@@ -209,6 +209,12 @@
   .tasks-head-left { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
   .tasks-head h2 { margin: 0; font-size: 15px; color: var(--navy); }
   .tasks-count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tasks-head-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .tasks-due { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+  .tasks-due-label { color: var(--muted); font-weight: 500; }
+  .tasks-due input { width: auto; margin: 0; padding: 2px 6px; font-size: 12px; }
+  .tasks-due-read { font-weight: 600; color: var(--navy); font-variant-numeric: tabular-nums; }
+  .tasks-due-read.is-unset { font-weight: 500; color: var(--muted); }
   .tasks-hide-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 500; white-space: nowrap; }
   .tasks-hide-wrap input { width: auto; margin: 0; }
   .tasks-progress { height: 3px; border-radius: 999px; background: #e8ecee; overflow: hidden; margin: 0 0 6px; }
@@ -255,12 +261,6 @@
   .tl-refnote-dead { color: var(--danger-dark); background: #fbeceb; border-color: #f0d6d4; }
   .tl-reflink { background: none; border: none; padding: 0; font: inherit; font-weight: 700;
                 color: inherit; text-decoration: underline; cursor: pointer; }
-  .tl-due { background: #eef1f4; color: var(--muted); cursor: pointer; font: inherit; font-size: 11px;
-            font-weight: 600; border-radius: 999px; padding: 2px 8px; border: 1px solid transparent; white-space: nowrap; }
-  .tl-due:hover { border-color: #c3ccd4; }
-  .tl-due-none { color: #9aa4ae; }
-  .tl-due-soon { background: #fdf4e3; color: #8a5d08; }
-  .tl-due-over { background: #fbeceb; color: var(--danger-dark); }
 
   .tl-avatar { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; padding: 0;
                border: none; font-size: 10px; font-weight: 700; letter-spacing: 0.2px; color: #fff;
@@ -847,10 +847,21 @@
               <h2>Tasks</h2>
               <span class="tasks-count" id="tasks-count"></span>
             </div>
-            <label class="tasks-hide-wrap">
-              <input type="checkbox" id="tasks-hide-done" />
-              <span>Hide completed</span>
-            </label>
+            <div class="tasks-head-right">
+              <!-- One date for the whole engagement (155). Greg: "the Team
+                   Lead sets a target date for completion and it should role
+                   down to all the researchers. no need to show it on every
+                   line for each researcher." -->
+              <div class="tasks-due" id="tasks-due-wrap" hidden>
+                <span class="tasks-due-label">Research due</span>
+                <input type="date" id="tasks-due" />
+                <span class="tasks-due-read" id="tasks-due-read" hidden></span>
+              </div>
+              <label class="tasks-hide-wrap">
+                <input type="checkbox" id="tasks-hide-done" />
+                <span>Hide completed</span>
+              </label>
+            </div>
           </div>
           <div class="tasks-progress"><i id="tasks-progress-bar" style="width:0%"></i></div>
           <div id="tasks-list"></div>
@@ -1220,8 +1231,9 @@
   // The lookup is best-effort: RLS may refuse it for the very user who just
   // got refused the write, and that is fine -- the original sentence is still
   // true, it is just less helpful.
-  async function teamLeadRefusalMessage() {
-    const generic = "Couldn't save that \u2014 only this engagement's Team Lead or an Admin can change what its dashboard shows.";
+  async function teamLeadRefusalMessage(what) {
+    const subject = what || "what its dashboard shows";
+    const generic = "Couldn't save that \u2014 only this engagement's Team Lead or an Admin can change " + subject + ".";
     try {
       const { data, error } = await sb
         .from("client_assignments")
@@ -1233,7 +1245,7 @@
       if (!lead || !lead.email) return generic;
       const name = lead.full_name ? lead.full_name + " (" + lead.email + ")" : lead.email;
       const me = currentUser && currentUser.email ? " You're signed in as " + currentUser.email + "." : "";
-      return "Couldn't save that \u2014 only " + name + " or an Admin can change what this engagement's dashboard shows." + me;
+      return "Couldn't save that \u2014 only " + name + " or an Admin can change " + subject + "." + me;
     } catch (e) {
       return generic;
     }
@@ -1313,6 +1325,7 @@
       loadResearchQuestions(),
       loadEngagementSpecialists(),
     ]);
+    renderResearchDue();
     renderTaskList();
   }
 
@@ -1489,6 +1502,9 @@
   // Everyone holding an assignment row on this engagement, for the task
   // assignee picker. Loaded only when tasks are in use.
   let engagementSpecialists = [];
+  // Set by loadEngagementSpecialists(). Admins and this engagement's Team
+  // Lead edit the research due date; everybody else reads it.
+  let viewerIsLead = false;
   let hideDoneTasks = false;
   // Which tasks are expanded. Originally one at a time, which I chose and
   // Greg never asked for -- his words were "accordian style dropdowns for
@@ -1546,12 +1562,18 @@
   async function loadEngagementSpecialists() {
     const { data, error } = await sb
       .from("client_assignments")
-      .select("user_id, specialty_type, slot_number, users(full_name, avatar_url)")
+      .select("user_id, specialty_type, slot_number, is_team_lead, users(full_name, avatar_url)")
       .eq("client_id", currentClient.id)
       .not("user_id", "is", null)
       .order("specialty_type")
       .order("slot_number");
-    if (error) { engagementSpecialists = []; return; }
+    if (error) { engagementSpecialists = []; viewerIsLead = isSuperAdmin; return; }
+    // Who may set the engagement's research date. Same rule the database
+    // enforces on clients_update -- is_super_admin() OR
+    // is_team_lead_of_client(id) -- read here only so a specialist sees the
+    // date as a fact rather than as a box that refuses them.
+    viewerIsLead = isSuperAdmin
+      || (data || []).some((a) => currentUser && a.user_id === currentUser.id && a.is_team_lead);
     engagementSpecialists = (data || []).map((a) => ({
       userId: a.user_id,
       name: (a.users && a.users.full_name) || "Unknown",
@@ -1665,14 +1687,6 @@
     return `<option value=""${!selectedId ? " selected" : ""}>Unassigned</option>${opts}`;
   }
 
-  function taskIsOverdue(q) {
-    if (!q.due_date || q.completed_at) return false;
-    // Date-only compare: a task due today is not overdue until tomorrow.
-    const today = new Date();
-    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    return q.due_date < todayKey;
-  }
-
   function initialsOf(name) {
     const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
     if (!parts.length) return "?";
@@ -1680,26 +1694,12 @@
   }
 
   // Stable per-person colour so the same face keeps the same swatch down the
-  // list. Muted hues only -- the list should read calm, and red is reserved
-  // for overdue.
+  // list. Muted hues only -- the list should read calm.
   const AVATAR_COLOURS = ["#5c7248", "#4a6b84", "#7a5c82", "#8a6a3e", "#4f7268", "#6b5f8a", "#87604f"];
   function avatarColour(seed) {
     let h = 0;
     for (const ch of String(seed || "")) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
     return AVATAR_COLOURS[h % AVATAR_COLOURS.length];
-  }
-
-  // "Oct 22", "Today", "3d overdue" -- what a person needs at a glance, not
-  // an input box. The input appears when the row is open.
-  function dueChip(q) {
-    // A finished task shows the plain date, never the relative label: once
-    // it is done, "10d overdue" is both wrong and a bit accusing.
-    if (q.completed_at) {
-      return q.due_date ? `<span class="tl-chip">${escapeHtml(absoluteDue(q.due_date))}</span>` : "";
-    }
-    if (!q.due_date) return `<button type="button" class="tl-due tl-due-none" data-task-due-open="${q.id}" title="Set a due date">No date</button>`;
-    const d = prettyDue(q.due_date);
-    return `<button type="button" class="tl-due ${d.cls}" data-task-due-open="${q.id}" title="Due ${escapeHtml(q.due_date)}">${escapeHtml(d.label)}</button>`;
   }
 
   // The row on the invoice: MR, DM2, GIS1, WH. An unassigned task has no
@@ -1730,26 +1730,13 @@
   }
 
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  function absoluteDue(iso) {
+  // Parsed as local parts, never Date(iso): "2026-10-22" through the Date
+  // constructor is UTC midnight, which reads as the 21st west of Greenwich.
+  function prettyDate(iso) {
     const [y, m, d] = String(iso).split("-").map(Number);
-    return `${MONTHS[(m || 1) - 1]} ${d || 1}`;
+    if (!y || !m || !d) return String(iso);
+    return `${MONTHS[m - 1]} ${d}, ${y}`;
   }
-  function prettyDue(iso) {
-    // Parsed as local parts, not Date(iso) -- "2026-10-22" through the Date
-    // constructor is UTC midnight, which reads as the 21st west of Greenwich
-    // and would show a task due today as overdue.
-    const [y, m, d] = String(iso).split("-").map(Number);
-    const due = new Date(y, (m || 1) - 1, d || 1);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const days = Math.round((due - today) / 86400000);
-    if (days < 0) return { label: `${Math.abs(days)}d overdue`, cls: "tl-due-over" };
-    if (days === 0) return { label: "Today", cls: "tl-due-soon" };
-    if (days === 1) return { label: "Tomorrow", cls: "tl-due-soon" };
-    const label = `${MONTHS[due.getMonth()]} ${due.getDate()}`;
-    return { label, cls: days <= 3 ? "tl-due-soon" : "" };
-  }
-
   // Greg (10/8/26, second pass): "people don't relate to the OB and IB
   // acronyms. they are much more interested in the acronyms they get paid
   // for." So the chip stopped being the WORK AREA and became the ASSIGNMENT
@@ -1819,9 +1806,7 @@
     const panel = document.querySelector(`[data-task-row="${id}"]`);
     if (!panel) return false;
     const ta = panel.querySelector(`[data-task-text="${id}"]`);
-    if (ta && ta.value.trim()) return true;
-    const due = panel.querySelector(`[data-task-due="${id}"]`);
-    return !!(due && due.value);
+    return !!(ta && ta.value.trim());
   }
   function sweepContentlessTasks() {
     if (!documentsLoaded) return;
@@ -1840,6 +1825,66 @@
     sb.from("client_research_questions").delete().in("id", ids)
       .then(({ error }) => { if (error) console.warn("Couldn't clear an empty task:", error.message); });
   }
+
+  // One date for the engagement, at the top of the card rather than on
+  // every row (155). Greg: "The Team Lead sets a target date for completion
+  // of all research for all specialists. we almost never set different dates
+  // for different research... no need to show it on every line for each
+  // researcher."
+  //
+  // Nothing counts down to it and nothing turns red: "we don't care if a
+  // researcher is overdue, we can see if they have uploaded their files or
+  // not." It is the date the Team Lead told everyone, written down where
+  // everyone can see it, and the paperclip counts are the real progress.
+  function renderResearchDue() {
+    const wrap = $("tasks-due-wrap");
+    if (!wrap || !currentClient) return;
+    wrap.hidden = false;
+    const iso = currentClient.research_due_date || "";
+    const input = $("tasks-due"), read = $("tasks-due-read");
+    input.hidden = !viewerIsLead;
+    read.hidden = viewerIsLead;
+    if (viewerIsLead) {
+      // Left alone while it has focus, so a re-render mid-edit does not
+      // snatch the half-typed date back.
+      if (document.activeElement !== input) input.value = iso;
+    } else {
+      read.textContent = iso ? prettyDate(iso) : "not set";
+      read.classList.toggle("is-unset", !iso);
+    }
+  }
+
+  function wireResearchDue() {
+    const input = $("tasks-due");
+    if (!input) return;
+    input.addEventListener("change", async () => {
+      if (!currentClient) return;
+      const next = input.value || null;
+      const before = currentClient.research_due_date || "";
+      input.disabled = true;
+      const { data, error } = await sb
+        .from("clients")
+        .update({ research_due_date: next })
+        .eq("id", currentClient.id)
+        .select("id, research_due_date");
+      input.disabled = false;
+      // An empty result is not an error from PostgREST: it is RLS declining
+      // the row. Same shape as the show-questions switch, same explanation.
+      if (error || !data || !data.length) {
+        input.value = before;
+        showBanner(error
+          ? "Couldn't save that: " + error.message
+          : await teamLeadRefusalMessage("this engagement's research due date"), "error");
+        return;
+      }
+      currentClient.research_due_date = data[0].research_due_date;
+      renderResearchDue();
+      showBanner(next
+        ? "Research for this engagement is due " + prettyDate(next) + "."
+        : "Cleared the research due date.", "success");
+    });
+  }
+  wireResearchDue();
 
   function renderTaskList() {
     const card = $("tasks-card");
@@ -1860,9 +1905,10 @@
       .filter((q) => !(hideDoneTasks && q.completed_at))
       .slice()
       .sort((a, b) => {
+        // Done last, then Controlling Document order. There is no longer a
+        // per-task date to sort by (155), which is one fewer way for the
+        // list to disagree with the document it came from.
         if (!!a.completed_at !== !!b.completed_at) return a.completed_at ? 1 : -1;
-        const ad = a.due_date || "9999-12-31", bd = b.due_date || "9999-12-31";
-        if (ad !== bd) return ad < bd ? -1 : 1;
         // An unnumbered task sorts last, not first: (x || 0) used to put a
         // brand-new one ahead of question 1.
         const an = a.question_number == null ? Infinity : a.question_number;
@@ -1933,7 +1979,6 @@
             ${nDocs ? `<span class="tl-chip" title="${nDocs} file${nDocs === 1 ? "" : "s"} filed">&#128206; ${nDocs}</span>` : ""}
             ${refChip(q, nDocs)}
             ${slotChip(q, who)}
-            ${dueChip(q)}
             ${avatar}
           </div>
         </div>
@@ -1946,10 +1991,6 @@
           <textarea class="tl-qtext" rows="1" data-task-text="${q.id}"
                     placeholder="What is this task asking for?">${escapeHtml(q.question || "")}</textarea>
           <div class="tl-fields">
-            <label class="tl-field">
-              <span>Due</span>
-              <input type="date" data-task-due="${q.id}" value="${escapeHtml(q.due_date || "")}" />
-            </label>
             <label class="tl-field">
               <span>Assigned to</span>
               <select data-task-assignee="${q.id}">${specialistOptionsHtml(q.assigned_user_id)}</select>
@@ -2070,8 +2111,8 @@
     //
     // The row still contains three real controls, so this skips any click
     // that landed on one, the way the Engagements list already does with
-    // its overdue badge. Without it, ticking a task off would also open it.
-    const TOGGLE_EXEMPT = "[data-task-done],[data-task-due-open],[data-task-who-open]";
+    // its avatar. Without it, ticking a task off would also open it.
+    const TOGGLE_EXEMPT = "[data-task-done],[data-task-who-open]";
     const toggleTask = toggleTaskAnchored;
     scope.querySelectorAll("[data-task-toggle]").forEach((head) => {
       head.addEventListener("click", (e) => {
@@ -2108,10 +2149,6 @@
         if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
       });
     });
-    scope.querySelectorAll("[data-task-due-open]").forEach((btn) => {
-      btn.addEventListener("click", (e) => { e.stopPropagation();
-        openAndFocus(btn.dataset.taskDueOpen, `[data-task-due="${btn.dataset.taskDueOpen}"]`); });
-    });
     scope.querySelectorAll("[data-task-who-open]").forEach((btn) => {
       btn.addEventListener("click", (e) => { e.stopPropagation();
         openAndFocus(btn.dataset.taskWhoOpen, `[data-task-assignee="${btn.dataset.taskWhoOpen}"]`); });
@@ -2122,9 +2159,6 @@
         const nowDone = btn.getAttribute("aria-checked") !== "true";
         toggleTaskDone(btn.dataset.taskDone, nowDone, btn);
       });
-    });
-    scope.querySelectorAll("[data-task-due]").forEach((inp) => {
-      inp.addEventListener("change", () => saveTaskField(inp.dataset.taskDue, { due_date: inp.value || null }, inp));
     });
     scope.querySelectorAll("[data-task-assignee]").forEach((sel) => {
       sel.addEventListener("change", () => saveTaskField(sel.dataset.taskAssignee, { assigned_user_id: sel.value || null }, sel));
