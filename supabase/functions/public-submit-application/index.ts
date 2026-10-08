@@ -87,6 +87,49 @@ const REQUIRED_KEYS = [
   "f-top-issues",
 ];
 
+// ---------- TEMPORARY: pre-go-live TEST marking ----------
+// Greg (10/8/26): "one of the test application approvals went out to a real
+// PA. Until we go live make sure that the subject line in the application
+// submission to: and cc: list says TEST".
+//
+// Both emails below reach somebody outside the EG team. The notification
+// goes to the Program Administrator as well as the Admins, and the
+// confirmation goes to the applicant -- so a rehearsal submission puts two
+// genuine-looking EG emails in two real inboxes.
+//
+// The addresses are deliberately NOT redirected: the parallel run with
+// Katie at GRE only tests anything if the mail actually arrives. What it
+// must not do is arrive looking real. So the subject carries [TEST], every
+// To address carries a TEST display name (which is what the recipient sees
+// on their To line), and the body opens with a line saying to disregard it.
+//
+// AT GO-LIVE: set the Edge Function secret EGDB_GO_LIVE to "true"
+// (Dashboard -> Edge Functions -> Manage secrets). Until it says exactly
+// "true" every send is marked, which is the safe way round: forgetting the
+// secret marks a real email, where the reverse would have sent an unmarked
+// rehearsal. Nothing here needs redeploying to switch over.
+const GO_LIVE = (Deno.env.get("EGDB_GO_LIVE") ?? "").trim().toLowerCase() === "true";
+const TEST_SUBJECT_PREFIX = "[TEST] ";
+const TEST_BODY_BANNER =
+  '<p style="margin:0 0 14px; padding:10px 12px; border:2px solid #b42318; '
+  + 'border-radius:6px; color:#b42318; font-weight:700;">'
+  + "*** TEST &mdash; this is a rehearsal of the EG Dashboard. "
+  + "Please disregard this message; no action is needed. ***</p>";
+
+function testSubject(subject: string) {
+  return GO_LIVE ? subject : TEST_SUBJECT_PREFIX + subject;
+}
+function testBody(html: string) {
+  return GO_LIVE ? html : TEST_BODY_BANNER + html;
+}
+// "a@b.org" -> "TEST <a@b.org>". Resend takes a display name on each
+// recipient, so TEST lands in the To header the recipient actually sees,
+// without changing who it goes to.
+function testRecipients(list: string[]) {
+  return GO_LIVE ? list : list.map((e) => (/^TEST\s*</i.test(e) ? e : `TEST <${e}>`));
+}
+// ---------- end TEMPORARY ----------
+
 function strOrNull(v: unknown): string | null {
   const s = v == null ? "" : String(v).trim();
   return s === "" ? null : s;
@@ -344,7 +387,7 @@ Deno.serve(async (req: Request) => {
           // forwarder was never created, delete this one line rather than
           // leaving it pointing at nothing.
           reply_to: "egdashboard@economicgardening.org",
-          to: recipients,
+          to: testRecipients(recipients),
           // Greg (9/14/26): "apply naming convention (GRE) New Application
           // Recieved to internal emails as well" -- the same
           // "(program) subject" shape the customer emails use
@@ -353,8 +396,8 @@ Deno.serve(async (req: Request) => {
           // No " - action" half: an admin notification is not asking the
           // reader to do one specific thing, and Greg's example had none.
           // The company name moves into the body, which already carries it.
-          subject: `(${program.code}) New Application Received`,
-          html: `
+          subject: testSubject(`(${program.code}) New Application Received`),
+          html: testBody(`
             <p>A new Economic Gardening Program application was just submitted through ${escapeHtml(program.name)}'s application link.</p>
             <p>
               <strong>Company:</strong> ${escapeHtml(companyName)}<br/>
@@ -362,7 +405,7 @@ Deno.serve(async (req: Request) => {
               <strong>Primary Contact:</strong> ${escapeHtml(officerName)}
             </p>
             <p>The EG team reviews it from here -- approval, then a Team Lead and hours to start the engagement. No action is needed from the Program.</p>
-          `,
+          `),
         }),
       });
       if (!res.ok) {
@@ -394,14 +437,14 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({
               from: "EG Dashboard <noreply@send.economicgardening.org>",
               reply_to: "egdashboard@economicgardening.org",
-              to: [officerEmail],
-              subject: `(${program.code}) Application Received - ${companyName}`,
-              html: `
+              to: testRecipients([officerEmail]),
+              subject: testSubject(`(${program.code}) Application Received - ${companyName}`),
+              html: testBody(`
                 <p>${officerName ? `Hi ${escapeHtml(officerName.split(" ")[0])},` : "Hello,"}</p>
                 <p>Thank you for applying to the Economic Gardening Program through ${escapeHtml(program.name)}. We have your application for <strong>${escapeHtml(companyName)}</strong>.</p>
                 <p>Our team reviews each application and will be in touch about next steps. If you have a question in the meantime, just reply to this email.</p>
                 <p>&mdash; The Economic Gardening Team</p>
-              `,
+              `),
             }),
           });
           if (!confirmRes.ok) {

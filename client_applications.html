@@ -1599,6 +1599,60 @@
   const TEST_TOOLS = true;
   const TEST_TAG = "TEST DATA";
 
+  // ============================================================
+  // TEMPORARY -- PRE-GO-LIVE EMAIL MARKING. Greg (10/8/26): "one of the
+  // test application approvals went out to a real PA. Until we go live
+  // make sure that the subject line in the application submission to:
+  // and cc: list says TEST".
+  //
+  // The approval letter below is a composer, not a send: it fills in the
+  // Program Administrator's real address and hands the whole thing to
+  // the sender's own mail client. Which is the point -- it has to look
+  // like Rita wrote it -- and is also exactly how a rehearsal reaches
+  // somebody who was not expecting one.
+  //
+  // So while this is true the letter marks itself: TEST on the subject,
+  // TEST on every To and CC address, and a line at the top of the body
+  // saying so. The addresses stay real on purpose, because the parallel
+  // run with Katie at GRE needs the letter to actually arrive -- what it
+  // must not do is arrive looking genuine.
+  //
+  // TO REMOVE AT GO-LIVE: set this to false. Nothing else changes.
+  // The matching switch for the emails the server sends is the
+  // EGDB_GO_LIVE secret on the Edge Functions (set it to "true").
+  // ============================================================
+  const PRE_GO_LIVE = true;
+  const TEST_SUBJECT_PREFIX = "[TEST] ";
+  const TEST_BODY_BANNER =
+    "*** TEST -- this is a rehearsal of the EG Dashboard approval process. "
+    + "Please disregard this message; no action is needed. ***";
+
+  // "a@b.org, c@d.org" -> "TEST <a@b.org>, TEST <c@d.org>". A display name
+  // rather than a changed address: the letter still has to reach the person
+  // it is being rehearsed with, and TEST then shows in their To line.
+  function markAddressesTest(list) {
+    return String(list || "")
+      .split(",").map((x) => x.trim()).filter(Boolean)
+      .map((x) => (/^TEST\s*</i.test(x) ? x : `TEST <${bareAddress(x)}>`))
+      .join(", ");
+  }
+  // The inverse, for the mailto: URI. RFC 6068 wants a bare addr-spec in
+  // the "to" of a mailto, and clients vary on display names -- so the
+  // marking rides in the subject and body on that path, and the address
+  // goes over plain. The copied-email path keeps the display name, where
+  // it reaches the sent headers intact.
+  function bareAddress(one) {
+    const m = /<([^>]*)>/.exec(String(one || ""));
+    return (m ? m[1] : String(one || "")).trim();
+  }
+  function markTest(list) {
+    return PRE_GO_LIVE ? markAddressesTest(list) : list;
+  }
+  function bareAddresses(list) {
+    return String(list || "")
+      .split(",").map((x) => bareAddress(x)).filter(Boolean).join(",");
+  }
+
   function wireTestTools() {
     const panel = $("test-tools");
     if (!panel) return;
@@ -3155,7 +3209,7 @@
     const rows = THRESHOLDS.map((t, i) =>
       `${i + 1}. ${thLabel(t, rural)} — ${checkedKeys.includes(t.key) ? "Yes" : "—"}`
     ).join("\n");
-    return `Hello ${paGreeting},
+    return `${PRE_GO_LIVE ? TEST_BODY_BANNER + "\n\n" : ""}Hello ${paGreeting},
 
 NCEG has reviewed the ${engagementName} application and found that the following thresholds have been met and the application is approved.
 
@@ -3250,9 +3304,10 @@ Have a great day!!`;
     box.innerHTML = `
       <h4>Next step — tell the Program Administrator that NCEG has approved this</h4>
       <p class="desc">${paDesc}</p>
-      <div class="pa-field"><label for="pa-to">To</label><input type="text" id="pa-to" value="${escapeHtml(pas.map((r) => r.email).join(", "))}" /></div>
-      <div class="pa-field"><label for="pa-cc">CC</label><input type="text" id="pa-cc" value="${escapeHtml(ccEmails.join(", "))}" /></div>
-      <div class="pa-field"><label for="pa-subject">Subject</label><input type="text" id="pa-subject" value="${escapeHtml(`${partner && partner.code ? `(${partner.code}) ` : ""}${a.company_name} — Application Approved`)}" /></div>
+      ${PRE_GO_LIVE ? `<p class="desc" style="color:var(--danger-dark); font-weight:600; margin:-4px 0 12px;">Pre-go-live: this letter is marked TEST on the subject, the To and CC lines, and the first line of the message.</p>` : ""}
+      <div class="pa-field"><label for="pa-to">To</label><input type="text" id="pa-to" value="${escapeHtml(markTest(pas.map((r) => r.email).join(", ")))}" /></div>
+      <div class="pa-field"><label for="pa-cc">CC</label><input type="text" id="pa-cc" value="${escapeHtml(markTest(ccEmails.join(", ")))}" /></div>
+      <div class="pa-field"><label for="pa-subject">Subject</label><input type="text" id="pa-subject" value="${escapeHtml(`${PRE_GO_LIVE ? TEST_SUBJECT_PREFIX : ""}${partner && partner.code ? `(${partner.code}) ` : ""}${a.company_name} — Application Approved`)}" /></div>
       <div class="pa-field"><label for="pa-body">Message</label><textarea id="pa-body" spellcheck="true"></textarea></div>
       <div class="pa-actions">
         <button type="button" class="btn-primary" id="pa-mailto">Open in email app</button>
@@ -3271,13 +3326,16 @@ Have a great day!!`;
     box.scrollIntoView({ behavior: "smooth", block: "center" });
 
     $("pa-mailto").addEventListener("click", () => {
-      const clean = (v) => v.split(",").map((x) => x.trim()).filter(Boolean).join(",");
+      // bareAddresses, not a plain split: while PRE_GO_LIVE marks the
+      // fields "TEST <someone@example.org>", a mailto: must still carry
+      // the bare address. The TEST marking rides in the subject and the
+      // first line of the body on this path.
       const params = [];
-      const cc = clean($("pa-cc").value);
+      const cc = bareAddresses($("pa-cc").value);
       if (cc) params.push("cc=" + encodeURIComponent(cc));
       params.push("subject=" + encodeURIComponent($("pa-subject").value));
       params.push("body=" + encodeURIComponent($("pa-body").value));
-      window.location.href = `mailto:${clean($("pa-to").value)}?${params.join("&")}`;
+      window.location.href = `mailto:${bareAddresses($("pa-to").value)}?${params.join("&")}`;
     });
 
     $("pa-close").addEventListener("click", () => { const el = document.getElementById("pa-letter"); if (el) el.remove(); });
