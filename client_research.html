@@ -251,6 +251,17 @@
   .tl-chip { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px; white-space: nowrap;
              border: 1px solid transparent; background: #eef1f4; color: var(--muted); }
   .tl-chip-area { background: #edf1e9; color: var(--accent-dark); }
+  .tl-due { background: #eef1f4; color: var(--muted); border: 1px solid transparent; cursor: pointer;
+            font: inherit; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+            white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .tl-due:hover { border-color: #c3ccd4; }
+  .tl-due-readonly { cursor: default; }
+  .tl-due-readonly:hover { border-color: transparent; }
+  .tl-due-none { color: #9aa4ae; font-weight: 500; }
+  /* Amber at a week out, red once it has gone by. Nothing in between --
+     a gradient of worry down a list of six tasks is noise. */
+  .tl-due-soon { background: #fdf4e3; color: #8a5d08; }
+  .tl-due-over { background: #fbeceb; color: var(--danger-dark); }
   .tl-chip-unassigned { background: #f1f3f5; color: #9aa4ae; }
   .tl-chip-ref { background: #e8eef5; color: #2f567d; cursor: pointer; font: inherit; font-size: 11px;
                  font-weight: 600; border: 1px solid transparent; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
@@ -1729,6 +1740,70 @@
     return `<button type="button" class="tl-chip tl-chip-ref" data-task-goto="${ref.target.id}" title="${escapeHtml(tip)}">&#128206;&#8599; ${ref.number}</button>`;
   }
 
+  // Greg (10/8/26, third pass): "let's keep the due date for each question
+  // so that if needed, it could be edited on a line by line basis but the
+  // master date set by the team lead would be it's initial input but it
+  // could be edited by the Team Lead. Then we can add back in your indicator
+  // pills for how many days left and overdue."
+  //
+  // So the engagement date is the default, not the whole story: it seeds
+  // each task and each task can then be moved off it.
+  //
+  // "5d left" rather than a bare date inside the week, because the question
+  // a specialist is actually asking the list is how long they have, and
+  // counting it off a calendar is work the row can do for them. Past a week
+  // the date itself is the more useful answer.
+  function dueState(iso) {
+    // Local parts, never Date(iso): "2026-10-22" through the Date
+    // constructor is UTC midnight, which reads as the 21st west of
+    // Greenwich -- and would show a task due today as a day overdue.
+    const [y, m, d] = String(iso).split("-").map(Number);
+    if (!y || !m || !d) return { label: String(iso), cls: "", days: null };
+    const due = new Date(y, m - 1, d);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const days = Math.round((due - today) / 86400000);
+    if (days < 0) return { label: `${Math.abs(days)}d overdue`, cls: "tl-due-over", days };
+    if (days === 0) return { label: "Today", cls: "tl-due-soon", days };
+    if (days === 1) return { label: "Tomorrow", cls: "tl-due-soon", days };
+    if (days <= 7) return { label: `${days}d left`, cls: "tl-due-soon", days };
+    return { label: `${MONTHS[m - 1]} ${d}`, cls: "", days };
+  }
+
+  function dueChip(q) {
+    // A finished task shows the plain date and never the relative label:
+    // once the work is in, "10d overdue" is both wrong and a bit accusing.
+    if (q.completed_at) {
+      return q.due_date
+        ? `<span class="tl-chip" title="Was due ${escapeHtml(prettyDate(q.due_date))}">${escapeHtml(absoluteDue(q.due_date))}</span>`
+        : "";
+    }
+    // Only whoever can change a date gets a button. A specialist reads it.
+    const tag = viewerIsLead ? "button" : "span";
+    const attrs = viewerIsLead
+      ? ` type="button" data-task-due-open="${q.id}"`
+      : ` class="tl-due-readonly"`;
+    if (!q.due_date) {
+      return viewerIsLead
+        ? `<button type="button" class="tl-due tl-due-none" data-task-due-open="${q.id}" title="Set a due date for this task">No date</button>`
+        : `<span class="tl-due tl-due-none tl-due-readonly">No date</span>`;
+    }
+    const st = dueState(q.due_date);
+    // A task sitting on its own date rather than the engagement's is worth
+    // knowing but not worth a mark: a glyph on the pill turned out to appear
+    // on nearly every row the moment any date moved, and the pill's job is
+    // to say how long is left. The tooltip carries it instead.
+    const off = currentClient && currentClient.research_due_date && q.due_date !== currentClient.research_due_date;
+    const title = `Due ${prettyDate(q.due_date)}${off ? " \u2014 set for this task, not the engagement's date" : ""}`;
+    const cls = `tl-due ${st.cls}${viewerIsLead ? "" : " tl-due-readonly"}`;
+    return `<${tag}${attrs.replace(' class="tl-due-readonly"', "")} class="${cls}" title="${escapeHtml(title)}">${escapeHtml(st.label)}</${tag}>`;
+  }
+  function absoluteDue(iso) {
+    const [y, m, d] = String(iso).split("-").map(Number);
+    if (!y || !m || !d) return String(iso);
+    return `${MONTHS[m - 1]} ${d}`;
+  }
+
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   // Parsed as local parts, never Date(iso): "2026-10-22" through the Date
   // constructor is UTC midnight, which reads as the 21st west of Greenwich.
@@ -1791,7 +1866,12 @@
     return !(q.question || "").trim()
       && !(q.background || "").trim()
       && q.question_number == null
-      && !q.due_date
+      // A date the task was handed by the engagement is not something
+      // somebody wrote: a new task is seeded with the master date, so
+      // treating any date as content would make every abandoned add
+      // permanent again. A date moved OFF the master was authored, and
+      // keeps the row.
+      && (!q.due_date || q.due_date === (currentClient && currentClient.research_due_date))
       && !q.completed_at
       && !allDocuments.some((d) => d.question_id === q.id);
   }
@@ -1877,13 +1957,61 @@
           : await teamLeadRefusalMessage("this engagement's research due date"), "error");
         return;
       }
+      const prev = currentClient.research_due_date || null;
       currentClient.research_due_date = data[0].research_due_date;
       renderResearchDue();
-      showBanner(next
-        ? "Research for this engagement is due " + prettyDate(next) + "."
-        : "Cleared the research due date.", "success");
+      const moved = await rollDownResearchDue(prev, next);
+      renderTaskList();
+      showBanner(describeRollDown(next, moved), "success");
     });
   }
+  // Greg: the master date "would be it's initial input but it could be
+  // edited by the Team Lead" per line. So moving the engagement date moves
+  // the tasks that were still sitting on the old one -- and leaves alone any
+  // task somebody deliberately moved off it. Changing the deadline should
+  // not quietly undo a decision that was made a line at a time.
+  //
+  // A task with no date at all is swept up too: questions arrive from the
+  // Controlling Document without one, and "everything is due the 24th"
+  // should mean everything.
+  async function rollDownResearchDue(prevIso, nextIso) {
+    const followers = allQuestions.filter(
+      (q) => !q.completed_at && (!q.due_date || q.due_date === prevIso)
+    );
+    const stayed = allQuestions.filter(
+      (q) => !q.completed_at && q.due_date && q.due_date !== prevIso
+    ).length;
+    if (!followers.length) return { moved: 0, stayed };
+    const ids = followers.map((q) => q.id);
+    const { error } = await sb
+      .from("client_research_questions")
+      .update({ due_date: nextIso })
+      .in("id", ids);
+    if (error) {
+      showBanner("The engagement date saved, but the tasks could not be moved: " + error.message, "error");
+      return { moved: 0, stayed };
+    }
+    // Updated in place rather than reloaded: one round trip is enough, and
+    // the rows we changed are the rows we already hold.
+    followers.forEach((q) => { q.due_date = nextIso; });
+    return { moved: followers.length, stayed };
+  }
+
+  function describeRollDown(nextIso, r) {
+    const n = (c, word) => `${c} ${word}${c === 1 ? "" : "s"}`;
+    if (!nextIso) {
+      return r.moved
+        ? `Cleared the research due date, and the ${n(r.moved, "task")} that followed it.`
+        : "Cleared the research due date.";
+    }
+    const head = `Research is due ${prettyDate(nextIso)}`;
+    if (!r.moved && !r.stayed) return head + ".";
+    const parts = [];
+    if (r.moved) parts.push(`${n(r.moved, "task")} moved with it`);
+    if (r.stayed) parts.push(`${n(r.stayed, "task")} kept ${r.stayed === 1 ? "its own" : "their own"} date`);
+    return `${head} \u2014 ${parts.join(", ")}.`;
+  }
+
   wireResearchDue();
 
   function renderTaskList() {
@@ -1905,10 +2033,13 @@
       .filter((q) => !(hideDoneTasks && q.completed_at))
       .slice()
       .sort((a, b) => {
-        // Done last, then Controlling Document order. There is no longer a
-        // per-task date to sort by (155), which is one fewer way for the
-        // list to disagree with the document it came from.
+        // Done last, then soonest due, then Controlling Document order.
+        // With every task seeded from the same engagement date the second
+        // key is usually a no-op, which is the point: it only reorders the
+        // list where somebody has deliberately moved a date.
         if (!!a.completed_at !== !!b.completed_at) return a.completed_at ? 1 : -1;
+        const ad = a.due_date || "9999-12-31", bd = b.due_date || "9999-12-31";
+        if (ad !== bd) return ad < bd ? -1 : 1;
         // An unnumbered task sorts last, not first: (x || 0) used to put a
         // brand-new one ahead of question 1.
         const an = a.question_number == null ? Infinity : a.question_number;
@@ -1979,6 +2110,7 @@
             ${nDocs ? `<span class="tl-chip" title="${nDocs} file${nDocs === 1 ? "" : "s"} filed">&#128206; ${nDocs}</span>` : ""}
             ${refChip(q, nDocs)}
             ${slotChip(q, who)}
+            ${dueChip(q)}
             ${avatar}
           </div>
         </div>
@@ -1991,6 +2123,11 @@
           <textarea class="tl-qtext" rows="1" data-task-text="${q.id}"
                     placeholder="What is this task asking for?">${escapeHtml(q.question || "")}</textarea>
           <div class="tl-fields">
+            ${viewerIsLead ? `
+            <label class="tl-field">
+              <span>Due</span>
+              <input type="date" data-task-due="${q.id}" value="${escapeHtml(q.due_date || "")}" />
+            </label>` : ""}
             <label class="tl-field">
               <span>Assigned to</span>
               <select data-task-assignee="${q.id}">${specialistOptionsHtml(q.assigned_user_id)}</select>
@@ -2111,8 +2248,9 @@
     //
     // The row still contains three real controls, so this skips any click
     // that landed on one, the way the Engagements list already does with
-    // its avatar. Without it, ticking a task off would also open it.
-    const TOGGLE_EXEMPT = "[data-task-done],[data-task-who-open]";
+    // its date pill or its avatar. Without it, ticking a task off would
+    // also open it.
+    const TOGGLE_EXEMPT = "[data-task-done],[data-task-due-open],[data-task-who-open]";
     const toggleTask = toggleTaskAnchored;
     scope.querySelectorAll("[data-task-toggle]").forEach((head) => {
       head.addEventListener("click", (e) => {
@@ -2148,6 +2286,13 @@
         const row = document.querySelector(`[data-task-row="${btn.dataset.taskGoto}"]`);
         if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
       });
+    });
+    scope.querySelectorAll("[data-task-due-open]").forEach((btn) => {
+      btn.addEventListener("click", (e) => { e.stopPropagation();
+        openAndFocus(btn.dataset.taskDueOpen, `[data-task-due="${btn.dataset.taskDueOpen}"]`); });
+    });
+    scope.querySelectorAll("[data-task-due]").forEach((inp) => {
+      inp.addEventListener("change", () => saveTaskField(inp.dataset.taskDue, { due_date: inp.value || null }, inp));
     });
     scope.querySelectorAll("[data-task-who-open]").forEach((btn) => {
       btn.addEventListener("click", (e) => { e.stopPropagation();
@@ -2278,6 +2423,10 @@
       research_area: area,
       question: "",
       sort_order: sortOrder,
+      // Seeded from the engagement, which is what makes the master date a
+      // default rather than a separate thing to remember. isContentlessTask
+      // knows to discount a date that still equals this one.
+      due_date: (currentClient && currentClient.research_due_date) || null,
       assigned_user_id: defaultAssigneeFor(area),
     }).select("id").single();
     if (error) { showBanner("Couldn't add that task: " + error.message, "error"); return; }
