@@ -245,6 +245,16 @@
   .tl-chip { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px; white-space: nowrap;
              border: 1px solid transparent; background: #eef1f4; color: var(--muted); }
   .tl-chip-area { background: #edf1e9; color: var(--accent-dark); }
+  .tl-chip-unassigned { background: #f1f3f5; color: #9aa4ae; }
+  .tl-chip-ref { background: #e8eef5; color: #2f567d; cursor: pointer; font: inherit; font-size: 11px;
+                 font-weight: 600; border: 1px solid transparent; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+  .tl-chip-ref:hover { border-color: #9fb6cc; }
+  .tl-chip-ref-dead { background: #fbeceb; color: var(--danger-dark); }
+  .tl-refnote { font-size: 12.5px; color: #2f567d; background: #f2f6fa; border: 1px solid #dbe6f0;
+                border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
+  .tl-refnote-dead { color: var(--danger-dark); background: #fbeceb; border-color: #f0d6d4; }
+  .tl-reflink { background: none; border: none; padding: 0; font: inherit; font-weight: 700;
+                color: inherit; text-decoration: underline; cursor: pointer; }
   .tl-due { background: #eef1f4; color: var(--muted); cursor: pointer; font: inherit; font-size: 11px;
             font-weight: 600; border-radius: 999px; padding: 2px 8px; border: 1px solid transparent; white-space: nowrap; }
   .tl-due:hover { border-color: #c3ccd4; }
@@ -1603,6 +1613,25 @@
     return html;
   }
 
+  // Greg (10/8/26): one document can answer more than one question, and he
+  // chose the cheap handling -- "i like the 'see Task 1' approach" -- over a
+  // join table. So the reference lives in the task's own text, written by a
+  // person, and this reads it back out: "see task 1", "See Question 3",
+  // "(see q2)". Nothing is stored; nothing can fall out of step with the
+  // text, because the text IS the record.
+  //
+  // "yes, the question should show an attachment like icon that it has been
+  // answered" -- without it a cross-referenced task reads "No files yet",
+  // which is exactly the impression the reference is there to correct.
+  function crossRefOf(q) {
+    const m = /\bsee\s+(?:task|questions?|q)\s*#?\s*(\d+)/i.exec(q.question || "");
+    if (!m) return null;
+    const n = Number(m[1]);
+    if (!n || n === q.question_number) return null;
+    const target = allQuestions.find((x) => x.question_number === n);
+    return { number: n, target: target || null };
+  }
+
   function taskAreaLabel(area) {
     const found = RESEARCH_AREAS.find(([k]) => k === area);
     return found ? found[1] : area;
@@ -1653,6 +1682,33 @@
     return `<button type="button" class="tl-due ${d.cls}" data-task-due-open="${q.id}" title="Due ${escapeHtml(q.due_date)}">${escapeHtml(d.label)}</button>`;
   }
 
+  // The row on the invoice: MR, DM2, GIS1, WH. An unassigned task has no
+  // slot yet, so it shows what its work area would default to, muted -- the
+  // vocabulary stays the one people are paid in either way.
+  function slotChip(q, who) {
+    if (who) {
+      const code = specialtyCode(who);
+      const full = (SPECIALTY_LABELS[who.specialty] || who.specialty) + (code.match(/\d$/) ? " " + code.slice(-1) : "");
+      return `<span class="tl-chip tl-chip-area" title="${escapeHtml(full)}">${escapeHtml(code)}</span>`;
+    }
+    const code = AREA_DEFAULT_CODE[q.research_area] || "";
+    if (!code) return "";
+    return `<span class="tl-chip tl-chip-unassigned" title="Unassigned \u2014 ${escapeHtml(taskAreaLabel(q.research_area))} work">${escapeHtml(code)}</span>`;
+  }
+
+  // "Answered under Task 1." A paperclip with an arrow, so it reads as an
+  // attachment that lives somewhere else rather than one filed here.
+  // Clicking it opens the task that holds the document.
+  function refChip(q, nDocs) {
+    const ref = crossRefOf(q);
+    if (!ref) return "";
+    if (!ref.target) {
+      return `<span class="tl-chip tl-chip-ref-dead" title="This task points at Task ${ref.number}, which does not exist on this engagement.">&#128206;&#8599; ${ref.number}?</span>`;
+    }
+    const tip = `Answered under Task ${ref.number}${nDocs ? " as well as here" : ""} \u2014 click to open it`;
+    return `<button type="button" class="tl-chip tl-chip-ref" data-task-goto="${ref.target.id}" title="${escapeHtml(tip)}">&#128206;&#8599; ${ref.number}</button>`;
+  }
+
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   function absoluteDue(iso) {
     const [y, m, d] = String(iso).split("-").map(Number);
@@ -1674,15 +1730,24 @@
     return { label, cls: days <= 3 ? "tl-due-soon" : "" };
   }
 
-  // Greg (10/8/26): "just use the abbreviations, MR, DM1, DM2, etc instead
-  // of spelling out the full name." Both the work-area chip and the
-  // specialty beside a person's name. Every one of them keeps the full
-  // wording in a title attribute, so the short form costs nothing to
-  // somebody who does not know it yet -- and the width it buys back is what
-  // lets the chip stay visible on a narrow pane instead of being hidden.
-  const AREA_SHORT = {
-    market_dynamics: "MD", outbound: "OB",
-    inbound: "IB", watering_holes: "WH", gis: "GIS",
+  // Greg (10/8/26, second pass): "people don't relate to the OB and IB
+  // acronyms. they are much more interested in the acronyms they get paid
+  // for." So the chip stopped being the WORK AREA and became the ASSIGNMENT
+  // SLOT -- the row on the invoice. OB and IB are gone from the interface
+  // entirely; outbound and inbound were both Digital Marketing anyway, so
+  // two codes nobody recognised were standing in for one that everybody
+  // does.
+  //
+  // Market research reads MR, not the MD Greg typed: MD is the work area
+  // (Market Dynamics), and the invoicing report calls the paid row "Market
+  // Research". Using MD here would put the area code back under a new name,
+  // which is the collision this change exists to remove.
+  //
+  // AREA_DEFAULT_CODE is only for an unassigned task, which has no slot to
+  // name -- it shows the code the work area would default to, muted.
+  const AREA_DEFAULT_CODE = {
+    market_dynamics: "MR", outbound: "DM",
+    inbound: "DM", watering_holes: "WH", gis: "GIS",
   };
   const SPECIALTY_CODES = {
     team_lead: "TL", market_research: "MR", digital_marketing: "DM",
@@ -1782,7 +1847,8 @@
           </div>
           <div class="tl-meta">
             ${nDocs ? `<span class="tl-chip" title="${nDocs} file${nDocs === 1 ? "" : "s"} filed">&#128206; ${nDocs}</span>` : ""}
-            <span class="tl-chip tl-chip-area" title="${escapeHtml(taskAreaLabel(q.research_area))}">${escapeHtml(AREA_SHORT[q.research_area] || q.research_area)}</span>
+            ${refChip(q, nDocs)}
+            ${slotChip(q, who)}
             ${dueChip(q)}
             ${avatar}
           </div>
@@ -1809,6 +1875,13 @@
           ${bgHtml
             ? `<div class="tl-bg">${bgHtml}</div>`
             : `<div class="tl-quiet" style="margin-bottom:12px;">No background was written for this question on the Controlling Document.</div>`}
+          ${(() => {
+            const ref = crossRefOf(q);
+            if (!ref) return "";
+            return ref.target
+              ? `<div class="tl-refnote">&#128206;&#8599; Also answered by the research under <button type="button" class="tl-reflink" data-task-goto="${ref.target.id}">Task ${ref.number}</button>.</div>`
+              : `<div class="tl-refnote tl-refnote-dead">This task points at Task ${ref.number}, which does not exist on this engagement.</div>`;
+          })()}
           <div class="tl-sub">Research filed against this question</div>
           <div id="task-docs-${q.id}"></div>
           <div class="tl-actions">
@@ -1927,6 +2000,15 @@
     // rather than an empty coloured circle.
     scope.querySelectorAll(".tl-avatar img").forEach((img) => {
       img.addEventListener("error", () => img.remove());
+    });
+    scope.querySelectorAll("[data-task-goto]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openTaskId = btn.dataset.taskGoto;
+        renderTaskList();
+        const row = document.querySelector(`[data-task-row="${openTaskId}"]`);
+        if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
     });
     scope.querySelectorAll("[data-task-due-open]").forEach((btn) => {
       btn.addEventListener("click", (e) => { e.stopPropagation();
