@@ -1485,10 +1485,24 @@
   // assignee picker. Loaded only when tasks are in use.
   let engagementSpecialists = [];
   let hideDoneTasks = false;
-  // Which task is expanded. Greg (10/8/26): "they can open their assignment
-  // and quickly see their question and add their research." One at a time --
-  // the point is to read one brief, not to scroll a wall of them.
-  let openTaskId = null;
+  // Which tasks are expanded. Originally one at a time, which I chose and
+  // Greg never asked for -- his words were "accordian style dropdowns for
+  // each question", one per question.
+  //
+  // Exclusivity turned out to be the cause of "the page rolls up and my
+  // mouse is no longer over the heading": collapsing the row above removes
+  // several hundred pixels from ABOVE the row just clicked, so its header
+  // leaps up. Anchoring the header and scrolling back by the difference
+  // only half fixes it -- correcting a 695px jump needs 695px of scroll
+  // range above you, and near the top of the list there is none. Measured:
+  // -695px became -365px, still nowhere near the cursor.
+  //
+  // Letting rows open independently removes the cause instead of
+  // compensating for it: nothing above the clicked row changes height, so
+  // its header cannot move, at any scroll position. The anchoring below
+  // stays for the other case -- closing a tall panel can shrink the
+  // document past the scroll position and the browser pulls it back.
+  let openTaskIds = new Set();
 
   // Which specialty row a work area's task falls to by default. The two
   // enums were built separately and do not line up one-for-one: outbound and
@@ -1797,18 +1811,20 @@
     if (!total) {
       list.innerHTML = `<div class="task-empty">No tasks yet. They arrive from the Controlling Document, or add one below.</div>`
         + addTaskRowHtml();
+      applyTailSpace(card);
       wireTaskHandlers(list);
       return;
     }
     if (!rows.length) {
       list.innerHTML = `<div class="task-empty">Every task is complete.</div>` + addTaskRowHtml();
+      applyTailSpace(card);
       wireTaskHandlers(list);
       return;
     }
 
     list.innerHTML = rows.map((q) => {
       const done = !!q.completed_at;
-      const open = openTaskId === q.id;
+      const open = openTaskIds.has(q.id);
       const mine = !!(currentUser && q.assigned_user_id === currentUser.id);
       const who = engagementSpecialists.find((x) => x.userId === q.assigned_user_id) || null;
       const nDocs = allDocuments.filter((d) => d.question_id === q.id).length;
@@ -1911,24 +1927,42 @@
       </div>`;
     }).join("");
 
-    if (openTaskId) {
-      const el = $(`task-docs-${openTaskId}`);
-      const q = allQuestions.find((x) => x.id === openTaskId);
-      if (el && q) {
-        const docs = allDocuments.filter((d) => d.question_id === q.id);
-        el.innerHTML = docs.length
-          // "q:" and not "task:" -- parseScope only understands "q" and
-          // treats anything else as the untied group, so a "task:" scope made
-          // every drag inside an open task reorder the wrong list. A task IS
-          // its question; it gets the question's scope.
-          ? renderQuestionDocs(docs, `q:${q.research_area}:${q.id}`)
-          : `<div class="tl-quiet">Nothing filed yet \u2014 use + Document or + Link below.</div>`;
-        if (docs.length) wireDocRowHandlers(el);
-      }
-    }
+    openTaskIds.forEach((id) => {
+      const el = $(`task-docs-${id}`);
+      const q = allQuestions.find((x) => x.id === id);
+      if (!el || !q) return;
+      const docs = allDocuments.filter((d) => d.question_id === q.id);
+      el.innerHTML = docs.length
+        // "q:" and not "task:" -- parseScope only understands "q" and
+        // treats anything else as the untied group, so a "task:" scope made
+        // every drag inside an open task reorder the wrong list. A task IS
+        // its question; it gets the question's scope.
+        ? renderQuestionDocs(docs, `q:${q.research_area}:${q.id}`)
+        : `<div class="tl-quiet">Nothing filed yet \u2014 use + Document or + Link below.</div>`;
+      if (docs.length) wireDocRowHandlers(el);
+    });
 
     list.insertAdjacentHTML("beforeend", addTaskRowHtml());
+    applyTailSpace(card);
     wireTaskHandlers(list);
+  }
+
+  // Room to scroll, below the card, while anything is open.
+  //
+  // Anchoring the clicked header fixes opening, but closing has a second
+  // problem it cannot reach: removing a tall panel shrinks the document,
+  // and if you were near the bottom the browser clamps the scroll and the
+  // whole page slides down -- measured at +117px and +246px, so the header
+  // walks out from under the cursor on the way back. The correction wants
+  // to scroll down to compensate and there is nothing left to scroll to.
+  //
+  // So while a task is open the page carries extra space after the card.
+  // It sits outside the card, below everything, where it reads as page
+  // padding rather than a hole in the list, and it disappears the moment
+  // the last task closes.
+  function applyTailSpace(card) {
+    if (!card) return;
+    card.style.marginBottom = openTaskIds.size ? "70vh" : "";
   }
 
   // Greg (10/8/26) kept a way to add one here: "Yes -- keep a + Add Task
@@ -1950,7 +1984,7 @@
   // close this open box" -- the visible button says how, this is the reflex
   // anyone already has.
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && openTaskId) { openTaskId = null; renderTaskList(); }
+    if (e.key === "Escape" && openTaskIds.size) { openTaskIds.clear(); renderTaskList(); }
   });
 
   function wireHideDoneToggle() {
@@ -1970,10 +2004,7 @@
     // that landed on one, the way the Engagements list already does with
     // its overdue badge. Without it, ticking a task off would also open it.
     const TOGGLE_EXEMPT = "[data-task-done],[data-task-due-open],[data-task-who-open]";
-    const toggleTask = (id) => {
-      openTaskId = openTaskId === id ? null : id;
-      renderTaskList();
-    };
+    const toggleTask = toggleTaskAnchored;
     scope.querySelectorAll("[data-task-toggle]").forEach((head) => {
       head.addEventListener("click", (e) => {
         if (e.target.closest(TOGGLE_EXEMPT)) return;
@@ -1991,8 +2022,7 @@
     // resting list stays a list and there is no second control to keep in
     // step with the first.
     const openAndFocus = (id, selector) => {
-      openTaskId = id;
-      renderTaskList();
+      openTaskAnchored(id);
       const el = document.querySelector(selector);
       if (el) { el.focus(); if (el.showPicker) { try { el.showPicker(); } catch (e) {} } }
     };
@@ -2004,9 +2034,9 @@
     scope.querySelectorAll("[data-task-goto]").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        openTaskId = btn.dataset.taskGoto;
+        openTaskIds.add(btn.dataset.taskGoto);
         renderTaskList();
-        const row = document.querySelector(`[data-task-row="${openTaskId}"]`);
+        const row = document.querySelector(`[data-task-row="${btn.dataset.taskGoto}"]`);
         if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
       });
     });
@@ -2080,6 +2110,58 @@
     });
   }
 
+  // Greg (10/8/26): "when i open the task, the page rolls up and my mouse is
+  // no longer over the heading to close it. it is best when you click to
+  // open, read it, click to close it without ever moving your mouse."
+  //
+  // Measured before fixing, on a 12-row list scrolled partway down:
+  //   open a row, nothing else open ............  0px
+  //   open a row while another is open ABOVE it  -695px
+  //   close the row you just opened .............. +330px
+  //
+  // Two different causes. The first is the accordion being exclusive: the
+  // row above collapses and everything below it jumps up. The second is
+  // scroll clamping -- removing a tall panel shrinks the document past
+  // where the page was scrolled to, so the browser pulls the scroll back
+  // and the content slides down.
+  //
+  // One fix covers both: remember where the clicked header sat in the
+  // viewport, re-render, then scroll by exactly the difference. The header
+  // lands back under the cursor whatever happened above or below it.
+  function scrollParentOf(el) {
+    let n = el && el.parentElement;
+    while (n && n !== document.body && n !== document.documentElement) {
+      const oy = getComputedStyle(n).overflowY;
+      if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight) return n;
+      n = n.parentElement;
+    }
+    return window;
+  }
+
+  function toggleTaskAnchored(id) {
+    const sel = `[data-task-row="${id}"] .tl-head`;
+    const el0 = document.querySelector(sel);
+    const before = el0 ? el0.getBoundingClientRect().top : null;
+    const scroller = el0 ? scrollParentOf(el0) : window;
+
+    if (openTaskIds.has(id)) openTaskIds.delete(id); else openTaskIds.add(id);
+    renderTaskList();
+
+    if (before === null) return;
+    const el1 = document.querySelector(sel);
+    if (!el1) return;
+    const delta = el1.getBoundingClientRect().top - before;
+    // Not smooth: this is a correction, not a journey. Animating it would
+    // show the jump it exists to hide.
+    if (delta) scroller.scrollBy(0, delta);
+  }
+
+  // Same anchoring for the two shortcuts that open a row as a side effect.
+  function openTaskAnchored(id) {
+    if (openTaskIds.has(id)) return;
+    toggleTaskAnchored(id);
+  }
+
   function autosizeTaskText(el) {
     el.style.height = "auto";
     el.style.height = el.scrollHeight + "px";
@@ -2100,9 +2182,10 @@
     await loadResearchQuestions();
     // Opened straight away with the text box focused: a task with no words
     // in it is the one thing on this list nobody can act on.
-    openTaskId = data ? data.id : null;
+    const newId = data ? data.id : null;
+    if (newId) openTaskIds.add(newId);
     renderTaskList();
-    const ta = document.querySelector(`[data-task-text="${openTaskId}"]`);
+    const ta = document.querySelector(`[data-task-text="${newId}"]`);
     if (ta) { ta.focus(); ta.scrollIntoView({ behavior: "smooth", block: "center" }); }
   }
 
@@ -2118,7 +2201,7 @@
     if (!confirm(msg)) return;
     const { error } = await sb.from("client_research_questions").delete().eq("id", questionId);
     if (error) { showBanner("Couldn't delete that task: " + error.message, "error"); return; }
-    if (openTaskId === questionId) openTaskId = null;
+    openTaskIds.delete(questionId);
     await Promise.all([loadResearchQuestions(), loadDocuments()]);
     renderTaskList();
     showBanner("Task deleted.", "success");
