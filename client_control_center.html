@@ -1648,7 +1648,7 @@
 
     const { data: assignRows } = await sb
       .from("client_assignments")
-      .select("is_team_lead, user_id, specialty_type, users(full_name, email)")
+      .select("is_team_lead, user_id, specialty_type, users(full_name, email, phone)")
       .eq("client_id", client.id)
       .not("user_id", "is", null);
     let teamLead = null;
@@ -1656,7 +1656,11 @@
     for (const r of assignRows || []) {
       if (r.is_team_lead && r.users && r.users.full_name) {
         teamLead = r.users.full_name;
-        teamLeadContact = { name: r.users.full_name, email: r.users.email || "" };
+        // phone feeds the "Cell:" line in the Scheduling Letter signature
+        // (10/8/26). Whatever the Roster holds, as typed -- Greg's reads
+        // "949.342.4430" and Rita's "253-326-1203", and a letter is not the
+        // place to start reformatting someone's own phone number.
+        teamLeadContact = { name: r.users.full_name, email: r.users.email || "", phone: r.users.phone || "" };
         break;
       }
     }
@@ -3026,6 +3030,11 @@
   // left.
   const WELCOME_CC_MATCH = (u) => !!u.cc_on_client_email && !u.archived_at;
 
+  // Unused since 10/8/26: the model letter Greg supplied opens with a plain
+  // "Greetings," and no names. Kept, not deleted, because that is the one part
+  // of his paste I would still like him to reconsider -- the old letter
+  // greeted the contacts by first name and this one does not -- and the
+  // function is the whole of putting it back.
   function welcomeFirstNames(names) {
     const firsts = names.map((n) => String(n || "").trim().split(/\s+/)[0]).filter(Boolean);
     if (!firsts.length) return "there";
@@ -3058,37 +3067,64 @@
     return `${initials ? `(${initials}) ` : ""}${client.name} - ${subject}`;
   }
 
+  // Greg (10/8/26) supplied the current model letter and asked for it verbatim
+  // in place of the dashboard-centric draft that was here. Three things in his
+  // paste were blanks rather than text, and each is resolved from the Resource
+  // Vault templates the letter is talking about, so the letter and the Vault
+  // cannot drift apart:
+  //   * the preference sorter had no URL -- it is the Vault's "Keirsey Work
+  //     Style Preference" item.
+  //   * the frameworks URL and its password match the Vault's "EG 5 Frameworks
+  //     Videos" item exactly.
+  //   * "xxxxxxxxx / Cell: xxxxxxxx" is the assigned Team Lead's name and
+  //     phone off the Roster.
+  //
+  // AVAILABILITY is a deliberate insert, not a merge field. Greg: "very few
+  // tl's use calendly. most insert a list of their available days and times.
+  // we need to allow an insert here." So the Calendly URL in the model (his
+  // own) is gone -- hardcoding it would book every engagement's Discovery
+  // Call on Greg's calendar whoever leads it -- and in its place is a marker
+  // loud enough that nobody sends the letter without noticing it. The note
+  // above the fields says so too.
+  //
   // Pure, so the wording can be checked without a database behind it.
-  function welcomeEmailBody(greeting, dashboardUrl, teamLead) {
-    return `Good morning, ${greeting},
+  const WELCOME_AVAILABILITY_MARKER =
+    ">>> REPLACE THIS LINE with your available dates and times, or your scheduling link <<<";
 
-Congratulations on being accepted into the Economic Gardening program. I'll be your EG Team Lead for this engagement.
+  function welcomeEmailBody(teamLead, teamLeadCell) {
+    return `Greetings,
 
-The next step is to schedule your 90-minute Discovery Call. Reply with a few times that work for you over the next couple of weeks and I'll send the invitation. We'll meet over Zoom. Once we complete the Discovery Call, our research team will begin work immediately.
+Congratulations on your acceptance into the Economic Gardening program. I am your team leader for this engagement. For the next several weeks you will have the services of a high-powered team to conduct strategic and market research for you. Our first step is scheduling a Discovery Call to learn about you, your company, and your business issues. You can invite key management staff members to attend if you want.
 
-Before the call, I'd like to ask you to review a few items so we can make the most productive use of our time together:
+The Discovery Call runs 1.5 hours and we will meet on Zoom. Here is my availability:
 
-1. Open the Economic Gardening Dashboard we created for your engagement:
-${dashboardUrl}
-2. Click on the Resource Vault inside the dashboard.
-3. Review these documents in the EG Dashboard Resource Vault:
+${WELCOME_AVAILABILITY_MARKER}
 
-* "What to Expect"
-* EG Deliverables - a short video showing examples of the work you'll receive from your engagement
-* EG FAQs
-* 5 Framework videos - the password is listed there
-* Work Style Preferences - a quick sorter
-* Signals of Change - how we spot buyers who are in a buying window right now
+Following the Discovery Call, a research team will start work for you immediately.
 
-Finally, please send me your top 10 customers and at least 3 competitors before the call. A simple list is fine.
+Please note that we avoid rescheduling calls if possible. Coordinating 5-7 people will eat into your sponsor's budget for the engagement.
 
-The better we understand your customers, competitors, goals, and working style going into the call, the more useful and targeted our research can be.
+\u2611\ufe0f Review the attached documents: "Frequently Asked Questions" and "What to Expect in an Economic Gardening Engagement" before the Discovery Call. They give a good overview of where we are going.
 
-If you have any questions, just reply, and I'll help. Also, could you do me a favor and reply to let me know this made it through your spam filters?
+\u2611\ufe0f There are two sets of videos that cover basic principles of the Economic Gardening program. The first is an overview of the analytical frameworks we use in trouble shooting business issues. The second is examples of deliverables in a marketing campaign.
 
-Looking forward to scheduling our Discovery Call.
+- Watch the framework videos at https://economicgardening.org/training-videos-frameworks/
+  Password is nceg2019 (all lowercase)
 
-${teamLead}`;
+- Watch the "Deliverables" video at https://economicgardening.org/nceg-sample-deliverables/
+
+\u2611\ufe0f This preference sorter will help us understand your work style and communication preferences (and those of any management people you wish to include). Please provide the results (4 letters) before your Discovery Call, or we can discuss them during the call.
+
+  https://claude.ai/public/artifacts/15e8c292-005b-4f20-81a3-8b637d504601
+
+\u2611\ufe0f Finally, please provide me with a list of your top 10 customers and at least 5 competitors (larger, smaller, same size). This will help us build a customer profile. We will also look at your competitors' website activity.
+
+Feel free to let me know if you have questions. We look forward to working with your company.
+
+Thank you,
+${teamLead}
+Cell: ${teamLeadCell}
+National Center for Economic Gardening \u2013 Team Lead`;
   }
 
   async function buildWelcomeEmail() {
@@ -3147,8 +3183,10 @@ ${teamLead}`;
         : "This engagement has no company contacts yet - add them under Company Info, step 3, and they'll fill in here.");
     }
 
-    const dashboardUrl = c.slug ? new URL(`c/${encodeURIComponent(c.slug)}`, PUBLIC_SITE_BASE).href : null;
-    if (!dashboardUrl) notes.push("This engagement has no dashboard link yet (no slug on the client record), so the link in the message is a placeholder.");
+    // The dashboard link and its missing-slug note went with the old wording
+    // (Greg, 10/8/26: keep it out -- "this letter just books the call", which
+    // is also why Chris renamed it the Scheduling Letter). The client meets
+    // the dashboard once the Discovery Call is on the calendar.
 
     // Greg (10/2/26): "The signature should be from the assigned Team Lead,
     // not necessarily Greg Gotcher."
@@ -3164,6 +3202,10 @@ ${teamLead}`;
     // So: the assigned Team Lead, or a placeholder that can't be mistaken
     // for a name. Both cases say so in the note above the fields.
     const teamLead = (teamLeadContact && teamLeadContact.name) || "";
+    const teamLeadCell = (teamLeadContact && teamLeadContact.phone) || "";
+    if (teamLead && !teamLeadCell) {
+      notes.push(`${teamLead} has no phone on the Roster, so the Cell line is a placeholder — add it to their profile and it will fill in here from then on.`);
+    }
     if (!teamLead) {
       notes.push("No Team Lead is assigned to this engagement yet, so the signature is a placeholder — assign one under Team & Hours and reopen this, or type a name in.");
     } else if (!isTeamLeadHere) {
@@ -3173,10 +3215,20 @@ ${teamLead}`;
     $("welcome-to").value = toList.join(", ");
     $("welcome-cc").value = ccUnique.join(", ");
     $("welcome-subject").value = egEmailSubject(c, "Welcome to Economic Gardening");
+    // Two things this letter cannot do for itself, so they are said out loud
+    // rather than left for the client to discover. First is the availability
+    // line -- the whole point of the letter, and the one line that is blank on
+    // purpose. Second is the attachments: Greg chose to keep the model's
+    // "attached documents" wording and attach them by hand, and a mailto
+    // cannot carry a file, so the letter promises two documents the composer
+    // has no way to put in the message. Naming them, and where they live,
+    // is the difference between a reminder and a bug report from the client.
+    notes.push(`Before sending: replace the "${WELCOME_AVAILABILITY_MARKER.replace(/^>>> |<<<$/g, "")}" line with your dates and times.`);
+    notes.push("Also attach \u201cEG FAQs\u201d and \u201cEG \u2013 What to Expect\u201d \u2014 the letter says they are attached, and a mailto cannot attach them for you. Both are in the Resource Vault.");
+
     $("welcome-body").value = welcomeEmailBody(
-      welcomeFirstNames(contacts.map((r) => r.name)),
-      dashboardUrl || "[dashboard link]",
-      teamLead || "[Team Lead]"
+      teamLead || "[Team Lead]",
+      teamLeadCell || "[cell number]"
     );
     $("welcome-note").textContent = notes.join(" ");
   }
