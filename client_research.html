@@ -188,6 +188,34 @@
   .show-questions-toggle[hidden] { display: none; }
   .show-questions-hint { display: block; font-size: 11.5px; font-weight: 400; color: var(--muted); margin-top: 2px; }
 
+  /* Task list (153). Deliberately plain: it is off for most engagements and
+     should read as a checklist, not a second product inside the page. */
+  .tasks-card[hidden] { display: none; }
+  .tasks-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .tasks-head h2 { margin: 0; font-size: 15px; color: var(--navy); }
+  .tasks-hide-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 500; }
+  .tasks-hide-wrap input { width: auto; margin: 0; }
+  .task-row { display: grid; grid-template-columns: 22px 130px 1fr auto; gap: 10px; align-items: start;
+              padding: 10px 0; border-top: 1px solid var(--border); }
+  .task-row:first-child { border-top: none; }
+  .task-row input[type="checkbox"] { width: auto; margin: 3px 0 0; }
+  .task-row input[type="date"] { font-family: inherit; font-size: 12.5px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; }
+  .task-title { font-size: 13.5px; line-height: 1.45; color: var(--text); }
+  .task-area { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
+  .task-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .task-side select { font-family: inherit; font-size: 12.5px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; max-width: 200px; }
+  .task-files { font-size: 11.5px; color: var(--muted); }
+  .task-actions { display: flex; gap: 6px; }
+  .task-done .task-title { text-decoration: line-through; color: var(--muted); }
+  .task-done-by { font-size: 11px; color: var(--muted); }
+  .task-overdue { color: var(--danger); font-weight: 600; }
+  .task-empty { font-size: 13px; color: var(--muted); padding: 6px 0; }
+  @media (max-width: 760px) {
+    .task-row { grid-template-columns: 22px 1fr; }
+    .task-side { align-items: flex-start; grid-column: 2; }
+    .task-row input[type="date"] { grid-column: 2; }
+  }
+
   .field { margin-bottom: 12px; }
   .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
   .field input[type="text"], .field input[type="url"], .field input[type="email"], .field textarea, .field select {
@@ -710,7 +738,33 @@
             <span class="show-questions-hint">Off by default. The research files show either way.</span>
           </span>
         </label>
+        <!-- Greg (10/8/26): "i like the idea of making the task list only
+             viewable if the TL clicks the 'Use Tasks' checkbox. maybe we add
+             it to the 'Add Research' page next to the Show Questions
+             selection that the TL already makes." Most Team Leads do not work
+             this way, so the whole feature stays behind this. -->
+        <label class="show-questions-toggle" id="use-tasks-wrap" hidden>
+          <input type="checkbox" id="use-tasks" />
+          <span>
+            Use tasks &mdash; assign each question to a specialist
+            <span class="show-questions-hint">Off by default. Adds a task list below, for Team Leads who track the work that way.</span>
+          </span>
+        </label>
         <div id="research-areas-sections"></div>
+
+        <!-- Below Watering Holes, the last research area, where Greg asked
+             for it: "Then we could add the New Task stuff below the Watering
+             Holes question box." -->
+        <div class="card tasks-card" id="tasks-card" hidden style="margin-bottom:0;">
+          <div class="tasks-head">
+            <h2>Tasks</h2>
+            <label class="tasks-hide-wrap">
+              <input type="checkbox" id="tasks-hide-done" />
+              <span>Hide completed</span>
+            </label>
+          </div>
+          <div id="tasks-list"></div>
+        </div>
       </div>
 
     </div>
@@ -1123,6 +1177,60 @@
       : "The research questions are hidden from this client's dashboard.", "success");
   });
 
+  wireHideDoneToggle();
+
+  $("use-tasks").addEventListener("change", async () => {
+    if (!currentClient) return;
+    const box = $("use-tasks");
+    const next = box.checked;
+    box.disabled = true;
+    const { data, error } = await sb
+      .from("clients")
+      .update({ use_tasks: next })
+      .eq("id", currentClient.id)
+      .select("id, use_tasks");
+    box.disabled = false;
+    if (error) {
+      box.checked = !next;
+      showBanner("Couldn't save that: " + error.message, "error");
+      return;
+    }
+    if (!data || !data.length) {
+      // Same Team-Lead-or-Admin write rule as show_research_questions, so
+      // the same sentence naming who can actually do it.
+      box.checked = !next;
+      showBanner(await teamLeadRefusalMessage(), "error");
+      return;
+    }
+    currentClient.use_tasks = data[0].use_tasks;
+    box.checked = !!currentClient.use_tasks;
+    if (currentClient.use_tasks) {
+      await loadEngagementSpecialists();
+      await backfillTaskAssignees();
+    }
+    renderTaskList();
+    showBanner(currentClient.use_tasks
+      ? "Tasks are on for this engagement. Each research question is now a task below."
+      : "Tasks are off. Nothing was lost — assignees and dates are still on the questions if you turn it back on.", "success");
+  });
+
+  // Turning tasks on assigns every unassigned question to its work area's
+  // specialist in one go, so the Team Lead starts from a filled-in list
+  // rather than a column of "Unassigned". Anything already assigned is left
+  // alone, which is what makes this safe to run again.
+  async function backfillTaskAssignees() {
+    const pending = allQuestions
+      .filter((q) => !q.assigned_user_id)
+      .map((q) => ({ q, userId: defaultAssigneeFor(q.research_area) }))
+      .filter((x) => x.userId);
+    if (!pending.length) return;
+    for (const { q, userId } of pending) {
+      const { error } = await sb.from("client_research_questions")
+        .update({ assigned_user_id: userId }).eq("id", q.id);
+      if (!error) q.assigned_user_id = userId;
+    }
+  }
+
   async function loadClient(clientId) {
     const { data: client, error } = await sb.from("clients").select("*, econ_dev_companies(name)").eq("id", clientId).single();
     if (error || !client) {
@@ -1138,6 +1246,11 @@
     if (sqWrap) {
       sqWrap.hidden = false;
       $("show-questions").checked = !!client.show_research_questions;
+    }
+    const utWrap = $("use-tasks-wrap");
+    if (utWrap) {
+      utWrap.hidden = false;
+      $("use-tasks").checked = !!client.use_tasks;
     }
 
     $("research-view").classList.remove("hidden");
@@ -1162,8 +1275,13 @@
     $("p-lifecycle-badge").className = `badge badge-${client.project_status}`;
     $("p-lifecycle-badge").textContent = client.project_status;
 
-    await Promise.all([loadDocuments(), loadResearchQuestions()]);
+    await Promise.all([
+      loadDocuments(),
+      loadResearchQuestions(),
+      client.use_tasks ? loadEngagementSpecialists() : Promise.resolve(),
+    ]);
     renderResearchAreaSections();
+    renderTaskList();
   }
 
   // Resource Vault (fileNameFromPath, RESOURCE_VAULT_CONFIG, the generic
@@ -1331,6 +1449,31 @@
   ];
   let allDocuments = [];
   let allQuestions = [];
+  // Everyone holding an assignment row on this engagement, for the task
+  // assignee picker. Loaded only when tasks are in use.
+  let engagementSpecialists = [];
+  let hideDoneTasks = false;
+
+  // Which specialty row a work area's task falls to by default. The two
+  // enums were built separately and do not line up one-for-one: outbound and
+  // inbound are both Digital Marketing (one person, two areas), and
+  // market_research and gis each run to two slots on about a third of live
+  // engagements. So this picks the DEFAULT, and the Team Lead can change it
+  // -- deriving the assignee outright would have shown one of two market
+  // research specialists arbitrarily and made it impossible to split
+  // questions between them, which is the thing the Podio list does.
+  const AREA_DEFAULT_SPECIALTY = {
+    market_dynamics: "market_research",
+    outbound: "digital_marketing",
+    inbound: "digital_marketing",
+    watering_holes: "watering_holes",
+    gis: "gis",
+  };
+  const SPECIALTY_LABELS = {
+    team_lead: "Team Lead", market_research: "Market Research",
+    digital_marketing: "Digital Marketing", gis: "GIS",
+    watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
+  };
   // renderResearchAreaSections() rebuilds the whole accordion group from
   // scratch after every upload/delete/reorder (simplest way to keep sort
   // order/render logic in one place) — track which area was open so that
@@ -1346,6 +1489,36 @@
       .order("sort_order", { ascending: true });
     if (error) { showBanner("Couldn't load research questions: " + error.message, "error"); return; }
     allQuestions = data || [];
+  }
+
+  // Only the people actually on this engagement can hold a task, so the
+  // picker is built from client_assignments rather than the whole Roster.
+  async function loadEngagementSpecialists() {
+    const { data, error } = await sb
+      .from("client_assignments")
+      .select("user_id, specialty_type, slot_number, users(full_name)")
+      .eq("client_id", currentClient.id)
+      .not("user_id", "is", null)
+      .order("specialty_type")
+      .order("slot_number");
+    if (error) { engagementSpecialists = []; return; }
+    engagementSpecialists = (data || []).map((a) => ({
+      userId: a.user_id,
+      name: (a.users && a.users.full_name) || "Unknown",
+      specialty: a.specialty_type,
+      slot: a.slot_number || 1,
+    }));
+  }
+
+  function defaultAssigneeFor(area) {
+    const want = AREA_DEFAULT_SPECIALTY[area];
+    if (!want) return null;
+    // Lowest slot number wins when an area has two people on it; the Team
+    // Lead moves it from there.
+    const match = engagementSpecialists
+      .filter((x) => x.specialty === want)
+      .sort((a, b) => a.slot - b.slot)[0];
+    return match ? match.userId : null;
   }
 
   async function loadDocuments() {
@@ -1543,6 +1716,168 @@
     updateAreaAddButtonsState(area);
   }
 
+  // ---------- Tasks (153) ----------
+  //
+  // A task IS a research question. There is no tasks table and no copy of
+  // anything: this renders the same client_research_questions rows the
+  // accordion above renders, with the three task columns showing. Greg
+  // (10/8/26): "adding a file to the task would also add it to the Add
+  // Research section so that if the specialist added the file to the task
+  // they don't have to also add it to the Research section." That needed no
+  // code -- the buttons on a task row call the same pickAreaDocuments(area,
+  // questionId) the question block calls, so the file lands on the question
+  // and both views show it because both are reading the same rows.
+
+  function taskAreaLabel(area) {
+    const found = RESEARCH_AREAS.find(([k]) => k === area);
+    return found ? found[1] : area;
+  }
+
+  function specialistOptionsHtml(selectedId) {
+    const opts = engagementSpecialists.map((x) => {
+      const label = `${x.name} \u2014 ${SPECIALTY_LABELS[x.specialty] || x.specialty}${x.slot > 1 ? " " + x.slot : ""}`;
+      return `<option value="${escapeHtml(x.userId)}"${x.userId === selectedId ? " selected" : ""}>${escapeHtml(label)}</option>`;
+    }).join("");
+    return `<option value=""${!selectedId ? " selected" : ""}>Unassigned</option>${opts}`;
+  }
+
+  function taskIsOverdue(q) {
+    if (!q.due_date || q.completed_at) return false;
+    // Date-only compare: a task due today is not overdue until tomorrow.
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    return q.due_date < todayKey;
+  }
+
+  function renderTaskList() {
+    const card = $("tasks-card");
+    if (!card) return;
+    const on = !!(currentClient && currentClient.use_tasks);
+    card.hidden = !on;
+    if (!on) return;
+
+    const list = $("tasks-list");
+    // Ordered the way the Team Lead reads a task list -- by when it is due,
+    // undated last -- not by the research-area grouping the accordion uses.
+    const rows = allQuestions
+      .filter((q) => !(hideDoneTasks && q.completed_at))
+      .slice()
+      .sort((a, b) => {
+        if (!!a.completed_at !== !!b.completed_at) return a.completed_at ? 1 : -1;
+        const ad = a.due_date || "9999-12-31", bd = b.due_date || "9999-12-31";
+        if (ad !== bd) return ad < bd ? -1 : 1;
+        return (a.question_number || 0) - (b.question_number || 0);
+      });
+
+    if (!allQuestions.length) {
+      list.innerHTML = `<div class="task-empty">No research questions yet. Add them in the areas above and they appear here as tasks.</div>`;
+      return;
+    }
+    if (!rows.length) {
+      list.innerHTML = `<div class="task-empty">Every task is complete.</div>`;
+      return;
+    }
+
+    list.innerHTML = rows.map((q) => {
+      const done = !!q.completed_at;
+      const nDocs = allDocuments.filter((d) => d.question_id === q.id).length;
+      const text = (q.question || "").trim();
+      const num = q.question_number ? `Question ${q.question_number}: ` : "";
+      const doneBy = done
+        ? (engagementSpecialists.find((x) => x.userId === q.completed_by) || {}).name
+        : null;
+      return `
+      <div class="task-row ${done ? "task-done" : ""}" data-task-row="${q.id}">
+        <input type="checkbox" data-task-done="${q.id}" ${done ? "checked" : ""}
+               aria-label="Mark this task complete" />
+        <input type="date" data-task-due="${q.id}" value="${escapeHtml(q.due_date || "")}"
+               class="${taskIsOverdue(q) ? "task-overdue" : ""}" aria-label="Due date" />
+        <div>
+          <span class="task-area">${escapeHtml(taskAreaLabel(q.research_area))}</span>
+          <span class="task-title">${escapeHtml(num + (text || "(no question text yet)"))}</span>
+          ${doneBy ? `<div class="task-done-by">Completed by ${escapeHtml(doneBy)}</div>` : ""}
+        </div>
+        <div class="task-side">
+          <select data-task-assignee="${q.id}" aria-label="Assigned to">${specialistOptionsHtml(q.assigned_user_id)}</select>
+          <span class="task-files">${nDocs ? `${nDocs} file${nDocs === 1 ? "" : "s"}` : "No files yet"}</span>
+          <div class="task-actions">
+            <button type="button" class="btn-secondary btn-sm" data-task-add-doc="${q.id}" data-area="${q.research_area}">+ Document</button>
+            <button type="button" class="btn-secondary btn-sm" data-task-add-link="${q.id}" data-area="${q.research_area}">+ Link</button>
+          </div>
+        </div>
+      </div>`;
+    }).join("");
+
+    wireTaskHandlers(list);
+  }
+
+  function wireHideDoneToggle() {
+    const box = $("tasks-hide-done");
+    if (!box) return;
+    box.addEventListener("change", () => { hideDoneTasks = box.checked; renderTaskList(); });
+  }
+
+  function wireTaskHandlers(scope) {
+    scope.querySelectorAll("[data-task-done]").forEach((box) => {
+      box.addEventListener("change", () => toggleTaskDone(box.dataset.taskDone, box.checked, box));
+    });
+    scope.querySelectorAll("[data-task-due]").forEach((inp) => {
+      inp.addEventListener("change", () => saveTaskField(inp.dataset.taskDue, { due_date: inp.value || null }, inp));
+    });
+    scope.querySelectorAll("[data-task-assignee]").forEach((sel) => {
+      sel.addEventListener("change", () => saveTaskField(sel.dataset.taskAssignee, { assigned_user_id: sel.value || null }, sel));
+    });
+    // The same upload path the question block uses, so the file is filed
+    // against the question once and shows in both places.
+    scope.querySelectorAll("[data-task-add-doc]").forEach((btn) => {
+      btn.addEventListener("click", () => pickAreaDocuments(btn.dataset.area, btn.dataset.taskAddDoc));
+    });
+    // A link needs its two fields, which live in the question block's own
+    // form -- so this opens the area and scrolls to it rather than building
+    // a second copy of the form that would then need keeping in step.
+    scope.querySelectorAll("[data-task-add-link]").forEach((btn) => {
+      btn.addEventListener("click", () => openQuestionLinkForm(btn.dataset.area, btn.dataset.taskAddLink));
+    });
+  }
+
+  function openQuestionLinkForm(area, questionId) {
+    openResearchArea = area;
+    renderResearchAreaSections();
+    const form = $(`rq-link-form-${questionId}`);
+    if (!form) { showBanner("Couldn't find that question's link form.", "error"); return; }
+    form.classList.add("open");
+    form.scrollIntoView({ behavior: "smooth", block: "center" });
+    const label = $(`rq-link-label-${questionId}`);
+    if (label) label.focus();
+  }
+
+  async function saveTaskField(questionId, patch, control) {
+    const q = allQuestions.find((x) => x.id === questionId);
+    if (!q) return;
+    const before = {};
+    Object.keys(patch).forEach((k) => { before[k] = q[k]; });
+    if (control) control.disabled = true;
+    const { data, error } = await sb.from("client_research_questions")
+      .update(patch).eq("id", questionId).select("id");
+    if (control) control.disabled = false;
+    if (error || !data || !data.length) {
+      Object.assign(q, before);
+      renderTaskList();
+      showBanner(error ? "Couldn't save that: " + error.message : await teamLeadRefusalMessage(), "error");
+      return;
+    }
+    Object.assign(q, patch);
+    renderTaskList();
+  }
+
+  // Ticking a task records WHO ticked it, not just that it happened -- the
+  // point of the list is knowing whose research landed.
+  async function toggleTaskDone(questionId, done, control) {
+    await saveTaskField(questionId, done
+      ? { completed_at: new Date().toISOString(), completed_by: currentUser ? currentUser.id : null }
+      : { completed_at: null, completed_by: null }, control);
+  }
+
   // The files under one question.
   function renderQuestionGroupDocs(area, questionId) {
     const el = $(`rq-docs-${questionId}`);
@@ -1643,6 +1978,7 @@
         // Its documents came loose rather than going with it (migration 124),
         // so both halves of every area have to be redrawn.
         await Promise.all([loadResearchQuestions(), loadDocuments()]);
+        renderTaskList();
         RESEARCH_AREAS.forEach(([key]) => { renderAreaQuestions(key); renderAreaDocs(key); });
       });
     });
@@ -1651,15 +1987,20 @@
   async function addAreaQuestion(area) {
     const existing = allQuestions.filter((q) => q.research_area === area);
     const sortOrder = existing.length ? Math.max(...existing.map((q) => q.sort_order || 0)) + 1 : 1;
+    // With tasks on, a new question arrives already pointed at its work
+    // area's specialist -- same default the backfill applies when tasks are
+    // switched on, so a question added later is not the odd one out.
     const { error } = await sb.from("client_research_questions").insert({
       client_id: currentClient.id,
       research_area: area,
       question: "",
       sort_order: sortOrder,
+      assigned_user_id: (currentClient.use_tasks ? defaultAssigneeFor(area) : null),
     });
     if (error) { showBanner("Couldn't add question: " + error.message, "error"); return; }
     await loadResearchQuestions();
     renderAreaQuestions(area);
+    renderTaskList();
     const inputs = $(`ra-${area}-questions`).querySelectorAll(".rq-question-input");
     if (inputs.length) inputs[inputs.length - 1].focus();
   }
@@ -1951,6 +2292,7 @@
     await loadDocuments();
     renderAreaQuestions(area);
     renderAreaDocs(area);
+    renderTaskList();
   }
 
   // A research area's findings can be a link instead of (or alongside) an
@@ -1998,6 +2340,7 @@
     await loadDocuments();
     renderAreaQuestions(area);
     renderAreaDocs(area);
+    renderTaskList();
   }
 </script>
 <script>
