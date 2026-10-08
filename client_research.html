@@ -210,6 +210,23 @@
   .task-done-by { font-size: 11px; color: var(--muted); }
   .task-overdue { color: var(--danger); font-weight: 600; }
   .task-empty { font-size: 13px; color: var(--muted); padding: 6px 0; }
+  .task-title-btn { background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit;
+                    text-align: left; cursor: pointer; display: block; width: 100%; }
+  .task-title-btn:hover .task-title { text-decoration: underline; }
+  .task-chev { display: inline-block; width: 10px; color: var(--muted); transition: transform 0.12s ease; }
+  .task-row.task-open .task-chev { transform: rotate(90deg); }
+  .task-detail { grid-column: 2 / -1; margin-top: 8px; padding: 10px 12px; background: #f7f9f6;
+                 border: 1px solid var(--border); border-radius: 8px; }
+  .task-detail-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px;
+                       font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+  .task-bg { font-size: 13px; line-height: 1.5; color: var(--text); }
+  .task-bg p { margin: 0 0 6px; }
+  .task-bg ul, .task-bg ol { margin: 0 0 6px 18px; padding: 0; }
+  .task-bg li { margin-bottom: 2px; }
+  .task-no-bg { font-size: 12.5px; color: var(--muted); font-style: italic; }
+  .task-mine { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+               color: #fff; background: var(--accent); border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
+  @media (max-width: 760px) { .task-detail { grid-column: 1 / -1; } }
   @media (max-width: 760px) {
     .task-row { grid-template-columns: 22px 1fr; }
     .task-side { align-items: flex-start; grid-column: 2; }
@@ -1453,6 +1470,10 @@
   // assignee picker. Loaded only when tasks are in use.
   let engagementSpecialists = [];
   let hideDoneTasks = false;
+  // Which task is expanded. Greg (10/8/26): "they can open their assignment
+  // and quickly see their question and add their research." One at a time --
+  // the point is to read one brief, not to scroll a wall of them.
+  let openTaskId = null;
 
   // Which specialty row a work area's task falls to by default. The two
   // enums were built separately and do not line up one-for-one: outbound and
@@ -1728,6 +1749,40 @@
   // questionId) the question block calls, so the file lands on the question
   // and both views show it because both are reading the same rows.
 
+  // The TL writes Background Information on the Controlling Document, and
+  // until now it was visible on that page and the client's public page and
+  // NOWHERE on this one -- the page the specialist actually works from. 8 of
+  // 17 live questions carry it, up to 1,254 characters, and in Podio it is
+  // the "Details" block that tells the specialist what the question actually
+  // means. Same renderer as controlling_document_public.html so the markdown
+  // the TL typed reads the same in both places.
+  function taskBgToHtml(text) {
+    if (!text) return "";
+    const inline = (x) => escapeHtml(x)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>");
+    const lines = String(text).split(/\r?\n/);
+    let html = "", listType = null;
+    const closeList = () => { if (listType) { html += `</${listType}>`; listType = null; } };
+    for (const raw of lines) {
+      const line = raw.trim();
+      const ul = /^[-*\u2022]\s+(.*)$/.exec(line);
+      const ol = /^\d+[.)]\s+(.*)$/.exec(line);
+      if (ul) {
+        if (listType !== "ul") { closeList(); html += "<ul>"; listType = "ul"; }
+        html += `<li>${inline(ul[1])}</li>`;
+      } else if (ol) {
+        if (listType !== "ol") { closeList(); html += "<ol>"; listType = "ol"; }
+        html += `<li>${inline(ol[1])}</li>`;
+      } else {
+        closeList();
+        if (line) html += `<p>${inline(line)}</p>`;
+      }
+    }
+    closeList();
+    return html;
+  }
+
   function taskAreaLabel(area) {
     const found = RESEARCH_AREAS.find(([k]) => k === area);
     return found ? found[1] : area;
@@ -1786,15 +1841,25 @@
       const doneBy = done
         ? (engagementSpecialists.find((x) => x.userId === q.completed_by) || {}).name
         : null;
+      const open = openTaskId === q.id;
+      // Every specialist on the engagement sees every task (Greg: "all the
+      // specialists can see all the tasks for this engagement"), so the one
+      // thing a specialist needs is to find their own in the list quickly.
+      const mine = !!(currentUser && q.assigned_user_id === currentUser.id);
+      const bgHtml = taskBgToHtml(q.background || "");
       return `
-      <div class="task-row ${done ? "task-done" : ""}" data-task-row="${q.id}">
+      <div class="task-row ${done ? "task-done" : ""} ${open ? "task-open" : ""}" data-task-row="${q.id}">
         <input type="checkbox" data-task-done="${q.id}" ${done ? "checked" : ""}
                aria-label="Mark this task complete" />
         <input type="date" data-task-due="${q.id}" value="${escapeHtml(q.due_date || "")}"
                class="${taskIsOverdue(q) ? "task-overdue" : ""}" aria-label="Due date" />
         <div>
-          <span class="task-area">${escapeHtml(taskAreaLabel(q.research_area))}</span>
-          <span class="task-title">${escapeHtml(num + (text || "(no question text yet)"))}</span>
+          <span class="task-area">${escapeHtml(taskAreaLabel(q.research_area))}${mine ? `<span class="task-mine">Yours</span>` : ""}</span>
+          <button type="button" class="task-title-btn" data-task-open="${q.id}"
+                  aria-expanded="${open}" aria-controls="task-detail-${q.id}">
+            <span class="task-chev">&#9656;</span>
+            <span class="task-title">${escapeHtml(num + (text || "(no question text yet)"))}</span>
+          </button>
           ${doneBy ? `<div class="task-done-by">Completed by ${escapeHtml(doneBy)}</div>` : ""}
         </div>
         <div class="task-side">
@@ -1805,8 +1870,32 @@
             <button type="button" class="btn-secondary btn-sm" data-task-add-link="${q.id}" data-area="${q.research_area}">+ Link</button>
           </div>
         </div>
+        ${open ? `
+        <div class="task-detail" id="task-detail-${q.id}">
+          <div class="task-detail-label">Background</div>
+          ${bgHtml
+            ? `<div class="task-bg">${bgHtml}</div>`
+            : `<div class="task-no-bg">No background was written for this question on the Controlling Document.</div>`}
+          <div class="task-detail-label" style="margin-top:10px;">Research filed against this question</div>
+          <div id="task-docs-${q.id}"></div>
+        </div>` : ""}
       </div>`;
     }).join("");
+
+    // The same document rows the question block draws, from the same
+    // filtered list -- so what the specialist sees under the task is
+    // literally what is filed under the question.
+    if (openTaskId) {
+      const el = $(`task-docs-${openTaskId}`);
+      const q = allQuestions.find((x) => x.id === openTaskId);
+      if (el && q) {
+        const docs = allDocuments.filter((d) => d.question_id === q.id);
+        el.innerHTML = docs.length
+          ? renderQuestionDocs(docs, `task:${q.research_area}:${q.id}`)
+          : `<div class="task-no-bg">Nothing filed yet \u2014 use + Document or + Link above.</div>`;
+        if (docs.length) wireDocRowHandlers(el);
+      }
+    }
 
     wireTaskHandlers(list);
   }
@@ -1818,6 +1907,12 @@
   }
 
   function wireTaskHandlers(scope) {
+    scope.querySelectorAll("[data-task-open]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        openTaskId = openTaskId === btn.dataset.taskOpen ? null : btn.dataset.taskOpen;
+        renderTaskList();
+      });
+    });
     scope.querySelectorAll("[data-task-done]").forEach((box) => {
       box.addEventListener("change", () => toggleTaskDone(box.dataset.taskDone, box.checked, box));
     });
