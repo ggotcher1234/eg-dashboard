@@ -283,6 +283,18 @@
   .tl-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   .tl-doneline { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
   .task-empty { font-size: 13px; color: var(--muted); padding: 10px 0; }
+  .tl-qtext { width: 100%; font-family: inherit; font-size: 13.5px; line-height: 1.5; color: var(--text);
+              border: 1px solid transparent; border-radius: 6px; padding: 5px 7px; margin: 0 0 10px -7px;
+              background: transparent; resize: none; overflow: hidden; display: block; }
+  .tl-qtext:hover { border-color: var(--border); }
+  .tl-qtext:focus { border-color: var(--accent); background: #fff; outline: none; }
+  .tl-linkform { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .tl-linkform.open { display: flex; }
+  .tl-linkform .tl-field { flex: 1 1 200px; }
+  .tl-linkform input { width: 100%; max-width: none; }
+  .tl-del { margin-left: auto; }
+  .tl-addrow { display: flex; align-items: center; gap: 8px; padding: 12px 0 2px; border-top: 1px solid var(--border); margin-top: 4px; }
+  .tl-addrow select { font-family: inherit; font-size: 12.5px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
 
   /* The codes are short enough that the work-area chip now survives a
      narrow pane, so it is no longer hidden here -- which was the one thing
@@ -410,7 +422,7 @@
      question." Research questions are full sentences -- "Which market
      segments, applications, and Clippard product families offer the..." --
      and a one-line input showed the first half of one. A textarea that sizes
-     itself to its content (autosizeQuestion below) shows all of it without
+     itself to its content (autosizeTaskText below) shows all of it without
      making short questions take up three lines each.
      The row aligns to the top, not centre, so the delete button stays beside
      the FIRST line of a three-line question rather than floating to its
@@ -813,23 +825,12 @@
             <span class="show-questions-hint">Off by default. The research files show either way.</span>
           </span>
         </label>
-        <!-- Greg (10/8/26): "i like the idea of making the task list only
-             viewable if the TL clicks the 'Use Tasks' checkbox. maybe we add
-             it to the 'Add Research' page next to the Show Questions
-             selection that the TL already makes." Most Team Leads do not work
-             this way, so the whole feature stays behind this. -->
-        <label class="show-questions-toggle" id="use-tasks-wrap" hidden>
-          <input type="checkbox" id="use-tasks" />
-          <span>
-            Use tasks &mdash; assign each question to a specialist
-            <span class="show-questions-hint">Off by default. Adds a task list below, for Team Leads who track the work that way.</span>
-          </span>
-        </label>
-        <div id="research-areas-sections"></div>
-
-        <!-- Below Watering Holes, the last research area, where Greg asked
-             for it: "Then we could add the New Task stuff below the Watering
-             Holes question box." -->
+        <!-- Greg (10/8/26): "let's go forward with a task based system only.
+             we can remove the question about tasks and remove the boxes we
+             were using to attach documents to questions and just use the
+             tasks as our input to the dashboard."
+             So the Use Tasks switch and the four research-area accordions
+             are both gone, and the task list below is the whole page. -->
         <div class="card tasks-card" id="tasks-card" hidden style="margin-bottom:0;">
           <div class="tasks-head">
             <div class="tasks-head-left">
@@ -1258,58 +1259,6 @@
 
   wireHideDoneToggle();
 
-  $("use-tasks").addEventListener("change", async () => {
-    if (!currentClient) return;
-    const box = $("use-tasks");
-    const next = box.checked;
-    box.disabled = true;
-    const { data, error } = await sb
-      .from("clients")
-      .update({ use_tasks: next })
-      .eq("id", currentClient.id)
-      .select("id, use_tasks");
-    box.disabled = false;
-    if (error) {
-      box.checked = !next;
-      showBanner("Couldn't save that: " + error.message, "error");
-      return;
-    }
-    if (!data || !data.length) {
-      // Same Team-Lead-or-Admin write rule as show_research_questions, so
-      // the same sentence naming who can actually do it.
-      box.checked = !next;
-      showBanner(await teamLeadRefusalMessage(), "error");
-      return;
-    }
-    currentClient.use_tasks = data[0].use_tasks;
-    box.checked = !!currentClient.use_tasks;
-    if (currentClient.use_tasks) {
-      await loadEngagementSpecialists();
-      await backfillTaskAssignees();
-    }
-    renderTaskList();
-    showBanner(currentClient.use_tasks
-      ? "Tasks are on for this engagement. Each research question is now a task below."
-      : "Tasks are off. Nothing was lost — assignees and dates are still on the questions if you turn it back on.", "success");
-  });
-
-  // Turning tasks on assigns every unassigned question to its work area's
-  // specialist in one go, so the Team Lead starts from a filled-in list
-  // rather than a column of "Unassigned". Anything already assigned is left
-  // alone, which is what makes this safe to run again.
-  async function backfillTaskAssignees() {
-    const pending = allQuestions
-      .filter((q) => !q.assigned_user_id)
-      .map((q) => ({ q, userId: defaultAssigneeFor(q.research_area) }))
-      .filter((x) => x.userId);
-    if (!pending.length) return;
-    for (const { q, userId } of pending) {
-      const { error } = await sb.from("client_research_questions")
-        .update({ assigned_user_id: userId }).eq("id", q.id);
-      if (!error) q.assigned_user_id = userId;
-    }
-  }
-
   async function loadClient(clientId) {
     const { data: client, error } = await sb.from("clients").select("*, econ_dev_companies(name)").eq("id", clientId).single();
     if (error || !client) {
@@ -1325,11 +1274,6 @@
     if (sqWrap) {
       sqWrap.hidden = false;
       $("show-questions").checked = !!client.show_research_questions;
-    }
-    const utWrap = $("use-tasks-wrap");
-    if (utWrap) {
-      utWrap.hidden = false;
-      $("use-tasks").checked = !!client.use_tasks;
     }
 
     $("research-view").classList.remove("hidden");
@@ -1357,9 +1301,8 @@
     await Promise.all([
       loadDocuments(),
       loadResearchQuestions(),
-      client.use_tasks ? loadEngagementSpecialists() : Promise.resolve(),
+      loadEngagementSpecialists(),
     ]);
-    renderResearchAreaSections();
     renderTaskList();
   }
 
@@ -1557,11 +1500,6 @@
     digital_marketing: "Digital Marketing", gis: "GIS",
     watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
   };
-  // renderResearchAreaSections() rebuilds the whole accordion group from
-  // scratch after every upload/delete/reorder (simplest way to keep sort
-  // order/render logic in one place) — track which area was open so that
-  // rebuild doesn't visually collapse it out from under the consultant.
-  let openResearchArea = null;
 
   async function loadResearchQuestions() {
     const { data, error } = await sb
@@ -1617,187 +1555,6 @@
       .order("uploaded_at", { ascending: false });
     if (error) { showBanner("Couldn't load documents: " + error.message, "error"); return; }
     allDocuments = data;
-  }
-
-  function renderResearchAreaSections() {
-    const container = $("research-areas-sections");
-    container.innerHTML = RESEARCH_AREAS.map(([key, label]) => {
-      const isOpen = openResearchArea === key;
-      return `
-      <div class="card ra-card ${isOpen ? "" : "ra-card-collapsed"}" style="margin-bottom:12px;">
-        <div class="accordion-header ${isOpen ? "open" : ""}" data-ra-accordion="${key}"
-             role="button" tabindex="0" aria-expanded="${isOpen}" aria-controls="ra-${key}-body">
-          <h2><span class="accordion-chevron">&#9656;</span> ${escapeHtml(label)}</h2>
-          <span class="accordion-hint">${isOpen ? "Click to close" : "Click to open"}</span>
-        </div>
-        <div class="accordion-body ${isOpen ? "open" : ""}" id="ra-${key}-body">
-          <!-- Greg (9/19/26): "i need to be able to associate research links
-               and documents under the appropriate question." Each question is
-               its own block now, with its files beneath it and its own add
-               buttons, so a file is filed in the right place when it arrives
-               rather than sorted out later. The group below them holds
-               anything not tied to a question -- files that pre-date this, and
-               anything deliberately filed under the area itself. -->
-          <div class="rq-docs-label">Research Questions</div>
-          <div id="ra-${key}-questions"></div>
-          <div class="rq-add-row" style="margin-bottom:16px;">
-            <button type="button" class="btn-secondary btn-sm" data-area-add-question="${key}">+ Add Question</button>
-          </div>
-
-          <div class="rq-docs-label" id="ra-${key}-untied-label">Not tied to a question</div>
-          <div id="ra-${key}-docs"></div>
-          <div class="rq-add-row">
-            <button type="button" class="btn-secondary btn-sm" data-area-add-doc="${key}">+ Add Document</button>
-            <button type="button" class="btn-secondary btn-sm" data-area-add-link="${key}">+ Add Link</button>
-          </div>
-          <div class="rq-link-form" id="ra-link-form-${key}">
-            <div class="field">
-              <label for="ra-link-label-${key}">Label</label>
-              <input type="text" id="ra-link-label-${key}" placeholder="e.g. Listening Post" />
-            </div>
-            <div class="field">
-              <label for="ra-link-url-${key}">URL</label>
-              <input type="text" id="ra-link-url-${key}" placeholder="https://…" />
-            </div>
-            <button type="button" class="btn-primary btn-sm" data-area-save-link="${key}">Save Link</button>
-            <button type="button" class="btn-secondary btn-sm" data-area-cancel-link="${key}">Cancel</button>
-          </div>
-        </div>
-      </div>
-    `;
-    }).join("");
-
-    container.querySelectorAll("[data-ra-accordion]").forEach((hdr) => {
-      // A div acting as a button has to behave like one: Enter and Space
-      // toggle it, and Space must not scroll the page first.
-      hdr.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") { e.preventDefault(); hdr.click(); }
-      });
-      hdr.addEventListener("click", () => {
-        const wasOpen = hdr.classList.contains("open");
-        container.querySelectorAll("[data-ra-accordion]").forEach((h) => {
-          h.classList.remove("open");
-          h.setAttribute("aria-expanded", "false");
-          const hint = h.querySelector(".accordion-hint");
-          if (hint) hint.textContent = "Click to open";
-          // The lift-on-hover belongs to a CLOSED box only -- an open one
-          // holding text inputs must not float when the pointer crosses it.
-          h.closest(".ra-card")?.classList.add("ra-card-collapsed");
-          $(`ra-${h.dataset.raAccordion}-body`).classList.remove("open");
-        });
-        if (!wasOpen) {
-          hdr.classList.add("open");
-          hdr.setAttribute("aria-expanded", "true");
-          const openHint = hdr.querySelector(".accordion-hint");
-          if (openHint) openHint.textContent = "Click to close";
-          hdr.closest(".ra-card")?.classList.remove("ra-card-collapsed");
-          const body = $(`ra-${hdr.dataset.raAccordion}-body`);
-          body.classList.add("open");
-          // The question textareas size themselves from scrollHeight, which
-          // reads 0 inside a display:none accordion -- every area but the
-          // open one is rendered collapsed, so they'd all come back as a
-          // zero-height sliver the first time they're expanded. Re-measure
-          // now that the body actually has a box.
-          body.querySelectorAll(".rq-question-input").forEach(autosizeQuestion);
-          openResearchArea = hdr.dataset.raAccordion;
-        } else {
-          openResearchArea = null;
-        }
-      });
-    });
-
-    container.querySelectorAll("[data-area-add-question]").forEach((btn) => {
-      btn.addEventListener("click", () => addAreaQuestion(btn.dataset.areaAddQuestion));
-    });
-
-    container.querySelectorAll("[data-area-add-doc]").forEach((btn) => {
-      btn.addEventListener("click", () => pickAreaDocuments(btn.dataset.areaAddDoc));
-    });
-
-    // Add Link -- toggles the small inline form open/closed rather than
-    // opening a file picker, since a link has no file to select.
-    container.querySelectorAll("[data-area-add-link]").forEach((btn) => {
-      const area = btn.dataset.areaAddLink;
-      const linkForm = $(`ra-link-form-${area}`);
-      btn.addEventListener("click", () => {
-        linkForm.classList.toggle("open");
-        if (linkForm.classList.contains("open")) $(`ra-link-label-${area}`).focus();
-      });
-    });
-    container.querySelectorAll("[data-area-cancel-link]").forEach((btn) => {
-      const area = btn.dataset.areaCancelLink;
-      btn.addEventListener("click", () => {
-        $(`ra-link-form-${area}`).classList.remove("open");
-        $(`ra-link-label-${area}`).value = "";
-        $(`ra-link-url-${area}`).value = "";
-      });
-    });
-    container.querySelectorAll("[data-area-save-link]").forEach((btn) => {
-      btn.addEventListener("click", () => saveAreaLink(btn.dataset.areaSaveLink));
-    });
-
-    RESEARCH_AREAS.forEach(([key]) => { renderAreaQuestions(key); renderAreaDocs(key); });
-  }
-
-  // Everything in this area that is NOT under a question: files added before
-  // 9/19/26, and anything filed against the area itself.
-  function renderAreaDocs(area) {
-    const el = $(`ra-${area}-docs`);
-    const docs = allDocuments.filter((d) => d.research_area === area && !d.question_id);
-    el.innerHTML = renderQuestionDocs(docs, `gen:${area}`);
-    wireDocRowHandlers(el);
-    // The heading is only worth its space when something is under it -- but
-    // the add buttons stay, since that group is how you file something with
-    // no question.
-    const label = $(`ra-${area}-untied-label`);
-    if (label) label.style.display = docs.length ? "" : "none";
-  }
-
-  // Research Questions -- flat list of question text per area, no document
-  // grouping (see the comment above RESEARCH_AREAS for why this came back
-  // and why it's kept simple). Existing questions are inline-editable
-  // (blur to save); "+ Add Question" appends a blank one to the end.
-  function renderAreaQuestions(area) {
-    const el = $(`ra-${area}-questions`);
-    const questions = allQuestions.filter((q) => q.research_area === area);
-    if (!questions.length) {
-      el.innerHTML = `<div class="field-hint" style="margin-bottom:10px;">No research questions yet — these are what the CEO close-out survey asks about.</div>`;
-    } else {
-      el.innerHTML = questions.map((q) => {
-        const hasText = !!(q.question && q.question.trim());
-        const gate = hasText ? "" : ' disabled title="Give this question some text first."';
-        return `
-        <div class="rq-question-group" data-question-group="${q.id}">
-          <div class="rq-doc-row rq-question-row">
-            <textarea class="row-input-edit rq-question-input" rows="1" data-question-id="${q.id}" placeholder="e.g. Who are our fastest-growing competitors?">${escapeHtml(q.question || "")}</textarea>
-            <button type="button" class="btn-danger icon-btn" data-delete-question="${q.id}" title="Delete this question — its files stay, untied">&times;</button>
-          </div>
-          <div class="rq-question-docs" id="rq-docs-${q.id}"></div>
-          <div class="rq-add-row rq-question-add">
-            <button type="button" class="btn-secondary btn-sm" data-q-add-doc="${q.id}" data-area="${area}"${gate}>+ Add Document</button>
-            <button type="button" class="btn-secondary btn-sm" data-q-add-link="${q.id}" data-area="${area}"${gate}>+ Add Link</button>
-          </div>
-          <div class="rq-link-form" id="rq-link-form-${q.id}">
-            <div class="field">
-              <label for="rq-link-label-${q.id}">Label</label>
-              <input type="text" id="rq-link-label-${q.id}" placeholder="e.g. Listening Post" />
-            </div>
-            <div class="field">
-              <label for="rq-link-url-${q.id}">URL</label>
-              <input type="text" id="rq-link-url-${q.id}" placeholder="https://…" />
-            </div>
-            <button type="button" class="btn-primary btn-sm" data-q-save-link="${q.id}" data-area="${area}">Save Link</button>
-            <button type="button" class="btn-secondary btn-sm" data-q-cancel-link="${q.id}">Cancel</button>
-          </div>
-        </div>
-      `;
-      }).join("");
-      el.querySelectorAll(".rq-question-input").forEach(autosizeQuestion);
-      wireQuestionHandlers(el, area);
-      wireQuestionDocButtons(el, area);
-      questions.forEach((q) => renderQuestionGroupDocs(area, q.id));
-    }
-    updateAreaAddButtonsState(area);
   }
 
   // ---------- Tasks (153) ----------
@@ -1946,9 +1703,10 @@
   function renderTaskList() {
     const card = $("tasks-card");
     if (!card) return;
-    const on = !!(currentClient && currentClient.use_tasks);
-    card.hidden = !on;
-    if (!on) return;
+    // Always on since 154 -- clients.use_tasks is left in place rather than
+    // dropped (a DROP hangs through the MCP connection these are applied
+    // over) but nothing reads it any more.
+    card.hidden = false;
 
     const list = $("tasks-list");
     const total = allQuestions.length;
@@ -1966,12 +1724,20 @@
         return (a.question_number || 0) - (b.question_number || 0);
       });
 
+    // Both empty states still get the Add Task row. They used to return
+    // early, which was survivable while the research-area boxes could create
+    // a question -- with those gone, an engagement whose Controlling
+    // Document has no questions yet would have had no way to make the first
+    // one. Caught by the suite, not by looking at it.
     if (!total) {
-      list.innerHTML = `<div class="task-empty">No research questions yet. Add them in the areas above and they appear here as tasks.</div>`;
+      list.innerHTML = `<div class="task-empty">No tasks yet. They arrive from the Controlling Document, or add one below.</div>`
+        + addTaskRowHtml();
+      wireTaskHandlers(list);
       return;
     }
     if (!rows.length) {
-      list.innerHTML = `<div class="task-empty">Every task is complete.</div>`;
+      list.innerHTML = `<div class="task-empty">Every task is complete.</div>` + addTaskRowHtml();
+      wireTaskHandlers(list);
       return;
     }
 
@@ -2023,7 +1789,12 @@
         </div>
         ${open ? `
         <div class="tl-detail" id="tl-detail-${q.id}">
-          <div class="tl-detail-q">${escapeHtml(text)}</div>
+          <!-- Editable here now. The research-area boxes that used to own
+               this went with 154; the Controlling Document is still where a
+               question is properly written, with its background and
+               numbering, and this is the quick correction. -->
+          <textarea class="tl-qtext" rows="1" data-task-text="${q.id}"
+                    placeholder="What is this task asking for?">${escapeHtml(q.question || "")}</textarea>
           <div class="tl-fields">
             <label class="tl-field">
               <span>Due</span>
@@ -2043,6 +1814,24 @@
           <div class="tl-actions">
             <button type="button" class="btn-secondary btn-sm" data-task-add-doc="${q.id}" data-area="${q.research_area}">+ Document</button>
             <button type="button" class="btn-secondary btn-sm" data-task-add-link="${q.id}" data-area="${q.research_area}">+ Link</button>
+            <button type="button" class="btn-danger btn-sm tl-del" data-task-delete="${q.id}">Delete task</button>
+          </div>
+          <!-- The link form lives in the task now. It used to live in the
+               question block, and the task's + Link jumped you over to it;
+               with those blocks gone there was nowhere to jump. -->
+          <div class="tl-linkform" id="tl-linkform-${q.id}">
+            <div class="tl-field">
+              <span>Label</span>
+              <input type="text" id="tl-link-label-${q.id}" placeholder="e.g. Listening Post" />
+            </div>
+            <div class="tl-field">
+              <span>URL</span>
+              <input type="text" id="tl-link-url-${q.id}" placeholder="https://…" />
+            </div>
+            <div class="tl-actions">
+              <button type="button" class="btn-primary btn-sm" data-task-save-link="${q.id}" data-area="${q.research_area}">Save Link</button>
+              <button type="button" class="btn-secondary btn-sm" data-task-cancel-link="${q.id}">Cancel</button>
+            </div>
           </div>
           ${doneBy ? `<div class="tl-doneline">Completed by ${escapeHtml(doneBy)}</div>` : ""}
         </div>` : ""}
@@ -2055,13 +1844,33 @@
       if (el && q) {
         const docs = allDocuments.filter((d) => d.question_id === q.id);
         el.innerHTML = docs.length
-          ? renderQuestionDocs(docs, `task:${q.research_area}:${q.id}`)
+          // "q:" and not "task:" -- parseScope only understands "q" and
+          // treats anything else as the untied group, so a "task:" scope made
+          // every drag inside an open task reorder the wrong list. A task IS
+          // its question; it gets the question's scope.
+          ? renderQuestionDocs(docs, `q:${q.research_area}:${q.id}`)
           : `<div class="tl-quiet">Nothing filed yet \u2014 use + Document or + Link below.</div>`;
         if (docs.length) wireDocRowHandlers(el);
       }
     }
 
+    list.insertAdjacentHTML("beforeend", addTaskRowHtml());
     wireTaskHandlers(list);
+  }
+
+  // Greg (10/8/26) kept a way to add one here: "Yes -- keep a + Add Task
+  // button." It creates a question in the chosen work area, which is all a
+  // task is. Anything written properly -- with background, numbering and a
+  // ranking -- still comes from the Controlling Document; this is for
+  // research nobody put in there.
+  function addTaskRowHtml() {
+    return `
+      <div class="tl-addrow">
+        <button type="button" class="btn-secondary btn-sm" id="tl-add-task">+ Add Task</button>
+        <select id="tl-add-area" aria-label="Work area for the new task">
+          ${RESEARCH_AREAS.map(([k, label]) => `<option value="${k}">${escapeHtml(label)}</option>`).join("")}
+        </select>
+      </div>`;
   }
 
   // Esc closes the open task, the other half of "make it obvious how to
@@ -2145,23 +1954,92 @@
     scope.querySelectorAll("[data-task-add-doc]").forEach((btn) => {
       btn.addEventListener("click", () => pickAreaDocuments(btn.dataset.area, btn.dataset.taskAddDoc));
     });
-    // A link needs its two fields, which live in the question block's own
-    // form -- so this opens the area and scrolls to it rather than building
-    // a second copy of the form that would then need keeping in step.
+
+    // Question text, saved on blur, same contract the question block had:
+    // Enter commits, Shift+Enter breaks a line.
+    scope.querySelectorAll("[data-task-text]").forEach((ta) => {
+      autosizeTaskText(ta);
+      const original = ta.value;
+      ta.addEventListener("input", () => autosizeTaskText(ta));
+      ta.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ta.blur(); }
+      });
+      ta.addEventListener("blur", async () => {
+        const value = ta.value.trim();
+        if (value === original) return;
+        await saveTaskField(ta.dataset.taskText, { question: value || null });
+      });
+    });
+
+    scope.querySelectorAll("[data-task-delete]").forEach((btn) => {
+      btn.addEventListener("click", () => deleteTask(btn.dataset.taskDelete));
+    });
+
+    scope.querySelectorAll("[data-task-save-link]").forEach((btn) => {
+      btn.addEventListener("click", () => saveTaskLink(btn.dataset.area, btn.dataset.taskSaveLink));
+    });
+    scope.querySelectorAll("[data-task-cancel-link]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const f = $(`tl-linkform-${btn.dataset.taskCancelLink}`);
+        if (f) f.classList.remove("open");
+      });
+    });
+
+    const addBtn = $("tl-add-task");
+    if (addBtn) addBtn.addEventListener("click", () => addTask($("tl-add-area").value));
     scope.querySelectorAll("[data-task-add-link]").forEach((btn) => {
-      btn.addEventListener("click", () => openQuestionLinkForm(btn.dataset.area, btn.dataset.taskAddLink));
+      btn.addEventListener("click", () => {
+        const f = $(`tl-linkform-${btn.dataset.taskAddLink}`);
+        if (!f) return;
+        f.classList.add("open");
+        const label = $(`tl-link-label-${btn.dataset.taskAddLink}`);
+        if (label) label.focus();
+      });
     });
   }
 
-  function openQuestionLinkForm(area, questionId) {
-    openResearchArea = area;
-    renderResearchAreaSections();
-    const form = $(`rq-link-form-${questionId}`);
-    if (!form) { showBanner("Couldn't find that question's link form.", "error"); return; }
-    form.classList.add("open");
-    form.scrollIntoView({ behavior: "smooth", block: "center" });
-    const label = $(`rq-link-label-${questionId}`);
-    if (label) label.focus();
+  function autosizeTaskText(el) {
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }
+
+  async function addTask(area) {
+    if (!area) return;
+    const existing = allQuestions.filter((q) => q.research_area === area);
+    const sortOrder = existing.length ? Math.max(...existing.map((q) => q.sort_order || 0)) + 1 : 1;
+    const { data, error } = await sb.from("client_research_questions").insert({
+      client_id: currentClient.id,
+      research_area: area,
+      question: "",
+      sort_order: sortOrder,
+      assigned_user_id: defaultAssigneeFor(area),
+    }).select("id").single();
+    if (error) { showBanner("Couldn't add that task: " + error.message, "error"); return; }
+    await loadResearchQuestions();
+    // Opened straight away with the text box focused: a task with no words
+    // in it is the one thing on this list nobody can act on.
+    openTaskId = data ? data.id : null;
+    renderTaskList();
+    const ta = document.querySelector(`[data-task-text="${openTaskId}"]`);
+    if (ta) { ta.focus(); ta.scrollIntoView({ behavior: "smooth", block: "center" }); }
+  }
+
+  async function deleteTask(questionId) {
+    const tied = allDocuments.filter((d) => d.question_id === questionId).length;
+    // Different warning from the one the question block used to show. Back
+    // then a deleted question left its files in a "Not tied to a question"
+    // group; that group no longer exists, so the files would be reachable
+    // by nobody but the client. Say so.
+    const msg = tied
+      ? `${tied} file${tied === 1 ? "" : "s"} sit under this task. Deleting it leaves ${tied === 1 ? "that file" : "them"} on the client's dashboard with no task to reach ${tied === 1 ? "it" : "them"} from. Move ${tied === 1 ? "it" : "them"} to another task first, or delete anyway?`
+      : "Delete this task?";
+    if (!confirm(msg)) return;
+    const { error } = await sb.from("client_research_questions").delete().eq("id", questionId);
+    if (error) { showBanner("Couldn't delete that task: " + error.message, "error"); return; }
+    if (openTaskId === questionId) openTaskId = null;
+    await Promise.all([loadResearchQuestions(), loadDocuments()]);
+    renderTaskList();
+    showBanner("Task deleted.", "success");
   }
 
   async function saveTaskField(questionId, patch, control) {
@@ -2189,133 +2067,6 @@
     await saveTaskField(questionId, done
       ? { completed_at: new Date().toISOString(), completed_by: currentUser ? currentUser.id : null }
       : { completed_at: null, completed_by: null }, control);
-  }
-
-  // The files under one question.
-  function renderQuestionGroupDocs(area, questionId) {
-    const el = $(`rq-docs-${questionId}`);
-    if (!el) return;
-    const docs = allDocuments.filter((d) => d.research_area === area && d.question_id === questionId);
-    el.innerHTML = renderQuestionDocs(docs, `q:${area}:${questionId}`);
-    wireDocRowHandlers(el);
-  }
-
-  function wireQuestionDocButtons(scopeEl, area) {
-    scopeEl.querySelectorAll("[data-q-add-doc]").forEach((btn) => {
-      btn.addEventListener("click", () => pickAreaDocuments(area, btn.dataset.qAddDoc));
-    });
-    scopeEl.querySelectorAll("[data-q-add-link]").forEach((btn) => {
-      const form = $(`rq-link-form-${btn.dataset.qAddLink}`);
-      btn.addEventListener("click", () => {
-        form.classList.toggle("open");
-        if (form.classList.contains("open")) $(`rq-link-label-${btn.dataset.qAddLink}`).focus();
-      });
-    });
-    scopeEl.querySelectorAll("[data-q-cancel-link]").forEach((btn) => {
-      const qid = btn.dataset.qCancelLink;
-      btn.addEventListener("click", () => {
-        $(`rq-link-form-${qid}`).classList.remove("open");
-        $(`rq-link-label-${qid}`).value = "";
-        $(`rq-link-url-${qid}`).value = "";
-      });
-    });
-    scopeEl.querySelectorAll("[data-q-save-link]").forEach((btn) => {
-      btn.addEventListener("click", () => saveAreaLink(area, btn.dataset.qSaveLink));
-    });
-  }
-
-  // Greg (8/28/26): a document or link has to be answering *something* --
-  // require at least one non-blank research question under an area before
-  // Add Document / Add Link there are usable. Only gates NEW adds; nothing
-  // already uploaded is affected.
-  function areaHasQuestion(area) {
-    return allQuestions.some((q) => q.research_area === area && q.question && q.question.trim());
-  }
-
-  function updateAreaAddButtonsState(area) {
-    const hasQuestion = areaHasQuestion(area);
-    const hint = "Add a research question above first — a document or link needs a question it's answering.";
-    document.querySelectorAll(`[data-area-add-doc="${area}"], [data-area-add-link="${area}"]`).forEach((btn) => {
-      btn.disabled = !hasQuestion;
-      btn.title = hasQuestion ? "" : hint;
-    });
-  }
-
-  // Height follows content. Two things this has to get right:
-  //
-  //  1. Reset to auto first. scrollHeight only ever reports the CURRENT
-  //     height or more, so a question edited down from three lines to one
-  //     would keep all three.
-  //  2. Account for box-sizing. This page sets `* { box-sizing: border-box }`,
-  //     and scrollHeight measures content + padding -- no border. Assigning it
-  //     straight to a border-box height leaves the content box 2px short and
-  //     the last line stays clipped, which is the whole bug we are fixing.
-  //     So add the borders back under border-box, and subtract the padding
-  //     under content-box.
-  function autosizeQuestion(el) {
-    el.style.height = "auto";
-    const cs = getComputedStyle(el);
-    const adjust = cs.boxSizing === "border-box"
-      ? parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth)
-      : -(parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom));
-    el.style.height = (el.scrollHeight + adjust) + "px";
-  }
-
-  function wireQuestionHandlers(scopeEl, area) {
-    scopeEl.querySelectorAll(".rq-question-input").forEach((inp) => {
-      const original = inp.value;
-      inp.addEventListener("input", () => autosizeQuestion(inp));
-      // A question is one sentence, not a paragraph, so Enter commits it the
-      // way it did when this was an <input> -- blur runs the save below.
-      // Shift+Enter still breaks a line for anyone who wants one.
-      inp.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); inp.blur(); }
-      });
-      inp.addEventListener("blur", async () => {
-        const value = inp.value.trim();
-        if (value === original) return;
-        const { error } = await sb.from("client_research_questions").update({ question: value || null }).eq("id", inp.dataset.questionId);
-        if (error) { showBanner("Couldn't save question: " + error.message, "error"); inp.value = original; autosizeQuestion(inp); return; }
-        const q = allQuestions.find((x) => x.id === inp.dataset.questionId);
-        if (q) q.question = value || null;
-        autosizeQuestion(inp);
-        updateAreaAddButtonsState(area);
-      });
-    });
-    scopeEl.querySelectorAll("[data-delete-question]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const tied = allDocuments.filter((d) => d.question_id === btn.dataset.deleteQuestion).length;
-        if (tied && !confirm(`${tied} file${tied === 1 ? "" : "s"} sit under this question. Deleting it keeps ${tied === 1 ? "that file" : "those files"} and moves ${tied === 1 ? "it" : "them"} to "Not tied to a question". Delete the question?`)) return;
-        const { error } = await sb.from("client_research_questions").delete().eq("id", btn.dataset.deleteQuestion);
-        if (error) { showBanner("Couldn't delete question: " + error.message, "error"); return; }
-        // Its documents came loose rather than going with it (migration 124),
-        // so both halves of every area have to be redrawn.
-        await Promise.all([loadResearchQuestions(), loadDocuments()]);
-        renderTaskList();
-        RESEARCH_AREAS.forEach(([key]) => { renderAreaQuestions(key); renderAreaDocs(key); });
-      });
-    });
-  }
-
-  async function addAreaQuestion(area) {
-    const existing = allQuestions.filter((q) => q.research_area === area);
-    const sortOrder = existing.length ? Math.max(...existing.map((q) => q.sort_order || 0)) + 1 : 1;
-    // With tasks on, a new question arrives already pointed at its work
-    // area's specialist -- same default the backfill applies when tasks are
-    // switched on, so a question added later is not the odd one out.
-    const { error } = await sb.from("client_research_questions").insert({
-      client_id: currentClient.id,
-      research_area: area,
-      question: "",
-      sort_order: sortOrder,
-      assigned_user_id: (currentClient.use_tasks ? defaultAssigneeFor(area) : null),
-    });
-    if (error) { showBanner("Couldn't add question: " + error.message, "error"); return; }
-    await loadResearchQuestions();
-    renderAreaQuestions(area);
-    renderTaskList();
-    const inputs = $(`ra-${area}-questions`).querySelectorAll(".rq-question-input");
-    if (inputs.length) inputs[inputs.length - 1].focus();
   }
 
   function renderQuestionDocs(docs, scope) {
@@ -2378,7 +2129,6 @@
         const { error } = await sb.from("documents").update({ display_name: value }).eq("id", doc.id);
         if (error) { showBanner("Couldn't rename: " + error.message, "error"); return; }
         await loadDocuments();
-        RESEARCH_AREAS.forEach(([key]) => { renderAreaQuestions(key); renderAreaDocs(key); });
       });
     });
     scopeEl.querySelectorAll("[data-delete-doc]").forEach((btn) => {
@@ -2388,7 +2138,6 @@
         const { error } = await sb.from("documents").delete().eq("id", btn.dataset.deleteDoc);
         if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
         await loadDocuments();
-        RESEARCH_AREAS.forEach(([key]) => { renderAreaQuestions(key); renderAreaDocs(key); });
       });
     });
     wireDocDragHandlers(scopeEl);
@@ -2518,12 +2267,9 @@
 
     const rest = allDocuments.filter((d) => d.research_area !== area);
     allDocuments = rest.concat(areaOrdered.map((d, i) => ({ ...d, sort_order: i + 1 })));
-    renderAreaQuestions(area);
-    renderAreaDocs(area);
     if (!(await persistDocOrder(areaOrdered))) {
       // Put the screen back to what the database actually holds.
       await loadDocuments();
-      RESEARCH_AREAS.forEach(([key]) => { renderAreaQuestions(key); renderAreaDocs(key); });
     }
   }
 
@@ -2603,8 +2349,6 @@
     }
     if (errors.length) showBanner("Some files didn't upload: " + errors.join("; "), "error");
     await loadDocuments();
-    renderAreaQuestions(area);
-    renderAreaDocs(area);
     renderTaskList();
   }
 
@@ -2613,10 +2357,15 @@
   // app itself, like the Listening Post, not a document to upload." Stored
   // as a documents row same as a file, just with url set and storage_path
   // left null.
-  async function saveAreaLink(area, questionId) {
-    const suffix = questionId || area;
-    const labelInput = questionId ? $(`rq-link-label-${questionId}`) : $(`ra-link-label-${area}`);
-    const urlInput = questionId ? $(`rq-link-url-${questionId}`) : $(`ra-link-url-${area}`);
+  // Renamed from saveAreaLink when the research-area boxes went (154). The
+  // body is untouched -- in particular the blob:/data:/javascript:/file:
+  // guard, which is the kind of thing a rewritten "equivalent" quietly
+  // loses. Only the field ids moved, from the question block's form to the
+  // task's own.
+  async function saveTaskLink(area, questionId) {
+    const labelInput = $(`tl-link-label-${questionId}`);
+    const urlInput = $(`tl-link-url-${questionId}`);
+    if (!labelInput || !urlInput) return;
     let url = urlInput.value.trim();
     if (!url) { showBanner("Enter a URL first.", "error"); return; }
     // Greg (9/22/26): a blob:/data:/javascript: URL copied out of a browser
@@ -2648,11 +2397,9 @@
 
     labelInput.value = "";
     urlInput.value = "";
-    const form = questionId ? $(`rq-link-form-${questionId}`) : $(`ra-link-form-${area}`);
+    const form = $(`tl-linkform-${questionId}`);
     if (form) form.classList.remove("open");
     await loadDocuments();
-    renderAreaQuestions(area);
-    renderAreaDocs(area);
     renderTaskList();
   }
 </script>
