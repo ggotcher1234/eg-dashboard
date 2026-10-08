@@ -216,7 +216,7 @@
 
   .tl-row { border-top: 1px solid var(--border); }
   .tl-row:first-child { border-top: none; }
-  .tl-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  .tl-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; cursor: pointer;
              padding: 9px 8px; margin: 0 -8px; border-radius: 8px; transition: background 0.12s ease; }
   .tl-head:hover { background: #f5f8f4; }
   .tl-row.is-open .tl-head { background: #f5f8f4; }
@@ -265,11 +265,7 @@
 
   /* Everything editable lives here, so the resting row stays a list. */
   .tl-detail { padding: 2px 8px 14px 36px; }
-  .tl-detail-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
-  .tl-detail-q { flex: 1 1 auto; min-width: 0; font-size: 13.5px; line-height: 1.5; color: var(--text); }
-  .tl-close { flex: 0 0 auto; background: #eef1f4; color: var(--muted); border: 1px solid var(--border);
-              border-radius: 6px; font: inherit; font-size: 11.5px; font-weight: 600; padding: 3px 9px; cursor: pointer; }
-  .tl-close:hover { background: #e2e6ea; color: var(--text); }
+  .tl-detail-q { font-size: 13.5px; line-height: 1.5; color: var(--text); margin-bottom: 10px; }
   .tl-fields { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 12px; }
   .tl-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .tl-field > span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; color: var(--muted); }
@@ -2006,13 +2002,13 @@
 
       return `
       <div class="tl-row ${done ? "is-done" : ""} ${open ? "is-open" : ""}" data-task-row="${q.id}">
-        <div class="tl-head">
+        <div class="tl-head" data-task-toggle="${q.id}">
           <button type="button" class="tl-check" role="checkbox" aria-checked="${done}"
                   data-task-done="${q.id}" aria-label="${done ? "Mark not complete" : "Mark complete"}">&#10003;</button>
           <div class="tl-main">
             <button type="button" class="tl-open-btn" data-task-open="${q.id}"
                     aria-expanded="${open}" aria-controls="tl-detail-${q.id}"
-                    title="${open ? "Collapse" : "Open this task"}">
+                    title="${open ? "Click to close" : "Click to open"}">
               <span class="tl-chev" aria-hidden="true">&#9656;</span>
               ${q.question_number ? `<span class="tl-num">${q.question_number}</span>` : ""}
               <span class="tl-title">${escapeHtml(text)}</span>
@@ -2027,10 +2023,7 @@
         </div>
         ${open ? `
         <div class="tl-detail" id="tl-detail-${q.id}">
-          <div class="tl-detail-top">
-            <div class="tl-detail-q">${escapeHtml(text)}</div>
-            <button type="button" class="tl-close" data-task-close="${q.id}" title="Close (Esc)">&times; Close</button>
-          </div>
+          <div class="tl-detail-q">${escapeHtml(text)}</div>
           <div class="tl-fields">
             <label class="tl-field">
               <span>Due</span>
@@ -2085,11 +2078,31 @@
   }
 
   function wireTaskHandlers(scope) {
-    scope.querySelectorAll("[data-task-open]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        openTaskId = openTaskId === btn.dataset.taskOpen ? null : btn.dataset.taskOpen;
-        renderTaskList();
+    // Greg (10/8/26): "instead of a close button use accordian style
+    // dropdowns for each question. click once to open, click again to
+    // close." So the whole header row is the toggle, not just the title --
+    // an accordion header is the whole bar everywhere else, and a 13px
+    // strip of text was a small target for something you do constantly.
+    //
+    // The row still contains three real controls, so this skips any click
+    // that landed on one, the way the Engagements list already does with
+    // its overdue badge. Without it, ticking a task off would also open it.
+    const TOGGLE_EXEMPT = "[data-task-done],[data-task-due-open],[data-task-who-open]";
+    const toggleTask = (id) => {
+      openTaskId = openTaskId === id ? null : id;
+      renderTaskList();
+    };
+    scope.querySelectorAll("[data-task-toggle]").forEach((head) => {
+      head.addEventListener("click", (e) => {
+        if (e.target.closest(TOGGLE_EXEMPT)) return;
+        toggleTask(head.dataset.taskToggle);
       });
+    });
+    // The title keeps being a real button so the row is reachable and
+    // operable from the keyboard; its click would otherwise bubble to the
+    // header above and toggle twice, back to where it started.
+    scope.querySelectorAll("[data-task-open]").forEach((btn) => {
+      btn.addEventListener("click", (e) => { e.stopPropagation(); toggleTask(btn.dataset.taskOpen); });
     });
     // The due chip and the avatar are shortcuts into the open row rather
     // than editors of their own: one place that edits a field, so the
@@ -2101,22 +2114,22 @@
       const el = document.querySelector(selector);
       if (el) { el.focus(); if (el.showPicker) { try { el.showPicker(); } catch (e) {} } }
     };
-    scope.querySelectorAll("[data-task-close]").forEach((btn) => {
-      btn.addEventListener("click", () => { openTaskId = null; renderTaskList(); });
-    });
     // A photo that 404s or is slow leaves the initials underneath showing,
     // rather than an empty coloured circle.
     scope.querySelectorAll(".tl-avatar img").forEach((img) => {
       img.addEventListener("error", () => img.remove());
     });
     scope.querySelectorAll("[data-task-due-open]").forEach((btn) => {
-      btn.addEventListener("click", () => openAndFocus(btn.dataset.taskDueOpen, `[data-task-due="${btn.dataset.taskDueOpen}"]`));
+      btn.addEventListener("click", (e) => { e.stopPropagation();
+        openAndFocus(btn.dataset.taskDueOpen, `[data-task-due="${btn.dataset.taskDueOpen}"]`); });
     });
     scope.querySelectorAll("[data-task-who-open]").forEach((btn) => {
-      btn.addEventListener("click", () => openAndFocus(btn.dataset.taskWhoOpen, `[data-task-assignee="${btn.dataset.taskWhoOpen}"]`));
+      btn.addEventListener("click", (e) => { e.stopPropagation();
+        openAndFocus(btn.dataset.taskWhoOpen, `[data-task-assignee="${btn.dataset.taskWhoOpen}"]`); });
     });
     scope.querySelectorAll("[data-task-done]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const nowDone = btn.getAttribute("aria-checked") !== "true";
         toggleTaskDone(btn.dataset.taskDone, nowDone, btn);
       });
