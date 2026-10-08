@@ -1481,6 +1481,11 @@
   ];
   let allDocuments = [];
   let allQuestions = [];
+  // Set only once a documents SELECT has actually come back. The contentless
+  // sweep below asks "does this task have files?", and an empty allDocuments
+  // because the load errored is not the same answer as an empty one because
+  // the task really has none.
+  let documentsLoaded = false;
   // Everyone holding an assignment row on this engagement, for the task
   // assignee picker. Loaded only when tasks are in use.
   let engagementSpecialists = [];
@@ -1579,6 +1584,7 @@
       .order("uploaded_at", { ascending: false });
     if (error) { showBanner("Couldn't load documents: " + error.message, "error"); return; }
     allDocuments = data;
+    documentsLoaded = true;
   }
 
   // ---------- Tasks (153) ----------
@@ -1779,9 +1785,66 @@
     return many ? base + x.slot : base;
   }
 
+  // A task row with nothing in it: no words, no background, no number, no
+  // files, no date, not ticked off. These are the residue of "create the row,
+  // then type into it" -- the old + Add Question button and addTask() both
+  // insert the record first, so closing the tab mid-add leaves one behind for
+  // good. Greg found the survivor, created 26/8/26 on Clippard's inbound
+  // area: "why is there a 'no question yet' at the top for the team lead.
+  // that line shouldn't be there". It led the list because it has neither a
+  // due date nor a number, and there was nothing anyone could do with it.
+  //
+  // It was the only one in the system. Rather than delete that row by hand
+  // and leave the next abandoned add to do the same thing again, the page
+  // clears them on sight -- but never one that is open, so the row you are
+  // typing into right now is left alone, and it only becomes a candidate
+  // once you close it still empty.
+  const sweptTaskIds = new Set();
+  function isContentlessTask(q) {
+    return !(q.question || "").trim()
+      && !(q.background || "").trim()
+      && q.question_number == null
+      && !q.due_date
+      && !q.completed_at
+      && !allDocuments.some((d) => d.question_id === q.id);
+  }
+  // Clicking the heading to collapse a row fires the textarea's blur and the
+  // re-render in the same tick, and that blur saves through an await -- so
+  // q.question can still read empty for a row somebody just typed into.
+  // The sweep runs before innerHTML is replaced, so the row's own controls
+  // are still in the document and hold the truer answer. Asking them is
+  // race-free, where writing to allQuestions from the blur handler would
+  // have raced with saveTaskField's rollback value.
+  function taskHasPendingEdit(id) {
+    const panel = document.querySelector(`[data-task-row="${id}"]`);
+    if (!panel) return false;
+    const ta = panel.querySelector(`[data-task-text="${id}"]`);
+    if (ta && ta.value.trim()) return true;
+    const due = panel.querySelector(`[data-task-due="${id}"]`);
+    return !!(due && due.value);
+  }
+  function sweepContentlessTasks() {
+    if (!documentsLoaded) return;
+    const gone = allQuestions.filter(
+      (q) => !openTaskIds.has(q.id) && !sweptTaskIds.has(q.id)
+             && !taskHasPendingEdit(q.id) && isContentlessTask(q)
+    );
+    if (!gone.length) return;
+    const ids = gone.map((q) => q.id);
+    ids.forEach((id) => sweptTaskIds.add(id));
+    // Dropped from the list first so the render that follows is already
+    // correct; the delete is fire-and-forget because nothing on the page
+    // depends on it, and a failure means the row comes back on next load
+    // rather than anything being lost.
+    allQuestions = allQuestions.filter((q) => !sweptTaskIds.has(q.id));
+    sb.from("client_research_questions").delete().in("id", ids)
+      .then(({ error }) => { if (error) console.warn("Couldn't clear an empty task:", error.message); });
+  }
+
   function renderTaskList() {
     const card = $("tasks-card");
     if (!card) return;
+    sweepContentlessTasks();
     // Always on since 154 -- clients.use_tasks is left in place rather than
     // dropped (a DROP hangs through the MCP connection these are applied
     // over) but nothing reads it any more.
@@ -1800,7 +1863,12 @@
         if (!!a.completed_at !== !!b.completed_at) return a.completed_at ? 1 : -1;
         const ad = a.due_date || "9999-12-31", bd = b.due_date || "9999-12-31";
         if (ad !== bd) return ad < bd ? -1 : 1;
-        return (a.question_number || 0) - (b.question_number || 0);
+        // An unnumbered task sorts last, not first: (x || 0) used to put a
+        // brand-new one ahead of question 1.
+        const an = a.question_number == null ? Infinity : a.question_number;
+        const bn = b.question_number == null ? Infinity : b.question_number;
+        if (an !== bn) return an < bn ? -1 : 1;
+        return (a.sort_order || 0) - (b.sort_order || 0);
       });
 
     // Both empty states still get the Add Task row. They used to return
@@ -1828,7 +1896,7 @@
       const mine = !!(currentUser && q.assigned_user_id === currentUser.id);
       const who = engagementSpecialists.find((x) => x.userId === q.assigned_user_id) || null;
       const nDocs = allDocuments.filter((d) => d.question_id === q.id).length;
-      const text = (q.question || "").trim() || "(no question text yet)";
+      const text = (q.question || "").trim() || "New task \u2014 type the question below";
       const bgHtml = taskBgToHtml(q.background || "");
       const doneBy = done ? (engagementSpecialists.find((x) => x.userId === q.completed_by) || {}).name : null;
 
@@ -2179,11 +2247,12 @@
       assigned_user_id: defaultAssigneeFor(area),
     }).select("id").single();
     if (error) { showBanner("Couldn't add that task: " + error.message, "error"); return; }
-    await loadResearchQuestions();
-    // Opened straight away with the text box focused: a task with no words
-    // in it is the one thing on this list nobody can act on.
+    // Marked open before the reload, not after: the row is textless for as
+    // long as it takes to type into it, and sweepContentlessTasks() spares
+    // open rows only.
     const newId = data ? data.id : null;
     if (newId) openTaskIds.add(newId);
+    await loadResearchQuestions();
     renderTaskList();
     const ta = document.querySelector(`[data-task-text="${newId}"]`);
     if (ta) { ta.focus(); ta.scrollIntoView({ behavior: "smooth", block: "center" }); }
