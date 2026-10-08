@@ -188,49 +188,100 @@
   .show-questions-toggle[hidden] { display: none; }
   .show-questions-hint { display: block; font-size: 11.5px; font-weight: 400; color: var(--muted); margin-top: 2px; }
 
-  /* Task list (153). Deliberately plain: it is off for most engagements and
-     should read as a checklist, not a second product inside the page. */
+  /* Task list (153, redesigned 10/8/26).
+     The first cut laid the row out on a CSS grid and gave it a narrow-width
+     rule that moved .task-side into column 2 while leaving the title to
+     auto-place into column 1 -- the 22px checkbox column. Embedded in the
+     workspace pane, which is narrow, every title wrapped one word per line.
+     Greg: "the formatting is off on the tasks."
+
+     This is flexbox with min-width:0 on the growing child, which is the fix
+     for the whole class of bug: there is no fixed track for content to be
+     crushed into, and when the row runs out of room the meta wraps to its
+     own line instead of squeezing the title to nothing.
+
+     Shape follows current task managers rather than Podio: one quiet line
+     per task, title truncated to a single line, status carried by small
+     chips at the right, and everything editable behind opening the row --
+     so the resting list reads as a list and not as a form. */
   .tasks-card[hidden] { display: none; }
-  .tasks-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .tasks-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .tasks-head-left { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
   .tasks-head h2 { margin: 0; font-size: 15px; color: var(--navy); }
-  .tasks-hide-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 500; }
+  .tasks-count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tasks-hide-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 500; white-space: nowrap; }
   .tasks-hide-wrap input { width: auto; margin: 0; }
-  .task-row { display: grid; grid-template-columns: 22px 130px 1fr auto; gap: 10px; align-items: start;
-              padding: 10px 0; border-top: 1px solid var(--border); }
-  .task-row:first-child { border-top: none; }
-  .task-row input[type="checkbox"] { width: auto; margin: 3px 0 0; }
-  .task-row input[type="date"] { font-family: inherit; font-size: 12.5px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; }
-  .task-title { font-size: 13.5px; line-height: 1.45; color: var(--text); }
-  .task-area { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
-  .task-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-  .task-side select { font-family: inherit; font-size: 12.5px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; max-width: 200px; }
-  .task-files { font-size: 11.5px; color: var(--muted); }
-  .task-actions { display: flex; gap: 6px; }
-  .task-done .task-title { text-decoration: line-through; color: var(--muted); }
-  .task-done-by { font-size: 11px; color: var(--muted); }
-  .task-overdue { color: var(--danger); font-weight: 600; }
-  .task-empty { font-size: 13px; color: var(--muted); padding: 6px 0; }
-  .task-title-btn { background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit;
-                    text-align: left; cursor: pointer; display: block; width: 100%; }
-  .task-title-btn:hover .task-title { text-decoration: underline; }
-  .task-chev { display: inline-block; width: 10px; color: var(--muted); transition: transform 0.12s ease; }
-  .task-row.task-open .task-chev { transform: rotate(90deg); }
-  .task-detail { grid-column: 2 / -1; margin-top: 8px; padding: 10px 12px; background: #f7f9f6;
-                 border: 1px solid var(--border); border-radius: 8px; }
-  .task-detail-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px;
-                       font-weight: 700; color: var(--muted); margin-bottom: 4px; }
-  .task-bg { font-size: 13px; line-height: 1.5; color: var(--text); }
-  .task-bg p { margin: 0 0 6px; }
-  .task-bg ul, .task-bg ol { margin: 0 0 6px 18px; padding: 0; }
-  .task-bg li { margin-bottom: 2px; }
-  .task-no-bg { font-size: 12.5px; color: var(--muted); font-style: italic; }
-  .task-mine { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
-               color: #fff; background: var(--accent); border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
-  @media (max-width: 760px) { .task-detail { grid-column: 1 / -1; } }
-  @media (max-width: 760px) {
-    .task-row { grid-template-columns: 22px 1fr; }
-    .task-side { align-items: flex-start; grid-column: 2; }
-    .task-row input[type="date"] { grid-column: 2; }
+  .tasks-progress { height: 3px; border-radius: 999px; background: #e8ecee; overflow: hidden; margin: 0 0 6px; }
+  .tasks-progress > i { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.25s ease; }
+
+  .tl-row { border-top: 1px solid var(--border); }
+  .tl-row:first-child { border-top: none; }
+  .tl-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+             padding: 9px 8px; margin: 0 -8px; border-radius: 8px; transition: background 0.12s ease; }
+  .tl-head:hover { background: #f5f8f4; }
+  .tl-row.is-open .tl-head { background: #f5f8f4; }
+
+  /* The growing child. min-width:0 is what lets it shrink and ellipsis
+     instead of forcing the row wider than its container. */
+  .tl-main { flex: 1 1 220px; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+  .tl-num { flex: 0 0 auto; font-size: 11.5px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tl-title { flex: 1 1 auto; min-width: 0; font-size: 13.5px; color: var(--text); text-align: left;
+              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tl-open-btn { background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit;
+                 cursor: pointer; display: flex; align-items: baseline; gap: 8px; flex: 1 1 auto; min-width: 0; }
+  .tl-open-btn:hover .tl-title { color: var(--navy); }
+  .tl-meta { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; }
+
+  /* Round check, the one control that stays on the resting row. */
+  .tl-check { flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%; padding: 0; cursor: pointer;
+              border: 1.5px solid #c3ccd4; background: #fff; display: inline-flex; align-items: center;
+              justify-content: center; font-size: 11px; line-height: 1; color: transparent; transition: all 0.12s ease; }
+  .tl-check:hover { border-color: var(--accent); color: #c3ccd4; }
+  .tl-check[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .tl-chip { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px; white-space: nowrap;
+             border: 1px solid transparent; background: #eef1f4; color: var(--muted); }
+  .tl-chip-area { background: #edf1e9; color: var(--accent-dark); }
+  .tl-due { background: #eef1f4; color: var(--muted); cursor: pointer; font: inherit; font-size: 11px;
+            font-weight: 600; border-radius: 999px; padding: 2px 8px; border: 1px solid transparent; white-space: nowrap; }
+  .tl-due:hover { border-color: #c3ccd4; }
+  .tl-due-none { color: #9aa4ae; }
+  .tl-due-soon { background: #fdf4e3; color: #8a5d08; }
+  .tl-due-over { background: #fbeceb; color: var(--danger-dark); }
+
+  .tl-avatar { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; padding: 0;
+               border: none; font-size: 10px; font-weight: 700; letter-spacing: 0.2px; color: #fff;
+               display: inline-flex; align-items: center; justify-content: center; }
+  .tl-avatar-none { background: #fff; color: #aab3bb; border: 1.5px dashed #c3ccd4; font-size: 13px; font-weight: 400; }
+  .tl-avatar-mine { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--accent); }
+
+  .tl-row.is-done .tl-title { text-decoration: line-through; color: var(--muted); }
+  .tl-row.is-done .tl-num { text-decoration: line-through; }
+
+  /* Everything editable lives here, so the resting row stays a list. */
+  .tl-detail { padding: 2px 8px 14px 36px; }
+  .tl-detail-q { font-size: 13.5px; line-height: 1.5; color: var(--text); margin-bottom: 10px; }
+  .tl-fields { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 12px; }
+  .tl-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .tl-field > span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; color: var(--muted); }
+  .tl-field input, .tl-field select { font-family: inherit; font-size: 13px; padding: 5px 8px;
+                                      border: 1px solid var(--border); border-radius: 6px; background: #fff; max-width: 240px; }
+  .tl-sub { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700;
+            color: var(--muted); margin: 0 0 5px; }
+  .tl-bg { font-size: 13px; line-height: 1.55; color: var(--text); background: #f7f9f6;
+           border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .tl-bg p { margin: 0 0 6px; }
+  .tl-bg p:last-child { margin-bottom: 0; }
+  .tl-bg ul, .tl-bg ol { margin: 0 0 6px 18px; padding: 0; }
+  .tl-bg li { margin-bottom: 2px; }
+  .tl-quiet { font-size: 12.5px; color: var(--muted); font-style: italic; }
+  .tl-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .tl-doneline { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
+  .task-empty { font-size: 13px; color: var(--muted); padding: 10px 0; }
+
+  @media (max-width: 560px) {
+    .tl-detail { padding-left: 8px; }
+    .tl-chip-area { display: none; }
   }
 
   .field { margin-bottom: 12px; }
@@ -774,12 +825,16 @@
              Holes question box." -->
         <div class="card tasks-card" id="tasks-card" hidden style="margin-bottom:0;">
           <div class="tasks-head">
-            <h2>Tasks</h2>
+            <div class="tasks-head-left">
+              <h2>Tasks</h2>
+              <span class="tasks-count" id="tasks-count"></span>
+            </div>
             <label class="tasks-hide-wrap">
               <input type="checkbox" id="tasks-hide-done" />
               <span>Hide completed</span>
             </label>
           </div>
+          <div class="tasks-progress"><i id="tasks-progress-bar" style="width:0%"></i></div>
           <div id="tasks-list"></div>
         </div>
       </div>
@@ -1804,6 +1859,61 @@
     return q.due_date < todayKey;
   }
 
+  function initialsOf(name) {
+    const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "?";
+    return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
+  }
+
+  // Stable per-person colour so the same face keeps the same swatch down the
+  // list. Muted hues only -- the list should read calm, and red is reserved
+  // for overdue.
+  const AVATAR_COLOURS = ["#5c7248", "#4a6b84", "#7a5c82", "#8a6a3e", "#4f7268", "#6b5f8a", "#87604f"];
+  function avatarColour(seed) {
+    let h = 0;
+    for (const ch of String(seed || "")) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return AVATAR_COLOURS[h % AVATAR_COLOURS.length];
+  }
+
+  // "Oct 22", "Today", "3d overdue" -- what a person needs at a glance, not
+  // an input box. The input appears when the row is open.
+  function dueChip(q) {
+    // A finished task shows the plain date, never the relative label: once
+    // it is done, "10d overdue" is both wrong and a bit accusing.
+    if (q.completed_at) {
+      return q.due_date ? `<span class="tl-chip">${escapeHtml(absoluteDue(q.due_date))}</span>` : "";
+    }
+    if (!q.due_date) return `<button type="button" class="tl-due tl-due-none" data-task-due-open="${q.id}" title="Set a due date">No date</button>`;
+    const d = prettyDue(q.due_date);
+    return `<button type="button" class="tl-due ${d.cls}" data-task-due-open="${q.id}" title="Due ${escapeHtml(q.due_date)}">${escapeHtml(d.label)}</button>`;
+  }
+
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function absoluteDue(iso) {
+    const [y, m, d] = String(iso).split("-").map(Number);
+    return `${MONTHS[(m || 1) - 1]} ${d || 1}`;
+  }
+  function prettyDue(iso) {
+    // Parsed as local parts, not Date(iso) -- "2026-10-22" through the Date
+    // constructor is UTC midnight, which reads as the 21st west of Greenwich
+    // and would show a task due today as overdue.
+    const [y, m, d] = String(iso).split("-").map(Number);
+    const due = new Date(y, (m || 1) - 1, d || 1);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const days = Math.round((due - today) / 86400000);
+    if (days < 0) return { label: `${Math.abs(days)}d overdue`, cls: "tl-due-over" };
+    if (days === 0) return { label: "Today", cls: "tl-due-soon" };
+    if (days === 1) return { label: "Tomorrow", cls: "tl-due-soon" };
+    const label = `${MONTHS[due.getMonth()]} ${due.getDate()}`;
+    return { label, cls: days <= 3 ? "tl-due-soon" : "" };
+  }
+
+  const AREA_SHORT = {
+    market_dynamics: "Market", outbound: "Outbound",
+    inbound: "Inbound", watering_holes: "Watering Holes", gis: "GIS",
+  };
+
   function renderTaskList() {
     const card = $("tasks-card");
     if (!card) return;
@@ -1812,8 +1922,11 @@
     if (!on) return;
 
     const list = $("tasks-list");
-    // Ordered the way the Team Lead reads a task list -- by when it is due,
-    // undated last -- not by the research-area grouping the accordion uses.
+    const total = allQuestions.length;
+    const doneCount = allQuestions.filter((q) => q.completed_at).length;
+    $("tasks-count").textContent = total ? `${doneCount} of ${total} done` : "";
+    $("tasks-progress-bar").style.width = total ? `${Math.round((doneCount / total) * 100)}%` : "0%";
+
     const rows = allQuestions
       .filter((q) => !(hideDoneTasks && q.completed_at))
       .slice()
@@ -1824,7 +1937,7 @@
         return (a.question_number || 0) - (b.question_number || 0);
       });
 
-    if (!allQuestions.length) {
+    if (!total) {
       list.innerHTML = `<div class="task-empty">No research questions yet. Add them in the areas above and they appear here as tasks.</div>`;
       return;
     }
@@ -1835,56 +1948,69 @@
 
     list.innerHTML = rows.map((q) => {
       const done = !!q.completed_at;
-      const nDocs = allDocuments.filter((d) => d.question_id === q.id).length;
-      const text = (q.question || "").trim();
-      const num = q.question_number ? `Question ${q.question_number}: ` : "";
-      const doneBy = done
-        ? (engagementSpecialists.find((x) => x.userId === q.completed_by) || {}).name
-        : null;
       const open = openTaskId === q.id;
-      // Every specialist on the engagement sees every task (Greg: "all the
-      // specialists can see all the tasks for this engagement"), so the one
-      // thing a specialist needs is to find their own in the list quickly.
       const mine = !!(currentUser && q.assigned_user_id === currentUser.id);
+      const who = engagementSpecialists.find((x) => x.userId === q.assigned_user_id) || null;
+      const nDocs = allDocuments.filter((d) => d.question_id === q.id).length;
+      const text = (q.question || "").trim() || "(no question text yet)";
       const bgHtml = taskBgToHtml(q.background || "");
+      const doneBy = done ? (engagementSpecialists.find((x) => x.userId === q.completed_by) || {}).name : null;
+
+      const avatar = who
+        ? `<button type="button" class="tl-avatar ${mine ? "tl-avatar-mine" : ""}" data-task-who-open="${q.id}"
+             style="background:${avatarColour(who.userId)}"
+             title="${escapeHtml(who.name + " \u2014 " + (SPECIALTY_LABELS[who.specialty] || who.specialty))}"
+             aria-label="Assigned to ${escapeHtml(who.name)}">${escapeHtml(initialsOf(who.name))}</button>`
+        : `<button type="button" class="tl-avatar tl-avatar-none" data-task-who-open="${q.id}"
+             title="Unassigned" aria-label="Unassigned">+</button>`;
+
       return `
-      <div class="task-row ${done ? "task-done" : ""} ${open ? "task-open" : ""}" data-task-row="${q.id}">
-        <input type="checkbox" data-task-done="${q.id}" ${done ? "checked" : ""}
-               aria-label="Mark this task complete" />
-        <input type="date" data-task-due="${q.id}" value="${escapeHtml(q.due_date || "")}"
-               class="${taskIsOverdue(q) ? "task-overdue" : ""}" aria-label="Due date" />
-        <div>
-          <span class="task-area">${escapeHtml(taskAreaLabel(q.research_area))}${mine ? `<span class="task-mine">Yours</span>` : ""}</span>
-          <button type="button" class="task-title-btn" data-task-open="${q.id}"
-                  aria-expanded="${open}" aria-controls="task-detail-${q.id}">
-            <span class="task-chev">&#9656;</span>
-            <span class="task-title">${escapeHtml(num + (text || "(no question text yet)"))}</span>
-          </button>
-          ${doneBy ? `<div class="task-done-by">Completed by ${escapeHtml(doneBy)}</div>` : ""}
-        </div>
-        <div class="task-side">
-          <select data-task-assignee="${q.id}" aria-label="Assigned to">${specialistOptionsHtml(q.assigned_user_id)}</select>
-          <span class="task-files">${nDocs ? `${nDocs} file${nDocs === 1 ? "" : "s"}` : "No files yet"}</span>
-          <div class="task-actions">
-            <button type="button" class="btn-secondary btn-sm" data-task-add-doc="${q.id}" data-area="${q.research_area}">+ Document</button>
-            <button type="button" class="btn-secondary btn-sm" data-task-add-link="${q.id}" data-area="${q.research_area}">+ Link</button>
+      <div class="tl-row ${done ? "is-done" : ""} ${open ? "is-open" : ""}" data-task-row="${q.id}">
+        <div class="tl-head">
+          <button type="button" class="tl-check" role="checkbox" aria-checked="${done}"
+                  data-task-done="${q.id}" aria-label="${done ? "Mark not complete" : "Mark complete"}">&#10003;</button>
+          <div class="tl-main">
+            <button type="button" class="tl-open-btn" data-task-open="${q.id}"
+                    aria-expanded="${open}" aria-controls="tl-detail-${q.id}">
+              ${q.question_number ? `<span class="tl-num">${q.question_number}</span>` : ""}
+              <span class="tl-title">${escapeHtml(text)}</span>
+            </button>
+          </div>
+          <div class="tl-meta">
+            ${nDocs ? `<span class="tl-chip" title="${nDocs} file${nDocs === 1 ? "" : "s"} filed">&#128206; ${nDocs}</span>` : ""}
+            <span class="tl-chip tl-chip-area">${escapeHtml(AREA_SHORT[q.research_area] || q.research_area)}</span>
+            ${dueChip(q)}
+            ${avatar}
           </div>
         </div>
         ${open ? `
-        <div class="task-detail" id="task-detail-${q.id}">
-          <div class="task-detail-label">Background</div>
+        <div class="tl-detail" id="tl-detail-${q.id}">
+          <div class="tl-detail-q">${escapeHtml(text)}</div>
+          <div class="tl-fields">
+            <label class="tl-field">
+              <span>Due</span>
+              <input type="date" data-task-due="${q.id}" value="${escapeHtml(q.due_date || "")}" />
+            </label>
+            <label class="tl-field">
+              <span>Assigned to</span>
+              <select data-task-assignee="${q.id}">${specialistOptionsHtml(q.assigned_user_id)}</select>
+            </label>
+          </div>
+          <div class="tl-sub">Background</div>
           ${bgHtml
-            ? `<div class="task-bg">${bgHtml}</div>`
-            : `<div class="task-no-bg">No background was written for this question on the Controlling Document.</div>`}
-          <div class="task-detail-label" style="margin-top:10px;">Research filed against this question</div>
+            ? `<div class="tl-bg">${bgHtml}</div>`
+            : `<div class="tl-quiet" style="margin-bottom:12px;">No background was written for this question on the Controlling Document.</div>`}
+          <div class="tl-sub">Research filed against this question</div>
           <div id="task-docs-${q.id}"></div>
+          <div class="tl-actions">
+            <button type="button" class="btn-secondary btn-sm" data-task-add-doc="${q.id}" data-area="${q.research_area}">+ Document</button>
+            <button type="button" class="btn-secondary btn-sm" data-task-add-link="${q.id}" data-area="${q.research_area}">+ Link</button>
+          </div>
+          ${doneBy ? `<div class="tl-doneline">Completed by ${escapeHtml(doneBy)}</div>` : ""}
         </div>` : ""}
       </div>`;
     }).join("");
 
-    // The same document rows the question block draws, from the same
-    // filtered list -- so what the specialist sees under the task is
-    // literally what is filed under the question.
     if (openTaskId) {
       const el = $(`task-docs-${openTaskId}`);
       const q = allQuestions.find((x) => x.id === openTaskId);
@@ -1892,7 +2018,7 @@
         const docs = allDocuments.filter((d) => d.question_id === q.id);
         el.innerHTML = docs.length
           ? renderQuestionDocs(docs, `task:${q.research_area}:${q.id}`)
-          : `<div class="task-no-bg">Nothing filed yet \u2014 use + Document or + Link above.</div>`;
+          : `<div class="tl-quiet">Nothing filed yet \u2014 use + Document or + Link below.</div>`;
         if (docs.length) wireDocRowHandlers(el);
       }
     }
@@ -1913,8 +2039,27 @@
         renderTaskList();
       });
     });
-    scope.querySelectorAll("[data-task-done]").forEach((box) => {
-      box.addEventListener("change", () => toggleTaskDone(box.dataset.taskDone, box.checked, box));
+    // The due chip and the avatar are shortcuts into the open row rather
+    // than editors of their own: one place that edits a field, so the
+    // resting list stays a list and there is no second control to keep in
+    // step with the first.
+    const openAndFocus = (id, selector) => {
+      openTaskId = id;
+      renderTaskList();
+      const el = document.querySelector(selector);
+      if (el) { el.focus(); if (el.showPicker) { try { el.showPicker(); } catch (e) {} } }
+    };
+    scope.querySelectorAll("[data-task-due-open]").forEach((btn) => {
+      btn.addEventListener("click", () => openAndFocus(btn.dataset.taskDueOpen, `[data-task-due="${btn.dataset.taskDueOpen}"]`));
+    });
+    scope.querySelectorAll("[data-task-who-open]").forEach((btn) => {
+      btn.addEventListener("click", () => openAndFocus(btn.dataset.taskWhoOpen, `[data-task-assignee="${btn.dataset.taskWhoOpen}"]`));
+    });
+    scope.querySelectorAll("[data-task-done]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const nowDone = btn.getAttribute("aria-checked") !== "true";
+        toggleTaskDone(btn.dataset.taskDone, nowDone, btn);
+      });
     });
     scope.querySelectorAll("[data-task-due]").forEach((inp) => {
       inp.addEventListener("change", () => saveTaskField(inp.dataset.taskDue, { due_date: inp.value || null }, inp));
