@@ -3203,7 +3203,7 @@
     blocks.push(P(
       "&bull; " + link("https://economicgardening.org/training-videos-frameworks/", "Watch the framework videos")
       + "<br>&nbsp;&nbsp;&nbsp;Password is nceg2019 (all lowercase)"
-      + "<br><br>&bull; " + link("https://economicgardening.org/nceg-sample-deliverables/", "Watch the &quot;Deliverables&quot; video"),
+      + "<br><br>&bull; " + link("https://economicgardening.org/nceg-sample-deliverables/", 'Watch the "Deliverables" video'),
       INDENT));
 
     // --- sorter, homework ---
@@ -3381,7 +3381,7 @@
     // the attachments (10/9) -- the letter now points at the Resource Vault
     // instead of promising files a mailto could never carry.
     notes.push(`Before sending: replace the "${WELCOME_AVAILABILITY_MARKER.replace(/^>>> |<<<$/g, "")}" line with your dates and times.`);
-    notes.push("Open in Email app hands your mail client a finished draft \u2014 recipients, subject and this letter with its links intact. Edit and send from there.");
+    notes.push("Open in Email app copies this letter and opens a new message with the recipients and subject filled in \u2014 press Cmd+V to drop the letter in, links and formatting intact, then edit and send. The paste is the one step a browser cannot do for you.");
     if (!c.slug) {
       notes.push("This engagement has no dashboard address yet, so the letter names the Resource Vault without linking it and leaves off the closing paragraph about the dashboard. Set a slug on the engagement and reopen this to get both.");
     }
@@ -3422,81 +3422,76 @@
   // easy links and perfect formatting. It should be called Open in Email
   // app. They can edit from there."
   //
-  // The two it replaces each failed at one half of that. mailto: is plain
-  // text by spec, so "Open in email app" printed the addresses in full.
-  // Copy email carried the links but lost every line break, because the
-  // HTML it put on the clipboard leaned on this page's stylesheet for its
-  // layout and a stylesheet does not travel on the clipboard. The letter
-  // itself is built from real paragraphs now, which fixes the second; this
-  // fixes the first.
+  // WHAT A BROWSER CAN ACTUALLY DO, since three attempts have now run into
+  // it. A web page has exactly two ways to reach a desktop mail client:
   //
-  // A .eml file is a whole email -- recipients, subject and an HTML body --
-  // and double-clicking one opens it in whatever mail app the computer
-  // uses. X-Unsent: 1 is what tells Outlook to open it as a draft to edit
-  // and send rather than as a message that has already been received.
-  // Apple Mail opens it as a window to read, where Message > Edit as New
-  // Message turns it into a draft; one extra step, and still the only way
-  // to hand a mail client a formatted letter.
+  //   mailto:   opens the compose window, but an RFC 6068 body is plain
+  //             text -- no links, no paragraphs, ever.
+  //   a file    can carry a formatted letter, but a browser DOWNLOADS it.
+  //             Chrome showed Greg a Save dialog (10/9), which is the end
+  //             of that idea.
   //
-  // Where the file goes is the browser's business: most open it straight
-  // away, some drop it in Downloads to be double-clicked. The banner says
-  // so rather than claiming the mail app will definitely appear.
-  function welcomeEml() {
-    const to = $("welcome-to").value.trim();
-    const cc = $("welcome-cc").value.trim();
-    const subject = $("welcome-subject").value.trim();
-    const bodyHtml = $("welcome-body").innerHTML;
-
-    // RFC 2047 for anything a header cannot carry as plain ASCII -- an en
-    // dash in a company name is enough to need it.
-    const b64 = (str) => {
-      const bytes = new TextEncoder().encode(str);
-      let bin = "";
-      bytes.forEach((b) => { bin += String.fromCharCode(b); });
-      return btoa(bin);
-    };
-    const header = (name, value) => {
-      if (!value) return "";
-      const safe = /^[\x20-\x7E]*$/.test(value)
-        ? value
-        : `=?UTF-8?B?${b64(value)}?=`;
-      return `${name}: ${safe}\r\n`;
-    };
-
-    // The body goes base64 so no line length, accent or emoji can corrupt
-    // it in transit through the file.
-    const wrapped = (b64(`<html><head><meta charset="utf-8"></head>`
-      + `<body style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#1d2420;">`
-      + bodyHtml + `</body></html>`)).replace(/(.{76})/g, "$1\r\n");
-
-    return header("To", to)
-      + header("Cc", cc)
-      + header("Subject", subject)
-      + "X-Unsent: 1\r\n"
-      + "MIME-Version: 1.0\r\n"
-      + "Content-Type: text/html; charset=utf-8\r\n"
-      + "Content-Transfer-Encoding: base64\r\n"
-      + "\r\n" + wrapped + "\r\n";
+  // Neither alone opens a formatted draft. So this does both halves in one
+  // press: the formatted letter goes on the clipboard, then the mail app
+  // opens with the recipients and subject already filled and the body
+  // empty, waiting for one paste. One click, one Cmd+V, then edit and send
+  // -- which is as close to what he asked for as the browser allows, and
+  // the banner says exactly that rather than pretending otherwise.
+  //
+  // The paste carries the formatting because the letter's markup is
+  // self-contained now: real <p> blocks with inline styles, nothing
+  // borrowed from this page's stylesheet. That was the bug behind "yes it
+  // does but it's not formatted".
+  async function welcomeToClipboard() {
+    const html = $("welcome-body").innerHTML;
+    const text = $("welcome-body").innerText;
+    if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
+      await navigator.clipboard.writeText(text);
+      return "plain";
+    }
+    await navigator.clipboard.write([new ClipboardItem({
+      "text/html": new Blob([html], { type: "text/html" }),
+      "text/plain": new Blob([text], { type: "text/plain" }),
+    })]);
+    return "rich";
   }
 
-  $("welcome-open").addEventListener("click", () => {
+  $("welcome-open").addEventListener("click", async () => {
+    const btn = $("welcome-open");
+    btn.disabled = true;
+    let copied = null;
     try {
-      const blob = new Blob([welcomeEml()], { type: "message/rfc822" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      // The file name is what the person sees in Downloads, so it says
-      // which letter it is rather than "message.eml".
-      const who = ($("welcome-subject").value || "Welcome").replace(/[^\w .-]+/g, " ").trim().slice(0, 60);
-      a.download = `${who || "Welcome"}.eml`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-      showBanner("Draft ready \u2014 it should open in your email app. If your browser saved it instead, double-click it in Downloads. Everything is filled in; edit and send from there.", "success");
+      copied = await welcomeToClipboard();
     } catch (e) {
-      showBanner("Couldn't build the draft: " + (e && e.message ? e.message : "unknown error"), "error");
+      copied = null;
     }
+    btn.disabled = false;
+
+    if (!copied) {
+      // Without the clipboard there is nothing to paste, so do not open an
+      // empty message and leave them wondering. Select the letter instead
+      // and say which key to press.
+      const r = document.createRange();
+      r.selectNodeContents($("welcome-body"));
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(r);
+      showBanner("Your browser wouldn't let the page copy for you \u2014 the letter is selected, press Cmd+C, then open a new message and paste.", "error");
+      return;
+    }
+
+    // No body on the mailto, deliberately: anything put there arrives as
+    // plain text and would have to be deleted before pasting.
+    const clean = (v) => v.split(",").map((e) => e.trim()).filter(Boolean).join(",");
+    const params = [];
+    const cc = clean($("welcome-cc").value);
+    if (cc) params.push("cc=" + encodeURIComponent(cc));
+    params.push("subject=" + encodeURIComponent($("welcome-subject").value));
+    window.location.href = `mailto:${clean($("welcome-to").value)}?${params.join("&")}`;
+
+    showBanner(copied === "rich"
+      ? "Letter copied and your email app is opening \u2014 press Cmd+V (Ctrl+V on Windows) in the new message to drop it in, links and all. Edit and send from there."
+      : "Your email app is opening. The letter is on the clipboard as plain text \u2014 this browser cannot copy formatting \u2014 so paste it and the addresses will show in place of the link names.",
+      copied === "rich" ? "success" : "info");
   });
 
 
