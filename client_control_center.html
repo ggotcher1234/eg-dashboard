@@ -630,21 +630,11 @@
     width: 100%; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--border);
     border-radius: 6px; font-size: 13.5px; font-family: inherit; color: var(--text); background: #fff;
   }
-  .welcome-field textarea { line-height: 1.6; resize: vertical; min-height: 420px; }
-  /* Same box as the inputs above, but editable rich text: the letter's own
-     blank lines and indents are its layout, so white-space is preserved
-     rather than collapsed the way a normal div would. */
-  .welcome-rich {
-    width: 100%; box-sizing: border-box; padding: 11px 13px; border: 1px solid var(--border);
-    border-radius: 6px; font-size: 13.5px; font-family: inherit; color: var(--text);
-    background: #fff; line-height: 1.6; min-height: 420px; max-height: 60vh;
-    overflow-y: auto; word-break: break-word;
-  }
-  .welcome-rich:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  .welcome-rich a { color: var(--accent-dark, #3d5230); font-weight: 600; }
-  /* The one line that must be replaced before sending, impossible to miss. */
-  .welcome-rich .fill-me { background: #fdf4e3; color: #8a5d08; font-weight: 600;
-                           padding: 1px 4px; border-radius: 3px; }
+  /* The letter is plain text and leaves as plain text, so the field it is
+     edited in is a plain textarea: what is on screen is character for
+     character what the client receives. */
+  .welcome-field textarea { line-height: 1.6; resize: vertical; min-height: 460px; }
+  .welcome-field textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .welcome-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   /* Two buttons in the order they are pressed, and the order said out loud:
      the clipboard has to be loaded before the message is open, or the Team
@@ -1142,16 +1132,9 @@
             <div class="welcome-field"><label for="welcome-to">To</label><input type="text" id="welcome-to" /></div>
             <div class="welcome-field"><label for="welcome-cc">CC</label><input type="text" id="welcome-cc" /></div>
             <div class="welcome-field"><label for="welcome-subject">Subject</label><input type="text" id="welcome-subject" /></div>
-            <!-- Greg (10/9/26): "i want hyperlinks so you can Click on
-                 Frequently Asked Questions and it opens the right link."
-                 A textarea cannot hold a link, which is why he kept seeing
-                 raw addresses: the field was plain text, so everything
-                 copied out of it was plain text too. This is a rich field.
-                 What is on screen is what lands in the email. -->
             <div class="welcome-field">
               <label for="welcome-body">Message</label>
-              <div id="welcome-body" class="welcome-rich" contenteditable="true"
-                   spellcheck="true" role="textbox" aria-multiline="true"></div>
+              <textarea id="welcome-body" spellcheck="true"></textarea>
             </div>
             <!-- Greg (10/9/26), looking at the finished letter: "the email
                  looks great as is in the open EGDB window. just put a copy
@@ -1162,9 +1145,9 @@
                  compose window and a full clipboard, which is the thing he
                  did not want a Team Lead left holding. -->
             <div class="welcome-actions">
-              <button type="button" class="btn-primary btn-sm" id="welcome-copy">Copy Email</button>
-              <button type="button" class="btn-secondary btn-sm" id="welcome-open">Open in Email app</button>
-              <span class="welcome-order">Copy first, then open &mdash; paste into the new message.</span>
+              <button type="button" class="btn-primary btn-sm" id="welcome-open">Open in Email app</button>
+              <button type="button" class="btn-secondary btn-sm" id="welcome-copy">Copy Email</button>
+              <span class="welcome-order">Remember to attach the two documents.</span>
             </div>
           </div>
 
@@ -3125,183 +3108,75 @@
   const WELCOME_AVAILABILITY_MARKER =
     ">>> REPLACE THIS LINE with your available dates and times, or your scheduling link <<<";
 
-  // Greg (10/9/26): "since all the documents referenced in the Welcome email
-  // are already digitally stored for the resource vault lets just provide
-  // links to them in the email instead of referencing attachments. let's also
-  // add a note at the end that we've created a EG Dashboard where all our
-  // contact info, videos, discussions and research will be stored throughout
-  // and after their engagement. Then provide that link."
+  // PLAIN TEXT, NO LINKS, THE TWO DOCUMENTS ATTACHED. Greg (10/9/26), after
+  // a day of this: "just create a plain text email without the hyperlinks
+  // and the TL's will add the two attachments as they do today."
   //
-  // This reverses two calls from 10/8 -- keep the model letter's "attached"
-  // wording, and keep the dashboard link out -- and both reversals hold up
-  // now that the Vault is actually filled.
+  // That is the end of the experiment, and the reason it failed is worth
+  // writing down so nobody restarts it:
   //
-  // WHY THE TWO DOCUMENTS DO NOT GET LINKS OF THEIR OWN. "EG FAQs" and
-  // "EG - What to Expect" are files in the client-documents bucket, which is
-  // PRIVATE: client_public.html mints a 300-second signed URL at the moment
-  // the client clicks one. There is no permanent address to paste. A signed
-  // URL long-lived enough to survive an inbox would be a standing public way
-  // into a private bucket, handed out by email -- so the link is the Resource
-  // Vault on the client's own dashboard, where both files already sit. The
-  // videos and the preference sorter keep their direct links: those are
-  // genuinely public URLs, and they are what the Vault rows store too.
+  //   mailto:   opens a compose window with the whole letter already in it
+  //             -- one click, nothing to paste -- but an RFC 6068 body is
+  //             PLAIN TEXT. A clickable link name cannot travel in one.
+  //   clipboard can carry formatting, but a browser cannot paste into
+  //             another application, so it always costs a manual step, and
+  //             what survives the paste depends on the mail client.
+  //   a file    (.eml) can carry a formatted letter, but a browser
+  //             downloads it -- Chrome showed a Save dialog, which ended it.
   //
-  // dashboardUrl is null when the engagement has no slug yet. The letter then
-  // names the Resource Vault without a link and drops the closing paragraph,
-  // rather than printing a broken address; the composer says so in its notes.
-  // The letter is HTML now, not text. Greg (10/9/26): "i want hyperlinks so
-  // you can Click on Frequently Asked Questions and it opens the right
-  // link." A clickable name is a hyperlink and nothing else is, so the
-  // template produces anchors and the Message field renders them.
-  //
-  // Still written as a letter rather than as a designed email: no tables, no
-  // images, no colours. White-space is preserved by the container, so the
-  // blank lines and two-space indents below are the layout, exactly as they
-  // were when this was plain text.
+  // So: the letter is text, exactly as it reads on screen, and the two
+  // collateral documents go on as attachments the way Team Leads have
+  // always sent them. The remaining addresses (the videos, the sorter, the
+  // dashboard) are printed as plain URLs, which every mail client turns
+  // into live links by itself.
   const esc = (x) => String(x ?? "")
     .split("&").join("&amp;").split("<").join("&lt;")
     .split(">").join("&gt;").split('"').join("&quot;");
-  const link = (href, text) => `<a href="${esc(href)}">${esc(text)}</a>`;
 
-  function welcomeEmailBody(teamLead, teamLeadCell, companyName, dashboardUrl, docs) {
-    // REAL PARAGRAPHS, not newlines. Greg (10/9/26), pasting into Outlook:
-    // "yes it does but it's not formatted. come on!" -- and he was right.
-    // The previous version leaned on the editor's `white-space: pre-wrap`
-    // to turn its newlines into line breaks. A stylesheet does not travel
-    // on the clipboard, so Outlook received one long run of text with no
-    // block structure and set it as one paragraph. Every break has to be
-    // carried by the markup itself: <p> between blocks, <br> within one.
-    //
-    // Inline styles for the same reason. Nothing here may depend on a class
-    // that only exists on this page.
-    const d = docs || {};
-    const P = (html, extra) => `<p style="margin:0 0 14px;${extra || ""}">${html}</p>`;
+  function welcomeEmailBody(teamLead, teamLeadCell, companyName, dashboardUrl) {
     // Green, not grey. Greg (10/9/26): "replace those ugly grey checkboxes
     // with nice green ones." U+2611 renders as a grey ballot box in Outlook
-    // and Gmail; U+2705 is the green check in every client's emoji font.
-    const TICK = "\u2705 ";
-    const INDENT = "margin:0 0 14px 18px;";
+    // and Gmail; U+2705 is the green check in every client's emoji font, and
+    // it survives a plain-text body intact.
+    const TICK = "✅ ";
+    const IN = "   ";
+    const L = [];
 
-    const blocks = [];
-    blocks.push(P("Greetings,"));
-    blocks.push(P("Congratulations on your acceptance into the Economic Gardening program. I am your team leader for this engagement. For the next several weeks you will have the services of a high-powered team to conduct strategic and market research for you. Our first step is scheduling a Discovery Call to learn about you, your company, and your business issues. You can invite key management staff members to attend if you want."));
-    blocks.push(P("The Discovery Call runs 1.5 hours and we will meet on Zoom. Here is my availability:"));
-    // Amber only until it is replaced; it is meant to be impossible to miss
-    // in the editor, and if it somehow survives to the CEO it should still
-    // read as a thing that went wrong rather than as part of the letter.
-    blocks.push(P(`<span class="fill-me" style="background:#fdf4e3;color:#8a5d08;font-weight:600;padding:1px 4px;">${WELCOME_AVAILABILITY_MARKER}</span>`));
-    blocks.push(P("Following the Discovery Call, a research team will start work for you immediately."));
-    blocks.push(P("Please note that we avoid rescheduling calls if possible. Coordinating 5-7 people will eat into your sponsor's budget for the engagement."));
+    L.push("Greetings,", "");
+    L.push("Congratulations on your acceptance into the Economic Gardening program. I am your team leader for this engagement. For the next several weeks you will have the services of a high-powered team to conduct strategic and market research for you. Our first step is scheduling a Discovery Call to learn about you, your company, and your business issues. You can invite key management staff members to attend if you want.", "");
+    L.push("The Discovery Call runs 1.5 hours and we will meet on Zoom. Here is my availability:", "");
+    L.push(WELCOME_AVAILABILITY_MARKER, "");
+    L.push("Following the Discovery Call, a research team will start work for you immediately.", "");
+    L.push("Please note that we avoid rescheduling calls if possible. Coordinating 5-7 people will eat into your sponsor's budget for the engagement.", "");
 
-    // --- the two documents ---
-    const vaultLink = dashboardUrl
-      ? link(dashboardUrl, "Resource Vault on your EG Dashboard")
-      : "Resource Vault on your EG Dashboard";
-    const bullets = [];
-    if (d.faq) bullets.push(link(d.faq, "Frequently Asked Questions"));
-    if (d.expect) bullets.push(link(d.expect, "What to Expect in an Economic Gardening Engagement"));
+    // Attached, as they have always been. The composer's note reminds the
+    // Team Lead to put them on before sending.
+    L.push(TICK + "Attached are \"Frequently Asked Questions\" and \"What to Expect in an Economic Gardening Engagement\". Please read these two before the Discovery Call. They give a good overview of where we are going.", "");
 
-    if (bullets.length === 2) {
-      blocks.push(P(TICK + "Please read these two before the Discovery Call. They give a good overview of where we are going."));
-      blocks.push(P(bullets.map((b) => "&bull; " + b).join("<br>"), INDENT));
-    } else if (bullets.length === 1) {
-      const missing = d.faq
-        ? "&quot;What to Expect in an Economic Gardening Engagement&quot;"
-        : "&quot;Frequently Asked Questions&quot;";
-      blocks.push(P(TICK + "Please read these two before the Discovery Call. They give a good overview of where we are going."));
-      blocks.push(P("&bull; " + bullets[0], INDENT));
-      blocks.push(P(`${missing} is in the ${vaultLink}.`, INDENT));
-    } else {
-      blocks.push(P(TICK + `Please read &quot;Frequently Asked Questions&quot; and &quot;What to Expect in an Economic Gardening Engagement&quot; before the Discovery Call. They give a good overview of where we are going. Both are in the ${vaultLink}.`));
-    }
+    L.push(TICK + "There are two sets of videos that cover basic principles of the Economic Gardening program. The first is an overview of the analytical frameworks we use in trouble shooting business issues. The second is examples of deliverables in a marketing campaign.", "");
+    L.push(IN + "The five frameworks", IN + "https://economicgardening.org/training-videos-frameworks/", IN + "Password is nceg2019 (all lowercase)", "");
+    L.push(IN + "Sample deliverables", IN + "https://economicgardening.org/nceg-sample-deliverables/", "");
 
-    // --- videos ---
-    blocks.push(P(TICK + "There are two sets of videos that cover basic principles of the Economic Gardening program. The first is an overview of the analytical frameworks we use in trouble shooting business issues. The second is examples of deliverables in a marketing campaign."));
-    blocks.push(P(
-      "&bull; " + link("https://economicgardening.org/training-videos-frameworks/", "Watch the framework videos")
-      + "<br>&nbsp;&nbsp;&nbsp;Password is nceg2019 (all lowercase)"
-      + "<br><br>&bull; " + link("https://economicgardening.org/nceg-sample-deliverables/", 'Watch the "Deliverables" video'),
-      INDENT));
+    L.push(TICK + "This preference sorter will help us understand your work style and communication preferences (and those of any management people you wish to include). Please provide the results (4 letters) before your Discovery Call, or we can discuss them during the call.", "");
+    L.push(IN + "https://claude.ai/public/artifacts/15e8c292-005b-4f20-81a3-8b637d504601", "");
 
-    // --- sorter, homework ---
-    blocks.push(P(TICK + `This ${link("https://claude.ai/public/artifacts/15e8c292-005b-4f20-81a3-8b637d504601", "preference sorter")} will help us understand your work style and communication preferences (and those of any management people you wish to include). Please provide the results (4 letters) before your Discovery Call, or we can discuss them during the call.`));
-    blocks.push(P(TICK + "Finally, please provide me with a list of your top 10 customers and at least 5 competitors (larger, smaller, same size). This will help us build a customer profile. We will also look at your competitors' website activity."));
+    L.push(TICK + "Finally, please provide me with a list of your top 10 customers and at least 5 competitors (larger, smaller, same size). This will help us build a customer profile. We will also look at your competitors' website activity.", "");
 
-    // --- the dashboard, then the sign-off ---
     if (dashboardUrl) {
       // Comma, not a full stop, after the name: plenty of these end in
-      // "Inc." and "Fuel Efficiency Inc.." is the kind of thing a CEO
-      // notices in a letter about being thorough.
-      blocks.push(P(`We have set up ${link(dashboardUrl, "an EG Dashboard for " + companyName)}, where our contact information, the videos, our discussion notes and all of the research we produce are kept \u2014 through your engagement and after it ends. Everything mentioned above is already there.`));
+      // "Inc." and "Fuel Efficiency Inc.." is exactly the kind of thing a
+      // CEO notices in a letter about being thorough.
+      L.push("We have set up an EG Dashboard for " + companyName + ", where our contact information, the videos, our discussion notes and all of the research we produce are kept — through your engagement and after it ends.", "");
+      L.push(IN + dashboardUrl, "");
     }
-    blocks.push(P("Feel free to let me know if you have questions. We look forward to working with your company."));
-    blocks.push(P(
-      "Thank you,<br>" + esc(teamLead)
-      + "<br>Cell: " + esc(teamLeadCell)
-      + "<br>National Center for Economic Gardening \u2013 Team Lead",
-      "margin:0;"));
 
-    return blocks.join("");
-  }
+    L.push("Feel free to let me know if you have questions. We look forward to working with your company.", "");
+    L.push("Thank you,");
+    L.push(teamLead);
+    L.push("Cell: " + teamLeadCell);
+    L.push("National Center for Economic Gardening – Team Lead");
 
-  // Chris (10/9/26, via Greg): he "doesn't think that CEO's will figure out
-  // how to go to the dashboard, find the resource vault, open it, and review
-  // the documents. he wants a direct link (or attachment) in the email that
-  // says, click here for the FAQ's type of statement."
-  //
-  // He is right, and the objection I raised yesterday -- these two files sit
-  // in the PRIVATE client-documents bucket, so there is no address to paste
-  // -- was aimed at the wrong risk. What must not be handed out by email is
-  // a way into other people's CLIENT documents. A signed URL is scoped to
-  // one object path and grants nothing else, and the object in question is
-  // NCEG's own marketing collateral, written to be read by exactly this
-  // person. So each document gets its own link.
-  //
-  // Two sources, in order of preference:
-  //   1. The Vault row's `url`. The videos and the preference sorter already
-  //      use it. If these two documents are ever moved to a public bucket --
-  //      which is the tidier home for public collateral, and would make the
-  //      links permanent and readable -- setting `url` on the row is the
-  //      whole change. This letter picks it up with no code edit.
-  //   2. A signed URL over the private file, minted here, in the Team Lead's
-  //      own browser, under their own access. 180 days: long enough that a
-  //      welcome letter read weeks late still works, short enough that it is
-  //      not a forever link. The dashboard in the closing paragraph is the
-  //      permanent home, which is what it is there for.
-  //
-  // Looked up by title rather than id, so Rita can replace the file behind
-  // either row without anything here needing to know.
-  const WELCOME_DOC_TITLES = {
-    faq: "EG FAQs",
-    expect: "EG \u2013 What to Expect",
-  };
-  const WELCOME_DOC_SIGNED_SECONDS = 180 * 24 * 60 * 60;
-
-  async function welcomeDocLinks() {
-    const out = { faq: null, expect: null };
-    const wanted = Object.values(WELCOME_DOC_TITLES);
-    const { data, error } = await sb
-      .from("resource_vault_templates")
-      .select("title, url, storage_path")
-      .in("title", wanted);
-    if (error || !data) return out;
-
-    for (const [key, title] of Object.entries(WELCOME_DOC_TITLES)) {
-      const row = data.find((r) => r.title === title);
-      if (!row) continue;
-      const direct = (row.url || "").trim();
-      if (direct) { out[key] = direct; continue; }
-      if (!row.storage_path) continue;
-      // One failure here costs one link, not the letter: the fallback is the
-      // Vault pointer, and the composer note says which one is missing.
-      try {
-        const { data: signed } = await sb.storage
-          .from("client-documents")
-          .createSignedUrl(row.storage_path, WELCOME_DOC_SIGNED_SECONDS);
-        if (signed && signed.signedUrl) out[key] = signed.signedUrl;
-      } catch (e) { /* leave it null */ }
-    }
-    return out;
+    return L.join("\n");
   }
 
   async function buildWelcomeEmail() {
@@ -3398,25 +3273,20 @@
     // the attachments (10/9) -- the letter now points at the Resource Vault
     // instead of promising files a mailto could never carry.
     notes.push(`Before sending: replace the "${WELCOME_AVAILABILITY_MARKER.replace(/^>>> |<<<$/g, "")}" line with your dates and times.`);
-    notes.push("Copy Email puts the whole letter on your clipboard with its links intact. Open in Email app then starts a new message from your own mailbox with the To, CC and Subject lines already filled in \u2014 paste the letter into it, edit, and send.");
+    notes.push("Attach \"EG FAQs\" and \"EG \u2013 What to Expect\" before you send \u2014 the letter says they are attached. Both are on the Resource Templates page.");
+    notes.push("Open in Email app starts a new message from your own mailbox with the addresses, the subject and the whole letter already in it. Copy Email is there if you would rather paste it into a message yourself.");
     if (!c.slug) {
-      notes.push("This engagement has no dashboard address yet, so the letter names the Resource Vault without linking it and leaves off the closing paragraph about the dashboard. Set a slug on the engagement and reopen this to get both.");
+      notes.push("This engagement has no dashboard address yet, so the letter leaves off the closing paragraph about the dashboard. Set a slug on the engagement and reopen this to get it.");
     }
 
     const welcomeDashboardUrl = c.slug
       ? new URL(`c/${encodeURIComponent(c.slug)}`, PUBLIC_SITE_BASE).href
       : null;
-    const docs = await welcomeDocLinks();
-    if (!docs.faq || !docs.expect) {
-      const missing = [!docs.faq && "EG FAQs", !docs.expect && "EG \u2013 What to Expect"].filter(Boolean);
-      notes.push(`Couldn't build a link for ${missing.join(" or ")} \u2014 the letter points at the Resource Vault for ${missing.length > 1 ? "those" : "that one"} instead. Check the document is still on the Resource Templates page.`);
-    }
-    $("welcome-body").innerHTML = welcomeEmailBody(
+    $("welcome-body").value = welcomeEmailBody(
       teamLead || "[Team Lead]",
       teamLeadCell || "[cell number]",
       c.name || "your company",
-      welcomeDashboardUrl,
-      docs
+      welcomeDashboardUrl
     );
     $("welcome-note").textContent = notes.join(" ");
   }
@@ -3435,101 +3305,61 @@
   }
 
 
-  // ONE button, and all it does is copy. Greg (10/9/26): "the email looks
-  // great as is in the open EGDB window. just put a copy email button at the
-  // bottom and then the TL will know to paste it into their email."
+  // TWO buttons, and now the first one does the whole job. Greg (10/9/26):
+  // "just create a plain text email without the hyperlinks and the TL's
+  // will add the two attachments as they do today."
   //
-  // That ends a run of four attempts at getting the letter INTO a message
-  // automatically, and the reason none of them worked is worth leaving here
-  // so nobody tries a fifth:
+  // That is what makes one click possible again. A mailto body is plain
+  // text, so a plain-text letter fits inside it whole -- recipients,
+  // subject and all 2,300-odd characters of the letter -- and the Team
+  // Lead's own mail app opens on a message that is already written. The
+  // four attempts this replaced all failed on the same wall: the moment
+  // the letter carried clickable link names it could no longer travel in a
+  // mailto, and no web page can paste into another application.
   //
-  //   mailto:   opens a compose window, but an RFC 6068 body is plain text.
-  //             A letter with clickable link names cannot travel in one.
-  //   a file    (.eml) can carry the formatting, but a browser downloads it
-  //             -- Chrome showed Greg a Save dialog, which ended that idea.
-  //   pasting   is an operating-system action. No web page can press Cmd+V
-  //             in another application, whatever it is allowed to copy.
+  // Copy Email stays as the second button for anyone who would rather
+  // start the message themselves, or whose mail client balks at a long
+  // mailto. Plain text, so nothing can be lost in the paste.
   //
-  // And the letter has to leave from the Team Lead's own mailbox ("this
-  // needs to go from the TL's email and they will need to custom edit it"),
-  // so the dashboard sending it was never on the table either. One human
-  // action is the floor, so this makes that action the obvious one: copy
-  // here, paste there.
-  //
-  // The paste keeps its formatting because the letter's markup is
-  // self-contained -- real <p> blocks with inline styles, nothing borrowed
-  // from this page's stylesheet. That was the bug behind "yes it does but
-  // it's not formatted".
+  // Length: mailto is not formally capped, but Windows historically cut it
+  // around 2,000 characters and this encodes to roughly 3,000. That is
+  // what the letter did before the links went in, and it worked. If a
+  // client ever truncates it, the letter is still on screen in full and
+  // Copy Email is right there.
   const WELCOME_PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "")
     ? "Cmd+V" : "Ctrl+V";
 
-  async function welcomeToClipboard() {
-    const html = $("welcome-body").innerHTML;
-    const text = $("welcome-body").innerText;
-    if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
-      await navigator.clipboard.writeText(text);
-      return "plain";
-    }
-    await navigator.clipboard.write([new ClipboardItem({
-      "text/html": new Blob([html], { type: "text/html" }),
-      "text/plain": new Blob([text], { type: "text/plain" }),
-    })]);
-    return "rich";
-  }
-
-  $("welcome-copy").addEventListener("click", async () => {
-    const btn = $("welcome-copy");
-    btn.disabled = true;
-    let copied = null;
-    try {
-      copied = await welcomeToClipboard();
-    } catch (e) {
-      copied = null;
-    }
-    btn.disabled = false;
-
-    if (!copied) {
-      // A browser that refuses the clipboard call leaves one thing worth
-      // doing: select the letter, so the keyboard copy is one keystroke
-      // rather than a hunt.
-      const r = document.createRange();
-      r.selectNodeContents($("welcome-body"));
-      const sel = window.getSelection();
-      sel.removeAllRanges(); sel.addRange(r);
-      showBanner("Your browser wouldn't let the page copy for you \u2014 the letter is selected, so press " + (WELCOME_PASTE_KEY === "Cmd+V" ? "Cmd+C" : "Ctrl+C") + ", then paste it into a new message.", "error");
-      return;
-    }
-
-    showBanner(copied === "rich"
-      ? "Letter copied with its links and formatting. Now press Open in Email app and paste it into the new message with " + WELCOME_PASTE_KEY + "."
-      : "Letter copied as plain text \u2014 this browser cannot copy formatting, so the links will paste as addresses rather than as names.",
-      copied === "rich" ? "success" : "info");
-  });
-
-  // The other half, on its own button. Greg (10/9/26): "can we have one
-  // button to open the email with all the recipients filled in and the other
-  // button to copy and paste the draft."
-  //
-  // Which is the right split, and it is the one thing the earlier
-  // single-button version got wrong -- it did both at once, so the compose
-  // window appeared before anyone had decided they were ready for it, and an
-  // empty message with a loaded clipboard looks like a failure rather than a
-  // step. Two buttons say what each one does and leave the order to the
-  // person pressing them.
-  //
-  // NO BODY on this mailto, deliberately. An RFC 6068 body is plain text, so
-  // anything put there would arrive as a wall of addresses that has to be
-  // deleted before the real letter can be pasted in. The message opens
-  // addressed and titled, and empty, which is exactly the thing being
-  // pasted into.
   $("welcome-open").addEventListener("click", () => {
     const clean = (v) => v.split(",").map((e) => e.trim()).filter(Boolean).join(",");
     const params = [];
     const cc = clean($("welcome-cc").value);
     if (cc) params.push("cc=" + encodeURIComponent(cc));
     params.push("subject=" + encodeURIComponent($("welcome-subject").value));
+    params.push("body=" + encodeURIComponent($("welcome-body").value));
     window.location.href = `mailto:${clean($("welcome-to").value)}?${params.join("&")}`;
-    showBanner("A new message is opening, addressed and titled \u2014 press " + WELCOME_PASTE_KEY + " to drop the letter in, then edit and send.", "info");
+    showBanner("Your email app is opening with the letter in it \u2014 attach the FAQs and What to Expect, replace the availability line, and send.", "success");
+  });
+
+  $("welcome-copy").addEventListener("click", async () => {
+    const btn = $("welcome-copy");
+    btn.disabled = true;
+    let ok = true;
+    try {
+      await navigator.clipboard.writeText($("welcome-body").value);
+    } catch (e) {
+      ok = false;
+    }
+    btn.disabled = false;
+
+    if (!ok) {
+      // A browser that refuses the clipboard call leaves one useful thing
+      // to do: select the letter, so the keyboard copy is one keystroke.
+      const ta = $("welcome-body");
+      ta.focus(); ta.select();
+      showBanner("Your browser wouldn't let the page copy for you \u2014 the letter is selected, so press " + (WELCOME_PASTE_KEY === "Cmd+V" ? "Cmd+C" : "Ctrl+C") + " to copy it.", "error");
+      return;
+    }
+    showBanner("Letter copied. Paste it into a new message with " + WELCOME_PASTE_KEY + " \u2014 the To, CC and Subject lines above are yours to copy too.", "success");
   });
 
   function recalcTeamStats() {
