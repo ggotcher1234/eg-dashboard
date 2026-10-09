@@ -3091,7 +3091,48 @@
   const WELCOME_AVAILABILITY_MARKER =
     ">>> REPLACE THIS LINE with your available dates and times, or your scheduling link <<<";
 
-  function welcomeEmailBody(teamLead, teamLeadCell) {
+  // Greg (10/9/26): "since all the documents referenced in the Welcome email
+  // are already digitally stored for the resource vault lets just provide
+  // links to them in the email instead of referencing attachments. let's also
+  // add a note at the end that we've created a EG Dashboard where all our
+  // contact info, videos, discussions and research will be stored throughout
+  // and after their engagement. Then provide that link."
+  //
+  // This reverses two calls from 10/8 -- keep the model letter's "attached"
+  // wording, and keep the dashboard link out -- and both reversals hold up
+  // now that the Vault is actually filled.
+  //
+  // WHY THE TWO DOCUMENTS DO NOT GET LINKS OF THEIR OWN. "EG FAQs" and
+  // "EG - What to Expect" are files in the client-documents bucket, which is
+  // PRIVATE: client_public.html mints a 300-second signed URL at the moment
+  // the client clicks one. There is no permanent address to paste. A signed
+  // URL long-lived enough to survive an inbox would be a standing public way
+  // into a private bucket, handed out by email -- so the link is the Resource
+  // Vault on the client's own dashboard, where both files already sit. The
+  // videos and the preference sorter keep their direct links: those are
+  // genuinely public URLs, and they are what the Vault rows store too.
+  //
+  // dashboardUrl is null when the engagement has no slug yet. The letter then
+  // names the Resource Vault without a link and drops the closing paragraph,
+  // rather than printing a broken address; the composer says so in its notes.
+  function welcomeEmailBody(teamLead, teamLeadCell, companyName, dashboardUrl) {
+    const vaultPointer = dashboardUrl
+      ? `Both are in the Resource Vault on your EG Dashboard:
+
+  ${dashboardUrl}`
+      : "Both are in the Resource Vault on your EG Dashboard.";
+
+    const closing = dashboardUrl
+      // Comma, not a full stop, after the name: plenty of these end in
+      // "Inc." or "Co." and "Fuel Efficiency Inc.." is the kind of thing a
+      // CEO notices in the first line of a letter about being thorough.
+      ? `We have set up an EG Dashboard for ${companyName}, where our contact information, the videos, our discussion notes and all of the research we produce are kept \u2014 through your engagement and after it ends. Everything mentioned above is already there.
+
+  ${dashboardUrl}
+
+`
+      : "";
+
     return `Greetings,
 
 Congratulations on your acceptance into the Economic Gardening program. I am your team leader for this engagement. For the next several weeks you will have the services of a high-powered team to conduct strategic and market research for you. Our first step is scheduling a Discovery Call to learn about you, your company, and your business issues. You can invite key management staff members to attend if you want.
@@ -3104,7 +3145,7 @@ Following the Discovery Call, a research team will start work for you immediatel
 
 Please note that we avoid rescheduling calls if possible. Coordinating 5-7 people will eat into your sponsor's budget for the engagement.
 
-\u2611\ufe0f Review the attached documents: "Frequently Asked Questions" and "What to Expect in an Economic Gardening Engagement" before the Discovery Call. They give a good overview of where we are going.
+\u2611\ufe0f Please read "Frequently Asked Questions" and "What to Expect in an Economic Gardening Engagement" before the Discovery Call. They give a good overview of where we are going. ${vaultPointer}
 
 \u2611\ufe0f There are two sets of videos that cover basic principles of the Economic Gardening program. The first is an overview of the analytical frameworks we use in trouble shooting business issues. The second is examples of deliverables in a marketing campaign.
 
@@ -3119,7 +3160,7 @@ Please note that we avoid rescheduling calls if possible. Coordinating 5-7 peopl
 
 \u2611\ufe0f Finally, please provide me with a list of your top 10 customers and at least 5 competitors (larger, smaller, same size). This will help us build a customer profile. We will also look at your competitors' website activity.
 
-Feel free to let me know if you have questions. We look forward to working with your company.
+${closing}Feel free to let me know if you have questions. We look forward to working with your company.
 
 Thank you,
 ${teamLead}
@@ -3215,20 +3256,24 @@ National Center for Economic Gardening \u2013 Team Lead`;
     $("welcome-to").value = toList.join(", ");
     $("welcome-cc").value = ccUnique.join(", ");
     $("welcome-subject").value = egEmailSubject(c, "Welcome to Economic Gardening");
-    // Two things this letter cannot do for itself, so they are said out loud
-    // rather than left for the client to discover. First is the availability
-    // line -- the whole point of the letter, and the one line that is blank on
-    // purpose. Second is the attachments: Greg chose to keep the model's
-    // "attached documents" wording and attach them by hand, and a mailto
-    // cannot carry a file, so the letter promises two documents the composer
-    // has no way to put in the message. Naming them, and where they live,
-    // is the difference between a reminder and a bug report from the client.
+    // One thing this letter still cannot do for itself: the availability
+    // line, which is the whole point of it and the one line left blank on
+    // purpose. The attachment reminder that used to sit here is gone with
+    // the attachments (10/9) -- the letter now points at the Resource Vault
+    // instead of promising files a mailto could never carry.
     notes.push(`Before sending: replace the "${WELCOME_AVAILABILITY_MARKER.replace(/^>>> |<<<$/g, "")}" line with your dates and times.`);
-    notes.push("Also attach \u201cEG FAQs\u201d and \u201cEG \u2013 What to Expect\u201d \u2014 the letter says they are attached, and a mailto cannot attach them for you. Both are in the Resource Vault.");
+    if (!c.slug) {
+      notes.push("This engagement has no dashboard address yet, so the letter names the Resource Vault without linking it and leaves off the closing paragraph about the dashboard. Set a slug on the engagement and reopen this to get both.");
+    }
 
+    const welcomeDashboardUrl = c.slug
+      ? new URL(`c/${encodeURIComponent(c.slug)}`, PUBLIC_SITE_BASE).href
+      : null;
     $("welcome-body").value = welcomeEmailBody(
       teamLead || "[Team Lead]",
-      teamLeadCell || "[cell number]"
+      teamLeadCell || "[cell number]",
+      c.name || "your company",
+      welcomeDashboardUrl
     );
     $("welcome-note").textContent = notes.join(" ");
   }
