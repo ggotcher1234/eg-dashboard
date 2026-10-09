@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Opening document&hellip; &middot; NCEG</title>
+<!--
+  Short, permanent links to NCEG's two public collateral documents.
+
+  Greg (10/9/26), looking at the Welcome letter composer: "this does not
+  show up as advertised. all the giant ugly links are showing."
+
+  He was looking at the plain-text textarea, where a 300-character signed
+  URL is exactly what a signed URL looks like. Telling a Team Lead to paste
+  it somewhere else and trust the result is not a fix. So the letter now
+  carries
+
+      https://egdb.netlify.app/doc/faq
+      https://egdb.netlify.app/doc/what-to-expect
+
+  and this page is what is on the other end: it resolves the document and
+  forwards to it, freshly signed, on every click. Short enough to read in
+  plain text, permanent enough to survive in an inbox, and it never goes
+  stale -- replace the file behind the Resource Vault row and the same link
+  starts serving the new one.
+
+  No sign-in. The reader is a CEO with no account. Two policies make that
+  safe without opening anything up: get_public_resource (migration 159)
+  answers for an allowlist of keys and nothing else, and storage's
+  "resource-templates read" policy already admits anyone to exactly that
+  folder of the client-documents bucket. Nothing else in that bucket is
+  reachable from here -- the signed URL is minted for one object path.
+-->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root { --bg:#f4f6f4; --surface:#fff; --ink:#1d2420; --muted:#656f68;
+          --line:#dfe4de; --sage:#5c7248; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center;
+         background:var(--bg); color:var(--ink);
+         font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; padding:24px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:12px;
+          padding:28px 30px; max-width:460px; width:100%; text-align:center;
+          box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  h1 { font-size:17px; margin:0 0 8px; }
+  p { margin:0 0 6px; color:var(--muted); font-size:14px; }
+  a { color:var(--sage); font-weight:600; }
+  .spinner { width:26px; height:26px; margin:0 auto 16px; border-radius:50%;
+             border:3px solid var(--line); border-top-color:var(--sage);
+             animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div id="working">
+      <div class="spinner" aria-hidden="true"></div>
+      <h1 id="working-title">Opening your document&hellip;</h1>
+      <p>This will only take a moment.</p>
+    </div>
+    <div id="failed" class="hidden">
+      <h1 id="fail-title">We couldn't open that document</h1>
+      <p id="fail-note"></p>
+      <p style="margin-top:14px;">Please reply to the email you came from and we
+         will send it straight over.</p>
+    </div>
+  </div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const $ = (id) => document.getElementById(id);
+
+  // The netlify.toml rule is a rewrite (status 200), so the address bar keeps
+  // saying /doc/faq and this page never sees ?doc= -- the same arrangement
+  // /c/:slug and /apply/:code use, and the same reason both of those read
+  // their key off the path too. The query string is still honoured so a
+  // direct /resource_link.html?doc=faq works for testing.
+  function resolveKey() {
+    const fromQuery = new URLSearchParams(location.search).get("doc");
+    if (fromQuery) return fromQuery.trim();
+    const parts = location.pathname.split("/").filter(Boolean);
+    const i = parts.indexOf("doc");
+    if (i !== -1 && parts[i + 1]) return decodeURIComponent(parts[i + 1]).trim();
+    return "";
+  }
+
+  function fail(note) {
+    $("working").classList.add("hidden");
+    $("fail-note").textContent = note;
+    $("failed").classList.remove("hidden");
+  }
+
+  (async function go() {
+    const key = resolveKey();
+    if (!key) { fail("The link is missing the document name."); return; }
+
+    let row = null;
+    try {
+      const { data, error } = await sb.rpc("get_public_resource", { p_key: key });
+      if (error) throw error;
+      row = Array.isArray(data) ? data[0] : data;
+    } catch (e) {
+      fail("We could not reach the document store just now. Please try again in a moment.");
+      return;
+    }
+    if (!row) { fail("That link does not match a document we publish."); return; }
+
+    document.title = (row.title || "Document") + " · NCEG";
+    $("working-title").textContent = "Opening " + (row.title || "your document") + "…";
+
+    // A row with its own url is already a public address -- the videos and
+    // the preference sorter work this way, and if these two documents are
+    // ever moved to a public bucket they will too. Nothing here changes.
+    const direct = (row.url || "").trim();
+    if (direct) { location.replace(direct); return; }
+
+    if (!row.storage_path) { fail("That document has no file attached to it yet."); return; }
+
+    try {
+      // One hour: this URL is created at the moment of the click and used
+      // immediately, so it never needs to outlive the click.
+      const { data, error } = await sb.storage
+        .from("client-documents")
+        .createSignedUrl(row.storage_path, 3600);
+      if (error || !data || !data.signedUrl) throw error || new Error("no url");
+      location.replace(data.signedUrl);
+    } catch (e) {
+      fail("We could not open the file just now. Please try again in a moment.");
+    }
+  })();
+</script>
+</body>
+</html>
