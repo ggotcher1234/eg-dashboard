@@ -1089,46 +1089,25 @@
               <div id="ed-hours-empty" class="empty-note hidden">No specialists are assigned to this engagement yet.</div>
             </div>
 
-            <!-- Chris (10/3/26, via Greg): the Cumulative Value table priced
-                 off the PAY rate was removed from this view entirely. It had
-                 been hidden from Team Leads and Specialists since 9/18/26 and
-                 kept on the Invoicing tab; then neither showed it. The Hourly
-                 Rate (Pay) field went with it -- left on its own beside the
-                 hours it was the same figure, one multiplication away.
+            <!-- There is no money on this page. Greg (10/9/26): "we don't
+                 want the $ amounts shown in this view of cummulative hours.
+                 only under invoicing section."
 
-                 Rita (10/7/26, via Greg): "I think that Chris told you that we
-                 didn't need to see the dollar values on the cumulative report
-                 under engagements but I do need to see those based on the
-                 dollar value billed to the program. The specialist and TL does
-                 not need to see these values."
+                 A "Cumulative Value Billed to the Program" table lived here
+                 from 10/7, built for Rita: "I need to see those based on the
+                 dollar value billed to the program." It was Admin-only, and
+                 the rate was never even sent to a Team Lead's browser. It is
+                 gone all the same -- this page is the one Team Leads and
+                 specialists open to see hours, and the safest place for a
+                 figure they must not see is a page that never carries it.
+                 Dollars live under Invoicing, where "Billed by Program" on
+                 Program Invoicing already answers Rita's question from the
+                 invoices themselves.
 
-                 So this is NOT the table Chris removed. That one multiplied
-                 hours by what NCEG PAYS the specialist; this one multiplies by
-                 what the Program is BILLED (econ_dev_companies
-                 .billing_hourly_rate) -- the same rate Program Invoicing
-                 prices off, which is why the figures here reconcile with an
-                 invoice and the old ones never did. The payroll tabs below
-                 still use the Pay rate, which is what they are for.
-
-                 data-super-admin-only is the whole of Rita's second sentence:
-                 one attribute, toggled by the single line in afterSignIn(),
-                 and the embedded Engagement Workspace copy obeys it too. The
-                 rate is also simply not requested for non-admins (loadData),
-                 so it never reaches a Team Lead's browser to be read out of
-                 the network tab. -->
-            <div class="eng-detail-section" id="ed-value-wrap" data-super-admin-only>
-              <div class="eng-detail-sechead">
-                <h3>Cumulative Value Billed to the Program</h3>
-                <div class="card-hint" id="ed-value-rate"></div>
-              </div>
-              <div class="table-scroll">
-                <table class="cum-table" id="ed-value-table">
-                  <thead><tr id="ed-value-thead"></tr></thead>
-                  <tbody id="ed-value-tbody"></tbody>
-                  <tfoot><tr id="ed-value-tfoot"></tr></tfoot>
-                </table>
-              </div>
-              <div id="ed-value-empty" class="empty-note hidden"></div>
+                 Note for whoever reads this next: that summary counts what
+                 has been INVOICED. The table removed here priced hours
+                 LOGGED, invoiced or not. If Rita needs the second number,
+                 it belongs on the invoicing side, not back here. -->
             </div>
           </div>
         </div>
@@ -1259,6 +1238,27 @@
   // A Program can opt out via econ_dev_companies.bill_admin_qc_upfront
   // (Greg, 8/23/26: GRE bills Admin/QC as actually performed instead).
   const SUNK_COST_SPECIALTIES = ["admin", "quality_control"];
+
+  // Greg (10/9/26): "change the order, start with TL, MR, DM, GIS, WH,
+  // Admin." Rows had been arriving in whatever order the assignments query
+  // returned, which on Fuel Efficiency put Admin and Quality Control above
+  // the Team Lead -- the overhead read first and the people doing the work
+  // read last. This is the order the engagement is actually staffed in, and
+  // the same order the Assignments table and the task list's slot codes use.
+  //
+  // Quality Control is not in Greg's list; it sits last with Admin, the
+  // other flat sunk-cost allocation, since those two are the pair that are
+  // not logged hour by hour.
+  const SPECIALTY_ORDER = [
+    "team_lead", "market_research", "digital_marketing",
+    "gis", "watering_holes", "admin", "quality_control",
+  ];
+  function specialtyRank(t) {
+    const i = SPECIALTY_ORDER.indexOf(t);
+    // An unknown specialty sorts after the known ones rather than ahead of
+    // them, so adding one to the database never silently tops this table.
+    return i === -1 ? SPECIALTY_ORDER.length : i;
+  }
   function isSunkCostSpecialty(specialtyType, partner) {
     if (!SUNK_COST_SPECIALTIES.includes(specialtyType)) return false;
     return !partner || partner.bill_admin_qc_upfront !== false;
@@ -1734,15 +1734,15 @@
       // they just stopped being billable. Measured against live data: 8 of
       // 59 logged hours never reached the invoice, all of them Amjad's GIS
       // hours on Clippard, with nothing on screen to say so.
-      // billing_hourly_rate is asked for ONLY when an Admin is looking
-      // (Rita, 10/7/26 -- "the specialist and TL does not need to see these
-      // values"). Hiding the table with data-super-admin-only satisfies the
-      // screen; leaving the rate out of the request is what keeps it off the
-      // wire, so there is nothing for a Team Lead to read out of devtools.
-      // econ_dev_select grants every org member SELECT on this table, so the
-      // restraint has to be here -- RLS will not do it for us.
+      // No billing_hourly_rate in this select. It used to be fetched for
+      // Admins only, to price the Cumulative Value table (Rita, 10/7/26).
+      // That table came off this page on 10/9, so the rate is now requested
+      // for nobody -- a figure that is never fetched cannot be read out of a
+      // network tab by anyone. econ_dev_select grants every org member
+      // SELECT on that table, so this restraint has to live here; RLS will
+      // not do it for us.
       sb.from("client_assignments")
-        .select(`id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name, bill_admin_qc_upfront${viewerIsAdmin() ? ", billing_hourly_rate" : ""}))`),
+        .select(`id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name, bill_admin_qc_upfront))`),
       // consultant_id is who actually did the work. It was never read here --
       // attribution ran off the assignment's CURRENT holder -- so reassigning
       // a row retroactively moved someone else's hours onto the new person's
@@ -1830,16 +1830,17 @@
           specialistName: person ? person.full_name : "Unknown",
           specialistRoleLabel: person ? roleLabel(person.role) : "",
           program: (a.clients && a.clients.econ_dev_companies && a.clients.econ_dev_companies.name) || "—",
-          // null for everyone but an Admin, because it was never fetched.
-          programBillingRate: (a.clients && a.clients.econ_dev_companies
-            && a.clients.econ_dev_companies.billing_hourly_rate != null)
-            ? Number(a.clients.econ_dev_companies.billing_hourly_rate) : null,
           client: (a.clients && a.clients.name) || "—",
           // Matches the same "Role N" convention used on the Client Workspace
           // Assignments table — only append the slot number when there's more
           // than one of that specialty (e.g. "Digital Marketing 1", "GIS 2"),
           // so Rita can tell which slot an invoice line refers to.
           role: (SPECIALTY_LABELS[a.specialty_type] || a.specialty_type) + (a.slot_number > 1 ? " " + a.slot_number : ""),
+          // Carried raw as well as in the label, so the engagement detail
+          // can sort by staffing order (SPECIALTY_ORDER) instead of parsing
+          // the display string back apart.
+          specialtyType: a.specialty_type,
+          slotNumber: Number(a.slot_number) || 1,
           hoursAllotted: carriesAllotment ? (Number(a.hours_allotted) || 0) : 0,
           carriesAllotment,
           // Set when these hours belong to someone who no longer holds the
@@ -2180,79 +2181,14 @@
       return { ...r, byMonth, total: round2(total), remaining };
     });
 
+    // Staffing order, then slot, then name: two market researchers read
+    // MR 1 before MR 2 rather than alphabetically.
+    detailRows.sort((x, y) =>
+      specialtyRank(x.specialtyType) - specialtyRank(y.specialtyType)
+      || (x.slotNumber || 1) - (y.slotNumber || 1)
+      || String(x.specialistName || "").localeCompare(String(y.specialistName || "")));
+
     renderEdHoursTable(detailRows, activeMonths);
-    // Every row of one engagement carries the same Program, so the first
-    // row that has a rate speaks for all of them.
-    const billingRate = (detailRows.find((r) => r.programBillingRate != null) || {}).programBillingRate ?? null;
-    renderEdValueTable(detailRows, activeMonths, billingRate);
-  }
-
-  // The money twin of renderEdHoursTable -- same rows, same months, same
-  // Totals line, each hours figure multiplied by what the Program is billed.
-  // Deliberately a separate table rather than extra columns on the one above:
-  // the hours table is the one Team Leads and Specialists see, and a table
-  // that has to drop columns per role is how a figure ends up leaking.
-  function renderEdValueTable(rows, activeMonths, rate) {
-    if (!$("ed-value-wrap")) return;
-    const theadRow = $("ed-value-thead");
-    const tbody = $("ed-value-tbody");
-    const tfootRow = $("ed-value-tfoot");
-    const emptyNote = $("ed-value-empty");
-
-    if (!rows.length || !rate) {
-      $("ed-value-table").classList.add("hidden");
-      emptyNote.classList.remove("hidden");
-      // Two different silences worth telling apart: nobody assigned yet, or a
-      // Program nobody has priced. The second is a thing Rita can go fix.
-      emptyNote.textContent = !rows.length
-        ? "No specialists are assigned to this engagement yet."
-        : "This Program has no billing rate set, so there is nothing to price these hours at. Set it on the Program to see values here.";
-      $("ed-value-rate").textContent = "";
-      return;
-    }
-    $("ed-value-table").classList.remove("hidden");
-    emptyNote.classList.add("hidden");
-    $("ed-value-rate").textContent = `Billed at ${money(rate)}/hour. Only months with logged hours are shown.`;
-
-    theadRow.innerHTML = `
-      <th>Specialty</th>
-      <th>Allotted</th>
-      ${activeMonths.map((m) => `<th class="money">${escapeHtml(monthLabelFor(m))}</th>`).join("")}
-      <th class="money">Total</th>
-      <th class="money">Remaining</th>
-    `;
-
-    tbody.innerHTML = rows.map((r) => `
-      <tr>
-        <td>
-          <div class="ed-specialty-name">${escapeHtml(r.role)}</div>
-          <div class="ed-person-name">${escapeHtml(r.specialistName || "Unassigned")}</div>
-        </td>
-        <td class="money">${money(r.hoursAllotted * rate)}</td>
-        ${activeMonths.map((m) => {
-          const v = r.byMonth[m];
-          return v ? `<td class="money">${money(v * rate)}</td>` : `<td class="blank-cell">—</td>`;
-        }).join("")}
-        <td class="money">${money(r.total * rate)}</td>
-        <td class="money${r.remaining < 0 ? " remaining-negative" : ""}">${money(r.remaining * rate)}</td>
-      </tr>
-    `).join("");
-
-    // Summed in hours and priced once, not summed in dollars: rounding each
-    // cell to cents and then adding them up drifts away from the invoice.
-    const totalsByMonth = {};
-    activeMonths.forEach((m) => { totalsByMonth[m] = round2(rows.reduce((sum, r) => sum + (r.byMonth[m] || 0), 0)); });
-    const grandAllotted = round2(rows.reduce((sum, r) => sum + r.hoursAllotted, 0));
-    const grandTotal = round2(rows.reduce((sum, r) => sum + r.total, 0));
-    const grandRemaining = round2(grandAllotted - grandTotal);
-
-    tfootRow.innerHTML = `
-      <td>Totals</td>
-      <td class="money">${money(grandAllotted * rate)}</td>
-      ${activeMonths.map((m) => `<td class="money">${money(totalsByMonth[m] * rate)}</td>`).join("")}
-      <td class="money">${money(grandTotal * rate)}</td>
-      <td class="money${grandRemaining < 0 ? " remaining-negative" : ""}">${money(grandRemaining * rate)}</td>
-    `;
   }
 
   function renderEdHoursTable(rows, activeMonths) {
