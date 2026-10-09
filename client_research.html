@@ -1337,6 +1337,7 @@
       loadEngagementSpecialists(),
     ]);
     renderResearchDue();
+    await applyEngagementDueDate();
     renderTaskList();
   }
 
@@ -2010,6 +2011,43 @@
     if (r.moved) parts.push(`${n(r.moved, "task")} moved with it`);
     if (r.stayed) parts.push(`${n(r.stayed, "task")} kept ${r.stayed === 1 ? "its own" : "their own"} date`);
     return `${head} \u2014 ${parts.join(", ")}.`;
+  }
+
+  // Setting the engagement date rolls down through the change handler
+  // above -- which only fires when somebody CHANGES it. A date that was
+  // already set when the page loads fires nothing, so six tasks sat
+  // reading "No date" under a filled-in Research due box. Greg (10/9/26):
+  // "whenever the top date is set it should be reflected in everyone's
+  // individual line. as you can see it is not happening."
+  //
+  // So the page reconciles on load as well: any incomplete task with NO
+  // date takes the engagement's. Only nulls -- a task carrying a different
+  // date was moved there deliberately and is left alone, the same rule the
+  // roll-down follows.
+  //
+  // The trigger from 157 covers questions created from here on; this is
+  // what catches the ones that already existed, including every question
+  // that arrived from a Controlling Document before a date was set.
+  //
+  // One consequence, stated rather than hidden: clearing a single task's
+  // date does not survive a reload -- it comes back on the engagement's
+  // date. "No date at all, while the engagement has one" is not a state
+  // this list can hold, and nobody has asked for it.
+  async function applyEngagementDueDate() {
+    const master = currentClient && currentClient.research_due_date;
+    if (!master) return 0;
+    const needing = allQuestions.filter((q) => !q.completed_at && !q.due_date);
+    if (!needing.length) return 0;
+    const { error } = await sb
+      .from("client_research_questions")
+      .update({ due_date: master })
+      .in("id", needing.map((q) => q.id));
+    // Silent on failure: this is a convenience pass on page load, not
+    // something the viewer asked for, and a specialist whose RLS refuses
+    // the write should see the list rather than an error about it.
+    if (error) { console.warn("Couldn't apply the engagement due date:", error.message); return 0; }
+    needing.forEach((q) => { q.due_date = master; });
+    return needing.length;
   }
 
   wireResearchDue();
