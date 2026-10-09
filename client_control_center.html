@@ -3122,6 +3122,9 @@
     // exists and where it lives.
     const d = docs || {};
     const linked = [];
+    // Shape matters: a line ending in ":" followed by an indented bare URL
+    // is what welcomeHtml() folds into a named hyperlink. Keep the pair
+    // together and keep the URL on its own line.
     if (d.faq) linked.push(`- Frequently Asked Questions:\n  ${d.faq}`);
     if (d.expect) linked.push(`- What to Expect in an Economic Gardening Engagement:\n  ${d.expect}`);
 
@@ -3346,6 +3349,7 @@ National Center for Economic Gardening \u2013 Team Lead`;
     // the attachments (10/9) -- the letter now points at the Resource Vault
     // instead of promising files a mailto could never carry.
     notes.push(`Before sending: replace the "${WELCOME_AVAILABILITY_MARKER.replace(/^>>> |<<<$/g, "")}" line with your dates and times.`);
+    notes.push("Use Copy email and paste into your mail client: the document names arrive as clickable links. Open in email app writes a plain-text message, where the addresses have to show to be clickable \u2014 that is a limit of mailto links, not a setting.");
     if (!c.slug) {
       notes.push("This engagement has no dashboard address yet, so the letter names the Resource Vault without linking it and leaves off the closing paragraph about the dashboard. Set a slug on the engagement and reopen this to get both.");
     }
@@ -3387,9 +3391,78 @@ National Center for Economic Gardening \u2013 Team Lead`;
     showBanner("Reset to the template.", "success");
   });
 
+  // Greg (10/9/26): "no need to share the excrutiating long links just build
+  // those as hyperlinks into the description text."
+  //
+  // A mailto: body is plain text by spec (RFC 6068), so the "Open in email
+  // app" button cannot carry a hyperlink and never will -- there the URL has
+  // to be visible to be clickable. Copy email can: the clipboard holds
+  // several flavours at once, and every mail client that composes rich text
+  // takes the text/html one. So this writes BOTH, and the same letter lands
+  // as named links in Outlook, Gmail or Apple Mail, and as the plain text
+  // everywhere else.
+  //
+  // Built from the textarea at the moment of copying, not from the template,
+  // so whatever the Team Lead typed into the availability line -- or anywhere
+  // else -- is what gets copied.
+  //
+  // The fold rule is the one shape the letter writes links in: a line ending
+  // in ":" followed by an indented bare URL becomes <a href="url">that line
+  // without its colon</a>. A bare URL with no label line above it (the
+  // videos, which read "Watch the framework videos at https://...") is
+  // linked where it stands, since its sentence already says what it is.
+  function welcomeHtml(text) {
+    const esc = (x) => String(x)
+      .split("&").join("&amp;").split("<").join("&lt;")
+      .split(">").join("&gt;").split('"').join("&quot;");
+    const isUrl = (l) => /^\s*https?:\/\/\S+$/.test(l);
+    const lines = String(text).replace(/\r\n/g, "\n").split("\n");
+    const out = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const next = lines[i + 1];
+      const labelled = /:\s*$/.test(line) && next !== undefined && isUrl(next);
+      if (labelled) {
+        const label = line.replace(/:\s*$/, "");
+        const lead = (label.match(/^\s*-\s*/) || [""])[0];
+        const words = label.slice(lead.length);
+        const href = next.trim();
+        out.push(`${esc(lead)}<a href="${esc(href)}">${esc(words)}</a>`);
+        i++; // the URL line is spent
+        continue;
+      }
+      if (isUrl(line)) {
+        const href = line.trim();
+        out.push(`${esc(line.slice(0, line.length - line.trimStart().length))}<a href="${esc(href)}">${esc(href)}</a>`);
+        continue;
+      }
+      // A URL sitting inside a sentence still becomes a link, under itself.
+      out.push(esc(line).replace(/(https?:\/\/[^\s<]+)/g, (m) => `<a href="${m}">${m}</a>`));
+    }
+
+    // White-space preserved rather than paragraphs rebuilt: the letter's
+    // blank lines and two-space indents are its layout, and a mail client
+    // honours them inside this one wrapper.
+    return `<div style="font-family:-apple-system,Segoe UI,sans-serif; font-size:14px; line-height:1.5; white-space:pre-wrap;">${out.join("\n")}</div>`;
+  }
+
   $("welcome-copy").addEventListener("click", async () => {
     const text = $("welcome-body").value;
+    const html = welcomeHtml(text);
     try {
+      // Both flavours in one item. A client that composes rich text takes
+      // the HTML and shows named links; a plain-text field takes the text.
+      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+        await navigator.clipboard.write([new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([text], { type: "text/plain" }),
+        })]);
+        showBanner("Message copied with the links built in. The To and CC lines are above it, ready to paste separately.", "success");
+        return;
+      }
+      // Older browser: plain text is still a correct letter, just with the
+      // addresses showing.
       await navigator.clipboard.writeText(text);
       showBanner("Message copied. The To and CC lines are above it, ready to paste separately.", "success");
     } catch {
