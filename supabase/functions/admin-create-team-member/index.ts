@@ -351,9 +351,19 @@ Deno.serve(async (req: Request) => {
                  Economic Gardening engagements. Your account is ready; you just need a password.</p>
               <p><a href="${escapeHtml(actionLink)}">Set your password and sign in</a></p>
               <p>That link gets you in the first time. It works once and expires in 24 hours.</p>
-              <p>Once you are in, <strong>bookmark
-                 <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a></strong> &mdash; that is
-                 the dashboard itself, and it is where you will go from then on.</p>
+              <!-- Greg (10/9/26): "give it it's own line with a label". The
+                   address was already here, but as the fifth paragraph of
+                   prose, where it reads as a remark rather than as the one
+                   thing to keep. A labelled block is the only part of this
+                   email anyone needs after the first sign-in.
+                   Inline styles only, and nothing an email client has to
+                   understand for the line to work: a client that drops the
+                   border and spacing still shows the label and the address
+                   on their own lines. -->
+              <p style="margin:18px 0; padding:12px 14px; border:1px solid #d6dcd3; border-left:4px solid #5c7248; border-radius:6px;">
+                <strong style="display:block; font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:#5c7248; margin-bottom:5px;">Bookmark this &mdash; it is where you sign in from now on</strong>
+                <a href="${escapeHtml(siteUrl)}" style="font-size:16px; font-weight:700;">${escapeHtml(siteUrl)}</a>
+              </p>
               <p>You will sign in with this address: <strong>${escapeHtml(String(target.email))}</strong></p>
               <p>If the link has already expired by the time you get to it, no problem &mdash; go to
                  <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a>, choose "Forgot your
