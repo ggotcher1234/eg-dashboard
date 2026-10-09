@@ -146,14 +146,29 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (profileErr || !callerProfile || callerProfile.role !== "super_admin") {
-      return jsonResponse({ error: "Only an Admin can add, archive or restore roster members." }, 403);
+      return jsonResponse({ error: "Only an Admin can add, invite, archive or restore roster members." }, 403);
     }
     // Belt and braces. An archived admin should never get this far -- their
     // auth account is banned, so they cannot hold a session -- but a token
     // issued just before the ban stays valid for up to an hour, and archiving
     // people is not something to leave open during that window.
+    //
+    // The sentence here used to be "This account has been archived." -- no
+    // subject, so on the invite panel it read as though the person ON SCREEN
+    // were archived. Greg (10/8/26), inviting Julie Dreyer: "when i clicked
+    // to send the invitation i got a message that her roster had been
+    // archived. that's bad. i don't know if she got the invitation and i had
+    // to check and see if she had been moved to archive. she had not." She
+    // had not; his own account had been, by the 10/6 duplicate cleanup. The
+    // message cost him a hunt through the wrong person's record and left him
+    // believing an invite had gone out when the request never got past this
+    // line. So it now names whose account it means, and says what to do.
     if (callerProfile.archived_at) {
-      return jsonResponse({ error: "This account has been archived." }, 403);
+      return jsonResponse({
+        error: `Your own Roster account (${userData.user.email ?? "this login"}) is archived, `
+          + "so it can't add, invite, archive or restore anyone. Nothing was sent or changed. "
+          + "Another Admin needs to restore your account first.",
+      }, 403);
     }
 
     // From here on we use the service role client — this is the one place
