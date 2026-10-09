@@ -646,6 +646,10 @@
   .welcome-rich .fill-me { background: #fdf4e3; color: #8a5d08; font-weight: 600;
                            padding: 1px 4px; border-radius: 3px; }
   .welcome-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  /* Two buttons in the order they are pressed, and the order said out loud:
+     the clipboard has to be loaded before the message is open, or the Team
+     Lead is standing in a new message with nothing to paste. */
+  .welcome-order { font-size: 12.5px; color: var(--muted); }
 
   /* ---------- Modals (Remove confirm / Log hours / Billing history) ---------- */
   .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 50; padding: 20px; }
@@ -1159,6 +1163,8 @@
                  did not want a Team Lead left holding. -->
             <div class="welcome-actions">
               <button type="button" class="btn-primary btn-sm" id="welcome-copy">Copy Email</button>
+              <button type="button" class="btn-secondary btn-sm" id="welcome-open">Open in Email app</button>
+              <span class="welcome-order">Copy first, then open &mdash; paste into the new message.</span>
             </div>
           </div>
 
@@ -3392,7 +3398,7 @@
     // the attachments (10/9) -- the letter now points at the Resource Vault
     // instead of promising files a mailto could never carry.
     notes.push(`Before sending: replace the "${WELCOME_AVAILABILITY_MARKER.replace(/^>>> |<<<$/g, "")}" line with your dates and times.`);
-    notes.push("Copy Email puts the whole letter on your clipboard with its links intact \u2014 start a new message in your own email app, paste it in, copy the To, CC and Subject lines above, then edit and send.");
+    notes.push("Copy Email puts the whole letter on your clipboard with its links intact. Open in Email app then starts a new message from your own mailbox with the To, CC and Subject lines already filled in \u2014 paste the letter into it, edit, and send.");
     if (!c.slug) {
       notes.push("This engagement has no dashboard address yet, so the letter names the Resource Vault without linking it and leaves off the closing paragraph about the dashboard. Set a slug on the engagement and reopen this to get both.");
     }
@@ -3495,9 +3501,35 @@
     }
 
     showBanner(copied === "rich"
-      ? "Letter copied. Start a new message in your email app and press " + WELCOME_PASTE_KEY + " \u2014 it pastes in with its links and formatting. The To, CC and Subject lines above are yours to copy too."
+      ? "Letter copied with its links and formatting. Now press Open in Email app and paste it into the new message with " + WELCOME_PASTE_KEY + "."
       : "Letter copied as plain text \u2014 this browser cannot copy formatting, so the links will paste as addresses rather than as names.",
       copied === "rich" ? "success" : "info");
+  });
+
+  // The other half, on its own button. Greg (10/9/26): "can we have one
+  // button to open the email with all the recipients filled in and the other
+  // button to copy and paste the draft."
+  //
+  // Which is the right split, and it is the one thing the earlier
+  // single-button version got wrong -- it did both at once, so the compose
+  // window appeared before anyone had decided they were ready for it, and an
+  // empty message with a loaded clipboard looks like a failure rather than a
+  // step. Two buttons say what each one does and leave the order to the
+  // person pressing them.
+  //
+  // NO BODY on this mailto, deliberately. An RFC 6068 body is plain text, so
+  // anything put there would arrive as a wall of addresses that has to be
+  // deleted before the real letter can be pasted in. The message opens
+  // addressed and titled, and empty, which is exactly the thing being
+  // pasted into.
+  $("welcome-open").addEventListener("click", () => {
+    const clean = (v) => v.split(",").map((e) => e.trim()).filter(Boolean).join(",");
+    const params = [];
+    const cc = clean($("welcome-cc").value);
+    if (cc) params.push("cc=" + encodeURIComponent(cc));
+    params.push("subject=" + encodeURIComponent($("welcome-subject").value));
+    window.location.href = `mailto:${clean($("welcome-to").value)}?${params.join("&")}`;
+    showBanner("A new message is opening, addressed and titled \u2014 press " + WELCOME_PASTE_KEY + " to drop the letter in, then edit and send.", "info");
   });
 
   function recalcTeamStats() {
