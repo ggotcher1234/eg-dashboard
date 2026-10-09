@@ -1149,8 +1149,16 @@
               <div id="welcome-body" class="welcome-rich" contenteditable="true"
                    spellcheck="true" role="textbox" aria-multiline="true"></div>
             </div>
+            <!-- Greg (10/9/26), looking at the finished letter: "the email
+                 looks great as is in the open EGDB window. just put a copy
+                 email button at the bottom and then the TL will know to
+                 paste it into their email."
+                 So the button copies and stops there. It no longer opens a
+                 message as well -- that half was what produced an empty
+                 compose window and a full clipboard, which is the thing he
+                 did not want a Team Lead left holding. -->
             <div class="welcome-actions">
-              <button type="button" class="btn-primary btn-sm" id="welcome-open">Open in Email app</button>
+              <button type="button" class="btn-primary btn-sm" id="welcome-copy">Copy Email</button>
             </div>
           </div>
 
@@ -3162,7 +3170,10 @@
     // that only exists on this page.
     const d = docs || {};
     const P = (html, extra) => `<p style="margin:0 0 14px;${extra || ""}">${html}</p>`;
-    const TICK = "\u2611\ufe0f ";
+    // Green, not grey. Greg (10/9/26): "replace those ugly grey checkboxes
+    // with nice green ones." U+2611 renders as a grey ballot box in Outlook
+    // and Gmail; U+2705 is the green check in every client's emoji font.
+    const TICK = "\u2705 ";
     const INDENT = "margin:0 0 14px 18px;";
 
     const blocks = [];
@@ -3381,7 +3392,7 @@
     // the attachments (10/9) -- the letter now points at the Resource Vault
     // instead of promising files a mailto could never carry.
     notes.push(`Before sending: replace the "${WELCOME_AVAILABILITY_MARKER.replace(/^>>> |<<<$/g, "")}" line with your dates and times.`);
-    notes.push("Open in Email app copies this letter and opens a new message with the recipients and subject filled in \u2014 press Cmd+V to drop the letter in, links and formatting intact, then edit and send. The paste is the one step a browser cannot do for you.");
+    notes.push("Copy Email puts the whole letter on your clipboard with its links intact \u2014 start a new message in your own email app, paste it in, copy the To, CC and Subject lines above, then edit and send.");
     if (!c.slug) {
       notes.push("This engagement has no dashboard address yet, so the letter names the Resource Vault without linking it and leaves off the closing paragraph about the dashboard. Set a slug on the engagement and reopen this to get both.");
     }
@@ -3418,30 +3429,34 @@
   }
 
 
-  // ONE button. Greg (10/9/26): "i want one button that works and provides
-  // easy links and perfect formatting. It should be called Open in Email
-  // app. They can edit from there."
+  // ONE button, and all it does is copy. Greg (10/9/26): "the email looks
+  // great as is in the open EGDB window. just put a copy email button at the
+  // bottom and then the TL will know to paste it into their email."
   //
-  // WHAT A BROWSER CAN ACTUALLY DO, since three attempts have now run into
-  // it. A web page has exactly two ways to reach a desktop mail client:
+  // That ends a run of four attempts at getting the letter INTO a message
+  // automatically, and the reason none of them worked is worth leaving here
+  // so nobody tries a fifth:
   //
-  //   mailto:   opens the compose window, but an RFC 6068 body is plain
-  //             text -- no links, no paragraphs, ever.
-  //   a file    can carry a formatted letter, but a browser DOWNLOADS it.
-  //             Chrome showed Greg a Save dialog (10/9), which is the end
-  //             of that idea.
+  //   mailto:   opens a compose window, but an RFC 6068 body is plain text.
+  //             A letter with clickable link names cannot travel in one.
+  //   a file    (.eml) can carry the formatting, but a browser downloads it
+  //             -- Chrome showed Greg a Save dialog, which ended that idea.
+  //   pasting   is an operating-system action. No web page can press Cmd+V
+  //             in another application, whatever it is allowed to copy.
   //
-  // Neither alone opens a formatted draft. So this does both halves in one
-  // press: the formatted letter goes on the clipboard, then the mail app
-  // opens with the recipients and subject already filled and the body
-  // empty, waiting for one paste. One click, one Cmd+V, then edit and send
-  // -- which is as close to what he asked for as the browser allows, and
-  // the banner says exactly that rather than pretending otherwise.
+  // And the letter has to leave from the Team Lead's own mailbox ("this
+  // needs to go from the TL's email and they will need to custom edit it"),
+  // so the dashboard sending it was never on the table either. One human
+  // action is the floor, so this makes that action the obvious one: copy
+  // here, paste there.
   //
-  // The paste carries the formatting because the letter's markup is
-  // self-contained now: real <p> blocks with inline styles, nothing
-  // borrowed from this page's stylesheet. That was the bug behind "yes it
-  // does but it's not formatted".
+  // The paste keeps its formatting because the letter's markup is
+  // self-contained -- real <p> blocks with inline styles, nothing borrowed
+  // from this page's stylesheet. That was the bug behind "yes it does but
+  // it's not formatted".
+  const WELCOME_PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "")
+    ? "Cmd+V" : "Ctrl+V";
+
   async function welcomeToClipboard() {
     const html = $("welcome-body").innerHTML;
     const text = $("welcome-body").innerText;
@@ -3456,8 +3471,8 @@
     return "rich";
   }
 
-  $("welcome-open").addEventListener("click", async () => {
-    const btn = $("welcome-open");
+  $("welcome-copy").addEventListener("click", async () => {
+    const btn = $("welcome-copy");
     btn.disabled = true;
     let copied = null;
     try {
@@ -3468,33 +3483,22 @@
     btn.disabled = false;
 
     if (!copied) {
-      // Without the clipboard there is nothing to paste, so do not open an
-      // empty message and leave them wondering. Select the letter instead
-      // and say which key to press.
+      // A browser that refuses the clipboard call leaves one thing worth
+      // doing: select the letter, so the keyboard copy is one keystroke
+      // rather than a hunt.
       const r = document.createRange();
       r.selectNodeContents($("welcome-body"));
       const sel = window.getSelection();
       sel.removeAllRanges(); sel.addRange(r);
-      showBanner("Your browser wouldn't let the page copy for you \u2014 the letter is selected, press Cmd+C, then open a new message and paste.", "error");
+      showBanner("Your browser wouldn't let the page copy for you \u2014 the letter is selected, so press " + (WELCOME_PASTE_KEY === "Cmd+V" ? "Cmd+C" : "Ctrl+C") + ", then paste it into a new message.", "error");
       return;
     }
 
-    // No body on the mailto, deliberately: anything put there arrives as
-    // plain text and would have to be deleted before pasting.
-    const clean = (v) => v.split(",").map((e) => e.trim()).filter(Boolean).join(",");
-    const params = [];
-    const cc = clean($("welcome-cc").value);
-    if (cc) params.push("cc=" + encodeURIComponent(cc));
-    params.push("subject=" + encodeURIComponent($("welcome-subject").value));
-    window.location.href = `mailto:${clean($("welcome-to").value)}?${params.join("&")}`;
-
     showBanner(copied === "rich"
-      ? "Letter copied and your email app is opening \u2014 press Cmd+V (Ctrl+V on Windows) in the new message to drop it in, links and all. Edit and send from there."
-      : "Your email app is opening. The letter is on the clipboard as plain text \u2014 this browser cannot copy formatting \u2014 so paste it and the addresses will show in place of the link names.",
+      ? "Letter copied. Start a new message in your email app and press " + WELCOME_PASTE_KEY + " \u2014 it pastes in with its links and formatting. The To, CC and Subject lines above are yours to copy too."
+      : "Letter copied as plain text \u2014 this browser cannot copy formatting, so the links will paste as addresses rather than as names.",
       copied === "rich" ? "success" : "info");
   });
-
-
 
   function recalcTeamStats() {
     const total = Number(activeClient && activeClient.budget_hours_available) || 0;
