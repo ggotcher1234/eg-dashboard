@@ -3115,12 +3115,36 @@
   // dashboardUrl is null when the engagement has no slug yet. The letter then
   // names the Resource Vault without a link and drops the closing paragraph,
   // rather than printing a broken address; the composer says so in its notes.
-  function welcomeEmailBody(teamLead, teamLeadCell, companyName, dashboardUrl) {
-    const vaultPointer = dashboardUrl
-      ? `Both are in the Resource Vault on your EG Dashboard:
+  function welcomeEmailBody(teamLead, teamLeadCell, companyName, dashboardUrl, docs) {
+    // A link per document when we have one, so there is a thing to click
+    // beside each name. Whatever we could not link falls back to the Vault
+    // pointer rather than disappearing -- the CEO still knows the document
+    // exists and where it lives.
+    const d = docs || {};
+    const linked = [];
+    if (d.faq) linked.push(`- Frequently Asked Questions:\n  ${d.faq}`);
+    if (d.expect) linked.push(`- What to Expect in an Economic Gardening Engagement:\n  ${d.expect}`);
 
-  ${dashboardUrl}`
-      : "Both are in the Resource Vault on your EG Dashboard.";
+    let docsBlock;
+    if (linked.length === 2) {
+      docsBlock = `Please read these two before the Discovery Call. They give a good overview of where we are going.
+
+${linked.join("\n\n")}`;
+    } else if (linked.length === 1) {
+      const missing = d.faq
+        ? "\"What to Expect in an Economic Gardening Engagement\""
+        : "\"Frequently Asked Questions\"";
+      docsBlock = `Please read these two before the Discovery Call. They give a good overview of where we are going.
+
+${linked[0]}
+
+${missing} is in the Resource Vault on your EG Dashboard${dashboardUrl ? `:\n\n  ${dashboardUrl}` : "."}`;
+    } else {
+      docsBlock = `Please read \"Frequently Asked Questions\" and \"What to Expect in an Economic Gardening Engagement\" before the Discovery Call. They give a good overview of where we are going. ${
+        dashboardUrl
+          ? `Both are in the Resource Vault on your EG Dashboard:\n\n  ${dashboardUrl}`
+          : "Both are in the Resource Vault on your EG Dashboard."}`;
+    }
 
     const closing = dashboardUrl
       // Comma, not a full stop, after the name: plenty of these end in
@@ -3145,7 +3169,7 @@ Following the Discovery Call, a research team will start work for you immediatel
 
 Please note that we avoid rescheduling calls if possible. Coordinating 5-7 people will eat into your sponsor's budget for the engagement.
 
-\u2611\ufe0f Please read "Frequently Asked Questions" and "What to Expect in an Economic Gardening Engagement" before the Discovery Call. They give a good overview of where we are going. ${vaultPointer}
+\u2611\ufe0f ${docsBlock}
 
 \u2611\ufe0f There are two sets of videos that cover basic principles of the Economic Gardening program. The first is an overview of the analytical frameworks we use in trouble shooting business issues. The second is examples of deliverables in a marketing campaign.
 
@@ -3166,6 +3190,66 @@ Thank you,
 ${teamLead}
 Cell: ${teamLeadCell}
 National Center for Economic Gardening \u2013 Team Lead`;
+  }
+
+  // Chris (10/9/26, via Greg): he "doesn't think that CEO's will figure out
+  // how to go to the dashboard, find the resource vault, open it, and review
+  // the documents. he wants a direct link (or attachment) in the email that
+  // says, click here for the FAQ's type of statement."
+  //
+  // He is right, and the objection I raised yesterday -- these two files sit
+  // in the PRIVATE client-documents bucket, so there is no address to paste
+  // -- was aimed at the wrong risk. What must not be handed out by email is
+  // a way into other people's CLIENT documents. A signed URL is scoped to
+  // one object path and grants nothing else, and the object in question is
+  // NCEG's own marketing collateral, written to be read by exactly this
+  // person. So each document gets its own link.
+  //
+  // Two sources, in order of preference:
+  //   1. The Vault row's `url`. The videos and the preference sorter already
+  //      use it. If these two documents are ever moved to a public bucket --
+  //      which is the tidier home for public collateral, and would make the
+  //      links permanent and readable -- setting `url` on the row is the
+  //      whole change. This letter picks it up with no code edit.
+  //   2. A signed URL over the private file, minted here, in the Team Lead's
+  //      own browser, under their own access. 180 days: long enough that a
+  //      welcome letter read weeks late still works, short enough that it is
+  //      not a forever link. The dashboard in the closing paragraph is the
+  //      permanent home, which is what it is there for.
+  //
+  // Looked up by title rather than id, so Rita can replace the file behind
+  // either row without anything here needing to know.
+  const WELCOME_DOC_TITLES = {
+    faq: "EG FAQs",
+    expect: "EG \u2013 What to Expect",
+  };
+  const WELCOME_DOC_SIGNED_SECONDS = 180 * 24 * 60 * 60;
+
+  async function welcomeDocLinks() {
+    const out = { faq: null, expect: null };
+    const wanted = Object.values(WELCOME_DOC_TITLES);
+    const { data, error } = await sb
+      .from("resource_vault_templates")
+      .select("title, url, storage_path")
+      .in("title", wanted);
+    if (error || !data) return out;
+
+    for (const [key, title] of Object.entries(WELCOME_DOC_TITLES)) {
+      const row = data.find((r) => r.title === title);
+      if (!row) continue;
+      const direct = (row.url || "").trim();
+      if (direct) { out[key] = direct; continue; }
+      if (!row.storage_path) continue;
+      // One failure here costs one link, not the letter: the fallback is the
+      // Vault pointer, and the composer note says which one is missing.
+      try {
+        const { data: signed } = await sb.storage
+          .from("client-documents")
+          .createSignedUrl(row.storage_path, WELCOME_DOC_SIGNED_SECONDS);
+        if (signed && signed.signedUrl) out[key] = signed.signedUrl;
+      } catch (e) { /* leave it null */ }
+    }
+    return out;
   }
 
   async function buildWelcomeEmail() {
@@ -3269,11 +3353,17 @@ National Center for Economic Gardening \u2013 Team Lead`;
     const welcomeDashboardUrl = c.slug
       ? new URL(`c/${encodeURIComponent(c.slug)}`, PUBLIC_SITE_BASE).href
       : null;
+    const docs = await welcomeDocLinks();
+    if (!docs.faq || !docs.expect) {
+      const missing = [!docs.faq && "EG FAQs", !docs.expect && "EG \u2013 What to Expect"].filter(Boolean);
+      notes.push(`Couldn't build a link for ${missing.join(" or ")} \u2014 the letter points at the Resource Vault for ${missing.length > 1 ? "those" : "that one"} instead. Check the document is still on the Resource Templates page.`);
+    }
     $("welcome-body").value = welcomeEmailBody(
       teamLead || "[Team Lead]",
       teamLeadCell || "[cell number]",
       c.name || "your company",
-      welcomeDashboardUrl
+      welcomeDashboardUrl,
+      docs
     );
     $("welcome-note").textContent = notes.join(" ");
   }
