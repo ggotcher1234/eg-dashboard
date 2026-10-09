@@ -631,6 +631,20 @@
     border-radius: 6px; font-size: 13.5px; font-family: inherit; color: var(--text); background: #fff;
   }
   .welcome-field textarea { line-height: 1.6; resize: vertical; min-height: 420px; }
+  /* Same box as the inputs above, but editable rich text: the letter's own
+     blank lines and indents are its layout, so white-space is preserved
+     rather than collapsed the way a normal div would. */
+  .welcome-rich {
+    width: 100%; box-sizing: border-box; padding: 11px 13px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13.5px; font-family: inherit; color: var(--text);
+    background: #fff; line-height: 1.6; min-height: 420px; max-height: 60vh;
+    overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  .welcome-rich:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .welcome-rich a { color: var(--accent-dark, #3d5230); font-weight: 600; }
+  /* The one line that must be replaced before sending, impossible to miss. */
+  .welcome-rich .fill-me { background: #fdf4e3; color: #8a5d08; font-weight: 600;
+                           padding: 1px 4px; border-radius: 3px; }
   .welcome-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .welcome-reset { background: none; border: none; padding: 0; font: inherit; font-size: 13px; color: var(--navy-light); cursor: pointer; text-decoration: underline; }
   .welcome-reset:hover { color: var(--navy); }
@@ -1126,10 +1140,20 @@
             <div class="welcome-field"><label for="welcome-to">To</label><input type="text" id="welcome-to" /></div>
             <div class="welcome-field"><label for="welcome-cc">CC</label><input type="text" id="welcome-cc" /></div>
             <div class="welcome-field"><label for="welcome-subject">Subject</label><input type="text" id="welcome-subject" /></div>
-            <div class="welcome-field"><label for="welcome-body">Message</label><textarea id="welcome-body" spellcheck="true"></textarea></div>
+            <!-- Greg (10/9/26): "i want hyperlinks so you can Click on
+                 Frequently Asked Questions and it opens the right link."
+                 A textarea cannot hold a link, which is why he kept seeing
+                 raw addresses: the field was plain text, so everything
+                 copied out of it was plain text too. This is a rich field.
+                 What is on screen is what lands in the email. -->
+            <div class="welcome-field">
+              <label for="welcome-body">Message</label>
+              <div id="welcome-body" class="welcome-rich" contenteditable="true"
+                   spellcheck="true" role="textbox" aria-multiline="true"></div>
+            </div>
             <div class="welcome-actions">
-              <button type="button" class="btn-primary btn-sm" id="welcome-copy">Copy email</button>
-              <button type="button" class="btn-secondary btn-sm" id="welcome-mailto">Open in email app</button>
+              <button type="button" class="btn-primary btn-sm" id="welcome-copy">Copy email &mdash; keeps the links</button>
+              <button type="button" class="btn-secondary btn-sm" id="welcome-mailto">Open in email app (plain text)</button>
               <button type="button" class="welcome-reset" id="welcome-reset">Start over from the template</button>
             </div>
           </div>
@@ -3115,6 +3139,20 @@
   // dashboardUrl is null when the engagement has no slug yet. The letter then
   // names the Resource Vault without a link and drops the closing paragraph,
   // rather than printing a broken address; the composer says so in its notes.
+  // The letter is HTML now, not text. Greg (10/9/26): "i want hyperlinks so
+  // you can Click on Frequently Asked Questions and it opens the right
+  // link." A clickable name is a hyperlink and nothing else is, so the
+  // template produces anchors and the Message field renders them.
+  //
+  // Still written as a letter rather than as a designed email: no tables, no
+  // images, no colours. White-space is preserved by the container, so the
+  // blank lines and two-space indents below are the layout, exactly as they
+  // were when this was plain text.
+  const esc = (x) => String(x ?? "")
+    .split("&").join("&amp;").split("<").join("&lt;")
+    .split(">").join("&gt;").split('"').join("&quot;");
+  const link = (href, text) => `<a href="${esc(href)}">${esc(text)}</a>`;
+
   function welcomeEmailBody(teamLead, teamLeadCell, companyName, dashboardUrl, docs) {
     // A link per document when we have one, so there is a thing to click
     // beside each name. Whatever we could not link falls back to the Vault
@@ -3122,12 +3160,11 @@
     // exists and where it lives.
     const d = docs || {};
     const linked = [];
-    // Shape matters: a line ending in ":" followed by an indented bare URL
-    // is what welcomeHtml() folds into a named hyperlink. Keep the pair
-    // together and keep the URL on its own line.
-    if (d.faq) linked.push(`- Frequently Asked Questions:\n  ${d.faq}`);
-    if (d.expect) linked.push(`- What to Expect in an Economic Gardening Engagement:\n  ${d.expect}`);
+    // The name is the link. Nothing here prints an address.
+    if (d.faq) linked.push(`- ${link(d.faq, "Frequently Asked Questions")}`);
+    if (d.expect) linked.push(`- ${link(d.expect, "What to Expect in an Economic Gardening Engagement")}`);
 
+    const vaultLink = dashboardUrl ? link(dashboardUrl, "Resource Vault on your EG Dashboard") : "Resource Vault on your EG Dashboard";
     let docsBlock;
     if (linked.length === 2) {
       docsBlock = `Please read these two before the Discovery Call. They give a good overview of where we are going.
@@ -3135,27 +3172,22 @@
 ${linked.join("\n\n")}`;
     } else if (linked.length === 1) {
       const missing = d.faq
-        ? "\"What to Expect in an Economic Gardening Engagement\""
-        : "\"Frequently Asked Questions\"";
+        ? "&quot;What to Expect in an Economic Gardening Engagement&quot;"
+        : "&quot;Frequently Asked Questions&quot;";
       docsBlock = `Please read these two before the Discovery Call. They give a good overview of where we are going.
 
 ${linked[0]}
 
-${missing} is in the Resource Vault on your EG Dashboard${dashboardUrl ? `:\n\n  ${dashboardUrl}` : "."}`;
+${missing} is in the ${vaultLink}.`;
     } else {
-      docsBlock = `Please read \"Frequently Asked Questions\" and \"What to Expect in an Economic Gardening Engagement\" before the Discovery Call. They give a good overview of where we are going. ${
-        dashboardUrl
-          ? `Both are in the Resource Vault on your EG Dashboard:\n\n  ${dashboardUrl}`
-          : "Both are in the Resource Vault on your EG Dashboard."}`;
+      docsBlock = `Please read &quot;Frequently Asked Questions&quot; and &quot;What to Expect in an Economic Gardening Engagement&quot; before the Discovery Call. They give a good overview of where we are going. Both are in the ${vaultLink}.`;
     }
 
     const closing = dashboardUrl
       // Comma, not a full stop, after the name: plenty of these end in
       // "Inc." or "Co." and "Fuel Efficiency Inc.." is the kind of thing a
       // CEO notices in the first line of a letter about being thorough.
-      ? `We have set up an EG Dashboard for ${companyName}, where our contact information, the videos, our discussion notes and all of the research we produce are kept \u2014 through your engagement and after it ends. Everything mentioned above is already there.
-
-  ${dashboardUrl}
+      ? `We have set up ${link(dashboardUrl, "an EG Dashboard for " + companyName)}, where our contact information, the videos, our discussion notes and all of the research we produce are kept \u2014 through your engagement and after it ends. Everything mentioned above is already there.
 
 `
       : "";
@@ -3166,7 +3198,7 @@ Congratulations on your acceptance into the Economic Gardening program. I am you
 
 The Discovery Call runs 1.5 hours and we will meet on Zoom. Here is my availability:
 
-${WELCOME_AVAILABILITY_MARKER}
+<span class="fill-me">${WELCOME_AVAILABILITY_MARKER}</span>
 
 Following the Discovery Call, a research team will start work for you immediately.
 
@@ -3176,22 +3208,20 @@ Please note that we avoid rescheduling calls if possible. Coordinating 5-7 peopl
 
 \u2611\ufe0f There are two sets of videos that cover basic principles of the Economic Gardening program. The first is an overview of the analytical frameworks we use in trouble shooting business issues. The second is examples of deliverables in a marketing campaign.
 
-- Watch the framework videos at https://economicgardening.org/training-videos-frameworks/
+- ${link("https://economicgardening.org/training-videos-frameworks/", "Watch the framework videos")}
   Password is nceg2019 (all lowercase)
 
-- Watch the "Deliverables" video at https://economicgardening.org/nceg-sample-deliverables/
+- ${link("https://economicgardening.org/nceg-sample-deliverables/", "Watch the \"Deliverables\" video")}
 
-\u2611\ufe0f This preference sorter will help us understand your work style and communication preferences (and those of any management people you wish to include). Please provide the results (4 letters) before your Discovery Call, or we can discuss them during the call.
-
-  https://claude.ai/public/artifacts/15e8c292-005b-4f20-81a3-8b637d504601
+\u2611\ufe0f This ${link("https://claude.ai/public/artifacts/15e8c292-005b-4f20-81a3-8b637d504601", "preference sorter")} will help us understand your work style and communication preferences (and those of any management people you wish to include). Please provide the results (4 letters) before your Discovery Call, or we can discuss them during the call.
 
 \u2611\ufe0f Finally, please provide me with a list of your top 10 customers and at least 5 competitors (larger, smaller, same size). This will help us build a customer profile. We will also look at your competitors' website activity.
 
 ${closing}Feel free to let me know if you have questions. We look forward to working with your company.
 
 Thank you,
-${teamLead}
-Cell: ${teamLeadCell}
+${esc(teamLead)}
+Cell: ${esc(teamLeadCell)}
 National Center for Economic Gardening \u2013 Team Lead`;
   }
 
@@ -3349,7 +3379,7 @@ National Center for Economic Gardening \u2013 Team Lead`;
     // the attachments (10/9) -- the letter now points at the Resource Vault
     // instead of promising files a mailto could never carry.
     notes.push(`Before sending: replace the "${WELCOME_AVAILABILITY_MARKER.replace(/^>>> |<<<$/g, "")}" line with your dates and times.`);
-    notes.push("Use Copy email and paste into your mail client: the document names arrive as clickable links. Open in email app writes a plain-text message, where the addresses have to show to be clickable \u2014 that is a limit of mailto links, not a setting.");
+    notes.push("Copy email, then paste into a new message: the letter arrives exactly as it looks here, document names clickable. Open in email app can only send plain text \u2014 a limit of mailto links, not a setting \u2014 so the addresses show in brackets there.");
     if (!c.slug) {
       notes.push("This engagement has no dashboard address yet, so the letter names the Resource Vault without linking it and leaves off the closing paragraph about the dashboard. Set a slug on the engagement and reopen this to get both.");
     }
@@ -3362,7 +3392,7 @@ National Center for Economic Gardening \u2013 Team Lead`;
       const missing = [!docs.faq && "EG FAQs", !docs.expect && "EG \u2013 What to Expect"].filter(Boolean);
       notes.push(`Couldn't build a link for ${missing.join(" or ")} \u2014 the letter points at the Resource Vault for ${missing.length > 1 ? "those" : "that one"} instead. Check the document is still on the Resource Templates page.`);
     }
-    $("welcome-body").value = welcomeEmailBody(
+    $("welcome-body").innerHTML = welcomeEmailBody(
       teamLead || "[Team Lead]",
       teamLeadCell || "[cell number]",
       c.name || "your company",
@@ -3391,84 +3421,59 @@ National Center for Economic Gardening \u2013 Team Lead`;
     showBanner("Reset to the template.", "success");
   });
 
-  // Greg (10/9/26): "no need to share the excrutiating long links just build
-  // those as hyperlinks into the description text."
+  // What the Message field holds IS the letter. Greg (10/9/26): "i want
+  // hyperlinks so you can Click on Frequently Asked Questions and it opens
+  // the right link." So Copy email hands the clipboard that field's own
+  // HTML, and every mail client that composes rich text -- Apple Mail,
+  // Outlook, Gmail -- pastes it with the links intact.
   //
-  // A mailto: body is plain text by spec (RFC 6068), so the "Open in email
-  // app" button cannot carry a hyperlink and never will -- there the URL has
-  // to be visible to be clickable. Copy email can: the clipboard holds
-  // several flavours at once, and every mail client that composes rich text
-  // takes the text/html one. So this writes BOTH, and the same letter lands
-  // as named links in Outlook, Gmail or Apple Mail, and as the plain text
-  // everywhere else.
-  //
-  // Built from the textarea at the moment of copying, not from the template,
-  // so whatever the Team Lead typed into the availability line -- or anywhere
-  // else -- is what gets copied.
-  //
-  // The fold rule is the one shape the letter writes links in: a line ending
-  // in ":" followed by an indented bare URL becomes <a href="url">that line
-  // without its colon</a>. A bare URL with no label line above it (the
-  // videos, which read "Watch the framework videos at https://...") is
-  // linked where it stands, since its sentence already says what it is.
-  function welcomeHtml(text) {
-    const esc = (x) => String(x)
-      .split("&").join("&amp;").split("<").join("&lt;")
-      .split(">").join("&gt;").split('"').join("&quot;");
-    const isUrl = (l) => /^\s*https?:\/\/\S+$/.test(l);
-    const lines = String(text).replace(/\r\n/g, "\n").split("\n");
-    const out = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const next = lines[i + 1];
-      const labelled = /:\s*$/.test(line) && next !== undefined && isUrl(next);
-      if (labelled) {
-        const label = line.replace(/:\s*$/, "");
-        const lead = (label.match(/^\s*-\s*/) || [""])[0];
-        const words = label.slice(lead.length);
-        const href = next.trim();
-        out.push(`${esc(lead)}<a href="${esc(href)}">${esc(words)}</a>`);
-        i++; // the URL line is spent
-        continue;
+  // A plain-text twin rides along for anywhere that cannot take HTML, and
+  // for the mailto button. It walks the field and writes each link as
+  // "text (url)", so the address is still reachable when the formatting is
+  // not; everything else is the text as typed.
+  function welcomePlainText() {
+    const root = $("welcome-body");
+    if (!root) return "";
+    let out = "";
+    (function walk(node) {
+      for (const n of node.childNodes) {
+        if (n.nodeType === 3) { out += n.nodeValue; continue; }
+        if (n.nodeType !== 1) continue;
+        if (n.tagName === "BR") { out += "\n"; continue; }
+        if (n.tagName === "A") {
+          const href = n.getAttribute("href") || "";
+          const text = n.textContent || "";
+          out += (href && href !== text) ? `${text} (${href})` : text;
+          continue;
+        }
+        const block = /^(DIV|P|LI|TR)$/.test(n.tagName);
+        walk(n);
+        if (block && !out.endsWith("\n")) out += "\n";
       }
-      if (isUrl(line)) {
-        const href = line.trim();
-        out.push(`${esc(line.slice(0, line.length - line.trimStart().length))}<a href="${esc(href)}">${esc(href)}</a>`);
-        continue;
-      }
-      // A URL sitting inside a sentence still becomes a link, under itself.
-      out.push(esc(line).replace(/(https?:\/\/[^\s<]+)/g, (m) => `<a href="${m}">${m}</a>`));
-    }
-
-    // White-space preserved rather than paragraphs rebuilt: the letter's
-    // blank lines and two-space indents are its layout, and a mail client
-    // honours them inside this one wrapper.
-    return `<div style="font-family:-apple-system,Segoe UI,sans-serif; font-size:14px; line-height:1.5; white-space:pre-wrap;">${out.join("\n")}</div>`;
+    })(root);
+    return out.replace(/\n{3,}/g, "\n\n").trim();
   }
 
   $("welcome-copy").addEventListener("click", async () => {
-    const text = $("welcome-body").value;
-    const html = welcomeHtml(text);
+    const html = $("welcome-body").innerHTML;
+    const text = welcomePlainText();
     try {
-      // Both flavours in one item. A client that composes rich text takes
-      // the HTML and shows named links; a plain-text field takes the text.
       if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
         await navigator.clipboard.write([new ClipboardItem({
           "text/html": new Blob([html], { type: "text/html" }),
           "text/plain": new Blob([text], { type: "text/plain" }),
         })]);
-        showBanner("Message copied with the links built in. The To and CC lines are above it, ready to paste separately.", "success");
+        showBanner("Message copied with the links intact. Paste it into a new message \u2014 the To and CC lines are above, ready to paste separately.", "success");
         return;
       }
-      // Older browser: plain text is still a correct letter, just with the
-      // addresses showing.
       await navigator.clipboard.writeText(text);
-      showBanner("Message copied. The To and CC lines are above it, ready to paste separately.", "success");
+      showBanner("Message copied as plain text \u2014 this browser cannot copy formatting. The To and CC lines are above it.", "success");
     } catch {
-      // Clipboard API needs a secure context and permission; selecting the
-      // text is the fallback that always works.
-      $("welcome-body").select();
+      // Selecting the field itself, so Cmd+C still takes the rich version.
+      const r = document.createRange();
+      r.selectNodeContents($("welcome-body"));
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(r);
       showBanner("Couldn't copy automatically - the message is selected, press Cmd+C.", "error");
     }
   });
@@ -3479,7 +3484,12 @@ National Center for Economic Gardening \u2013 Team Lead`;
     const cc = clean($("welcome-cc").value);
     if (cc) params.push("cc=" + encodeURIComponent(cc));
     params.push("subject=" + encodeURIComponent($("welcome-subject").value));
-    params.push("body=" + encodeURIComponent($("welcome-body").value));
+    // A mailto: body is plain text by spec (RFC 6068), so this path cannot
+    // carry a hyperlink -- the addresses come through in brackets after the
+    // words instead. Said out loud, because the difference between the two
+    // buttons is otherwise invisible until the letter is already open.
+    params.push("body=" + encodeURIComponent(welcomePlainText()));
+    showBanner("Opened as plain text \u2014 a mailto link cannot carry hyperlinks, so the addresses show in brackets. For clickable names, use Copy email and paste instead.", "info");
     window.location.href = `mailto:${clean($("welcome-to").value)}?${params.join("&")}`;
   });
 
