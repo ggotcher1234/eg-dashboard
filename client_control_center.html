@@ -638,7 +638,7 @@
     width: 100%; box-sizing: border-box; padding: 11px 13px; border: 1px solid var(--border);
     border-radius: 6px; font-size: 13.5px; font-family: inherit; color: var(--text);
     background: #fff; line-height: 1.6; min-height: 420px; max-height: 60vh;
-    overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+    overflow-y: auto; word-break: break-word;
   }
   .welcome-rich:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .welcome-rich a { color: var(--accent-dark, #3d5230); font-weight: 600; }
@@ -646,8 +646,6 @@
   .welcome-rich .fill-me { background: #fdf4e3; color: #8a5d08; font-weight: 600;
                            padding: 1px 4px; border-radius: 3px; }
   .welcome-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .welcome-reset { background: none; border: none; padding: 0; font: inherit; font-size: 13px; color: var(--navy-light); cursor: pointer; text-decoration: underline; }
-  .welcome-reset:hover { color: var(--navy); }
 
   /* ---------- Modals (Remove confirm / Log hours / Billing history) ---------- */
   .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 50; padding: 20px; }
@@ -1152,9 +1150,7 @@
                    spellcheck="true" role="textbox" aria-multiline="true"></div>
             </div>
             <div class="welcome-actions">
-              <button type="button" class="btn-primary btn-sm" id="welcome-copy">Copy email &mdash; keeps the links</button>
-              <button type="button" class="btn-secondary btn-sm" id="welcome-mailto">Open in email app (plain text)</button>
-              <button type="button" class="welcome-reset" id="welcome-reset">Start over from the template</button>
+              <button type="button" class="btn-primary btn-sm" id="welcome-open">Open in Email app</button>
             </div>
           </div>
 
@@ -3154,75 +3150,81 @@
   const link = (href, text) => `<a href="${esc(href)}">${esc(text)}</a>`;
 
   function welcomeEmailBody(teamLead, teamLeadCell, companyName, dashboardUrl, docs) {
-    // A link per document when we have one, so there is a thing to click
-    // beside each name. Whatever we could not link falls back to the Vault
-    // pointer rather than disappearing -- the CEO still knows the document
-    // exists and where it lives.
+    // REAL PARAGRAPHS, not newlines. Greg (10/9/26), pasting into Outlook:
+    // "yes it does but it's not formatted. come on!" -- and he was right.
+    // The previous version leaned on the editor's `white-space: pre-wrap`
+    // to turn its newlines into line breaks. A stylesheet does not travel
+    // on the clipboard, so Outlook received one long run of text with no
+    // block structure and set it as one paragraph. Every break has to be
+    // carried by the markup itself: <p> between blocks, <br> within one.
+    //
+    // Inline styles for the same reason. Nothing here may depend on a class
+    // that only exists on this page.
     const d = docs || {};
-    const linked = [];
-    // The name is the link. Nothing here prints an address.
-    if (d.faq) linked.push(`- ${link(d.faq, "Frequently Asked Questions")}`);
-    if (d.expect) linked.push(`- ${link(d.expect, "What to Expect in an Economic Gardening Engagement")}`);
+    const P = (html, extra) => `<p style="margin:0 0 14px;${extra || ""}">${html}</p>`;
+    const TICK = "\u2611\ufe0f ";
+    const INDENT = "margin:0 0 14px 18px;";
 
-    const vaultLink = dashboardUrl ? link(dashboardUrl, "Resource Vault on your EG Dashboard") : "Resource Vault on your EG Dashboard";
-    let docsBlock;
-    if (linked.length === 2) {
-      docsBlock = `Please read these two before the Discovery Call. They give a good overview of where we are going.
+    const blocks = [];
+    blocks.push(P("Greetings,"));
+    blocks.push(P("Congratulations on your acceptance into the Economic Gardening program. I am your team leader for this engagement. For the next several weeks you will have the services of a high-powered team to conduct strategic and market research for you. Our first step is scheduling a Discovery Call to learn about you, your company, and your business issues. You can invite key management staff members to attend if you want."));
+    blocks.push(P("The Discovery Call runs 1.5 hours and we will meet on Zoom. Here is my availability:"));
+    // Amber only until it is replaced; it is meant to be impossible to miss
+    // in the editor, and if it somehow survives to the CEO it should still
+    // read as a thing that went wrong rather than as part of the letter.
+    blocks.push(P(`<span class="fill-me" style="background:#fdf4e3;color:#8a5d08;font-weight:600;padding:1px 4px;">${WELCOME_AVAILABILITY_MARKER}</span>`));
+    blocks.push(P("Following the Discovery Call, a research team will start work for you immediately."));
+    blocks.push(P("Please note that we avoid rescheduling calls if possible. Coordinating 5-7 people will eat into your sponsor's budget for the engagement."));
 
-${linked.join("\n\n")}`;
-    } else if (linked.length === 1) {
+    // --- the two documents ---
+    const vaultLink = dashboardUrl
+      ? link(dashboardUrl, "Resource Vault on your EG Dashboard")
+      : "Resource Vault on your EG Dashboard";
+    const bullets = [];
+    if (d.faq) bullets.push(link(d.faq, "Frequently Asked Questions"));
+    if (d.expect) bullets.push(link(d.expect, "What to Expect in an Economic Gardening Engagement"));
+
+    if (bullets.length === 2) {
+      blocks.push(P(TICK + "Please read these two before the Discovery Call. They give a good overview of where we are going."));
+      blocks.push(P(bullets.map((b) => "&bull; " + b).join("<br>"), INDENT));
+    } else if (bullets.length === 1) {
       const missing = d.faq
         ? "&quot;What to Expect in an Economic Gardening Engagement&quot;"
         : "&quot;Frequently Asked Questions&quot;";
-      docsBlock = `Please read these two before the Discovery Call. They give a good overview of where we are going.
-
-${linked[0]}
-
-${missing} is in the ${vaultLink}.`;
+      blocks.push(P(TICK + "Please read these two before the Discovery Call. They give a good overview of where we are going."));
+      blocks.push(P("&bull; " + bullets[0], INDENT));
+      blocks.push(P(`${missing} is in the ${vaultLink}.`, INDENT));
     } else {
-      docsBlock = `Please read &quot;Frequently Asked Questions&quot; and &quot;What to Expect in an Economic Gardening Engagement&quot; before the Discovery Call. They give a good overview of where we are going. Both are in the ${vaultLink}.`;
+      blocks.push(P(TICK + `Please read &quot;Frequently Asked Questions&quot; and &quot;What to Expect in an Economic Gardening Engagement&quot; before the Discovery Call. They give a good overview of where we are going. Both are in the ${vaultLink}.`));
     }
 
-    const closing = dashboardUrl
+    // --- videos ---
+    blocks.push(P(TICK + "There are two sets of videos that cover basic principles of the Economic Gardening program. The first is an overview of the analytical frameworks we use in trouble shooting business issues. The second is examples of deliverables in a marketing campaign."));
+    blocks.push(P(
+      "&bull; " + link("https://economicgardening.org/training-videos-frameworks/", "Watch the framework videos")
+      + "<br>&nbsp;&nbsp;&nbsp;Password is nceg2019 (all lowercase)"
+      + "<br><br>&bull; " + link("https://economicgardening.org/nceg-sample-deliverables/", "Watch the &quot;Deliverables&quot; video"),
+      INDENT));
+
+    // --- sorter, homework ---
+    blocks.push(P(TICK + `This ${link("https://claude.ai/public/artifacts/15e8c292-005b-4f20-81a3-8b637d504601", "preference sorter")} will help us understand your work style and communication preferences (and those of any management people you wish to include). Please provide the results (4 letters) before your Discovery Call, or we can discuss them during the call.`));
+    blocks.push(P(TICK + "Finally, please provide me with a list of your top 10 customers and at least 5 competitors (larger, smaller, same size). This will help us build a customer profile. We will also look at your competitors' website activity."));
+
+    // --- the dashboard, then the sign-off ---
+    if (dashboardUrl) {
       // Comma, not a full stop, after the name: plenty of these end in
-      // "Inc." or "Co." and "Fuel Efficiency Inc.." is the kind of thing a
-      // CEO notices in the first line of a letter about being thorough.
-      ? `We have set up ${link(dashboardUrl, "an EG Dashboard for " + companyName)}, where our contact information, the videos, our discussion notes and all of the research we produce are kept \u2014 through your engagement and after it ends. Everything mentioned above is already there.
+      // "Inc." and "Fuel Efficiency Inc.." is the kind of thing a CEO
+      // notices in a letter about being thorough.
+      blocks.push(P(`We have set up ${link(dashboardUrl, "an EG Dashboard for " + companyName)}, where our contact information, the videos, our discussion notes and all of the research we produce are kept \u2014 through your engagement and after it ends. Everything mentioned above is already there.`));
+    }
+    blocks.push(P("Feel free to let me know if you have questions. We look forward to working with your company."));
+    blocks.push(P(
+      "Thank you,<br>" + esc(teamLead)
+      + "<br>Cell: " + esc(teamLeadCell)
+      + "<br>National Center for Economic Gardening \u2013 Team Lead",
+      "margin:0;"));
 
-`
-      : "";
-
-    return `Greetings,
-
-Congratulations on your acceptance into the Economic Gardening program. I am your team leader for this engagement. For the next several weeks you will have the services of a high-powered team to conduct strategic and market research for you. Our first step is scheduling a Discovery Call to learn about you, your company, and your business issues. You can invite key management staff members to attend if you want.
-
-The Discovery Call runs 1.5 hours and we will meet on Zoom. Here is my availability:
-
-<span class="fill-me">${WELCOME_AVAILABILITY_MARKER}</span>
-
-Following the Discovery Call, a research team will start work for you immediately.
-
-Please note that we avoid rescheduling calls if possible. Coordinating 5-7 people will eat into your sponsor's budget for the engagement.
-
-\u2611\ufe0f ${docsBlock}
-
-\u2611\ufe0f There are two sets of videos that cover basic principles of the Economic Gardening program. The first is an overview of the analytical frameworks we use in trouble shooting business issues. The second is examples of deliverables in a marketing campaign.
-
-- ${link("https://economicgardening.org/training-videos-frameworks/", "Watch the framework videos")}
-  Password is nceg2019 (all lowercase)
-
-- ${link("https://economicgardening.org/nceg-sample-deliverables/", "Watch the \"Deliverables\" video")}
-
-\u2611\ufe0f This ${link("https://claude.ai/public/artifacts/15e8c292-005b-4f20-81a3-8b637d504601", "preference sorter")} will help us understand your work style and communication preferences (and those of any management people you wish to include). Please provide the results (4 letters) before your Discovery Call, or we can discuss them during the call.
-
-\u2611\ufe0f Finally, please provide me with a list of your top 10 customers and at least 5 competitors (larger, smaller, same size). This will help us build a customer profile. We will also look at your competitors' website activity.
-
-${closing}Feel free to let me know if you have questions. We look forward to working with your company.
-
-Thank you,
-${esc(teamLead)}
-Cell: ${esc(teamLeadCell)}
-National Center for Economic Gardening \u2013 Team Lead`;
+    return blocks.join("");
   }
 
   // Chris (10/9/26, via Greg): he "doesn't think that CEO's will figure out
@@ -3379,7 +3381,7 @@ National Center for Economic Gardening \u2013 Team Lead`;
     // the attachments (10/9) -- the letter now points at the Resource Vault
     // instead of promising files a mailto could never carry.
     notes.push(`Before sending: replace the "${WELCOME_AVAILABILITY_MARKER.replace(/^>>> |<<<$/g, "")}" line with your dates and times.`);
-    notes.push("Copy email, then paste into a new message: the letter arrives exactly as it looks here, document names clickable. Open in email app can only send plain text \u2014 a limit of mailto links, not a setting \u2014 so the addresses show in brackets there.");
+    notes.push("Open in Email app hands your mail client a finished draft \u2014 recipients, subject and this letter with its links intact. Edit and send from there.");
     if (!c.slug) {
       notes.push("This engagement has no dashboard address yet, so the letter names the Resource Vault without linking it and leaves off the closing paragraph about the dashboard. Set a slug on the engagement and reopen this to get both.");
     }
@@ -3415,83 +3417,89 @@ National Center for Economic Gardening \u2013 Team Lead`;
     }
   }
 
-  $("welcome-reset").addEventListener("click", async () => {
-    welcomeBuilt = true;
-    await buildWelcomeEmail();
-    showBanner("Reset to the template.", "success");
-  });
 
-  // What the Message field holds IS the letter. Greg (10/9/26): "i want
-  // hyperlinks so you can Click on Frequently Asked Questions and it opens
-  // the right link." So Copy email hands the clipboard that field's own
-  // HTML, and every mail client that composes rich text -- Apple Mail,
-  // Outlook, Gmail -- pastes it with the links intact.
+  // ONE button. Greg (10/9/26): "i want one button that works and provides
+  // easy links and perfect formatting. It should be called Open in Email
+  // app. They can edit from there."
   //
-  // A plain-text twin rides along for anywhere that cannot take HTML, and
-  // for the mailto button. It walks the field and writes each link as
-  // "text (url)", so the address is still reachable when the formatting is
-  // not; everything else is the text as typed.
-  function welcomePlainText() {
-    const root = $("welcome-body");
-    if (!root) return "";
-    let out = "";
-    (function walk(node) {
-      for (const n of node.childNodes) {
-        if (n.nodeType === 3) { out += n.nodeValue; continue; }
-        if (n.nodeType !== 1) continue;
-        if (n.tagName === "BR") { out += "\n"; continue; }
-        if (n.tagName === "A") {
-          const href = n.getAttribute("href") || "";
-          const text = n.textContent || "";
-          out += (href && href !== text) ? `${text} (${href})` : text;
-          continue;
-        }
-        const block = /^(DIV|P|LI|TR)$/.test(n.tagName);
-        walk(n);
-        if (block && !out.endsWith("\n")) out += "\n";
-      }
-    })(root);
-    return out.replace(/\n{3,}/g, "\n\n").trim();
+  // The two it replaces each failed at one half of that. mailto: is plain
+  // text by spec, so "Open in email app" printed the addresses in full.
+  // Copy email carried the links but lost every line break, because the
+  // HTML it put on the clipboard leaned on this page's stylesheet for its
+  // layout and a stylesheet does not travel on the clipboard. The letter
+  // itself is built from real paragraphs now, which fixes the second; this
+  // fixes the first.
+  //
+  // A .eml file is a whole email -- recipients, subject and an HTML body --
+  // and double-clicking one opens it in whatever mail app the computer
+  // uses. X-Unsent: 1 is what tells Outlook to open it as a draft to edit
+  // and send rather than as a message that has already been received.
+  // Apple Mail opens it as a window to read, where Message > Edit as New
+  // Message turns it into a draft; one extra step, and still the only way
+  // to hand a mail client a formatted letter.
+  //
+  // Where the file goes is the browser's business: most open it straight
+  // away, some drop it in Downloads to be double-clicked. The banner says
+  // so rather than claiming the mail app will definitely appear.
+  function welcomeEml() {
+    const to = $("welcome-to").value.trim();
+    const cc = $("welcome-cc").value.trim();
+    const subject = $("welcome-subject").value.trim();
+    const bodyHtml = $("welcome-body").innerHTML;
+
+    // RFC 2047 for anything a header cannot carry as plain ASCII -- an en
+    // dash in a company name is enough to need it.
+    const b64 = (str) => {
+      const bytes = new TextEncoder().encode(str);
+      let bin = "";
+      bytes.forEach((b) => { bin += String.fromCharCode(b); });
+      return btoa(bin);
+    };
+    const header = (name, value) => {
+      if (!value) return "";
+      const safe = /^[\x20-\x7E]*$/.test(value)
+        ? value
+        : `=?UTF-8?B?${b64(value)}?=`;
+      return `${name}: ${safe}\r\n`;
+    };
+
+    // The body goes base64 so no line length, accent or emoji can corrupt
+    // it in transit through the file.
+    const wrapped = (b64(`<html><head><meta charset="utf-8"></head>`
+      + `<body style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:#1d2420;">`
+      + bodyHtml + `</body></html>`)).replace(/(.{76})/g, "$1\r\n");
+
+    return header("To", to)
+      + header("Cc", cc)
+      + header("Subject", subject)
+      + "X-Unsent: 1\r\n"
+      + "MIME-Version: 1.0\r\n"
+      + "Content-Type: text/html; charset=utf-8\r\n"
+      + "Content-Transfer-Encoding: base64\r\n"
+      + "\r\n" + wrapped + "\r\n";
   }
 
-  $("welcome-copy").addEventListener("click", async () => {
-    const html = $("welcome-body").innerHTML;
-    const text = welcomePlainText();
+  $("welcome-open").addEventListener("click", () => {
     try {
-      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
-        await navigator.clipboard.write([new ClipboardItem({
-          "text/html": new Blob([html], { type: "text/html" }),
-          "text/plain": new Blob([text], { type: "text/plain" }),
-        })]);
-        showBanner("Message copied with the links intact. Paste it into a new message \u2014 the To and CC lines are above, ready to paste separately.", "success");
-        return;
-      }
-      await navigator.clipboard.writeText(text);
-      showBanner("Message copied as plain text \u2014 this browser cannot copy formatting. The To and CC lines are above it.", "success");
-    } catch {
-      // Selecting the field itself, so Cmd+C still takes the rich version.
-      const r = document.createRange();
-      r.selectNodeContents($("welcome-body"));
-      const sel = window.getSelection();
-      sel.removeAllRanges(); sel.addRange(r);
-      showBanner("Couldn't copy automatically - the message is selected, press Cmd+C.", "error");
+      const blob = new Blob([welcomeEml()], { type: "message/rfc822" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      // The file name is what the person sees in Downloads, so it says
+      // which letter it is rather than "message.eml".
+      const who = ($("welcome-subject").value || "Welcome").replace(/[^\w .-]+/g, " ").trim().slice(0, 60);
+      a.download = `${who || "Welcome"}.eml`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      showBanner("Draft ready \u2014 it should open in your email app. If your browser saved it instead, double-click it in Downloads. Everything is filled in; edit and send from there.", "success");
+    } catch (e) {
+      showBanner("Couldn't build the draft: " + (e && e.message ? e.message : "unknown error"), "error");
     }
   });
 
-  $("welcome-mailto").addEventListener("click", () => {
-    const clean = (v) => v.split(",").map((e) => e.trim()).filter(Boolean).join(",");
-    const params = [];
-    const cc = clean($("welcome-cc").value);
-    if (cc) params.push("cc=" + encodeURIComponent(cc));
-    params.push("subject=" + encodeURIComponent($("welcome-subject").value));
-    // A mailto: body is plain text by spec (RFC 6068), so this path cannot
-    // carry a hyperlink -- the addresses come through in brackets after the
-    // words instead. Said out loud, because the difference between the two
-    // buttons is otherwise invisible until the letter is already open.
-    params.push("body=" + encodeURIComponent(welcomePlainText()));
-    showBanner("Opened as plain text \u2014 a mailto link cannot carry hyperlinks, so the addresses show in brackets. For clickable names, use Copy email and paste instead.", "info");
-    window.location.href = `mailto:${clean($("welcome-to").value)}?${params.join("&")}`;
-  });
+
 
   function recalcTeamStats() {
     const total = Number(activeClient && activeClient.budget_hours_available) || 0;
