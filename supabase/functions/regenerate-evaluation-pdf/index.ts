@@ -147,12 +147,16 @@ async function buildEvaluationFormPdf(r: any, logoBytes: Uint8Array | null): Pro
   const ratings = Array.isArray(r.question_ratings) ? r.question_ratings : [];
   ratings.forEach((q: any, i: number) => {
     const lines = wrap(String(i + 1) + ". " + String(q.question || "").replace(/^\s*\d+\.\s*/, ""), reg, 8.4, colQ - 16);
-    const rowH = Math.max(lines.length * 8.4 * 1.35 + 12, 26);
+    // "Researched by ..." on its own smaller line under the question, so
+    // the saved PDF credits the same person the client saw on the form.
+    const byLine = q.person ? "Researched by " + String(q.person) : "";
+    const rowH = Math.max(lines.length * 8.4 * 1.35 + (byLine ? 11 : 0) + 12, 26);
     need(rowH);
     if (i % 2 === 1) page.drawRectangle({ x: M, y: y - rowH, width: CW, height: rowH, color: ROW_ALT });
     page.drawLine({ start: { x: M, y: y - rowH }, end: { x: M + CW, y: y - rowH }, thickness: 0.5, color: BORDER });
     let ly = y - 11;
     lines.forEach((l) => { draw(l, M + 8, ly, { size: 8.4, color: rgb(0.1, 0.1, 0.1) }); ly -= 8.4 * 1.35; });
+    if (byLine) { draw(byLine, M + 8, ly, { size: 7.2, color: GREY_700 }); ly -= 11; }
     const mid = y - rowH / 2;
     ["very", "partial", "not"].forEach((v, c) => {
       const ox = cx[c] + colR / 2;

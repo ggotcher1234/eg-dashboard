@@ -641,7 +641,12 @@ async function submitEvaluation(){
       respondentDate: state.date,
       companyName: state.company,
       sponsorName: state.sponsor,
-      questionRatings: state.q1Rows.map(r => ({ question: r.q, rating: r.rating || null })),
+      // The researcher's name is stored WITH the answer, not looked up
+      // later. A rating is a record of what this CEO was asked and who
+      // did that work at the time; re-deriving the name months from now
+      // would quietly rewrite history every time an engagement's
+      // assignments change.
+      questionRatings: state.q1Rows.map(r => ({ question: r.q, person: r.person || '', rating: r.rating || null })),
       q1Explain: state.q1Explain,
       prepared: state.q3 || null,
       preparedExplain: state.q3Explain,
@@ -732,23 +737,27 @@ function fillFromSubmitted(r){
   // lining up by position would then put ratings against the wrong rows.
   // Anything that no longer matches falls back to its original position.
   const saved = Array.isArray(r.question_ratings) ? r.question_ratings : [];
-  const byText = new Map(saved.filter(x => x && x.question).map(x => [String(x.question).trim(), x.rating || '']));
-  state.q1Rows = state.q1Rows.map((row, i) => ({
-    q: row.q,
-    person: row.person || '',
-    rating: byText.has(String(row.q).trim())
-      ? byText.get(String(row.q).trim())
-      : ((saved[i] && saved[i].rating) || '')
-  }));
+  const byText = new Map(saved.filter(x => x && x.question).map(x => [String(x.question).trim(), x]));
+  state.q1Rows = state.q1Rows.map((row, i) => {
+    const hit = byText.get(String(row.q).trim());
+    return {
+      q: row.q,
+      // What the Controlling Document says now, falling back to whoever
+      // was recorded at submission -- so a reopened sheet still credits
+      // someone even if the question has since been unassigned.
+      person: row.person || (hit && hit.person) || '',
+      rating: hit ? (hit.rating || '') : ((saved[i] && saved[i].rating) || '')
+    };
+  });
 
   // Questions that were rated but are no longer on the form still belong on
   // a record of what they answered, so they are appended rather than lost.
   const live = new Set(state.q1Rows.map(x => String(x.q).trim()));
   saved.forEach(x => {
     if(x && x.question && !live.has(String(x.question).trim())){
-      // No name on these: the question is gone from the Controlling
-      // Document, so there is nobody current to credit for it.
-      state.q1Rows.push({ q: x.question, person: '', rating: x.rating || '' });
+      // Gone from the Controlling Document, so there is no current
+      // assignment -- but the name recorded at submission still stands.
+      state.q1Rows.push({ q: x.question, person: x.person || '', rating: x.rating || '' });
     }
   });
 

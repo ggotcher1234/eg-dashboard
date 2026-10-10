@@ -14,6 +14,7 @@
 // summary; it now draws the sheet itself -- intro band, field boxes, the
 // ratings table with its radio dots, Yes/No pills, the 1-10 scale, the
 // testimonial panel -- with the real NCEG logo fetched from the site.
+// v8 (10/10/26): each question carries the specialist who researched it.
 //
 // ORDER IS THE DESIGN. The response is inserted and committed FIRST; the
 // PDF, upload and email all run afterwards inside one guard that can only
@@ -184,12 +185,16 @@ async function buildEvaluationFormPdf(r: any, logoBytes: Uint8Array | null): Pro
   const ratings = Array.isArray(r.question_ratings) ? r.question_ratings : [];
   ratings.forEach((q: any, i: number) => {
     const lines = wrap(String(i + 1) + ". " + String(q.question || "").replace(/^\s*\d+\.\s*/, ""), reg, 8.4, colQ - 16);
-    const rowH = Math.max(lines.length * 8.4 * 1.35 + 12, 26);
+    // "Researched by ..." on its own smaller line under the question, so
+    // the saved PDF credits the same person the client saw on the form.
+    const byLine = q.person ? "Researched by " + String(q.person) : "";
+    const rowH = Math.max(lines.length * 8.4 * 1.35 + (byLine ? 11 : 0) + 12, 26);
     need(rowH);
     if (i % 2 === 1) page.drawRectangle({ x: M, y: y - rowH, width: CW, height: rowH, color: ROW_ALT });
     page.drawLine({ start: { x: M, y: y - rowH }, end: { x: M + CW, y: y - rowH }, thickness: 0.5, color: BORDER });
     let ly = y - 11;
     lines.forEach((l) => { draw(l, M + 8, ly, { size: 8.4, color: rgb(0.1, 0.1, 0.1) }); ly -= 8.4 * 1.35; });
+    if (byLine) { draw(byLine, M + 8, ly, { size: 7.2, color: GREY_700 }); ly -= 11; }
     const mid = y - rowH / 2;
     ["very", "partial", "not"].forEach((v, c) => {
       const ox = cx[c] + colR / 2;
@@ -321,7 +326,11 @@ Deno.serve(async (req: Request) => {
     if (!questionRatings.length) return jsonResponse({ error: "Please answer at least one research question before submitting." }, 400);
 
     const cleanRatings = questionRatings
-      .map((r: any) => ({ question: clampText(r && r.question) || "", rating: ["very", "partial", "not"].includes(r && r.rating) ? r.rating : null }))
+      // person (10/10/26): who did the research for that question, as the
+      // Controlling Document had it when the CEO answered. Stored with the
+      // answer so the saved sheet and its PDF keep saying the same thing
+      // however the engagement's assignments change afterwards.
+      .map((r: any) => ({ question: clampText(r && r.question) || "", person: clampText(r && r.person) || "", rating: ["very", "partial", "not"].includes(r && r.rating) ? r.rating : null }))
       .filter((r: any) => r.question || r.rating);
     const cleanReferrals = (Array.isArray(data.referrals) ? data.referrals : [])
       .map((r: any) => ({ name: clampText(r && r.name), company: clampText(r && r.company), contact: clampText(r && r.contact) }))
