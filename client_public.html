@@ -154,6 +154,21 @@
     transition: background 0.15s ease;
   }
   .wf-step:first-child { margin-left: 0; clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%); }
+  /* Close-Out carries two documents in one chevron (Greg, 10/10/26): the
+     recording of the call on the top row, the Evaluation Sheet on the
+     bottom. The chevron itself stops being the click target -- each row is
+     its own link, and each has its own state. */
+  .wf-step-stack { flex-direction: column; gap: 2px; padding-top: 8px; padding-bottom: 8px; cursor: default; }
+  .wf-step-stack .wf-line {
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    color: #fff; text-decoration: none; font-size: 10.5px; line-height: 1.3; letter-spacing: 0.3px;
+  }
+  .wf-step-stack .wf-line:not(.filled) { opacity: 0.75; }
+  .wf-step-stack .wf-line.filled { cursor: pointer; }
+  .wf-step-stack .wf-line.filled .wf-label {
+    text-decoration: underline; text-decoration-color: rgba(255,255,255,0.5); text-underline-offset: 3px;
+  }
+  .wf-step-stack .wf-line.filled:hover .wf-label { text-decoration-color: #fff; text-decoration-thickness: 2px; }
   .wf-step.filled { cursor: pointer; }
   /* Greg (9/25/26), on Chris: "it's not intuitively obvious that workflow
      arrows are clickable with documents behind them if they have a
@@ -944,6 +959,24 @@
     return "";
   }
 
+  // The strip across the top of a client's dashboard. Three plain chevrons,
+  // then Close-Out, which is one chevron carrying TWO rows.
+  //
+  // Greg (10/10/26): "this is a two part/two document category... we will
+  // add this change to the client dashboard so that we can provide a link to
+  // the close-out video on the top row of the chevron and evaluation sheet
+  // link on the bottom row of the client dashboard chevron." Two documents,
+  // one step of the engagement -- the same shape the workspace nav now has,
+  // where Evaluation Sheet sits under Close-Out.
+  //
+  // Each row keeps its own state: the recording can be up before the sheet
+  // is filled in, and the sheet can be open for filling while no recording
+  // exists yet. The chevron behind them counts as started when either is.
+  const EVALUATION_SHEET_STEP = {
+    urlKey: "closeout_survey_url", pathKey: "closeout_survey_storage_path", label: "Evaluation Sheet",
+    extraFilledKey: "evaluation_submitted_at", formUrlKey: "evaluation_form_url",
+    opensAfterKeys: ["controlling_doc_link_url", "controlling_doc_storage_path", "controlling_doc_url"],
+  };
   const WORKFLOW_STEPS = [
     { urlKey: "discovery_doc_url", pathKey: "discovery_doc_storage_path", label: "Discovery Call Notes" },
     { urlKey: "controlling_doc_url", pathKey: "controlling_doc_storage_path", label: "Controlling Document", clientLinkKey: "controlling_doc_link_url" },
@@ -956,80 +989,102 @@
     // are unchanged on purpose: renaming storage would touch the uploader,
     // the workflow page and the public view function for no gain.
     { urlKey: "research_review_url", pathKey: "research_review_storage_path", label: "Debriefing" },
-    { urlKey: "closeout_survey_url", pathKey: "closeout_survey_storage_path", label: "Evaluation Sheet", extraFilledKey: "evaluation_submitted_at", formUrlKey: "evaluation_form_url", opensAfterKeys: ["controlling_doc_link_url", "controlling_doc_storage_path", "controlling_doc_url"] },
+    {
+      label: "Close-Out",
+      rows: [
+        { urlKey: "closeout_recording_url", pathKey: "closeout_recording_storage_path", label: "Close-Out Video" },
+        EVALUATION_SHEET_STEP,
+      ],
+    },
   ];
+
+  // Has this row got anything behind it yet? Used both for the row's own
+  // styling and to decide whether the Close-Out chevron reads as started.
+  function stepIsFilled(step, w) {
+    if (step.clientLinkKey && w[step.clientLinkKey]) return true;
+    if (step.pathKey && w[step.pathKey]) return true;
+    if (step.urlKey && w[step.urlKey]) return true;
+    if (step.extraFilledKey && w[step.extraFilledKey]) return true;
+    if (step.formUrlKey && w[step.formUrlKey]) {
+      return (step.opensAfterKeys || []).some((k) => w[k]);
+    }
+    return false;
+  }
+
+  // One row of the strip, rendered into whatever class it is given: the
+  // chevron itself for the three single steps, a line inside the chevron for
+  // the two Close-Out rows. The branches are in priority order and are the
+  // same ones this page has always used.
+  function stepPieceHtml(step, w, cls) {
+    const path = step.pathKey ? w[step.pathKey] : null;
+    const url = step.urlKey ? w[step.urlKey] : null;
+    const clientLink = step.clientLinkKey ? w[step.clientLinkKey] : null;
+    const extraFilled = step.extraFilledKey ? w[step.extraFilledKey] : null;
+    const label = escapeHtml(step.label);
+    const check = `<span class="wf-check" aria-hidden="true">&#10003;</span>`;
+
+    // Greg (10/6/26): "make the client evaluation sheet available to open
+    // from the client dashboard as soon as the controlling document is
+    // submitted. That way the client can view it from their dashboard, fill
+    // it out and submit it. Only after submission should it show the
+    // checkmark and link to the final document."
+    //
+    // So this row has a third state the others do not: OPEN. It is live and
+    // clickable, and it carries no check mark -- the check is a claim about
+    // what the client has done, and at this point they have not done it yet.
+    // It goes first, but only fires when no "done" branch applies, so a
+    // submitted evaluation (or a signed sheet an admin uploaded instead)
+    // still renders exactly as it did before.
+    if (step.formUrlKey && !path && !url && !extraFilled) {
+      const opensNow = (step.opensAfterKeys || []).some((k) => w[k]);
+      const formUrl = w[step.formUrlKey];
+      if (opensNow && formUrl) {
+        return `<a class="${cls} filled wf-step-open" href="${escapeHtml(formUrl)}" target="_blank" rel="noopener" title="Open your Evaluation Sheet — fill it out and submit it here"><span class="wf-label">${label}</span></a>`;
+      }
+    }
+    // A checkmark marks "done" explicitly -- the color shift alone (esp.
+    // step 3's slate-on-slate) was too subtle for Greg to tell filled
+    // from unfilled at a glance (8/25/26).
+    // A client-facing review link (the polished Controlling Document page
+    // we email out) is the nicest thing for the client to open, so it
+    // wins over an uploaded file or the internal editor self-link (Greg,
+    // 9/1/26: "make the client dashboard showcase the link we send").
+    if (clientLink) {
+      return `<a class="${cls} filled" href="${escapeHtml(clientLink)}" target="_blank" rel="noopener">${check}<span class="wf-label">${label}</span></a>`;
+    }
+    if (path) {
+      return `<a class="${cls} filled wf-doc-link" data-path="${escapeHtml(path)}" href="#">${check}<span class="wf-label">${label}</span></a>`;
+    }
+    if (url) {
+      return `<a class="${cls} filled" href="${escapeHtml(url)}" target="_blank" rel="noopener">${check}<span class="wf-label">${label}</span></a>`;
+    }
+    // A submitted evaluation response has no doc/link to open here (it's
+    // rows in client_evaluation_responses, not a file) -- clicking it opens
+    // the sheet they actually filled in, rendered read-only by the
+    // evaluation page itself (148). The summary modal stays for the team's
+    // own view in client_workflow_files.html, where a summary is right.
+    if (extraFilled) {
+      const submittedFormUrl = step.formUrlKey ? w[step.formUrlKey] : null;
+      if (submittedFormUrl) {
+        return `<a class="${cls} filled" href="${escapeHtml(submittedFormUrl)}" target="_blank" rel="noopener" title="Open your completed Evaluation Sheet">${check}<span class="wf-label">${label}</span></a>`;
+      }
+      return `<div class="${cls} filled wf-eval-detail-btn">${check}<span class="wf-label">${label}</span></div>`;
+    }
+    return `<div class="${cls}"><span class="wf-label">${label}</span></div>`;
+  }
 
   function renderWorkflow(workflow) {
     const w = workflow || {};
     $("workflow-tracker").innerHTML = WORKFLOW_STEPS.map((step, i) => {
-      const path = step.pathKey ? w[step.pathKey] : null;
-      const url = w[step.urlKey];
-      const clientLink = step.clientLinkKey ? w[step.clientLinkKey] : null;
-      const extraFilled = step.extraFilledKey ? w[step.extraFilledKey] : null;
       const colorClass = `wf-step-${i}`;
-      // Greg (10/6/26): "make the client evaluation sheet available to open
-      // from the client dashboard as soon as the controlling document is
-      // submitted. That way the client can view it from their dashboard, fill
-      // it out and submit it. Only after submission should it show the
-      // checkmark and link to the final document."
-      //
-      // So this step has a third state the other three do not: OPEN. It is
-      // live and clickable, and it carries no check mark -- the check is a
-      // claim about what the client has done, and at this point they have not
-      // done it yet. It goes first, ahead of every "done" branch, but it only
-      // fires when none of those apply, so an evaluation that has been
-      // submitted (or whose signed sheet was uploaded by an admin instead)
-      // still renders exactly as it did before.
-      //
-      // "Submitted" is read as either a response row OR an attached close-out
-      // document, not the response row alone: an admin who uploads a filled-in
-      // sheet on the client's behalf leaves no evaluation_submitted_at, and
-      // keying the check mark on that alone would have left their step looking
-      // permanently undone.
-      if (step.formUrlKey && !path && !url && !extraFilled) {
-        const opensNow = (step.opensAfterKeys || []).some((k) => w[k]);
-        const formUrl = w[step.formUrlKey];
-        if (opensNow && formUrl) {
-          return `<a class="wf-step ${colorClass} filled wf-step-open" href="${escapeHtml(formUrl)}" target="_blank" rel="noopener" title="Open your Evaluation Sheet \u2014 fill it out and submit it here"><span class="wf-label">${escapeHtml(step.label)}</span></a>`;
-        }
+      if (step.rows) {
+        // The chevron is the container; the rows inside it are what click.
+        const anyFilled = step.rows.some((r) => stepIsFilled(r, w));
+        return `<div class="wf-step ${colorClass} wf-step-stack${anyFilled ? " filled" : ""}">`
+          + step.rows.map((r) => stepPieceHtml(r, w, "wf-line")).join("")
+          + `</div>`;
       }
-      // A checkmark marks "done" explicitly -- the color shift alone (esp.
-      // step 3's slate-on-slate) was too subtle for Greg to tell filled
-      // from unfilled at a glance (8/25/26).
-      // A client-facing review link (the polished Controlling Document page
-      // we email out) is the nicest thing for the client to open, so it
-      // wins over an uploaded file or the internal editor self-link (Greg,
-      // 9/1/26: "make the client dashboard showcase the link we send").
-      if (clientLink) {
-        return `<a class="wf-step ${colorClass} filled" href="${escapeHtml(clientLink)}" target="_blank" rel="noopener"><span class="wf-check" aria-hidden="true">&#10003;</span><span class="wf-label">${escapeHtml(step.label)}</span></a>`;
-      }
-      if (path) {
-        return `<a class="wf-step ${colorClass} filled wf-doc-link" data-path="${escapeHtml(path)}" href="#"><span class="wf-check" aria-hidden="true">&#10003;</span><span class="wf-label">${escapeHtml(step.label)}</span></a>`;
-      }
-      if (url) {
-        return `<a class="wf-step ${colorClass} filled" href="${escapeHtml(url)}" target="_blank" rel="noopener"><span class="wf-check" aria-hidden="true">&#10003;</span><span class="wf-label">${escapeHtml(step.label)}</span></a>`;
-      }
-      // A submitted evaluation response has no doc/link to open here (it's
-      // rows in client_evaluation_responses, not a file) -- clicking it
-      // opens the modal below with the same answers instead, so it behaves
-      // the same as the other three steps do (Greg, 8/25/26: "all the
-      // other workflow fields bring up a document... this should do the
-      // same").
-      // Greg (10/6/26), after opening Clippard's: "i want the real form filled
-      // out with the information that was in their pdf." This used to open a
-      // summary modal -- their ratings as a bulleted list. What belongs behind
-      // this step is the sheet they actually filled in, so it now opens the
-      // evaluation page itself, which renders their answers in place and
-      // read-only (148). The modal stays for the team's own view in
-      // client_workflow_files.html, where a summary is the right thing.
-      if (extraFilled) {
-        const submittedFormUrl = step.formUrlKey ? w[step.formUrlKey] : null;
-        if (submittedFormUrl) {
-          return `<a class="wf-step ${colorClass} filled" href="${escapeHtml(submittedFormUrl)}" target="_blank" rel="noopener" title="Open your completed Evaluation Sheet"><span class="wf-check" aria-hidden="true">&#10003;</span><span class="wf-label">${escapeHtml(step.label)}</span></a>`;
-        }
-        return `<div class="wf-step ${colorClass} filled wf-eval-detail-btn"><span class="wf-check" aria-hidden="true">&#10003;</span><span class="wf-label">${escapeHtml(step.label)}</span></div>`;
-      }
-      return `<div class="wf-step ${colorClass}">${escapeHtml(step.label)}</div>`;
+      return stepPieceHtml(step, w, `wf-step ${colorClass}`);
     }).join("");
     // Greg (10/6/26): "...available to download on the Clippard Dashboard."
     // The step itself opens the live, filled-in sheet -- that is what Greg
@@ -1190,7 +1245,25 @@
     renderCompany(row, isFinalized);
     renderStatPills(row);
     renderActionBars(row, isFinalized);
-    renderWorkflow(row.workflow);
+    // The close-out recording lives on client_content, which this signed-out
+    // page cannot read, and get_client_public_view answers from a frozen
+    // snapshot once an engagement is finalized -- which would hide a
+    // recording attached after close-out, the very moment it gets attached.
+    // So it comes from its own small live read (migration 162), merged in
+    // here. One failed call costs one row, never the strip.
+    let workflow = row.workflow || {};
+    try {
+      const { data: co } = await sb.rpc("get_client_closeout", { p_slug: slug });
+      const coRow = Array.isArray(co) ? co[0] : co;
+      if (coRow) {
+        workflow = {
+          ...workflow,
+          closeout_recording_url: coRow.recording_url || null,
+          closeout_recording_storage_path: coRow.recording_storage_path || null,
+        };
+      }
+    } catch (e) { /* leave the Close-Out row empty */ }
+    renderWorkflow(workflow);
     renderResearchGrid(row.research_areas);
     renderGeneralDocs(row.documents);
 

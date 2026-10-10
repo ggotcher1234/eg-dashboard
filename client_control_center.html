@@ -542,6 +542,10 @@
     font-size: 13px; font-weight: 600; color: var(--muted);
   }
   .cc-nav-subbtn:hover:not(.active) { background: #f4f6f8; color: var(--text); }
+  /* Evaluation Sheet sits under Close-Out rather than beside it (Greg,
+     10/10/26) -- one step with two documents. Indented and a shade smaller,
+     the way a second line of the same item reads. */
+  .cc-nav-subbtn-nested { padding-left: 26px; font-size: 12.5px; gap: 15px; }
   /* The Workflow sub-items get the same treatment -- two different active
      colours in one column would read as two different kinds of selection. */
   .cc-nav-subbtn.active { background: #e8eee3; color: var(--accent-dark); border-left-color: var(--accent-dark); }
@@ -1745,7 +1749,14 @@
     // client sees on their own dashboard and on the survey itself is
     // unchanged until Chris says so.
     { key: "review", label: "Debriefing" },
-    { key: "eval", label: "Evaluation Sheet" },
+    // Greg (10/10/26): "this is a two part/two document category. the
+    // primary category is going to be Close-Out and the submenu under
+    // close-out will be evaluation sheet." Close-Out is the call itself --
+    // the Zoom recording the Team Lead attaches -- and the Evaluation Sheet
+    // is the second half of the same step, so it sits under it rather than
+    // beside it.
+    { key: "closeout", label: "Close-Out" },
+    { key: "eval", label: "Evaluation Sheet", nested: true },
   ];
 
   // Breadcrumb label per nav row. Deliberately its own map rather than a
@@ -1783,6 +1794,9 @@
       controlling: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
       review: '<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>',
       eval: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 17.01"/>',
+      // A play mark: what a Team Lead attaches here is almost always the
+      // recording of the close-out call.
+      closeout: '<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>',
       // Cumulative Hours (Rita item 9) -- a clock, matching the hours idea,
       // and distinct from "review" (bar chart) and "eval" (check) above.
       cumulative: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
@@ -1904,7 +1918,7 @@
           `<div class="cc-nav-section">Attachments</div>` +
           `<button type="button" class="cc-nav-subbtn" data-pane="welcome">${navIconSvg("welcome")}<span>Scheduling Letter</span></button>` +
           item.docs.map((d) => `
-            <button type="button" class="cc-nav-subbtn" data-pane="${item.key}" data-doc="${d.key}">${navIconSvg(d.key)}<span>${d.label}</span></button>
+            <button type="button" class="cc-nav-subbtn${d.nested ? " cc-nav-subbtn-nested" : ""}" data-pane="${item.key}" data-doc="${d.key}">${navIconSvg(d.key)}<span>${d.label}</span></button>
           ` + (d.key === "controlling" ? researchRow : "")).join("");
         return secHtml + `
           <div class="cc-nav-group">
