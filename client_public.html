@@ -164,6 +164,12 @@
     color: #fff; text-decoration: none; font-size: 10.5px; line-height: 1.3; letter-spacing: 0.3px;
   }
   .wf-step-stack .wf-line:not(.filled) { opacity: 0.75; }
+  /* Open for the client to fill in, but nothing to read yet: clickable and
+     at full strength, with no check and no standing underline. */
+  .wf-step-stack .wf-line.wf-step-open { opacity: 1; cursor: pointer; }
+  .wf-step-stack .wf-line.wf-step-open:hover .wf-label {
+    text-decoration: underline; text-decoration-color: #fff; text-underline-offset: 3px;
+  }
   .wf-step-stack .wf-line .wf-check { margin-right: 4px; font-size: 11px; }
   .wf-step-stack .wf-line.filled { cursor: pointer; }
   .wf-step-stack .wf-line.filled .wf-label {
@@ -999,16 +1005,21 @@
     },
   ];
 
-  // Has this row got anything behind it yet? Used both for the row's own
-  // styling and to decide whether the Close-Out chevron reads as started.
-  function stepIsFilled(step, w) {
+  // THE RULE, in Greg's words (10/10/26): "if no document the dashboard
+  // shows no check and no underline. if document = yes, then check and
+  // underline show on dashboard."
+  //
+  // A DOCUMENT means something actually exists to open: a file, a link, the
+  // client-facing review page, or a submitted evaluation response. A form
+  // that is merely OPEN for the client to fill in is not a document -- it is
+  // an invitation -- so it stays clickable but plain, with no check and no
+  // underline until they send it back. Same test decides whether the
+  // Close-Out chevron behind the two rows reads as started.
+  function stepHasDocument(step, w) {
     if (step.clientLinkKey && w[step.clientLinkKey]) return true;
     if (step.pathKey && w[step.pathKey]) return true;
     if (step.urlKey && w[step.urlKey]) return true;
     if (step.extraFilledKey && w[step.extraFilledKey]) return true;
-    if (step.formUrlKey && w[step.formUrlKey]) {
-      return (step.opensAfterKeys || []).some((k) => w[k]);
-    }
     return false;
   }
 
@@ -1032,21 +1043,22 @@
     // and clickable, not yet filled in -- carried no check: the check was a
     // claim about what the CLIENT had done.
     //
-    // Greg (10/10/26), on the two Close-Out rows: "these two documents are
-    // seperate and each get's its own link, underline and checkmark that
-    // shows their is an active link ready." That redefines the mark on this
-    // strip -- it now says A LINK IS READY HERE rather than you have
-    // finished this -- so the open sheet gets one like every other live
-    // row, and a CEO sees a check wherever there is something to click.
+    // Greg (10/10/26), settling it: "if no document the dashboard shows no
+    // check and no underline. if document = yes, then check and underline
+    // show on dashboard." An open sheet is not a document -- there is
+    // nothing of the client's to read yet -- so this state keeps the link
+    // and loses the decoration. The pointer and the hover underline are
+    // what say it can be clicked; the check and the standing underline are
+    // reserved for a document that exists.
     //
-    // This branch still goes first and still only fires when no "done"
+    // This branch still goes first and still only fires when no "document"
     // branch applies, so a submitted evaluation (or a signed sheet an admin
     // uploaded instead) renders exactly as it did before.
     if (step.formUrlKey && !path && !url && !extraFilled) {
       const opensNow = (step.opensAfterKeys || []).some((k) => w[k]);
       const formUrl = w[step.formUrlKey];
       if (opensNow && formUrl) {
-        return `<a class="${cls} filled wf-step-open" href="${escapeHtml(formUrl)}" target="_blank" rel="noopener" title="Open your Evaluation Sheet — fill it out and submit it here">${check}<span class="wf-label">${label}</span></a>`;
+        return `<a class="${cls} wf-step-open" href="${escapeHtml(formUrl)}" target="_blank" rel="noopener" title="Open your Evaluation Sheet — fill it out and submit it here"><span class="wf-label">${label}</span></a>`;
       }
     }
     // A checkmark marks "done" explicitly -- the color shift alone (esp.
@@ -1086,7 +1098,7 @@
       const colorClass = `wf-step-${i}`;
       if (step.rows) {
         // The chevron is the container; the rows inside it are what click.
-        const anyFilled = step.rows.some((r) => stepIsFilled(r, w));
+        const anyFilled = step.rows.some((r) => stepHasDocument(r, w));
         return `<div class="wf-step ${colorClass} wf-step-stack${anyFilled ? " filled" : ""}">`
           + step.rows.map((r) => stepPieceHtml(r, w, "wf-line")).join("")
           + `</div>`;
