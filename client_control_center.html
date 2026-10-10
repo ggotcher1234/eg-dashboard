@@ -2501,17 +2501,32 @@
   // underneath (Greg, 9/18/26).
   const FIRST_HOUSE_SLOT = FIXED_SLOTS.findIndex(([spec]) => spec === "admin");
 
-  // Sort key: the seven standard rows keep their fixed order; anything extra
-  // sits in one block just above Admin, so added specialists read as part of
-  // the specialist team rather than trailing off the end of the table. A
-  // duplicate of a house row (a second Admin) stays with the house rows.
+  // Sort key: the eleven standard rows keep their fixed order, and an added
+  // row sits with its OWN kind -- Market Research 3 straight after Market
+  // Research 2, GIS 3 straight after GIS 2.
+  //
+  // Greg (10/10/26), having added a third market researcher: "Market
+  // Research 3 should be moved to follow market research 2 instead of being
+  // down at the bottom. all additions should go to the list of similar work
+  // groups." Before this, extras collected in one block just above Admin,
+  // which was an improvement on trailing off the end (9/18/26) but still
+  // separated a researcher from the researchers.
+  //
+  // The fractional key is what keeps them there: the last fixed row of that
+  // specialty, plus a half. Market Research's last fixed slot is index 2, so
+  // every extra researcher sorts at 2.5 -- after both fixed rows, before
+  // Digital Marketing at 3 -- and the tiebreak below puts 3 before 4. A
+  // specialty with no fixed row at all still lands just above Admin.
+  function lastFixedIndexOf(specialty) {
+    let last = -1;
+    FIXED_SLOTS.forEach(([spec], i) => { if (spec === specialty) last = i; });
+    return last;
+  }
   function sortKeyFor(r) {
     const fixed = fixedSlotIndex(r.specialty_type, r.slot_number);
     if (fixed !== -1) return fixed;
-    const base = FIXED_SLOTS.findIndex(([spec]) => spec === r.specialty_type);
-    // A duplicate of a house row still sorts with the house rows; anything
-    // else sits in the specialist block, just before Admin.
-    return (base !== -1 && base >= FIRST_HOUSE_SLOT) ? base + 0.5 : FIRST_HOUSE_SLOT - 0.5;
+    const last = lastFixedIndexOf(r.specialty_type);
+    return last !== -1 ? last + 0.5 : FIRST_HOUSE_SLOT - 0.5;
   }
 
   // Existing engagements were created with one row per category, and the
