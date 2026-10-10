@@ -648,6 +648,10 @@
   /* ---------- Modals (Remove confirm / Log hours / Billing history) ---------- */
   .overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); align-items: center; justify-content: center; z-index: 50; padding: 20px; }
   .overlay.open { display: flex; }
+  /* The logged date, stated rather than asked for (punch list #110). */
+  .tw-log-date { padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px;
+                 background: #f4f6f8; color: var(--text); font-size: 14px; font-weight: 600; }
+  .tw-log-date-note { margin-top: 5px; font-size: 12px; color: var(--muted); line-height: 1.45; }
   .modal { background: #fff; border-radius: 10px; width: 400px; max-width: 92vw; padding: 26px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); max-height: 88vh; overflow-y: auto; }
   .modal h3 { margin: 0 0 10px; font-size: 16.5px; color: var(--navy); }
   .modal p { font-size: 13.5px; color: var(--muted); }
@@ -1206,9 +1210,18 @@
         <label>Hours <span class="required-star">*</span></label>
         <input type="number" id="tw-log-hours-amount" min="0.25" step="0.25" required />
       </div>
+      <!-- Punch list #110, settled by Greg (10/10/26): "when an EG member
+           enters a date for work done it should be automatically labeled
+           with todays date and it is not editable. that way, if they enter
+           hours in Sept. they will paid for those in October. If they enter
+           hours on oct 1st, they cannot be paid for those until Dec."
+           The picker is gone: the entry is stamped with the day it is
+           logged, and the line below says what that means for payment so
+           nobody has to be told twice. -->
       <div class="field">
-        <label>Date</label>
-        <input type="date" id="tw-log-hours-date" required />
+        <label>Date logged</label>
+        <div class="tw-log-date" id="tw-log-hours-date"></div>
+        <div class="tw-log-date-note" id="tw-log-hours-month"></div>
       </div>
       <div class="field-error" id="tw-log-hours-error"></div>
       <div class="modal-actions">
@@ -3408,6 +3421,24 @@
   // list, which needs no confirm because it is undone by picking a name again.
 
   // ---------- Log hours ----------
+  //
+  // LOCAL date, not toISOString(). The old code took the UTC day, so a
+  // specialist logging at 8pm Eastern on 30 September was stamped 1 October
+  // -- the exact month-boundary slip this item is about, built into the
+  // thing meant to prevent it.
+  function todayLocalIso() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  // The month the entry lands in, and the month it is therefore paid in:
+  // a month's hours are invoiced after that month closes, and paid the
+  // month after that.
+  function paymentMonthFor(iso) {
+    const [y, m] = iso.split("-").map(Number);
+    const monthName = (yy, mm) => new Date(yy, mm - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    const next = m === 12 ? [y + 1, 1] : [y, m + 1];
+    return { worked: monthName(y, m), invoiced: monthName(next[0], next[1]) };
+  }
   let pendingLogAssignmentId = null;
   function openLogHours(assignmentId) {
     const r = currentAssignments.find((x) => x.id === assignmentId);
@@ -3421,7 +3452,13 @@
     $("tw-log-hours-text").textContent = isSuperAdmin && person.id !== currentUser.id
       ? `Logging hours for ${userLabel(person)} on ${label}.`
       : `Logging your hours on ${label}.`;
-    $("tw-log-hours-date").value = new Date().toISOString().slice(0, 10);
+    const today = todayLocalIso();
+    const [yy, mm, dd] = today.split("-").map(Number);
+    $("tw-log-hours-date").textContent =
+      new Date(yy, mm - 1, dd).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    const months = paymentMonthFor(today);
+    $("tw-log-hours-month").textContent =
+      `Logged against ${months.worked}. ${months.worked} hours are invoiced once the month closes and paid in ${months.invoiced}.`;
     $("tw-log-hours-overlay").classList.add("open");
   }
   $("tw-log-hours-cancel").addEventListener("click", () => { $("tw-log-hours-overlay").classList.remove("open"); pendingLogAssignmentId = null; });
@@ -3438,7 +3475,9 @@
       assignment_id: pendingLogAssignmentId,
       consultant_id: r.user_id,
       hours: Number($("tw-log-hours-amount").value),
-      entry_date: $("tw-log-hours-date").value,
+      // Read again at submit, not from the screen: a modal left open past
+      // midnight -- or past a month end -- must not file yesterday's date.
+      entry_date: todayLocalIso(),
       // Note field removed 9/18/26 (Chris/Rita: "reduce data entry"). Zero of
       // the entries logged so far carried one. The column stays -- billing
       // history still shows a note where one exists -- it just is not asked
