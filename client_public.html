@@ -154,6 +154,14 @@
     transition: background 0.15s ease;
   }
   .wf-step:first-child { margin-left: 0; clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%); }
+  /* Check and label as ONE block, sized to its contents and centred in the
+     chevron. Without it the chevron centres two separate flex items, and a
+     label long enough to wrap takes the full width and strands the check
+     over at the left edge -- which is what "Controlling Document" was
+     doing. Text inside stays left-aligned so a wrapped second line starts
+     under the first. */
+  .wf-step-inner { display: inline-flex; align-items: center; min-width: 0; }
+  .wf-step .wf-label { text-align: left; }
   /* Close-Out carries two documents in one chevron (Greg, 10/10/26): the
      recording of the call on the top row, the Evaluation Sheet on the
      bottom. The chevron itself stops being the click target -- each row is
@@ -1060,6 +1068,26 @@
     // Alignment needs a column the check sits in whether or not it is there,
     // or the label slides sideways the day a document arrives.
     const gap = stacked ? `<span class="wf-check wf-check-blank" aria-hidden="true"></span>` : "";
+    const labelHtml = `<span class="wf-label">${label}</span>`;
+    // Greg (10/10/26): "what do you think is the best looking alignment for
+    // the Cheveron text and checkmarks."
+    //
+    // One rule for all four: the check in its own column, the label beside
+    // it, and that pair centred in the chevron as a single block.
+    //
+    // The alternative the strip was already showing is what gives it away.
+    // A chevron is a flex row centring two items, so a label short enough
+    // to fit on one line sits snug against its check, but "Controlling
+    // Document" wraps, takes the full width, and shoves the check off to
+    // the far left where it looks like it belongs to nothing. One block,
+    // sized to its contents, keeps the check beside its words at every
+    // label length -- and a wrapped second line starts under the first
+    // rather than being centred against it.
+    //
+    // Right-justifying would fight the chevron itself: each one points
+    // right, into a 16px notch, so text pushed that way crowds the point
+    // of the arrow and leaves a hole at the blunt end.
+    const wrap = (inner) => (stacked ? inner : `<span class="wf-step-inner">${inner}</span>`);
 
     // Greg (10/6/26): "make the client evaluation sheet available to open
     // from the client dashboard as soon as the controlling document is
@@ -1084,7 +1112,7 @@
       const opensNow = (step.opensAfterKeys || []).some((k) => w[k]);
       const formUrl = w[step.formUrlKey];
       if (opensNow && formUrl) {
-        return `<a class="${cls} wf-step-open" href="${escapeHtml(formUrl)}" target="_blank" rel="noopener" title="Open your Evaluation Sheet — fill it out and submit it here">${gap}<span class="wf-label">${label}</span></a>`;
+        return `<a class="${cls} wf-step-open" href="${escapeHtml(formUrl)}" target="_blank" rel="noopener" title="Open your Evaluation Sheet — fill it out and submit it here">${wrap(gap + labelHtml)}</a>`;
       }
     }
     // A checkmark marks "done" explicitly -- the color shift alone (esp.
@@ -1095,13 +1123,13 @@
     // wins over an uploaded file or the internal editor self-link (Greg,
     // 9/1/26: "make the client dashboard showcase the link we send").
     if (clientLink) {
-      return `<a class="${cls} filled" href="${escapeHtml(clientLink)}" target="_blank" rel="noopener">${check}<span class="wf-label">${label}</span></a>`;
+      return `<a class="${cls} filled" href="${escapeHtml(clientLink)}" target="_blank" rel="noopener">${wrap(check + labelHtml)}</a>`;
     }
     if (path) {
-      return `<a class="${cls} filled wf-doc-link" data-path="${escapeHtml(path)}" href="#">${check}<span class="wf-label">${label}</span></a>`;
+      return `<a class="${cls} filled wf-doc-link" data-path="${escapeHtml(path)}" href="#">${wrap(check + labelHtml)}</a>`;
     }
     if (url) {
-      return `<a class="${cls} filled" href="${escapeHtml(url)}" target="_blank" rel="noopener">${check}<span class="wf-label">${label}</span></a>`;
+      return `<a class="${cls} filled" href="${escapeHtml(url)}" target="_blank" rel="noopener">${wrap(check + labelHtml)}</a>`;
     }
     // A submitted evaluation response has no doc/link to open here (it's
     // rows in client_evaluation_responses, not a file) -- clicking it opens
@@ -1111,11 +1139,11 @@
     if (extraFilled) {
       const submittedFormUrl = step.formUrlKey ? w[step.formUrlKey] : null;
       if (submittedFormUrl) {
-        return `<a class="${cls} filled" href="${escapeHtml(submittedFormUrl)}" target="_blank" rel="noopener" title="Open your completed Evaluation Sheet">${check}<span class="wf-label">${label}</span></a>`;
+        return `<a class="${cls} filled" href="${escapeHtml(submittedFormUrl)}" target="_blank" rel="noopener" title="Open your completed Evaluation Sheet">${wrap(check + labelHtml)}</a>`;
       }
-      return `<div class="${cls} filled wf-eval-detail-btn">${check}<span class="wf-label">${label}</span></div>`;
+      return `<div class="${cls} filled wf-eval-detail-btn">${wrap(check + labelHtml)}</div>`;
     }
-    return `<div class="${cls}">${gap}<span class="wf-label">${label}</span></div>`;
+    return `<div class="${cls}">${wrap(gap + labelHtml)}</div>`;
   }
 
   function renderWorkflow(workflow) {
