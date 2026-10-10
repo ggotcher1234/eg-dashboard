@@ -2460,12 +2460,13 @@
   // a second researcher does not have to be added by hand every time -- the
   // "Add Specialist" button stays for the rare third.
   //
-  // Greg gave the order and the exact labels (10/2/26): "below Team Lead,
-  // row 1 = Market Research 1, row 2 = MR2, row 3 = Digital Marketing 1,
-  // row 4 = DM2, row 5 = GIS1, row 6 GIS2, row 7 = Watering Holes 1,
-  // row 8 = Watering Holes 2." Spelled out first, abbreviated second, which
-  // is why SLOT_LABELS is a literal map rather than a rule -- the labels are
-  // his, not a pattern to be inferred and then quietly "corrected".
+  // Greg gave the order on 10/2/26, with the second row of each pair
+  // abbreviated (MR2, DM2, GIS1/GIS2). Chris reversed that on 10/10/26,
+  // seeing the finished table: "all the work area's to be consistant and
+  // spelled out. Market Research 1, Market Research 2, etc." So the labels
+  // are a rule again rather than a literal map -- the specialty spelled out,
+  // then the slot number -- which also means an added third specialist
+  // reads the same way as the first two instead of being the odd one out.
   //
   // Admin and Quality Control are NCEG's own work, not the specialist team,
   // so they keep one row each and stay at the bottom.
@@ -2477,19 +2478,15 @@
     ["watering_holes", 1], ["watering_holes", 2],
     ["admin", 1], ["quality_control", 1],
   ];
-  const SLOT_LABELS = {
-    "team_lead:1": "Team Lead",
-    "market_research:1": "Market Research 1", "market_research:2": "MR2",
-    "digital_marketing:1": "Digital Marketing 1", "digital_marketing:2": "DM2",
-    "gis:1": "GIS1", "gis:2": "GIS2",
-    "watering_holes:1": "Watering Holes 1", "watering_holes:2": "Watering Holes 2",
-    "admin:1": "Admin", "quality_control:1": "Quality Control",
-  };
-  // A row outside the fixed grid (an added third specialist) still needs a
-  // name: the category plus its slot number, as before.
+  // Numbered where the engagement has more than one of that specialty, bare
+  // where it never can: "Market Research 1" and "Market Research 2", but
+  // "Team Lead", "Admin" and "Quality Control" on their own, since a
+  // "Team Lead 1" with no Team Lead 2 anywhere reads as a mistake.
+  const NUMBERED_SPECIALTIES = new Set(["market_research", "digital_marketing", "gis", "watering_holes"]);
   function slotLabel(specialty, slot) {
-    return SLOT_LABELS[`${specialty}:${slot}`]
-      || (SPECIALTY_LABELS[specialty] || specialty) + (slot > 1 ? " " + slot : "");
+    const base = SPECIALTY_LABELS[specialty] || specialty;
+    const n = Number(slot) || 1;
+    return (NUMBERED_SPECIALTIES.has(specialty) || n > 1) ? `${base} ${n}` : base;
   }
   function fixedSlotIndex(specialty, slot) {
     return FIXED_SLOTS.findIndex(([s, n]) => s === specialty && n === slot);
