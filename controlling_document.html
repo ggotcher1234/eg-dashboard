@@ -163,6 +163,16 @@
     .cd-q-numwrap { display: none; }
     .cd-q-numprint { display: inline; }
   }
+  /* The assigned person, on the card's own header line next to the number
+     (Greg's sketch, 10/10/26). Wide enough for "Firstname Lastname -- MR"
+     without pushing the question preview out of the row. */
+  .cd-q-personwrap { flex-shrink: 0; }
+  .cd-q-person { max-width: 220px; height: 26px; padding: 0 4px 0 6px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--navy); cursor: pointer; }
+  .cd-q-person:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
+  .cd-q-personprint { display: none; font-size: 11px; font-weight: 700; color: #000; }
+  @media print {
+    .cd-q-personprint:not(:empty) { display: inline; }
+  }
   .cd-q-del { flex-shrink: 0; width: 30px; height: 30px; border: 1.5px solid var(--border); background: #fff; color: var(--danger); border-radius: 6px; font-size: 17px; line-height: 1; cursor: pointer; font-family: inherit; }
   .cd-q-del:hover { background: #fdecea; }
   .cd-q-field { margin-bottom: 12px; }
@@ -405,6 +415,68 @@
   // ranking (A/B/C) and customer_notes -- the last three internal to this
   // form (new columns in 101_controlling_doc_question_fields.sql).
   const RESEARCH_AREAS = ["market_dynamics", "outbound", "inbound", "watering_holes"];
+
+  // ---------- Assigned Person (Greg, 10/10/26) ----------
+  // "add the Assigned Person from the Hours page to each question here."
+  //
+  // Same field the Research page's task list already writes
+  // (client_research_questions.assigned_user_id), so this is not a second
+  // place to record who owns a question -- it is the same record, reachable
+  // from the document where the questions are actually written. Set it here
+  // and the task list shows it; change it there and this shows it.
+  //
+  // The list is the engagement's own people (client_assignments, what Team &
+  // Hours fills in), never the whole Roster: a question cannot be owned by
+  // someone who is not on the engagement, and nobody wants to scroll past
+  // forty names to find the three who are.
+  const SPECIALTY_CODES = {
+    team_lead: "TL", market_research: "MR", digital_marketing: "DM",
+    gis: "GIS", watering_holes: "WH", admin: "ADM", quality_control: "QC",
+  };
+  // Which specialty a new question in each area belongs to by default --
+  // the same mapping the Research page uses to hand out new tasks, so a
+  // question written here lands on the same person's list either way.
+  const AREA_DEFAULT_SPECIALTY = {
+    market_dynamics: "market_research",
+    outbound: "digital_marketing",
+    inbound: "digital_marketing",
+    watering_holes: "watering_holes",
+  };
+  let engagementSpecialists = [];
+
+  // The slot number only shows when there are two of a specialty on THIS
+  // engagement: "MR" when Ann is the only market researcher, "DM1"/"DM2"
+  // when there are two digital marketers.
+  function specialtyCode(x) {
+    if (!x) return "";
+    const base = SPECIALTY_CODES[x.specialty] || String(x.specialty || "").slice(0, 3).toUpperCase();
+    const many = engagementSpecialists.filter((y) => y.specialty === x.specialty).length > 1;
+    return many ? base + x.slot : base;
+  }
+
+  function specialistOptionsHtml(selectedId) {
+    const opts = engagementSpecialists.map((x) => {
+      const label = `${x.name} \u2014 ${specialtyCode(x)}`;
+      return `<option value="${escapeHtml(x.userId)}"${x.userId === selectedId ? " selected" : ""}>${escapeHtml(label)}</option>`;
+    }).join("");
+    return `<option value=""${!selectedId ? " selected" : ""}>Unassigned</option>${opts}`;
+  }
+
+  function specialistName(userId) {
+    const who = engagementSpecialists.find((x) => x.userId === userId);
+    return who ? who.name : "";
+  }
+
+  function defaultAssigneeFor(area) {
+    const want = AREA_DEFAULT_SPECIALTY[area];
+    if (!want) return "";
+    // Lowest slot wins when an area has two people on it; the Team Lead
+    // moves it from there.
+    const match = engagementSpecialists
+      .filter((x) => x.specialty === want)
+      .sort((a, b) => a.slot - b.slot)[0];
+    return match ? match.userId : "";
+  }
   const AREA_PLACEHOLDER = {
     market_dynamics: "e.g. Who are the client's fastest-growing target markets?",
     outbound: "e.g. Which target accounts show recent signals of change?",
@@ -433,6 +505,8 @@
         row.background = bgHtmlToText(el.querySelector(".cd-q-bg-editor"));
         row.ranking = el.querySelector(".cd-q-rank").value;
         row.customer_notes = el.querySelector(".cd-q-notes").value;
+        const personEl = el.querySelector(".cd-q-person");
+        if (personEl) row.assigned_user_id = personEl.value || "";
         row.collapsed = el.classList.contains("collapsed");
       });
     });
@@ -527,7 +601,7 @@
       const container = document.querySelector(`.cd-questions[data-cd-area="${area}"]`);
       if (!container) return;
       let rows = questionsByArea[area] || [];
-      if (rows.length === 0) { rows = [blankQuestion()]; questionsByArea[area] = rows; }
+      if (rows.length === 0) { rows = [blankQuestion(area)]; questionsByArea[area] = rows; }
       container.innerHTML = rows.map((row, idx) => {
         const ph = idx === 0 ? (AREA_PLACEHOLDER[area] || "") : "";
         const qprev = (row.question || "").trim().replace(/\s+/g, " ");
@@ -543,6 +617,12 @@
                   ${[1,2,3,4,5,6,7,8,9].map((n) => `<option value="${n}"${String(row.question_number) === String(n) ? " selected" : ""}>${n}</option>`).join("")}
                 </select>
               </span>
+              <span class="cd-q-personwrap no-print">
+                <select class="cd-q-person" aria-label="Assigned person" title="Who on this engagement owns this question">
+                  ${specialistOptionsHtml(row.assigned_user_id || "")}
+                </select>
+              </span>
+              <span class="cd-q-personprint">${escapeHtml(specialistName(row.assigned_user_id || "") || "")}</span>
               <button type="button" class="cd-q-toggle" aria-expanded="${row.collapsed ? "false" : "true"}">
                 <!-- Greg (9/19/26), in three passes on the same card header:
                      the trailing number went first (it numbered cards 1..n
@@ -611,14 +691,18 @@
     return any;
   }
 
-  function blankQuestion() {
-    return { question: "", background: "", ranking: "", customer_notes: "", question_number: "", collapsed: false };
+  function blankQuestion(area) {
+    return {
+      question: "", background: "", ranking: "", customer_notes: "",
+      question_number: "", assigned_user_id: defaultAssigneeFor(area),
+      collapsed: false,
+    };
   }
 
   function addQuestionRow(area) {
     if (!RESEARCH_AREAS.includes(area)) return;
     syncQuestionModelFromDom();
-    (questionsByArea[area] = questionsByArea[area] || []).push(blankQuestion());
+    (questionsByArea[area] = questionsByArea[area] || []).push(blankQuestion(area));
     renderQuestions();
     const container = document.querySelector(`.cd-questions[data-cd-area="${area}"]`);
     const last = container && container.querySelector(".cd-q-row:last-child .cd-q-question");
@@ -637,7 +721,7 @@
     }
     if (row.id) pendingQuestionDeletes.push(row.id);
     rows.splice(idx, 1);
-    if (rows.length === 0) rows.push(blankQuestion());
+    if (rows.length === 0) rows.push(blankQuestion(area));
     renderQuestions();
   }
 
@@ -752,6 +836,7 @@
           ranking: q.ranking || "",
           customer_notes: q.customer_notes || "",
           question_number: q.question_number == null ? "" : String(q.question_number),
+          assigned_user_id: q.assigned_user_id || "",
           sort_order: q.sort_order,
           collapsed: false, // every row starts expanded on load
         }));
@@ -790,6 +875,7 @@
         // as 0, which the 1-9 check constraint would reject anyway.
         const qnum = row.question_number === "" || row.question_number == null
           ? null : parseInt(row.question_number, 10);
+        const who = row.assigned_user_id || null;
         if (row.id) {
           const original = areaAll.find((q) => q.id === row.id);
           const changed = !original
@@ -797,10 +883,11 @@
             || bg !== (original.background || "")
             || rank !== (original.ranking || "")
             || notes !== (original.customer_notes || "")
-            || qnum !== (original.question_number == null ? null : Number(original.question_number));
+            || qnum !== (original.question_number == null ? null : Number(original.question_number))
+            || who !== (original.assigned_user_id || null);
           if (changed) {
             const { error } = await sb.from("client_research_questions")
-              .update({ question: value || null, background: bg || null, ranking: rank || null, customer_notes: notes || null, question_number: qnum })
+              .update({ question: value || null, background: bg || null, ranking: rank || null, customer_notes: notes || null, question_number: qnum, assigned_user_id: who })
               .eq("id", row.id);
             if (error) throw new Error(error.message);
           }
@@ -813,6 +900,7 @@
             ranking: rank || null,
             customer_notes: notes || null,
             question_number: qnum,
+            assigned_user_id: who,
             sort_order: nextSort++,
           });
           if (error) throw new Error(error.message);
@@ -989,7 +1077,9 @@
 
     const [{ data: content }, { data: team }, programRes] = await Promise.all([
       sb.from("client_content").select("*").eq("client_id", clientId).maybeSingle(),
-      sb.from("client_assignments").select("id, is_team_lead, users(full_name, email)").eq("client_id", clientId).not("user_id", "is", null).order("is_team_lead", { ascending: false }),
+      // user_id/specialty/slot came along on 10/10 for the per-question
+      // Assigned Person picker; is_team_lead still names the lead above.
+      sb.from("client_assignments").select("id, user_id, specialty_type, slot_number, is_team_lead, users(full_name, email)").eq("client_id", clientId).not("user_id", "is", null).order("is_team_lead", { ascending: false }),
       // Same guarded lookup discovery_call_notes.html uses -- an engagement
       // with no Program yet resolves to null rather than failing the load.
       client.econ_dev_company_id
@@ -1001,6 +1091,18 @@
     const programName = program && (program.name || "").trim();
     const programLabel = [programCode ? `(${programCode})` : "", programName].filter(Boolean).join(" ");
     contentRow = content || {};
+
+    // Sorted the way the picker should read: Team Lead first, then by
+    // specialty and slot, which is the order Team & Hours lists them in.
+    engagementSpecialists = (team || [])
+      .filter((a) => a.user_id)
+      .map((a) => ({
+        userId: a.user_id,
+        name: (a.users && a.users.full_name) || "Unknown",
+        specialty: a.specialty_type,
+        slot: a.slot_number || 1,
+      }))
+      .sort((a, b) => String(a.specialty).localeCompare(String(b.specialty)) || a.slot - b.slot);
 
     const leadRow = (team || []).find((r) => r.is_team_lead && r.users && r.users.full_name);
     const teamLead = leadRow ? [leadRow.users.full_name, leadRow.users.email].filter(Boolean).join(", ") : "";
