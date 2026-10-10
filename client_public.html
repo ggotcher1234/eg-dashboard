@@ -159,8 +159,12 @@
      bottom. The chevron itself stops being the click target -- each row is
      its own link, and each has its own state. */
   .wf-step-stack { flex-direction: column; gap: 2px; padding-top: 8px; padding-bottom: 8px; cursor: default; }
+  /* Both rows share one left edge and the pair is centred as a block, so
+     the two checks sit in one column instead of drifting with the length
+     of each label. */
+  .wf-stack-inner { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
   .wf-step-stack .wf-line {
-    display: flex; align-items: center; justify-content: center; gap: 4px;
+    display: flex; align-items: center; justify-content: flex-start; gap: 0;
     color: #fff; text-decoration: none; font-size: 10.5px; line-height: 1.3; letter-spacing: 0.3px;
   }
   .wf-step-stack .wf-line:not(.filled) { opacity: 0.75; }
@@ -170,7 +174,10 @@
   .wf-step-stack .wf-line.wf-step-open:hover .wf-label {
     text-decoration: underline; text-decoration-color: #fff; text-underline-offset: 3px;
   }
-  .wf-step-stack .wf-line .wf-check { margin-right: 4px; font-size: 11px; }
+  /* The check column: 13px whether or not there is a check in it. */
+  .wf-step-stack .wf-line .wf-check {
+    width: 13px; margin-right: 5px; font-size: 11px; text-align: left; flex-shrink: 0;
+  }
   .wf-step-stack .wf-line.filled { cursor: pointer; }
   .wf-step-stack .wf-line.filled .wf-label {
     text-decoration: underline; text-decoration-color: rgba(255,255,255,0.5);
@@ -1036,13 +1043,23 @@
   // chevron itself for the three single steps, a line inside the chevron for
   // the two Close-Out rows. The branches are in priority order and are the
   // same ones this page has always used.
-  function stepPieceHtml(step, w, cls) {
+  function stepPieceHtml(step, w, cls, stacked) {
     const path = step.pathKey ? w[step.pathKey] : null;
     const url = step.urlKey ? w[step.urlKey] : null;
     const clientLink = step.clientLinkKey ? w[step.clientLinkKey] : null;
     const extraFilled = step.extraFilledKey ? w[step.extraFilledKey] : null;
     const label = escapeHtml(step.label);
     const check = `<span class="wf-check" aria-hidden="true">&#10003;</span>`;
+    // Greg (10/10/26) asked whether the two checks should line up or the
+    // Evaluation Sheet should indent like a submenu. Lined up: on the client
+    // dashboard these are two documents of one stage, not a parent and a
+    // child -- the submenu shape belongs in the workspace nav, where the
+    // list is left-aligned and the hierarchy is real. Here an indent inside
+    // a centred chevron reads as a mistake.
+    //
+    // Alignment needs a column the check sits in whether or not it is there,
+    // or the label slides sideways the day a document arrives.
+    const gap = stacked ? `<span class="wf-check wf-check-blank" aria-hidden="true"></span>` : "";
 
     // Greg (10/6/26): "make the client evaluation sheet available to open
     // from the client dashboard as soon as the controlling document is
@@ -1067,7 +1084,7 @@
       const opensNow = (step.opensAfterKeys || []).some((k) => w[k]);
       const formUrl = w[step.formUrlKey];
       if (opensNow && formUrl) {
-        return `<a class="${cls} wf-step-open" href="${escapeHtml(formUrl)}" target="_blank" rel="noopener" title="Open your Evaluation Sheet — fill it out and submit it here"><span class="wf-label">${label}</span></a>`;
+        return `<a class="${cls} wf-step-open" href="${escapeHtml(formUrl)}" target="_blank" rel="noopener" title="Open your Evaluation Sheet — fill it out and submit it here">${gap}<span class="wf-label">${label}</span></a>`;
       }
     }
     // A checkmark marks "done" explicitly -- the color shift alone (esp.
@@ -1098,7 +1115,7 @@
       }
       return `<div class="${cls} filled wf-eval-detail-btn">${check}<span class="wf-label">${label}</span></div>`;
     }
-    return `<div class="${cls}"><span class="wf-label">${label}</span></div>`;
+    return `<div class="${cls}">${gap}<span class="wf-label">${label}</span></div>`;
   }
 
   function renderWorkflow(workflow) {
@@ -1109,8 +1126,9 @@
         // The chevron is the container; the rows inside it are what click.
         const anyFilled = step.rows.some((r) => stepHasDocument(r, w));
         return `<div class="wf-step ${colorClass} wf-step-stack${anyFilled ? " filled" : ""}">`
-          + step.rows.map((r) => stepPieceHtml(r, w, "wf-line")).join("")
-          + `</div>`;
+          + `<div class="wf-stack-inner">`
+          + step.rows.map((r) => stepPieceHtml(r, w, "wf-line", true)).join("")
+          + `</div></div>`;
       }
       return stepPieceHtml(step, w, `wf-step ${colorClass}`);
     }).join("");
