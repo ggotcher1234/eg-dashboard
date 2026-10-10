@@ -735,6 +735,7 @@ function fillFromSubmitted(r){
   const byText = new Map(saved.filter(x => x && x.question).map(x => [String(x.question).trim(), x.rating || '']));
   state.q1Rows = state.q1Rows.map((row, i) => ({
     q: row.q,
+    person: row.person || '',
     rating: byText.has(String(row.q).trim())
       ? byText.get(String(row.q).trim())
       : ((saved[i] && saved[i].rating) || '')
@@ -745,7 +746,9 @@ function fillFromSubmitted(r){
   const live = new Set(state.q1Rows.map(x => String(x.q).trim()));
   saved.forEach(x => {
     if(x && x.question && !live.has(String(x.question).trim())){
-      state.q1Rows.push({ q: x.question, rating: x.rating || '' });
+      // No name on these: the question is gone from the Controlling
+      // Document, so there is nobody current to credit for it.
+      state.q1Rows.push({ q: x.question, person: '', rating: x.rating || '' });
     }
   });
 
@@ -825,7 +828,11 @@ async function init(){
 
   let formData;
   try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_evaluation_form_data`, {
+    // v2 (161) returns question_people alongside questions -- same rows,
+    // same order, the assigned specialist's name per question. v1 is still
+    // there and still works; this page is the only caller that needs the
+    // extra column.
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_evaluation_form_data_v2`, {
       method: 'POST',
       headers: {
         apikey: SUPABASE_ANON_KEY,
@@ -855,7 +862,12 @@ async function init(){
   STORE_KEY = 'nceg_eval_' + CLIENT_ID;
   state.company = formData.client_name || '';
   state.sponsor = formData.sponsor_name || '';
-  state.q1Rows = (formData.questions || []).map(q => ({ q, rating: '' }));
+  // Greg (10/10/26): "we want to include the specialist name with the
+  // question ... This will help the client remember who did the research
+  // for that question." question_people is positional -- index i is who
+  // was assigned questions[i] on the Controlling Document, '' if nobody.
+  const people = formData.question_people || [];
+  state.q1Rows = (formData.questions || []).map((q, i) => ({ q, person: people[i] || '', rating: '' }));
 
   // Greg (10/6/26), opening Clippard's sheet from their dashboard: "i want
   // the real form filled out with the information that was in their pdf."
@@ -903,7 +915,14 @@ function buildResearchRows(){
     const tr = document.createElement('tr');
     // Questions are always read-only text here -- they're fetched live
     // from the client's real research questions, never hand-typed.
-    const qCell = '<td style="width:78%;font-size:0.85rem;line-height:1.35;padding:8px 10px;">' + esc(row.q) + '</td>';
+    // The researcher's name sits under the question rather than in a
+    // column of its own: the three rating columns are fixed-width and a
+    // fourth would squeeze the question text, which is the thing being
+    // read. Quiet styling -- it is a reminder, not a second question.
+    const who = row.person
+      ? '<div style="margin-top:4px;font-size:0.75rem;color:#6b7280;">Researched by ' + esc(row.person) + '</div>'
+      : '';
+    const qCell = '<td style="width:78%;font-size:0.85rem;line-height:1.35;padding:8px 10px;">' + esc(row.q) + who + '</td>';
     tr.innerHTML = qCell +
       ['very','partial','not'].map(v =>
         '<td class="radio-cell">' +
@@ -1032,13 +1051,14 @@ function loadState(){
   try{
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
     if(!saved) return;
-    const liveQuestions = state.q1Rows.map(r => r.q);
+    const liveQuestions = state.q1Rows.map(r => ({ q: r.q, person: r.person || '' }));
     Object.assign(state, saved);
     // Always keep the freshly-fetched questions -- don't let a stale
     // localStorage snapshot override them if the client's questions
     // changed since this CEO last opened the link.
-    state.q1Rows = liveQuestions.map((q, i) => ({
-      q,
+    state.q1Rows = liveQuestions.map((row, i) => ({
+      q: row.q,
+      person: row.person,
       rating: (saved.q1Rows && saved.q1Rows[i]) ? saved.q1Rows[i].rating : ''
     }));
   } catch(e){}
