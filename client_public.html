@@ -173,10 +173,13 @@
   .wf-step-stack .wf-line .wf-check { margin-right: 4px; font-size: 11px; }
   .wf-step-stack .wf-line.filled { cursor: pointer; }
   .wf-step-stack .wf-line.filled .wf-label {
-    text-decoration: underline; text-decoration-color: rgba(255,255,255,0.5); text-underline-offset: 3px;
+    text-decoration: underline; text-decoration-color: rgba(255,255,255,0.5);
+    text-underline-offset: 3px; text-decoration-thickness: 1px;
   }
   .wf-step-stack .wf-line.filled:hover .wf-label { text-decoration-color: #fff; text-decoration-thickness: 2px; }
-  .wf-step.filled { cursor: pointer; }
+  /* A stacked chevron is a container, not a target -- its rows are the
+     links -- so the pointer stays off it even when it reads as started. */
+  .wf-step.filled:not(.wf-step-stack) { cursor: pointer; }
   /* Greg (9/25/26), on Chris: "it's not intuitively obvious that workflow
      arrows are clickable with documents behind them if they have a
      checkmark." The checkmark says DONE, which is not the same claim as
@@ -209,11 +212,17 @@
      check mark Chris just asked to have back. Only .filled steps get it,
      so the underline also separates "done, and here is the document" from
      "not there yet" -- which the dimmed colour alone was carrying. */
-  .wf-step.filled .wf-label {
+  /* :not(.wf-step-stack) matters. Greg (10/10/26): "close out video is
+     still showing underline even though there is no document attached."
+     The Close-Out chevron carries .filled when EITHER of its two rows has
+     a document, and this rule reached every .wf-label inside it -- so the
+     Evaluation Sheet's document was underlining the empty Close-Out Video
+     row above it. On a stacked chevron each row decorates itself. */
+  .wf-step.filled:not(.wf-step-stack) .wf-label {
     text-decoration: underline; text-underline-offset: 3px;
     text-decoration-thickness: 1px; text-decoration-color: rgba(255,255,255,0.5);
   }
-  .wf-step.filled:hover .wf-label { text-decoration-color: #fff; text-decoration-thickness: 2px; }
+  .wf-step.filled:not(.wf-step-stack):hover .wf-label { text-decoration-color: #fff; text-decoration-thickness: 2px; }
 
   /* Each step gets its own color, dimmed until its document/link is set,
      bright (and clickable) once it is -- Discovery blue, Controlling tan,
