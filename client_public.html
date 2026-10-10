@@ -147,25 +147,38 @@
   }
   .wf-pdf-link:hover { color: var(--navy); }
   .wf-step {
-    flex: 1; padding: 12px 20px 12px 32px; color: #fff; font-size: 12px; font-weight: 700;
+    /* SYMMETRIC padding (Greg, 10/10/26: "This Text is Not Centered in the
+       Chevron"). The clip-path below is symmetric -- a 16px notch bitten
+       out of the left edge, a 16px point added to the right -- so the
+       shape's visual centre is the box's centre. The old 32px/20px padding
+       therefore pushed every label 6px right of it, in all four chevrons at
+       once, which is exactly the kind of off-by-a-hair that reads as wrong
+       without announcing why. Equal padding puts the content box's centre
+       on the shape's centre. */
+    flex: 1; padding: 12px 28px; color: #fff; font-size: 12px; font-weight: 700;
     text-align: center; text-transform: uppercase; letter-spacing: 0.3px; position: relative;
     clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%, 16px 50%);
     margin-left: -16px; text-decoration: none; display: flex; align-items: center; justify-content: center;
     transition: background 0.15s ease;
   }
   .wf-step:first-child { margin-left: 0; clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%); }
-  /* Check and label as ONE block, sized to its contents and centred in the
-     chevron. Without it the chevron centres two separate flex items, and a
-     label long enough to wrap takes the full width and strands the check
-     over at the left edge -- which is what "Controlling Document" was
-     doing.
-     Greg (10/10/26), on left-aligning the words inside that block: "this
-     does not look good. center the text in the chevron. keep the checkmark
-     next to the text." So the block holds the check beside the words, and
-     the words themselves centre -- a wrapped label stacks centred lines
-     rather than hanging off to the left of the arrow. */
-  .wf-step-inner { display: inline-flex; align-items: center; min-width: 0; }
-  .wf-step .wf-label { text-align: center; }
+  /* Greg (10/10/26), marking up a screenshot: "all checkmarks should be
+     within a space of the text. the text should be centered in the
+     chevron."
+     The check is now INLINE TEXT, not a flex cell. Every previous attempt
+     laid the check and the label out as two boxes side by side, and a box
+     that is wide enough to wrap is wide enough to leave its neighbour
+     behind: "Controlling Document" wrapped, its label box took the
+     remaining width, centred its two lines inside itself, and left the
+     check stranded a hundred pixels to the left. As inline content the
+     check is simply the first thing on the first line -- it cannot be
+     anywhere but next to the words -- and text-align centres the whole run,
+     wrapped or not. */
+  .wf-step-inner { display: block; text-align: center; min-width: 0; }
+  /* Not inside the stacked chevron: there the check is a 13px column, and
+     width does nothing to an inline box. */
+  .wf-step:not(.wf-step-stack) .wf-check { display: inline; }
+  .wf-step:not(.wf-step-stack) .wf-label { display: inline; }
   /* The exception, in his words: "exception for the 4th chevron as it is
      two separate documents, center text in cheveron but keep the
      checkmarks aligned." Two rows, so the checks need one column to sit
