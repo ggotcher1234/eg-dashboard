@@ -206,11 +206,19 @@
      the client on the right -- so the email button takes the slack between
      them rather than sitting shoulder to shoulder with the file controls. */
   .wf-action-row > [id$="-client"] > :first-child { margin-left: auto; }
+  /* Close-Out reverses the pair: the email is the first thing used, so it
+     holds the left edge and the recording controls take the slack on the
+     right (Greg, 10/10/26). Either the file cell or, before anything is
+     attached, the "+ Add file" trigger is the one that gets pushed. */
+  .wf-action-row > #wf-closeout-file > :first-child,
+  .wf-action-row > #wf-closeout-file:empty + #wf-closeout-actions > :first-child { margin-left: auto; }
   /* At phone width the row wraps and the email button lands on its own
      line; pushed right there it would float away from everything, so it
      goes back to the left edge. */
   @media (max-width: 520px) {
-    .wf-action-row > [id$="-client"] > :first-child { margin-left: 0; }
+    .wf-action-row > [id$="-client"] > :first-child,
+    .wf-action-row > #wf-closeout-file > :first-child,
+    .wf-action-row > #wf-closeout-file:empty + #wf-closeout-actions > :first-child { margin-left: 0; }
   }
   /* Greg (10/6/26): "when you click on the evaluation sheet in the left menu
      have it open up in the right column window." The sheet renders in place
@@ -720,8 +728,13 @@
               <div class="wf-item-header">
                 <div class="wf-item-title">Close-Out Recording</div>
               </div>
-              <div class="wf-item-hint">The recording of the close-out call &mdash; usually the Zoom link, or upload the file. It shows on the client&rsquo;s dashboard above their Evaluation Sheet.</div>
+              <div class="wf-item-hint">Send the close-out email to book the call, then attach the recording afterwards &mdash; usually the Zoom link, or upload the file. The recording shows on the client&rsquo;s dashboard above their Evaluation Sheet.</div>
+              <!-- Greg (10/10/26): "make the email button on the left and the
+                   close out recording on the right as that is the order that
+                   they will be used." The row reads as the sequence: ask for
+                   the call, hold it, then file what came out of it. -->
               <div class="wf-action-row">
+                <div id="wf-closeout-email"></div>
                 <div id="wf-closeout-file"></div>
                 <div id="wf-closeout-actions"></div>
               </div>
@@ -731,10 +744,9 @@
             <span class="wf-item-num">5</span>
             <div class="wf-item-body">
               <div class="wf-item-header">
-                <div class="wf-item-title">Evaluation Sheet -- Send Evaluation Email (to the CEO, from the Team Lead)</div>
-                <div id="wf-eval-header-actions"></div>
+                <div class="wf-item-title">Evaluation Sheet</div>
               </div>
-              <div class="wf-item-hint">The sheet the CEO fills in is below. Use Create Email to send it to them, or Get Link to grab the URL and write your own note. Their reply comes back right here &mdash; or attach a signed copy if they return one on paper.</div>
+              <div class="wf-item-hint">The sheet the CEO fills in is below. The email that sends it to them is on the Close-Out page, since it books the call at the same time. Their reply comes back right here &mdash; or attach a signed copy if they return one on paper.</div>
               <div class="wf-action-row">
                 <div id="wf-eval-link"></div>
                 <div id="wf-eval-file"></div>
@@ -1884,7 +1896,13 @@
 
   function renderEvalLinkField() {
     const container = $("wf-eval-link");
-    const actions = $("wf-eval-header-actions");
+    // Greg (10/10/26): "now let's move the create email button from the
+    // Evaluation Page to the Close-Out page with the Close Out Recording."
+    // It belongs there because of what the email now says (c80c34d): it
+    // asks for the close-out call and carries the sheet along with it, so
+    // the button sits beside the recording that call produces rather than
+    // on the sheet it links to.
+    const actions = $("wf-closeout-email");
     if (!container || !actions) return;
 
     // Greg (8/25/26): "instead of putting a button on the dashboard that
