@@ -730,12 +730,21 @@
     }
     currentClient = client;
 
-    const [{ data: content }, { data: contacts }, { data: ccList }, { data: team }, { data: partnerSelections }, partnerRes] = await Promise.all([
+    const [{ data: content }, { data: contacts }, { data: ccList }, { data: team }, { data: partnerSelections }, { data: ccContactSelections }, partnerRes] = await Promise.all([
       sb.from("client_content").select("*").eq("client_id", clientId).maybeSingle(),
       sb.from("client_contacts").select("*").eq("client_id", clientId),
       sb.from("client_cc_list").select("*").eq("client_id", clientId).order("sort_order").order("created_at"),
       sb.from("client_assignments").select("id, is_team_lead, users(full_name, email)").eq("client_id", clientId).not("user_id", "is", null).order("is_team_lead", { ascending: false }),
       sb.from("client_team_partner_contacts").select("partner_contact_id").eq("client_id", clientId),
+      // The OTHER table holding the same idea. An engagement's Program
+      // contacts are ticked on Client Info and land in client_cc_contacts;
+      // client_team_partner_contacts is what accept_client_application()
+      // writes. Both are in use -- across the 7 engagements there are 2 rows
+      // in one and 3 in the other -- and this form only ever read the first,
+      // which is why Fuel Efficiency showed no Program Manager while two
+      // Program contacts were ticked on it (Greg, 10/11/26: "the discovery
+      // document didn't grab the PA or the CC list").
+      sb.from("client_cc_contacts").select("partner_contact_id").eq("client_id", clientId),
       client.econ_dev_company_id
         ? sb.from("econ_dev_companies").select("name").eq("id", client.econ_dev_company_id).single()
         : Promise.resolve({ data: null }),
@@ -763,14 +772,29 @@
     // the Close-Out Evaluation email's CC line). This looks the contact
     // up the same two-step way client_profile.html's Team section does:
     // selected partner_contact_id's first, then the real contact rows.
-    const partnerContactIds = (partnerSelections || []).map((s) => s.partner_contact_id);
+    const partnerContactIds = [...new Set([
+      ...(partnerSelections || []).map((x) => x.partner_contact_id),
+      ...(ccContactSelections || []).map((x) => x.partner_contact_id),
+    ].filter(Boolean))];
     let programManager = "";
+    let programCcRows = [];
     if (partnerContactIds.length) {
       const { data: partnerContacts } = await sb
         .from("econ_dev_partner_contacts")
-        .select("name, title, email, phone")
+        .select("id, name, title, email, phone, is_program_administrator, sort_order")
         .in("id", partnerContactIds);
-      programManager = (partnerContacts || []).map((c) => [c.name, c.title, c.email, c.phone].filter(Boolean).join(", ")).join("\n");
+      const rows = (partnerContacts || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+      // The Program Manager line is ONE person: the Program Administrator
+      // if this engagement has one ticked, otherwise the first contact. It
+      // used to list every ticked contact, one per line, which is how a
+      // single-line field ended up trying to hold a whole CC list.
+      const pa = rows.find((c) => c.is_program_administrator) || rows[0] || null;
+      if (pa) programManager = [pa.name, pa.title, pa.email, pa.phone].filter(Boolean).join(", ");
+      // Everyone else ticked for this engagement is who gets copied, so
+      // they are the CC List's live default.
+      programCcRows = rows
+        .filter((c) => !pa || c.id !== pa.id)
+        .map((c) => ({ name: c.name || "", title: c.title || "", email: c.email || "" }));
     }
 
     $("back-link").href = `client_workflow_files.html?client=${client.id}&doc=discovery`;
@@ -786,7 +810,12 @@
     $("f-program-name").value = fieldValue(contentRow.discovery_program_name, programName);
     $("f-program-manager").value = fieldValue(contentRow.discovery_program_manager, programManager);
     $("f-company-address").value = fieldValue(contentRow.discovery_company_address, client.address);
-    ccListRows = parseCcListSnapshot(contentRow.discovery_cc_list) || liveCcListRows;
+    // client_cc_list is the engagement's own hand-kept CC list and is empty
+    // on every engagement so far, so this table was always blank. Falling
+    // back to the Program contacts ticked for the engagement fills it with
+    // the people who are in fact copied on this client's correspondence.
+    ccListRows = parseCcListSnapshot(contentRow.discovery_cc_list)
+      || (liveCcListRows.length ? liveCcListRows : programCcRows);
     if (!ccListRows.length) ccListRows = [{ name: "", title: "", email: "" }];
     renderCcListRows();
     $("f-company-contacts").value = fieldValue(contentRow.discovery_company_contacts, contactLines);
