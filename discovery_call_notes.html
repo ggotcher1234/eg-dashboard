@@ -63,6 +63,31 @@
   .field input, .field textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; }
   .field input:focus, .field textarea:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
   .field textarea { resize: vertical; }
+  /* Rich-text Notes (10/11/26). Looks like the textarea it replaced, so the
+     form still reads as one set of fields. */
+  .rt-toolbar { display: flex; gap: 3px; margin-bottom: 6px; flex-wrap: wrap; }
+  .rt-toolbar button { min-width: 30px; height: 28px; padding: 0 8px; border: 1px solid var(--border);
+                       border-radius: 6px; background: #eef1f4; color: var(--text); font-size: 12.5px;
+                       font-weight: 600; font-family: inherit; cursor: pointer;
+                       display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+  .rt-toolbar button:hover { background: #e2e6ea; }
+  .rt-toolbar button.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .rt-editor { width: 100%; min-height: 300px; max-height: 60vh; overflow-y: auto;
+               padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+               font-size: 14px; font-family: inherit; line-height: 1.55; background: #fff; }
+  .rt-editor:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
+  .rt-editor p { margin: 0 0 8px; }
+  .rt-editor p:last-child { margin-bottom: 0; }
+  .rt-editor ul, .rt-editor ol { margin: 0 0 8px; padding-left: 22px; }
+  .rt-editor ul:last-child, .rt-editor ol:last-child { margin-bottom: 0; }
+  .rt-editor li { margin: 0 0 3px; }
+  /* An empty contenteditable shows nothing at all, so it needs its own
+     placeholder -- :empty alone misses the <br> a browser leaves behind. */
+  .rt-editor:empty::before,
+  .rt-editor:has(> br:only-child)::before { content: attr(data-placeholder); color: var(--muted); }
+  @media print {
+    .rt-editor { border: none; padding: 0; max-height: none; overflow: visible; }
+  }
   .field-row { display: flex; gap: 14px; flex-wrap: wrap; }
   .field-row .field { flex: 1; min-width: 200px; }
 
@@ -257,9 +282,22 @@
           <label for="f-participants">Participants on the Call</label>
           <textarea id="f-participants" rows="2" placeholder="Names of everyone who joined the call"></textarea>
         </div>
-        <div class="field">
+        <!-- Greg (10/11/26): "make the discover call notes section handle
+             rich text." Same editor the Controlling Document's Background
+             field uses, and the same storage: the column stays plain text
+             with a tiny syntax ("- " bullets, "1." numbered, **bold**,
+             *italic*), so notes remain readable and greppable in the
+             database and nothing downstream has to learn HTML. -->
+        <div class="field" id="notes-field">
           <label for="f-notes">Notes</label>
-          <textarea id="f-notes" rows="14" placeholder="Discovery call notes…"></textarea>
+          <div class="rt-toolbar no-print">
+            <button type="button" data-rt="bold" title="Bold"><strong>B</strong></button>
+            <button type="button" data-rt="italic" title="Italic"><em>I</em></button>
+            <button type="button" data-rt="bullet" title="Bulleted list">&#8226;&nbsp;List</button>
+            <button type="button" data-rt="number" title="Numbered list">1.&nbsp;List</button>
+          </div>
+          <div id="f-notes" class="rt-editor" contenteditable="true" role="textbox" aria-multiline="true"
+               aria-label="Discovery call notes" data-placeholder="Discovery call notes&hellip;"></div>
         </div>
         <div class="field">
           <label>Attach a File or Link</label>
@@ -281,6 +319,138 @@
 
   const $ = (id) => document.getElementById(id);
   const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
+
+  // ---------- Notes: rich text in, markdown-lite out ----------
+  // The same pair controlling_document.html uses for its Background field,
+  // and deliberately the same stored format: discovery_call_notes stays a
+  // plain-text column anyone can read in the database or grep, rather than
+  // becoming a blob of HTML the moment someone bolds a word.
+  function notesTextToHtml(text) {
+    if (!text) return "";
+    const inline = (x) => escapeHtml(x)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>");
+    const lines = String(text).split(/\r?\n/);
+    let html = "", listType = null; // null | "ul" | "ol"
+    const closeList = () => { if (listType) { html += `</${listType}>`; listType = null; } };
+    for (const raw of lines) {
+      const line = raw.trim();
+      const ul = /^[-*\u2022]\s+(.*)$/.exec(line);
+      const ol = /^\d+[.)]\s+(.*)$/.exec(line);
+      if (ul) {
+        if (listType !== "ul") { closeList(); html += "<ul>"; listType = "ul"; }
+        html += `<li>${inline(ul[1])}</li>`;
+      } else if (ol) {
+        if (listType !== "ol") { closeList(); html += "<ol>"; listType = "ol"; }
+        html += `<li>${inline(ol[1])}</li>`;
+      } else {
+        closeList();
+        if (line) html += `<p>${inline(line)}</p>`;
+      }
+    }
+    closeList();
+    return html;
+  }
+
+  function notesInlineToText(node) {
+    let out = "";
+    node.childNodes.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) { out += child.textContent; return; }
+      if (child.nodeType !== Node.ELEMENT_NODE) return;
+      const tag = child.tagName.toLowerCase();
+      const inner = notesInlineToText(child);
+      if (tag === "b" || tag === "strong") out += `**${inner}**`;
+      else if (tag === "i" || tag === "em") out += `*${inner}*`;
+      else if (tag === "br") out += "\n";
+      else out += inner;
+    });
+    return out;
+  }
+
+  function notesCollectLines(node, lines) {
+    node.childNodes.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        const t = child.textContent.trim();
+        if (t) lines.push(t);
+        return;
+      }
+      if (child.nodeType !== Node.ELEMENT_NODE) return;
+      const tag = child.tagName.toLowerCase();
+      if (tag === "ul" || tag === "ol") {
+        let i = 1;
+        child.querySelectorAll(":scope > li").forEach((li) => {
+          const prefix = tag === "ol" ? `${i++}. ` : "- ";
+          lines.push(prefix + notesInlineToText(li).trim());
+        });
+      } else if (tag === "li") {
+        lines.push("- " + notesInlineToText(child).trim());
+      } else if (tag === "p" || tag === "div") {
+        if (child.querySelector("ul, ol, li")) {
+          notesCollectLines(child, lines);
+        } else {
+          const t = notesInlineToText(child).trim();
+          if (t) lines.push(t);
+        }
+      } else if (tag !== "br") {
+        notesCollectLines(child, lines);
+      }
+    });
+  }
+
+  function notesHtmlToText(el) {
+    if (!el) return "";
+    const lines = [];
+    notesCollectLines(el, lines);
+    return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  // ---------- Notes toolbar ----------
+  const RT_COMMANDS = { bold: "bold", italic: "italic", bullet: "insertUnorderedList", number: "insertOrderedList" };
+  // <p> rather than <div> between paragraphs, so what comes back out maps
+  // cleanly onto the stored line-per-paragraph format.
+  try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch (e) {}
+
+  function rtUpdateToolbar() {
+    const toolbar = document.querySelector(".rt-toolbar");
+    if (!toolbar) return;
+    toolbar.querySelectorAll("button[data-rt]").forEach((b) => {
+      let on = false;
+      try { on = document.queryCommandState(RT_COMMANDS[b.dataset.rt]); } catch (e) {}
+      b.classList.toggle("active", on);
+    });
+  }
+  // mousedown+preventDefault keeps the editor's selection when a button is
+  // pressed -- a plain click would blur the editor first and the command
+  // would land on nothing.
+  document.addEventListener("mousedown", (e) => {
+    if (e.target.closest(".rt-toolbar button[data-rt]")) e.preventDefault();
+  });
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".rt-toolbar button[data-rt]");
+    if (!btn) return;
+    const editor = document.getElementById("f-notes");
+    if (!editor) return;
+    editor.focus();
+    document.execCommand(RT_COMMANDS[btn.dataset.rt]);
+    rtUpdateToolbar();
+  });
+  document.addEventListener("selectionchange", () => {
+    const sel = document.getSelection();
+    if (!sel || !sel.anchorNode) return;
+    const host = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
+    if (host && host.closest && host.closest(".rt-editor")) rtUpdateToolbar();
+  });
+  // Paste as plain text: a paragraph dragged in from Word or a browser
+  // arrives with its own fonts, colours and spans, none of which survive the
+  // round trip to the stored format -- so it would look right until the next
+  // time the form was opened.
+  document.addEventListener("paste", (e) => {
+    const editor = e.target.closest && e.target.closest(".rt-editor");
+    if (!editor) return;
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData("text/plain");
+    document.execCommand("insertText", false, text);
+  });
 
   function htmlToPlainText(html) {
     if (!html) return "";
@@ -633,7 +803,7 @@
     $("f-call-date").value = contentRow.discovery_call_date || "";
     $("f-call-link").value = contentRow.discovery_call_link || "";
     $("f-participants").value = contentRow.discovery_call_participants || "";
-    $("f-notes").value = contentRow.discovery_call_notes || "";
+    $("f-notes").innerHTML = notesTextToHtml(contentRow.discovery_call_notes || "");
     if (contentRow.discovery_call_notes || contentRow.discovery_call_participants) {
       $("save-hint").textContent = "Previously saved notes loaded below.";
     }
@@ -653,7 +823,7 @@
         discovery_call_date: $("f-call-date").value || null,
         discovery_call_link: $("f-call-link").value.trim() || null,
         discovery_call_participants: $("f-participants").value,
-        discovery_call_notes: $("f-notes").value,
+        discovery_call_notes: notesHtmlToText($("f-notes")),
         discovery_team_lead: $("f-team-lead").value,
         discovery_program_name: $("f-program-name").value,
         discovery_company_name: $("f-company-name").value,
