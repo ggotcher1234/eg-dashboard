@@ -920,10 +920,23 @@
     { key: "resource_vault", icon: "&#128193;", label: (n) => `Resource Vault${n ? ` (${n})` : ""}`, openByDefault: true },
   ];
 
+  // Greg (10/11/26): "the QC and Admin should not show up as team members.
+  // they are in the silent background." They are assigned to the engagement
+  // and they log hours against it, so they belong on Team & Hours -- but the
+  // client never meets them, and listing them only invites a call to someone
+  // whose job is to stay out of the way. Filtered here rather than in the
+  // view so the count on the green bar matches the list, and so engagements
+  // already snapshotted at finalize are cleaned up too.
+  const BACKSTAGE_SPECIALTIES = new Set(["admin", "quality_control"]);
+
+  function clientFacingTeam(rows) {
+    return (rows || []).filter((r) => r && !BACKSTAGE_SPECIALTIES.has(r.specialty));
+  }
+
   function renderActionBars(row, expandAll) {
     const container = $("action-bars");
     container.innerHTML = ACTION_BAR_DEFS.map((def) => {
-      const rows = row[def.key] || [];
+      const rows = def.key === "team" ? clientFacingTeam(row.team) : (row[def.key] || []);
       // Nothing to show means nothing to open -- an empty section expanded on
       // arrival just advertises that it is empty.
       const open = expandAll || (def.openByDefault && rows.length > 0);
