@@ -1406,9 +1406,9 @@
     // "all customer emails should cc the team leader, PA and assigned cc
     // list, cgibbons@economicgardening.org and rbenson@economicgardening.org"
     //
-    // The assigned CC list is client_cc_contacts -- chosen per engagement
-    // when the application was accepted (116_engagement_cc_contacts.sql) and
-    // editable on Client Info. The PAs are the Program's own Program
+    // The assigned CC list is client_partner_contacts.on_cc_list -- chosen
+    // per engagement when the application was accepted and editable on
+    // Client Info (116, merged into one table by 163). The PAs are the Program's own Program
     // Administrators, which is a wider set: someone can be a PA on the
     // Program without having been ticked for this engagement, and Greg wants
     // both. Both sets are Program contacts, so the dedupe below collapses
@@ -1418,8 +1418,8 @@
       const [{ data: admins }, { data: ccRows }] = await Promise.all([
         sb.from("econ_dev_partner_contacts").select("id, name, email")
           .eq("partner_id", programId).eq("active", true).eq("is_program_administrator", true),
-        sb.from("client_cc_contacts").select("econ_dev_partner_contacts(id, name, email)")
-          .eq("client_id", clientId),
+        sb.from("client_partner_contacts").select("econ_dev_partner_contacts(id, name, email)")
+          .eq("client_id", clientId).eq("on_cc_list", true),
       ]);
       listData.programAdmins = admins || [];
       listData.ccContacts = (ccRows || []).map((r) => r.econ_dev_partner_contacts).filter(Boolean);

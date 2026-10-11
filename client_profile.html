@@ -2606,9 +2606,30 @@
   // (above, read-only). Non-consultants -- reps from the client's assigned
   // Economic Development Partner org -- live in econ_dev_partner_contacts,
   // managed on the Econ Dev Partners page, and get selected in per client
-  // via client_team_partner_contacts. Only the ones checked here show on the
+  // via client_partner_contacts.on_client_team. Only the ones checked here show on the
   // public dashboard's combined Economic Gardening Team list (Section 041).
-  // Who's copied on THIS engagement's correspondence -- client_cc_contacts,
+  // ONE row per (engagement, Program contact), two flags on it: 163 merged
+  // client_team_partner_contacts and client_cc_contacts, which held the same
+  // pair of ids and differed only in which question they answered. Ticking
+  // someone here is still a different decision from putting them on the
+  // client's dashboard -- that was never the problem. The problem was that
+  // a page reading the wrong one of two near-identical tables shows nothing
+  // and says nothing, which is how the Discovery form sat empty for a month.
+  //
+  // Unticking clears a flag rather than deleting the row, since the same
+  // person may be ticked for the other thing.
+  async function setPartnerContactFlag(partnerContactId, field, value) {
+    if (value) {
+      return sb.from("client_partner_contacts").upsert(
+        { client_id: currentClient.id, partner_contact_id: partnerContactId, [field]: true },
+        { onConflict: "client_id,partner_contact_id" }
+      );
+    }
+    return sb.from("client_partner_contacts").update({ [field]: false })
+      .eq("client_id", currentClient.id).eq("partner_contact_id", partnerContactId);
+  }
+
+  // Who's copied on THIS engagement's correspondence -- on_cc_list,
   // set when the application was accepted (Chris/Rita, 9/11/26). Same shape as
   // the partner-contacts picker below, deliberately: they answer neighbouring
   // questions and shouldn't look like two different features.
@@ -2628,7 +2649,7 @@
     const [{ data: partner }, { data: contacts, error: contactsErr }, { data: picks, error: pickErr }] = await Promise.all([
       sb.from("econ_dev_companies").select("name").eq("id", currentClient.econ_dev_company_id).single(),
       sb.from("econ_dev_partner_contacts").select("*").eq("partner_id", currentClient.econ_dev_company_id).eq("active", true).order("sort_order").order("created_at"),
-      sb.from("client_cc_contacts").select("partner_contact_id").eq("client_id", currentClient.id),
+      sb.from("client_partner_contacts").select("partner_contact_id").eq("client_id", currentClient.id).eq("on_cc_list", true),
     ]);
 
     if (contactsErr || pickErr) {
@@ -2675,8 +2696,9 @@
     container.querySelectorAll("[data-remove-cc-id]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         btn.disabled = true;
-        const { error } = await sb.from("client_cc_contacts").delete()
-          .eq("client_id", currentClient.id).eq("partner_contact_id", btn.dataset.removeCcId);
+        // Untick, not delete: one row per (engagement, contact) now carries
+        // both decisions, and the person may still be on the client's team.
+        const { error } = await setPartnerContactFlag(btn.dataset.removeCcId, "on_cc_list", false);
         if (error) { showBanner("Couldn't remove from the CC list: " + error.message, "error"); btn.disabled = false; return; }
         await loadEngagementCcSection();
       });
@@ -2688,8 +2710,7 @@
         const picker = document.getElementById("engagement-cc-picker");
         if (!picker || !picker.value) return;
         addBtn.disabled = true;
-        const { error } = await sb.from("client_cc_contacts")
-          .insert({ client_id: currentClient.id, partner_contact_id: picker.value });
+        const { error } = await setPartnerContactFlag(picker.value, "on_cc_list", true);
         addBtn.disabled = false;
         if (error) { showBanner("Couldn't add to the CC list: " + error.message, "error"); return; }
         await loadEngagementCcSection();
@@ -2709,7 +2730,7 @@
     const [{ data: partner }, { data: contacts, error: contactsErr }, { data: selections, error: selErr }] = await Promise.all([
       sb.from("econ_dev_companies").select("name").eq("id", currentClient.econ_dev_company_id).single(),
       sb.from("econ_dev_partner_contacts").select("*").eq("partner_id", currentClient.econ_dev_company_id).eq("active", true).order("sort_order").order("created_at"),
-      sb.from("client_team_partner_contacts").select("partner_contact_id").eq("client_id", currentClient.id),
+      sb.from("client_partner_contacts").select("partner_contact_id").eq("client_id", currentClient.id).eq("on_client_team", true),
     ]);
 
     if (contactsErr || selErr) {
@@ -2758,7 +2779,7 @@
       btn.addEventListener("click", async () => {
         const partnerContactId = btn.dataset.removePartnerContactId;
         btn.disabled = true;
-        const { error } = await sb.from("client_team_partner_contacts").delete().eq("client_id", currentClient.id).eq("partner_contact_id", partnerContactId);
+        const { error } = await setPartnerContactFlag(partnerContactId, "on_client_team", false);
         if (error) { showBanner("Couldn't remove from team list: " + error.message, "error"); btn.disabled = false; return; }
         await loadPartnerContactsSection();
       });
@@ -2771,7 +2792,7 @@
         const partnerContactId = picker.value;
         if (!partnerContactId) return;
         addBtn.disabled = true;
-        const { error } = await sb.from("client_team_partner_contacts").insert({ client_id: currentClient.id, partner_contact_id: partnerContactId });
+        const { error } = await setPartnerContactFlag(partnerContactId, "on_client_team", true);
         if (error) { showBanner("Couldn't add to team list: " + error.message, "error"); addBtn.disabled = false; return; }
         await loadPartnerContactsSection();
       });

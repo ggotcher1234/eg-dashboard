@@ -730,21 +730,16 @@
     }
     currentClient = client;
 
-    const [{ data: content }, { data: contacts }, { data: ccList }, { data: team }, { data: partnerSelections }, { data: ccContactSelections }, partnerRes] = await Promise.all([
+    const [{ data: content }, { data: contacts }, { data: ccList }, { data: team }, { data: partnerSelections }, partnerRes] = await Promise.all([
       sb.from("client_content").select("*").eq("client_id", clientId).maybeSingle(),
       sb.from("client_contacts").select("*").eq("client_id", clientId),
       sb.from("client_cc_list").select("*").eq("client_id", clientId).order("sort_order").order("created_at"),
       sb.from("client_assignments").select("id, is_team_lead, users(full_name, email)").eq("client_id", clientId).not("user_id", "is", null).order("is_team_lead", { ascending: false }),
-      sb.from("client_team_partner_contacts").select("partner_contact_id").eq("client_id", clientId),
-      // The OTHER table holding the same idea. An engagement's Program
-      // contacts are ticked on Client Info and land in client_cc_contacts;
-      // client_team_partner_contacts is what accept_client_application()
-      // writes. Both are in use -- across the 7 engagements there are 2 rows
-      // in one and 3 in the other -- and this form only ever read the first,
-      // which is why Fuel Efficiency showed no Program Manager while two
-      // Program contacts were ticked on it (Greg, 10/11/26: "the discovery
-      // document didn't grab the PA or the CC list").
-      sb.from("client_cc_contacts").select("partner_contact_id").eq("client_id", clientId),
+      // Every Program contact ticked for this engagement, for either
+      // reason. Yesterday this was two tables and this form read only one of
+      // them, which is why Fuel Efficiency showed no Program Manager while
+      // two contacts sat ticked on it; 163 merged them.
+      sb.from("client_partner_contacts").select("partner_contact_id").eq("client_id", clientId),
       client.econ_dev_company_id
         ? sb.from("econ_dev_companies").select("name").eq("id", client.econ_dev_company_id).single()
         : Promise.resolve({ data: null }),
@@ -767,15 +762,12 @@
     // through from the application." Program Manager is the Program
     // Contact picked on the original Application (program_contact_id),
     // which accept_client_application() (056) copies onto
-    // client_team_partner_contacts -- NOT the application's freeform
+    // client_partner_contacts (163) -- NOT the application's freeform
     // cc_emails (that's a separate, email-only field used elsewhere for
     // the Close-Out Evaluation email's CC line). This looks the contact
     // up the same two-step way client_profile.html's Team section does:
     // selected partner_contact_id's first, then the real contact rows.
-    const partnerContactIds = [...new Set([
-      ...(partnerSelections || []).map((x) => x.partner_contact_id),
-      ...(ccContactSelections || []).map((x) => x.partner_contact_id),
-    ].filter(Boolean))];
+    const partnerContactIds = [...new Set((partnerSelections || []).map((x) => x.partner_contact_id).filter(Boolean))];
     let programManager = "";
     let programCcRows = [];
     if (partnerContactIds.length) {

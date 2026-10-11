@@ -3154,8 +3154,13 @@
       ...[...document.querySelectorAll(".cc-check:checked")].map((el) => el.value),
     ])];
     if (ccIds.length) {
-      const { error: ccErr } = await sb.from("client_cc_contacts").insert(
-        ccIds.map((contactId) => ({ client_id: clientId, partner_contact_id: contactId }))
+      // upsert, not insert (163): accept_client_application() may already
+      // have put the application's Program Contact on this engagement's row
+      // for the client's team, and that row must gain the CC flag rather
+      // than collide with it.
+      const { error: ccErr } = await sb.from("client_partner_contacts").upsert(
+        ccIds.map((contactId) => ({ client_id: clientId, partner_contact_id: contactId, on_cc_list: true })),
+        { onConflict: "client_id,partner_contact_id" }
       );
       // Non-fatal: the engagement exists and is usable, and the CC list can be
       // corrected from the engagement. Losing it silently would be worse.
