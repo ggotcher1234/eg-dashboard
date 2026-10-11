@@ -2075,14 +2075,14 @@
   async function deleteEvalResponse() {
     if (!evalResponse) return;
     if (!confirm("Delete this submitted evaluation response? This cannot be undone.")) return;
-    // Same check as the Controlling Document's (10/11/26): a removal that
-    // row-level security filters down to nothing is reported as success, so
-    // confirm a row actually went before saying so.
-    const { data: gone, error } = await sb.from("client_evaluation_responses")
-      .delete().eq("id", evalResponse.id).select("id");
+    // Removed the same way as the Controlling Document response (165): a
+    // SECURITY DEFINER function that checks Admin itself and reports how
+    // many rows it took out, so a removal that row-level security would
+    // have quietly filtered to nothing cannot be mistaken for a success.
+    const { data: removed, error } = await sb.rpc("purge_evaluation_response", { p_id: evalResponse.id });
     if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
-    if (!gone || !gone.length) {
-      showBanner("That response wasn't deleted \u2014 your account doesn't have permission to remove it. Ask an Admin.", "error");
+    if (!removed) {
+      showBanner("That response wasn't deleted \u2014 nothing was removed. Reload and try again.", "error");
       return;
     }
     evalResponse = null;
@@ -2385,18 +2385,17 @@ ${teamLeadName || teamLeadFirstName || "Your EG Team Lead"}`;
   async function deleteControllingResponse() {
     if (!controllingResponse) return;
     if (!confirm("Delete this Controlling Document response? This cannot be undone.")) return;
-    // .select() so we are told WHAT WENT, not merely that nothing errored.
-    // Greg (10/11/26): "i have clicked the Delete Response button on
-    // multiple occaisions but it keeps coming back when i reopen this
-    // section." The table had no delete policy (fixed in 164), so the
-    // removal matched no rows -- and PostgREST calls that success, because
-    // nothing failed. This page then announced a deletion that had not
-    // happened. An empty result now says so.
-    const { data: gone, error } = await sb.from("client_controlling_doc_responses")
-      .delete().eq("id", controllingResponse.id).select("id");
+    // Greg (10/11/26): "i still cannot permenantly delete this submission.
+    // it keeps coming back." A table delete from the browser has to clear
+    // row-level security first, and when it does not, PostgREST reports the
+    // nothing-removed as success -- so the page said "deleted" and the row
+    // was still there on the next open. 165 moves the removal into a
+    // SECURITY DEFINER function that checks Admin itself and returns the
+    // number of rows it took out, so there is no silent middle ground.
+    const { data: removed, error } = await sb.rpc("purge_controlling_doc_response", { p_id: controllingResponse.id });
     if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
-    if (!gone || !gone.length) {
-      showBanner("That response wasn't deleted \u2014 your account doesn't have permission to remove it. Ask an Admin.", "error");
+    if (!removed) {
+      showBanner("That response wasn't deleted \u2014 nothing was removed. Reload and try again.", "error");
       return;
     }
     controllingResponse = null;
