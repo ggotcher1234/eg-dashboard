@@ -2075,8 +2075,16 @@
   async function deleteEvalResponse() {
     if (!evalResponse) return;
     if (!confirm("Delete this submitted evaluation response? This cannot be undone.")) return;
-    const { error } = await sb.from("client_evaluation_responses").delete().eq("id", evalResponse.id);
+    // Same check as the Controlling Document's (10/11/26): a removal that
+    // row-level security filters down to nothing is reported as success, so
+    // confirm a row actually went before saying so.
+    const { data: gone, error } = await sb.from("client_evaluation_responses")
+      .delete().eq("id", evalResponse.id).select("id");
     if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
+    if (!gone || !gone.length) {
+      showBanner("That response wasn't deleted \u2014 your account doesn't have permission to remove it. Ask an Admin.", "error");
+      return;
+    }
     evalResponse = null;
     if (workflowData) workflowData.evaluation_response = null;
     renderEvalLinkField();
@@ -2377,8 +2385,20 @@ ${teamLeadName || teamLeadFirstName || "Your EG Team Lead"}`;
   async function deleteControllingResponse() {
     if (!controllingResponse) return;
     if (!confirm("Delete this Controlling Document response? This cannot be undone.")) return;
-    const { error } = await sb.from("client_controlling_doc_responses").delete().eq("id", controllingResponse.id);
+    // .select() so we are told WHAT WENT, not merely that nothing errored.
+    // Greg (10/11/26): "i have clicked the Delete Response button on
+    // multiple occaisions but it keeps coming back when i reopen this
+    // section." The table had no delete policy (fixed in 164), so the
+    // removal matched no rows -- and PostgREST calls that success, because
+    // nothing failed. This page then announced a deletion that had not
+    // happened. An empty result now says so.
+    const { data: gone, error } = await sb.from("client_controlling_doc_responses")
+      .delete().eq("id", controllingResponse.id).select("id");
     if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
+    if (!gone || !gone.length) {
+      showBanner("That response wasn't deleted \u2014 your account doesn't have permission to remove it. Ask an Admin.", "error");
+      return;
+    }
     controllingResponse = null;
     renderControllingClientField();
     showBanner("Controlling Document response deleted.", "success");
