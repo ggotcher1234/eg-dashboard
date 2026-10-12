@@ -374,10 +374,10 @@
   }
   .rv-x-btn:hover { color: var(--danger-dark); background: #fdecea; }
 
-  /* Competitors & Customers (Greg, 10/12/26): one step, two slots, each
-     holding a file or a link. Side by side on a wide screen, stacked on a
-     narrow one -- they are peers, not a sequence. */
-  .listslot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  /* Lists (Greg, 10/12/26): one step, four slots, each holding a file or a
+     link. One column -- "go to a single column" -- so they read as one
+     stack of peers rather than a grid that implies pairing. */
+  .listslot-stack { display: flex; flex-direction: column; gap: 14px; }
   .listslot { border: 1px solid var(--border); border-radius: 8px; padding: 16px; background: #fff; }
   .listslot-title { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 2px; }
   .listslot-hint { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
@@ -392,6 +392,12 @@
   .listslot-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .listslot-linkrow { display: flex; gap: 8px; margin-top: 10px; }
   .listslot-linkrow input { flex: 1; min-width: 0; }
+  /* "Other" needs to say what it is before the list under it means
+     anything, so its name sits above the slot's own controls. */
+  .listslot-naming { margin-bottom: 12px; }
+  .listslot-naming label { display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .listslot-naming-row { display: flex; gap: 8px; }
+  .listslot-naming-row input { flex: 1; min-width: 0; }
 
   /* Competitors / Top Customers: rendered as a real spreadsheet-style
      table (Company | URL | Location | Notes/NAICS Code, one column-
@@ -1193,19 +1199,22 @@
             </div>
           </div>
 
-          <!-- Step 4: Competitors & Customers.
+          <!-- Step 4: Lists.
                Greg (10/12/26): "let's simplify the customers and competitors
                list pages down to a simple button to upload a file or a link.
                With that, maybe we can even combine them into a single step."
-               Two spreadsheet editors became two slots on one step: nobody
-               was typing thirty competitors a row at a time, they already
-               had the list in a file. -->
+               Then: "Let's call this combined section - Lists and go to a
+               single column. add a list/link for Keywords and another for
+               Other with a place to enter what Other is." One column so the
+               four read as one stack rather than a 2x2 grid. -->
           <div class="wizard-panel-card wizard-panel hidden" data-step="4">
-            <h3>Competitors &amp; Customers</h3>
+            <h3>Lists</h3>
             <div class="wizard-panel-hint">Attach the client's lists however you already have them &mdash; upload a file (CSV, Excel, PDF, whatever it is) or paste a link to one. Each slot holds one or the other.</div>
-            <div class="listslot-grid">
+            <div class="listslot-stack">
               <div class="listslot" id="slot-competitors"></div>
               <div class="listslot" id="slot-customers"></div>
+              <div class="listslot" id="slot-keywords"></div>
+              <div class="listslot" id="slot-other"></div>
             </div>
           </div>
 
@@ -2364,14 +2373,33 @@
       hint: "The accounts that matter most to them.",
       pathColumn: "customer_list_storage_path", urlColumn: "customer_list_url",
     },
+    {
+      key: "keywords", mount: "slot-keywords", label: "Keywords",
+      hint: "The search terms their buyers actually use.",
+      pathColumn: "keyword_list_storage_path", urlColumn: "keyword_list_url",
+    },
+    {
+      // The only slot that has to say what it is before its contents mean
+      // anything -- the name the TL types becomes the slot's heading.
+      key: "other", mount: "slot-other", label: "Other",
+      hint: "Anything else worth keeping with the engagement.",
+      pathColumn: "other_list_storage_path", urlColumn: "other_list_url",
+      labelColumn: "other_list_label", labelPrompt: "What is this list?",
+      labelPlaceholder: "e.g. Trade shows, Distributors, Patent filings",
+    },
   ];
   let listSlotData = {};
 
   async function loadListSlots(clientId) {
-    const columns = LIST_SLOTS.flatMap((s) => [s.pathColumn, s.urlColumn]).join(", ");
+    const columns = LIST_SLOTS.flatMap((s) => [s.pathColumn, s.urlColumn, s.labelColumn].filter(Boolean)).join(", ");
     const { data } = await sb.from("client_content").select(columns).eq("client_id", clientId).maybeSingle();
     listSlotData = data || {};
     LIST_SLOTS.forEach(renderListSlot);
+  }
+
+  function listSlotName(slot) {
+    const custom = slot.labelColumn ? (listSlotData[slot.labelColumn] || "").trim() : "";
+    return custom || slot.label;
   }
 
   function listSlotFileName(path) {
@@ -2398,9 +2426,20 @@
          </div>`
       : `<div class="listslot-empty">Nothing attached yet.</div>`;
 
+    const customName = slot.labelColumn ? (listSlotData[slot.labelColumn] || "").trim() : "";
+    const naming = slot.labelColumn ? `
+      <div class="listslot-naming">
+        <label for="${slot.mount}-name">${escapeHtml(slot.labelPrompt)}</label>
+        <div class="listslot-naming-row">
+          <input type="text" id="${slot.mount}-name" placeholder="${escapeHtml(slot.labelPlaceholder)}" value="${escapeHtml(customName)}" />
+          <button type="button" class="btn-secondary btn-sm" data-slot-name="${slot.key}">Save name</button>
+        </div>
+      </div>` : "";
+
     mount.innerHTML = `
-      <div class="listslot-title">${escapeHtml(slot.label)}</div>
+      <div class="listslot-title">${escapeHtml(customName || slot.label)}</div>
       <div class="listslot-hint">${escapeHtml(slot.hint)}</div>
+      ${naming}
       ${filled}
       <div class="listslot-actions">
         <button type="button" class="btn-secondary btn-sm" data-slot-upload="${slot.key}">&#8593; ${path || url ? "Replace with a file" : "Upload a file"}</button>
@@ -2421,6 +2460,8 @@
     if (openLink) openLink.addEventListener("click", (e) => { e.preventDefault(); openListSlotFile(path); });
     const removeBtn = mount.querySelector(`[data-slot-remove]`);
     if (removeBtn) removeBtn.addEventListener("click", () => clearListSlot(slot));
+    const nameBtn = mount.querySelector(`[data-slot-name]`);
+    if (nameBtn) nameBtn.addEventListener("click", () => saveListSlotName(slot));
   }
 
   async function saveListSlot(slot, patch) {
@@ -2441,7 +2482,7 @@
     // replaces whatever link was there, and vice versa.
     if (!(await saveListSlot(slot, { [slot.pathColumn]: path, [slot.urlColumn]: null }))) return;
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
-    showBanner(`${slot.label} list uploaded.`, "success");
+    showBanner(`${listSlotName(slot)} list uploaded.`, "success");
   }
 
   async function saveListSlotLink(slot) {
@@ -2451,14 +2492,20 @@
     const oldPath = listSlotData[slot.pathColumn];
     if (!(await saveListSlot(slot, { [slot.urlColumn]: url, [slot.pathColumn]: null }))) return;
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
-    showBanner(`${slot.label} link saved.`, "success");
+    showBanner(`${listSlotName(slot)} link saved.`, "success");
+  }
+
+  async function saveListSlotName(slot) {
+    const name = ($(`${slot.mount}-name`).value || "").trim();
+    if (!(await saveListSlot(slot, { [slot.labelColumn]: name || null }))) return;
+    showBanner(name ? `Renamed to "${name}".` : "Name cleared.", "success");
   }
 
   async function clearListSlot(slot) {
     const oldPath = listSlotData[slot.pathColumn];
     if (!(await saveListSlot(slot, { [slot.pathColumn]: null, [slot.urlColumn]: null }))) return;
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
-    showBanner(`${slot.label} list removed.`, "success");
+    showBanner(`${listSlotName(slot)} list removed.`, "success");
   }
 
   // Office formats can't render in a browser tab -- a direct link just
@@ -3680,7 +3727,7 @@
     { n: 1, key: "description_issues", label: "Description" },
     { n: 2, key: "status_company", label: "Links" },
     { n: 3, key: "contacts", label: "Contacts" },
-    { n: 4, key: "lists", label: "Competitors & Customers" },
+    { n: 4, key: "lists", label: "Lists" },
     { n: 5, key: "resources", label: "Resources" },
   ];
   let wizStep = 1;
