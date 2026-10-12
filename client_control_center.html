@@ -449,6 +449,12 @@
     background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px;
     display: flex; flex-direction: column; gap: 2px;
   }
+  /* The Project Kit button sits under the status control rather than beside
+     it -- the status toggle is the one thing in this masthead people click
+     by reflex, and a second button on that line stole from it. */
+  .ccc-kit { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .ccc-kit-note { font-size: 12px; color: var(--muted); }
+
   .cc-nav-btn {
     display: flex; align-items: center; gap: 20px; width: 100%; text-align: left; padding: 12px 6px 12px 9px;
     border: none; border-left: 3px solid transparent; border-radius: 8px; background: transparent;
@@ -1016,6 +1022,15 @@
               <span class="badge hidden" id="cm-status-badge"></span>
               <div class="segmented-control hidden" id="cm-status-toggle"></div>
             </span>
+            <!-- Greg (10/12/26): "a simple one click button that could help
+                 me setup a dedicated project for my work... having all the
+                 information available in the project." No API creates an AI
+                 project or uploads into one, so this assembles the kit and
+                 the specialist drags it in once. -->
+            <div class="ccc-kit">
+              <button type="button" class="btn-secondary btn-sm" id="cm-kit-btn">&#128230; Project Kit</button>
+              <span class="ccc-kit-note">Everything on this engagement, packed for your AI project.</span>
+            </div>
             </div>
 
             <!-- Greg (9/6/26): "make all note boxes in the header the same
@@ -1354,6 +1369,81 @@
   let AI_CONTEXT_LABEL = "Engagement";
   const AI_PAGE_KEY = "workspace";
   const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/eg-dashboard-ai`;
+  const PROJECT_KIT_URL = `${SUPABASE_URL}/functions/v1/engagement-project-kit`;
+
+  // ---------- Project Kit ----------
+  // Greg (10/12/26): "What would be a good strategy for a simple one click
+  // button that could help me setup a dedicated project for my work for FE...
+  // so that i could start with my DM question having all the information
+  // available in the project." And: "that way it is LLM agnostic if different
+  // specialists want to use different LLM projects."
+  //
+  // Nothing here names a vendor. The function returns a zip -- a briefing
+  // document in Markdown and PDF, a paste-ready instructions file, and every
+  // document actually uploaded to the engagement -- and the specialist drags
+  // it into whichever assistant they use. Who may take one is decided inside
+  // the function (the kit carries the client's financials); this button is
+  // courtesy, so it stays enabled and lets the function answer.
+  async function downloadProjectKit() {
+    const btn = $("cm-kit-btn");
+    if (!btn || !activeClient) return;
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.textContent = "Building\u2026";
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error("Your session expired — sign in again.");
+      const res = await fetch(PROJECT_KIT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ client_id: activeClient.id }),
+      });
+      if (!res.ok) {
+        // The failure path answers in JSON; the success path is a zip.
+        const problem = await res.json().catch(() => ({}));
+        throw new Error(problem.error || "Couldn't build the kit.");
+      }
+      const blob = await res.blob();
+      const name = res.headers.get("X-Kit-Filename") || "project-kit.zip";
+      const packed = Number(res.headers.get("X-Kit-Files") || 0);
+      const skipped = Number(res.headers.get("X-Kit-Skipped") || 0);
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoked on a timer rather than immediately: Safari cancels the
+      // download if the object URL goes away while it is still reading.
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+      const filePart = packed === 1 ? "1 document" : `${packed} documents`;
+      showBanner(
+        `Project kit downloaded — the brief plus ${filePart}.` +
+        (skipped ? ` ${skipped} file${skipped === 1 ? "" : "s"} couldn't be packed; the brief says which.` : "") +
+        " Unzip it and read README.txt.",
+        "success",
+      );
+    } catch (err) {
+      showBanner(err.message || "Couldn't build the kit.", "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
+  }
+  // Wired on whichever comes second, the script or the DOM -- this block
+  // sits mid-file and must not depend on which.
+  (function wireProjectKit() {
+    const btn = document.getElementById("cm-kit-btn");
+    if (btn) { btn.addEventListener("click", downloadProjectKit); return; }
+    document.addEventListener("DOMContentLoaded", wireProjectKit, { once: true });
+  })();
   let aiHistory = [];
 
   function aiSuggestedQuestions() {
