@@ -374,6 +374,25 @@
   }
   .rv-x-btn:hover { color: var(--danger-dark); background: #fdecea; }
 
+  /* Competitors & Customers (Greg, 10/12/26): one step, two slots, each
+     holding a file or a link. Side by side on a wide screen, stacked on a
+     narrow one -- they are peers, not a sequence. */
+  .listslot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .listslot { border: 1px solid var(--border); border-radius: 8px; padding: 16px; background: #fff; }
+  .listslot-title { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 2px; }
+  .listslot-hint { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .listslot-filled {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    background: #f4f7f4; border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 12px; margin-bottom: 12px; font-size: 13px;
+  }
+  .listslot-filled a { color: var(--accent-dark); font-weight: 600; word-break: break-all; }
+  .listslot-kind { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+  .listslot-empty { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .listslot-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .listslot-linkrow { display: flex; gap: 8px; margin-top: 10px; }
+  .listslot-linkrow input { flex: 1; min-width: 0; }
+
   /* Competitors / Top Customers: rendered as a real spreadsheet-style
      table (Company | URL | Location | Notes/NAICS Code, one column-
      header row, one line per item, delete "x" inline at the end of the
@@ -1174,43 +1193,25 @@
             </div>
           </div>
 
-          <!-- Step 4 (was 5): Competitors -->
+          <!-- Step 4: Competitors & Customers.
+               Greg (10/12/26): "let's simplify the customers and competitors
+               list pages down to a simple button to upload a file or a link.
+               With that, maybe we can even combine them into a single step."
+               Two spreadsheet editors became two slots on one step: nobody
+               was typing thirty competitors a row at a time, they already
+               had the list in a file. -->
           <div class="wizard-panel-card wizard-panel hidden" data-step="4">
-            <h3>Competitors</h3>
-            <div class="wizard-panel-hint">This list can be built manually below, or imported and exported as a CSV with columns: Company, URL, Location, Notes.</div>
-            <div style="display:flex; gap:8px; margin-bottom:14px;">
-              <button type="button" class="btn-secondary btn-sm" data-csv-import="competitors">&#8593; Import CSV</button>
-              <button type="button" class="btn-secondary btn-sm" data-csv-export="competitors">&#8595; Export CSV</button>
-              <button type="button" class="btn-danger btn-sm" data-csv-clear="competitors">Clear Contents</button>
-              <input type="file" accept=".csv,text/csv" id="competitors-csv-file" style="display:none;" />
-            </div>
-            <span class="accordion-count" id="competitors-count" style="display:inline-block; margin-bottom:10px;"></span>
-            <div class="company-table-wrap">
-              <div id="competitors-list"></div>
-              <form class="add-row-form" id="competitors-add-form"></form>
+            <h3>Competitors &amp; Customers</h3>
+            <div class="wizard-panel-hint">Attach the client's lists however you already have them &mdash; upload a file (CSV, Excel, PDF, whatever it is) or paste a link to one. Each slot holds one or the other.</div>
+            <div class="listslot-grid">
+              <div class="listslot" id="slot-competitors"></div>
+              <div class="listslot" id="slot-customers"></div>
             </div>
           </div>
 
-          <!-- Step 5 (was 6): Top Customers -->
+          <!-- Step 5 (was 6): Resources (Greg, 9/5/26: moved here from its
+               own Resource Vault (TL) page, renamed "Resources"). -->
           <div class="wizard-panel-card wizard-panel hidden" data-step="5">
-            <h3>Top Customers</h3>
-            <div class="wizard-panel-hint">This list can be built manually below, or imported and exported as a CSV with columns: Company, URL, Location, Notes.</div>
-            <div style="display:flex; gap:8px; margin-bottom:14px;">
-              <button type="button" class="btn-secondary btn-sm" data-csv-import="top_customers">&#8593; Import CSV</button>
-              <button type="button" class="btn-secondary btn-sm" data-csv-export="top_customers">&#8595; Export CSV</button>
-              <button type="button" class="btn-danger btn-sm" data-csv-clear="top_customers">Clear Contents</button>
-              <input type="file" accept=".csv,text/csv" id="top_customers-csv-file" style="display:none;" />
-            </div>
-            <span class="accordion-count" id="top_customers-count" style="display:inline-block; margin-bottom:10px;"></span>
-            <div class="company-table-wrap">
-              <div id="top_customers-list"></div>
-              <form class="add-row-form" id="top_customers-add-form"></form>
-            </div>
-          </div>
-
-          <!-- Step 6: Resources (Greg, 9/5/26: moved here from its own
-               Resource Vault (TL) page, renamed "Resources"). -->
-          <div class="wizard-panel-card wizard-panel hidden" data-step="6">
             <h3>Resources</h3>
             <div class="wizard-panel-hint">Each resource can be a Link URL (opens in a new tab -- a video, quiz, external doc, etc.) or an uploaded file (downloads), whichever fits. Add anything client-specific below; resources set up for every client also show here.</div>
             <span class="accordion-count" id="resource_vault-count" style="display:inline-block; margin-bottom:10px;"></span>
@@ -1657,7 +1658,7 @@
   // WIZARD_STEPS above by hand -- this was stale (off by one on every key,
   // plus a "workflow" entry for a step that no longer exists here at all)
   // until fixed alongside adding the "resources" step (Greg, 9/5/26).
-  const SECTION_TO_STEP = { contacts: 3, team: 3, competitors: 4, top_customers: 5, resources: 6 };
+  const SECTION_TO_STEP = { contacts: 3, team: 3, competitors: 4, top_customers: 4, lists: 4, resources: 5 };
 
   // ---------- Standardized Search/Print/Export/Import toolbar ----------
   // Same four controls, same order, on every internal page (Greg, 8/27/26).
@@ -1798,6 +1799,7 @@
     await Promise.all(LIST_CONFIGS.map((cfg) => loadListSection(cfg)));
     await loadPartnerContactsSection();
     await loadEngagementCcSection();
+    await loadListSlots(client.id);
     await loadResourceVault(client.id);
 
     // Deep links from other pages (?section=next_steps, ?section=contacts,
@@ -2343,45 +2345,138 @@
     ],
     render: (r) => ({ title: r.name, sub: [r.title, r.email].filter(Boolean).join(" · ") }),
   };
-  const COMPETITORS_CONFIG = {
-    key: "competitors", table: "client_competitors", title: "Competitors",
-    hint: "This list can be built manually below, or imported and exported as a CSV with columns: Company, URL, Location, Notes.",
-    // Company/URL/Location/Notes rows get their own responsive grid (see
-    // .fields-3col below) instead of the generic equal-width flex-wrap
-    // every other list uses -- Company, URL and Location are genuinely
-    // different lengths of content, so treating them as 30/40/30 fits more
-    // real text before anything gets cramped (Greg, 8/30/26).
-    rowLayout: "company3",
-    fields: [
-      { name: "name", label: "Company", type: "text", required: true },
-      { name: "website_url", label: "URL", type: "url" },
-      { name: "location", label: "Location", type: "text" },
-      { name: "notes", label: "Notes/NAICS Code", type: "text" },
-    ],
-    // Maps this config's own field names to the CSV column headers Greg's
-    // reference tool uses (Company, URL, Location, Notes), in order —
-    // shared by Competitors and Top Customers since they're the same shape.
-    csv: {
-      headers: ["Company", "URL", "Location", "Notes"],
-      fieldOrder: ["name", "website_url", "location", "notes"],
+  // Competitors / Top Customers used to be two spreadsheet-style list
+  // sections here, each with its own wizard step, inline add-row form and
+  // CSV import/export. Greg (10/12/26) replaced both with one step holding
+  // two file-or-link slots -- see the "Competitors & Customers" panel and
+  // LIST_SLOTS below. The client_competitors / client_top_customers tables
+  // are left in place for now; nothing writes to them any more.
+
+  // ---------- Competitors & Customers: one file or one link, each ----------
+  const LIST_SLOTS = [
+    {
+      key: "competitors", mount: "slot-competitors", label: "Competitors",
+      hint: "Who this client competes against.",
+      pathColumn: "competitor_list_storage_path", urlColumn: "competitor_list_url",
     },
-    render: (r) => ({
-      title: r.name,
-      subHtml: [
-        r.website_url ? `<a href="${escapeHtml(r.website_url)}" target="_blank" rel="noopener">${escapeHtml(r.website_url)}</a>` : "",
-        escapeHtml(r.location || ""),
-        escapeHtml(r.notes || ""),
-      ].filter(Boolean).join(" · "),
-    }),
-  };
-  const TOP_CUSTOMERS_CONFIG = {
-    key: "top_customers", table: "client_top_customers", title: "Top Customers",
-    hint: COMPETITORS_CONFIG.hint,
-    rowLayout: COMPETITORS_CONFIG.rowLayout,
-    fields: COMPETITORS_CONFIG.fields,
-    csv: COMPETITORS_CONFIG.csv,
-    render: COMPETITORS_CONFIG.render,
-  };
+    {
+      key: "customers", mount: "slot-customers", label: "Top Customers",
+      hint: "The accounts that matter most to them.",
+      pathColumn: "customer_list_storage_path", urlColumn: "customer_list_url",
+    },
+  ];
+  let listSlotData = {};
+
+  async function loadListSlots(clientId) {
+    const columns = LIST_SLOTS.flatMap((s) => [s.pathColumn, s.urlColumn]).join(", ");
+    const { data } = await sb.from("client_content").select(columns).eq("client_id", clientId).maybeSingle();
+    listSlotData = data || {};
+    LIST_SLOTS.forEach(renderListSlot);
+  }
+
+  function listSlotFileName(path) {
+    const base = (path || "").split("/").pop() || "";
+    // Paths are stamped with Date.now() on upload so two files of the same
+    // name can coexist -- the stamp is plumbing, not something to read.
+    return base.replace(/^\d{10,}-/, "") || "Attached file";
+  }
+
+  function renderListSlot(slot) {
+    const mount = $(slot.mount);
+    if (!mount) return;
+    const path = listSlotData[slot.pathColumn];
+    const url = listSlotData[slot.urlColumn];
+    const filled = path
+      ? `<div class="listslot-filled">
+           <span class="listslot-kind">File</span>
+           <a href="#" data-slot-open="${slot.key}">${escapeHtml(listSlotFileName(path))}</a>
+         </div>`
+      : url
+      ? `<div class="listslot-filled">
+           <span class="listslot-kind">Link</span>
+           <a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>
+         </div>`
+      : `<div class="listslot-empty">Nothing attached yet.</div>`;
+
+    mount.innerHTML = `
+      <div class="listslot-title">${escapeHtml(slot.label)}</div>
+      <div class="listslot-hint">${escapeHtml(slot.hint)}</div>
+      ${filled}
+      <div class="listslot-actions">
+        <button type="button" class="btn-secondary btn-sm" data-slot-upload="${slot.key}">&#8593; ${path || url ? "Replace with a file" : "Upload a file"}</button>
+        ${path || url ? `<button type="button" class="btn-danger btn-sm" data-slot-remove="${slot.key}">Remove</button>` : ""}
+        <input type="file" id="${slot.mount}-file" style="display:none;" />
+      </div>
+      <div class="listslot-linkrow">
+        <input type="url" id="${slot.mount}-url" placeholder="…or paste a link" value="${escapeHtml(url || "")}" />
+        <button type="button" class="btn-secondary btn-sm" data-slot-link="${slot.key}">Save link</button>
+      </div>
+    `;
+
+    const picker = $(`${slot.mount}-file`);
+    picker.addEventListener("change", () => { if (picker.files.length) uploadListSlotFile(slot, picker.files[0]); });
+    mount.querySelector(`[data-slot-upload]`).addEventListener("click", () => picker.click());
+    mount.querySelector(`[data-slot-link]`).addEventListener("click", () => saveListSlotLink(slot));
+    const openLink = mount.querySelector(`[data-slot-open]`);
+    if (openLink) openLink.addEventListener("click", (e) => { e.preventDefault(); openListSlotFile(path); });
+    const removeBtn = mount.querySelector(`[data-slot-remove]`);
+    if (removeBtn) removeBtn.addEventListener("click", () => clearListSlot(slot));
+  }
+
+  async function saveListSlot(slot, patch) {
+    const { error } = await sb.from("client_content")
+      .upsert({ client_id: currentClient.id, ...patch }, { onConflict: "client_id" });
+    if (error) { showBanner("Couldn't save: " + error.message, "error"); return false; }
+    Object.assign(listSlotData, patch);
+    renderListSlot(slot);
+    return true;
+  }
+
+  async function uploadListSlotFile(slot, file) {
+    const oldPath = listSlotData[slot.pathColumn];
+    const path = `clients/${currentClient.id}/lists/${slot.key}/${Date.now()}-${sanitizeFilename(file.name)}`;
+    const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
+    if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    // A slot is one or the other, same rule the Resource Vault uses: a file
+    // replaces whatever link was there, and vice versa.
+    if (!(await saveListSlot(slot, { [slot.pathColumn]: path, [slot.urlColumn]: null }))) return;
+    if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
+    showBanner(`${slot.label} list uploaded.`, "success");
+  }
+
+  async function saveListSlotLink(slot) {
+    const input = $(`${slot.mount}-url`);
+    const url = (input.value || "").trim();
+    if (!url) { showBanner("Paste a link first, or upload a file instead.", "error"); return; }
+    const oldPath = listSlotData[slot.pathColumn];
+    if (!(await saveListSlot(slot, { [slot.urlColumn]: url, [slot.pathColumn]: null }))) return;
+    if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
+    showBanner(`${slot.label} link saved.`, "success");
+  }
+
+  async function clearListSlot(slot) {
+    const oldPath = listSlotData[slot.pathColumn];
+    if (!(await saveListSlot(slot, { [slot.pathColumn]: null, [slot.urlColumn]: null }))) return;
+    if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
+    showBanner(`${slot.label} list removed.`, "success");
+  }
+
+  // Office formats can't render in a browser tab -- a direct link just
+  // downloads them. Route those through Microsoft's read-only viewer, same
+  // as every other stored document in this app.
+  const SLOT_OFFICE_EXTENSIONS = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
+  async function openListSlotFile(path) {
+    if (!path) return;
+    const name = (path.split("/").pop() || "").toLowerCase();
+    const dot = name.lastIndexOf(".");
+    const useViewer = SLOT_OFFICE_EXTENSIONS.includes(dot === -1 ? "" : name.slice(dot + 1));
+    const { data, error } = await sb.storage.from("client-documents").createSignedUrl(path, useViewer ? 3600 : 300);
+    if (error) { showBanner("Couldn't open file: " + error.message, "error"); return; }
+    const viewUrl = useViewer
+      ? "https://view.officeapps.live.com/op/view.aspx?src=" + encodeURIComponent(data.signedUrl)
+      : data.signedUrl;
+    window.open(viewUrl, "_blank", "noopener");
+  }
   // Project Next Steps (the old free-typed 6-item checklist -- Send EG
   // Invitation Email, Discovery Call, Controlling Document, etc.) is gone as
   // of 8/29/26, briefly replaced by an automatic Engagement Progress step in
@@ -2423,7 +2518,7 @@
       ].filter(Boolean).join(" · "),
     }),
   };
-  const LIST_CONFIGS = [CONTACTS_CONFIG, CC_LIST_CONFIG, TEAM_CONFIG, COMPETITORS_CONFIG, TOP_CUSTOMERS_CONFIG];
+  const LIST_CONFIGS = [CONTACTS_CONFIG, CC_LIST_CONFIG, TEAM_CONFIG];
   const listData = {}; // key -> rows
 
   // Builds the "+ Add" form for one config into its wizard step (the list
@@ -3585,9 +3680,8 @@
     { n: 1, key: "description_issues", label: "Description" },
     { n: 2, key: "status_company", label: "Links" },
     { n: 3, key: "contacts", label: "Contacts" },
-    { n: 4, key: "competitors", label: "Competitors" },
-    { n: 5, key: "top_customers", label: "Customers" },
-    { n: 6, key: "resources", label: "Resources" },
+    { n: 4, key: "lists", label: "Competitors & Customers" },
+    { n: 5, key: "resources", label: "Resources" },
   ];
   let wizStep = 1;
 

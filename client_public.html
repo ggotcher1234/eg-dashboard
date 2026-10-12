@@ -74,14 +74,6 @@
   .social-link.ot { color: #5b6472; }
   .social-link:hover { text-decoration: underline; }
 
-  .stat-pills { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
-  .stat-pill { display: inline-flex; align-items: center; gap: 9px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 9px 16px; font-size: 13px; font-weight: 700; color: var(--navy); cursor: pointer; }
-  .stat-pill:hover { border-color: var(--accent); }
-  .stat-pill.open { border-color: var(--accent); background: #f3f6f1; }
-  .stat-pill .count { background: #eef1f4; color: var(--muted); border-radius: 999px; padding: 2px 9px; font-size: 11.5px; }
-  .stat-pill .pill-chevron { color: var(--muted); font-size: 11px; transition: transform 0.15s ease; }
-  .stat-pill.open .pill-chevron { transform: rotate(90deg); }
-  #stat-pill-details .action-body { margin: 10px 0 0; }
 
   .action-bar { background: var(--accent); color: #fff; border-radius: 8px; padding: 13px 20px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; cursor: pointer; font-weight: 700; font-size: 14px; }
   .action-bar:hover { background: var(--accent-dark); }
@@ -96,29 +88,6 @@
   .action-row .ar-sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
   .action-row .ar-sub a { color: var(--accent-dark); text-decoration: none; }
   .action-row.done .ar-title { text-decoration: line-through; color: var(--muted); }
-
-  /* Fixed layout so a handful of very long tracking-parameter URLs in the
-     Website column can't blow the table wider than the card -- each column
-     gets a hard percentage cap and long content truncates/wraps inside it
-     instead of pushing later columns off to the right. Greg (8/18/26). */
-  .mini-table { width: 100%; border-collapse: collapse; font-size: 13.5px; table-layout: fixed; }
-  .mini-table th {
-    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px;
-    color: var(--muted); font-weight: 700; padding: 0 14px 7px 0; border-bottom: 1px solid var(--border);
-  }
-  .mini-table td { padding: 9px 14px 9px 0; border-bottom: 1px solid #f0f2f4; vertical-align: top; overflow: hidden; }
-  .mini-table tr:last-child td { border-bottom: none; }
-  .mini-table th:nth-child(1), .mini-table td:nth-child(1) { width: 22%; word-break: break-word; }
-  .mini-table th:nth-child(2), .mini-table td:nth-child(2) { width: 36%; }
-  .mini-table th:nth-child(3), .mini-table td:nth-child(3) { width: 20%; word-break: break-word; }
-  .mini-table th:nth-child(4), .mini-table td:nth-child(4) { width: 22%; word-break: break-word; }
-  .mini-table td.mt-name { font-weight: 600; }
-  .mini-table a { color: var(--accent-dark); text-decoration: none; }
-  .mini-table a:hover { text-decoration: underline; }
-  /* Website links truncate to one line with an ellipsis rather than
-     wrapping raw URLs across the row -- the full address is still in the
-     href and shows on hover via the title attribute. */
-  .mini-table td:nth-child(2) a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* The Evaluation Sheet has no document to open like the other three
      workflow steps do -- it's rows in client_evaluation_responses, not a
@@ -381,7 +350,7 @@
      expanded, with none of the click-to-open chrome. */
   @media print {
     body { background: #fff; }
-    #print-btn, .stat-pill .count, .ab-chevron, .pill-chevron { display: none !important; }
+    #print-btn, .ab-chevron { display: none !important; }
     .action-bar { cursor: default; }
     .action-body { display: block !important; }
     .card, .research-card, .action-bar, .action-body { break-inside: avoid; }
@@ -470,11 +439,6 @@
           <div class="company-naics hidden" id="company-naics"></div>
           <a class="company-website hidden" id="company-website" target="_blank" rel="noopener"></a>
           <div class="company-socials" id="company-socials"></div>
-          <div class="stat-pills" id="stat-pills"></div>
-          <div id="stat-pill-details">
-            <div class="action-body" id="detail-competitors"></div>
-            <div class="action-body" id="detail-top_customers"></div>
-          </div>
         </div>
       </div>
     </div>
@@ -834,14 +798,12 @@
     // and the Competitors/Top Customers stat pills all live inside
     // bar-company_info-body, so the bar itself shows if ANY of that has
     // content, not just the description. Stat-pill counts come from the
-    // same `row` this function already receives, same as renderStatPills().
     // (Greg, 8/29/26: Next Steps removed from the client-facing dashboard
     // entirely -- the workflow tracker above is the only progress display
     // now, so it's dropped from this check too.)
-    const hasStats = (row.competitors || []).length || (row.top_customers || []).length;
     const hasSocials = c.linkedin_url || c.facebook_url || c.instagram_url || c.twitter_url || c.youtube_url || c.other_social_url;
     // Team Lead preview only -- the client-facing view leaves this hidden.
-    if (previewMode && (c.description || c.top_business_issues || c.naics_codes || c.website_url || hasSocials || hasStats)) {
+    if (previewMode && (c.description || c.top_business_issues || c.naics_codes || c.website_url || hasSocials)) {
       $("company-info-card").classList.remove("hidden");
       $("bar-company_info").classList.toggle("open", !!expandAll);
       $("bar-company_info-body").classList.toggle("open", !!expandAll);
@@ -871,43 +833,15 @@
       .join("");
   }
 
-  // Competitors / Top Customers used to also get their own full-width
-  // accordion bars below, which just duplicated these pill counts. The
-  // pills are now the only place to see them — clicking one expands the
-  // same list content right underneath instead.
-  // (Greg, 8/29/26: Next Steps pill removed -- Project Next Steps no longer
-  // surfaces on the client-facing dashboard at all; the workflow tracker
-  // above is the sole progress display now.)
-  function renderStatPills(row) {
-    const competitorsCount = (row.competitors || []).length;
-    const customersCount = (row.top_customers || []).length;
-    $("stat-pills").innerHTML = `
-      <div class="stat-pill" data-pill="competitors">&#127970; Competitors <span class="count">${competitorsCount}</span> <span class="pill-chevron">&#9656;</span></div>
-      <div class="stat-pill" data-pill="top_customers">&#127991; Top Customers <span class="count">${customersCount}</span> <span class="pill-chevron">&#9656;</span></div>
-    `;
-
-    $("detail-competitors").innerHTML = renderActionBody("competitors", row.competitors || []);
-    $("detail-top_customers").innerHTML = renderActionBody("top_customers", row.top_customers || []);
-
-    $("stat-pills").querySelectorAll("[data-pill]").forEach((pill) => {
-      pill.addEventListener("click", () => {
-        const key = pill.dataset.pill;
-        const detail = $(`detail-${key}`);
-        const wasOpen = detail.classList.contains("open");
-        // Only one pill's detail shows at a time.
-        $("stat-pills").querySelectorAll(".stat-pill").forEach((p) => p.classList.remove("open"));
-        document.querySelectorAll("#stat-pill-details .action-body").forEach((el) => el.classList.remove("open"));
-        if (!wasOpen) {
-          pill.classList.add("open");
-          detail.classList.add("open");
-        }
-      });
-    });
-  }
-
-  // Competitors, Top Customers, and Next Steps used to be here too — they
-  // now live only under the stat pills above (see renderStatPills), since a
-  // full-width accordion bar down here just duplicated that count.
+  // Competitors and Top Customers are gone from the client-facing
+  // dashboard. Greg (10/12/26) replaced the two typed-in lists with a
+  // single "Competitors & Customers" step on Company Info holding a file or
+  // a link each -- working material for the team, not something the client
+  // needs read back to them. The pills that counted the old rows, and the
+  // mini-tables they opened, went with them.
+  // Next Steps used to be here too, and so did Competitors and Top
+  // Customers before them -- all three are off the client-facing dashboard
+  // now.
   const ACTION_BAR_DEFS = [
     // Client Contacts is Team-Lead-preview-only (?preview=1) -- the
     // client-facing dashboard drops it, they already have their own
@@ -1010,23 +944,6 @@
           </div>
         `;
       }).join("");
-    }
-    if (key === "competitors" || key === "top_customers") {
-      return `
-        <table class="mini-table">
-          <thead><tr><th>Name</th><th>Website</th><th>Location</th><th>NAICS</th></tr></thead>
-          <tbody>
-            ${rows.map((r) => `
-              <tr>
-                <td class="mt-name">${escapeHtml(r.name)}</td>
-                <td>${r.website_url ? `<a href="${escapeHtml(r.website_url)}" target="_blank" rel="noopener" title="${escapeHtml(r.website_url)}">${escapeHtml(r.website_url)}</a>` : "—"}</td>
-                <td>${escapeHtml(r.location || "—")}</td>
-                <td>${escapeHtml(r.notes || "—")}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-      `;
     }
     return "";
   }
@@ -1359,7 +1276,6 @@
 
     renderBrandHeader(row);
     renderCompany(row, isFinalized);
-    renderStatPills(row);
     renderActionBars(row, isFinalized);
     // The close-out recording lives on client_content, which this signed-out
     // page cannot read, and get_client_public_view answers from a frozen
