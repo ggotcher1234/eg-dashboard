@@ -29,6 +29,14 @@
 // here, server side, with the caller's own token -- the button on the page
 // is courtesy.
 //
+// AND, FOR NOW, ONLY GREG
+// Greg (10/12/26): "Just make the Project Kit viewable by me." While this is
+// being tried out, BETA_EMAILS below is the outer gate. The page hides the
+// button from everyone else; this is what makes that true rather than
+// decorative. Opening it up means deleting BETA_EMAILS and its check here
+// AND the matching list in client_control_center.html -- the two have to move
+// together or the button appears and then refuses.
+//
 // HOW TO DEPLOY (no CLI, no Terminal)
 //   1. Supabase Dashboard -> Edge Functions -> New Function, named exactly
 //      engagement-project-kit
@@ -39,6 +47,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import JSZip from "https://esm.sh/jszip@3.10.1";
+
+// Beta gate -- see the header. Delete this and its one check below when the
+// kit opens up to every specialist.
+const BETA_EMAILS = new Set([
+  "greg@leadforcesolutions.com",
+  "greg.gotcher@leadforcesolutions.com",
+]);
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -635,7 +650,7 @@ Deno.serve(async (req: Request) => {
     if (userErr || !userData?.user) return jsonResponse({ error: "Not signed in." }, 401);
 
     const { data: caller, error: callerErr } = await callerClient
-      .from("users").select("id, full_name, role, archived_at").eq("id", userData.user.id).single();
+      .from("users").select("id, full_name, role, email, archived_at").eq("id", userData.user.id).single();
     if (callerErr || !caller) return jsonResponse({ error: "Couldn't read your profile." }, 403);
     if (caller.archived_at) return jsonResponse({ error: "This account has been archived." }, 403);
 
@@ -657,6 +672,11 @@ Deno.serve(async (req: Request) => {
     const isSuperAdmin = caller.role === "super_admin";
     if (!isSuperAdmin && !(myAssignments && myAssignments.length)) {
       return jsonResponse({ error: "You're not on this engagement." }, 403);
+    }
+    // The beta gate (see the header). Super Admin is too wide to stand in for
+    // "Greg" -- Chris and Rita hold it too.
+    if (!BETA_EMAILS.has((caller.email || "").trim().toLowerCase())) {
+      return jsonResponse({ error: "The Project Kit is still being tested. Ask Greg if you'd like it turned on." }, 403);
     }
 
     const [clientRes, contentRes, appRes, questionRes, controllingRes, contactRes, teamRes, docRes] = await Promise.all([

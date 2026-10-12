@@ -1027,7 +1027,7 @@
                  information available in the project." No API creates an AI
                  project or uploads into one, so this assembles the kit and
                  the specialist drags it in once. -->
-            <div class="ccc-kit">
+            <div class="ccc-kit hidden" id="cm-kit-row">
               <button type="button" class="btn-secondary btn-sm" id="cm-kit-btn">&#128230; Project Kit</button>
               <span class="ccc-kit-note">Everything on this engagement, packed for your AI project.</span>
             </div>
@@ -1371,6 +1371,28 @@
   const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/eg-dashboard-ai`;
   const PROJECT_KIT_URL = `${SUPABASE_URL}/functions/v1/engagement-project-kit`;
 
+  // Greg (10/12/26): "Just make the Project Kit viewable by me." A beta gate,
+  // not a permission: the kit is for every specialist eventually, but while
+  // Greg is the only one trying it there is no sense in Chris, Rita or a Team
+  // Lead finding a button nobody has explained yet. Super Admin is too wide --
+  // Chris and Rita hold it too -- so this names the accounts.
+  //
+  // TO OPEN IT UP: delete PROJECT_KIT_BETA_EMAILS and canSeeProjectKit, and
+  // make showProjectKitButton() unhide the row for everyone. The Edge
+  // Function carries the same list and has to be opened in the same pass --
+  // this one only decides what shows.
+  const PROJECT_KIT_BETA_EMAILS = new Set([
+    "greg@leadforcesolutions.com",
+    "greg.gotcher@leadforcesolutions.com",
+  ]);
+  function canSeeProjectKit(profile) {
+    return !!profile && PROJECT_KIT_BETA_EMAILS.has((profile.email || "").trim().toLowerCase());
+  }
+  function showProjectKitButton(profile) {
+    const row = document.getElementById("cm-kit-row");
+    if (row) row.classList.toggle("hidden", !canSeeProjectKit(profile));
+  }
+
   // ---------- Project Kit ----------
   // Greg (10/12/26): "What would be a good strategy for a simple one click
   // button that could help me setup a dedicated project for my work for FE...
@@ -1648,6 +1670,7 @@
     // this one line covers every nav copy on the page, including the
     // second header some pages render inside #not-admin-view.
     document.querySelectorAll("[data-super-admin-only]").forEach((el) => el.classList.toggle("hidden", profile.role !== "super_admin"));
+    showProjectKitButton(profile);
 
     await Promise.all([
       clientId ? loadClient(clientId) : Promise.resolve(),
