@@ -1270,6 +1270,10 @@
   let isTeamLeadHere = false; // is currentUser the Team Lead on activeClient?
   let allUsers = [];
   let allUsersIncludingHidden = [];
+  // Accounts that can actually be chosen, or are already on a row. See
+  // userLabel -- this, not the full account list, is what makes a name
+  // ambiguous.
+  let reachableUsers = [];
   let userSpecialties = {}; // user_id -> array of specialty keys
   let nameCounts = {};      // full_name -> how many accounts carry it, hidden included
   let currentAssignments = [];
@@ -1348,15 +1352,28 @@
     const specs = (userSpecialties[u.id] || []).map((s) => SPECIALTY_LABELS[s] || s);
     return specs.length ? specs.join(", ") : roleLabel(u.role);
   }
+  // Greg (10/13/26): "i don't want my name to show up with my email when no
+  // one else's does." Three accounts carry the name "Greg Gotcher": the one
+  // he works from, a spare admin login hidden from the roster, and an
+  // archived personal address. Counting all three made the name ambiguous and
+  // stamped his email on every row -- but the other two cannot be chosen and
+  // are on no row, so there was nothing to tell apart.
+  //
+  // A name is ambiguous when more than one REACHABLE account carries it.
+  // Reachable means selectable (on the visible roster) or actually holding an
+  // assignment, which is what keeps the 9/11/26 fix alive: back then both
+  // Gregs were pickable and a bare "Greg Gotcher" sent JLR to a login he
+  // never signs into. Archived accounts never count; a hidden one counts only
+  // while it is still on a row, so the NCEG Admin house account can still be
+  // named without the picker offering it.
   function userLabel(u) {
     if (!u) return "";
     const collides = (nameCounts[(u.full_name || "").trim()] || 0) > 1;
     if (!collides) return u.full_name;
     const descriptor = specialtyDescriptor(u);
     const label = `${u.full_name} — ${descriptor}`;
-    // nameCounts above counts every account, hidden included, so the tie-break
-    // has to look at the same population or it disagrees with itself.
-    const stillCollides = allUsersIncludingHidden.filter((x) => x.full_name === u.full_name && specialtyDescriptor(x) === descriptor).length > 1;
+    // Same population as nameCounts, or the tie-break disagrees with itself.
+    const stillCollides = reachableUsers.filter((x) => x.full_name === u.full_name && specialtyDescriptor(x) === descriptor).length > 1;
     return stillCollides && u.email ? `${label} (${u.email})` : label;
   }
 
@@ -1689,7 +1706,7 @@
   });
 
   async function loadUsers() {
-    const [{ data, error }, { data: specialtyRows, error: specErr }, { data: nameRows }] = await Promise.all([
+    const [{ data, error }, { data: specialtyRows, error: specErr }, { data: nameRows }, { data: assignedRows }] = await Promise.all([
       // .is("archived_at", null) added 9/23/26 with 125_archive_roster_members.sql:
       // an archived person must not appear in any assignment picker. It sits
       // beside hidden_from_roster rather than replacing it -- hidden means "on
@@ -1708,15 +1725,23 @@
       // dropdown, so take id/role/email too (Greg, 9/16/26 -- the NCEG Admin
       // house account is hidden and owns every Admin/QC row, and a select
       // whose value matches no option silently displays "Not assigned").
-      sb.from("users").select("id, full_name, role, email, cc_on_client_email, archived_at"),
+      sb.from("users").select("id, full_name, role, email, cc_on_client_email, archived_at, hidden_from_roster"),
+      // Who is on a row ANYWHERE. A hidden account still has to be named
+      // where it is already assigned, and it is the only reason a hidden
+      // account counts toward an ambiguous name (see userLabel).
+      sb.from("client_assignments").select("user_id").not("user_id", "is", null),
     ]);
     if (error) return;
     allUsers = data;
     // Choices stay filtered to the visible roster; DISPLAY has to cover
     // everyone, which is the distinction this pair encodes.
     allUsersIncludingHidden = nameRows || data;
+    const assignedIds = new Set((assignedRows || []).map((r) => r.user_id));
+    reachableUsers = (nameRows || data).filter(
+      (u) => !u.archived_at && (u.hidden_from_roster === false || assignedIds.has(u.id)),
+    );
     nameCounts = {};
-    (nameRows || data).forEach((u) => {
+    reachableUsers.forEach((u) => {
       const n = (u.full_name || "").trim();
       if (n) nameCounts[n] = (nameCounts[n] || 0) + 1;
     });

@@ -804,7 +804,8 @@
   }
   const usersById = () => Object.fromEntries(allUsers.map((u) => [u.id, u]));
   let userSpecialties = {}; // user_id -> array of specialty keys
-  let nameCounts = {};      // full_name -> how many accounts carry it, hidden included, from user_specialties
+  let nameCounts = {};      // full_name -> how many REACHABLE accounts carry it (see userLabel)
+  let reachableUsers = [];  // selectable, or already on a row -- not every account that exists
   function specialtyDescriptor(u) {
     const specs = (userSpecialties[u.id] || []).map((s) => SPECIALTY_LABELS[s] || s);
     return specs.length ? specs.join(", ") : roleLabel(u.role);
@@ -814,6 +815,12 @@
   // technically disambiguates them but doesn't mean anything at a glance --
   // their specialties (or account role, if none are set) is what a Team
   // Lead is actually trying to tell apart when picking who fills a slot.
+  //
+  // Greg (10/13/26): "i don't want my name to show up with my email when no
+  // one else's does." Same rule as client_control_center.html -- a name is
+  // ambiguous when more than one REACHABLE account carries it, meaning one
+  // that can be chosen or is already on a row. His spare hidden login and his
+  // archived personal address are neither, so there is nothing to tell apart.
   function userLabel(u) {
     if (!u) return "";
     const collides = (nameCounts[(u.full_name || "").trim()] || 0) > 1;
@@ -823,7 +830,7 @@
     // Extremely rare fallback: two same-named accounts with the exact same
     // specialties/role would still look identical -- fall back to email so
     // the dropdown never shows two literally indistinguishable options.
-    const stillCollides = allUsers.filter((x) => x.full_name === u.full_name && specialtyDescriptor(x) === descriptor).length > 1;
+    const stillCollides = reachableUsers.filter((x) => x.full_name === u.full_name && specialtyDescriptor(x) === descriptor).length > 1;
     return stillCollides && u.email ? `${label} (${u.email})` : label;
   }
   const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
@@ -1097,7 +1104,7 @@
   });
 
   async function loadUsers() {
-    const [{ data, error }, { data: specialtyRows, error: specErr }, { data: nameRows }] = await Promise.all([
+    const [{ data, error }, { data: specialtyRows, error: specErr }, { data: nameRows }, { data: assignedRows }] = await Promise.all([
       // .is("archived_at", null) added 9/23/26 with 125_archive_roster_members.sql:
       // an archived person must not appear in any assignment picker. It sits
       // beside hidden_from_roster rather than replacing it -- hidden means "on
@@ -1107,15 +1114,21 @@
       // assignments would render as blanks.
       sb.from("users").select("id, full_name, role, email").eq("hidden_from_roster", false).is("archived_at", null).order("full_name"),
       sb.from("user_specialties").select("user_id, specialty"),
-      // Names of every account, hidden included -- see the note in
-      // client_control_center.html's loadUsers(). A name duplicated across a
-      // visible and a hidden account still has to be disambiguated.
-      sb.from("users").select("full_name"),
+      // Every account, so a name shared with a hidden-but-assigned one is
+      // still disambiguated -- see userLabel. Archived and unassigned-hidden
+      // accounts are filtered out below rather than here, because the filter
+      // needs the assignment list too.
+      sb.from("users").select("id, full_name, archived_at, hidden_from_roster"),
+      sb.from("client_assignments").select("user_id").not("user_id", "is", null),
     ]);
     if (error) { showBanner("Couldn't load the staff directory: " + error.message, "error"); return; }
     allUsers = data;
+    const assignedIds = new Set((assignedRows || []).map((r) => r.user_id));
+    reachableUsers = (nameRows || data).filter(
+      (u) => !u.archived_at && (u.hidden_from_roster === false || assignedIds.has(u.id)),
+    );
     nameCounts = {};
-    (nameRows || data).forEach((u) => {
+    reachableUsers.forEach((u) => {
       const n = (u.full_name || "").trim();
       if (n) nameCounts[n] = (nameCounts[n] || 0) + 1;
     });
