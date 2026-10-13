@@ -2584,15 +2584,40 @@
         const { error } = await sb.from("documents").update({ display_name: value }).eq("id", doc.id);
         if (error) { showBanner("Couldn't rename: " + error.message, "error"); return; }
         await loadDocuments();
+        renderTaskList();
       });
     });
     scopeEl.querySelectorAll("[data-delete-doc]").forEach((btn) => {
       btn.addEventListener("click", async () => {
+        // Greg (10/13/26): "i added the wrong file to the digital marketing
+        // task and clicking the x does not delete it." It did delete it --
+        // the row was gone from the database on the first click. What never
+        // happened was the redraw: loadDocuments() only refills the
+        // allDocuments array, and these two handlers were the only ones that
+        // did not call renderTaskList() afterwards, so the deleted row sat
+        // on screen until a reload. The + Document and + Link paths below
+        // always did, which is why adding a file looked like it worked and
+        // removing one did not.
+        //
+        // The .select() is the other half: a removal that row-level
+        // security filters down to nothing comes back as a success, so
+        // without it the page would cheerfully redraw the row it had just
+        // claimed to delete.
+        if (!confirm("Remove this file from the task? This cannot be undone.")) return;
         // A link row has no storage_path -- nothing to remove from storage.
-        if (btn.dataset.path) await sb.storage.from("client-documents").remove([btn.dataset.path]);
-        const { error } = await sb.from("documents").delete().eq("id", btn.dataset.deleteDoc);
+        const { data: gone, error } = await sb.from("documents")
+          .delete().eq("id", btn.dataset.deleteDoc).select("id");
         if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
+        if (!gone || !gone.length) {
+          showBanner("That file wasn't removed \u2014 your account doesn't have permission. Ask an Admin.", "error");
+          return;
+        }
+        // Only once the row is really gone: an orphaned file in storage is
+        // tidier than a row pointing at a file that no longer exists.
+        if (btn.dataset.path) await sb.storage.from("client-documents").remove([btn.dataset.path]);
         await loadDocuments();
+        renderTaskList();
+        showBanner("File removed from the task.", "success");
       });
     });
     wireDocDragHandlers(scopeEl);
@@ -2723,8 +2748,11 @@
     const rest = allDocuments.filter((d) => d.research_area !== area);
     allDocuments = rest.concat(areaOrdered.map((d, i) => ({ ...d, sort_order: i + 1 })));
     if (!(await persistDocOrder(areaOrdered))) {
-      // Put the screen back to what the database actually holds.
+      // Put the screen back to what the database actually holds -- which
+      // takes a redraw, not just a reload of the array (10/13/26, same
+      // omission as the delete handler above).
       await loadDocuments();
+      renderTaskList();
     }
   }
 
