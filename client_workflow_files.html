@@ -242,6 +242,11 @@
     border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 7px 16px;
     font-size: 12.5px; font-weight: 700; font-family: inherit; cursor: pointer;
   }
+  /* The Create Email button used to inherit flex-shrink:0 from the
+     .wf-change-wrap it sat in; that wrapper went with its dropdown
+     (10/13/26), so the button holds its own width now. Every other .wf-btn
+     is still inside a wrap, so this is belt and braces for them. */
+  .wf-btn { flex-shrink: 0; }
   .wf-btn:hover { background: #eef4fb; }
   .wf-btn-danger { border-color: var(--danger); color: var(--danger); }
   .wf-btn-danger:hover { background: #fdecea; }
@@ -737,12 +742,11 @@
             <span class="wf-item-num">4</span>
             <div class="wf-item-body">
               <div class="wf-item-header">
-                <!-- Greg (10/13/26), marking up the pane: the heading is
-                     "Close-Out Call Email". The step starts with the email
-                     that books the call -- the recording is what you come
-                     back and file afterwards, and the field below still
-                     calls itself that. -->
-                <div class="wf-item-title">Close-Out Call Email</div>
+                <!-- Greg (10/13/26), marking up the pane. The heading says
+                     what the email is AND that it carries the sheet, because
+                     that is the whole reason this one email replaced the
+                     separate Evaluation Sheet send. -->
+                <div class="wf-item-title">Schedule Close Out Call Email &mdash; includes a Link to Evaluation Sheet</div>
               </div>
               <div class="wf-item-hint">Send the close-out email to book the call, then attach the recording afterwards &mdash; usually the Zoom link, or upload the file. The recording shows on the client&rsquo;s dashboard above their Evaluation Sheet.</div>
               <!-- Greg (10/10/26): "make the email button on the left and the
@@ -1619,7 +1623,12 @@
     // Sheet's own attachment slot (a signed sheet an admin uploads on the
     // client's behalf), and the dashboard's Evaluation Sheet step still
     // reads them. One step, one meaning (migration 162).
-    { key: "closeout", label: "Close-Out Recording", pathColumn: "closeout_recording_storage_path", urlColumn: "closeout_recording_url" },
+    // Greg (10/13/26), marking up the pane: this trigger says what it takes.
+    // "+ Add file" is fine on a row whose heading already names the document;
+    // this row's heading is about the email, so the button has to carry the
+    // recording on its own. addLabel is per-field, so the other three rows
+    // are untouched.
+    { key: "closeout", label: "Close-Out Recording", addLabel: "Attach Close-Out Call Recording", pathColumn: "closeout_recording_storage_path", urlColumn: "closeout_recording_url" },
     // The Evaluation Sheet's own attachment slot, back after being dropped
     // on 8/25/26 when the direct-submit flow made it look redundant. Greg
     // (10/10/26) asked for both halves of Close-Out to take "a file or link
@@ -1733,7 +1742,7 @@
 
     actions.innerHTML = `
       <div class="wf-change-wrap">
-        <button type="button" class="wf-btn" data-wf-change>+ Add file &#9662;</button>
+        <button type="button" class="wf-btn" data-wf-change>${f.addLabel || "+ Add file"} &#9662;</button>
         <div class="wf-menu hidden">
           <button type="button" data-wf-upload>Upload file</button>
           <button type="button" data-wf-add-link>Add a link</button>
@@ -1867,48 +1876,14 @@
   // always available), and once a response has come back, "View Full
   // Response" becomes the prominent primary action in the body -- same
   // wf-open-btn treatment as "Open Document" on the other three rows.
-  // The dropdown trigger doubles as the busy indicator while
-  // ensureEvalLinkUrl() runs, so its label lives in one place.
-  const EVAL_TRIGGER_LABEL = "Create Email &#9662;";
+  // The button doubles as the busy indicator while ensureEvalLinkUrl()
+  // runs, so its label lives in one place.
+  const EVAL_TRIGGER_LABEL = "Create Email";
 
-  // Greg (10/6/26): "...or just grab the link to the Evaluation Sheet and
-  // write their own email." This hands over the REAL link, not the preview
-  // one -- it is the URL the client is meant to receive, so it goes through
-  // ensureEvalLinkUrl() exactly as Create Email does: same research-document
-  // gate, and saved to client_content.evaluation_link_url so the dashboard
-  // and the email agree on one URL.
-  async function copyEvalLink() {
-    const btn = document.querySelector("#eval-email-create-btn");
-    if (btn) { btn.disabled = true; btn.innerHTML = "Preparing&hellip;"; }
-    const url = await ensureEvalLinkUrl();
-    if (btn) { btn.disabled = false; btn.innerHTML = EVAL_TRIGGER_LABEL; }
-    if (!url) return;
-    let copied = false;
-    try {
-      await navigator.clipboard.writeText(url);
-      copied = true;
-    } catch (e) {
-      // Clipboard access is refused in plenty of ordinary situations (an
-      // insecure origin, a permission the browser never granted, the page
-      // not being focused at the moment of the call). Falling back to the
-      // old execCommand path covers most of them.
-      try {
-        const ta = document.createElement("textarea");
-        ta.value = url;
-        ta.setAttribute("readonly", "");
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        copied = document.execCommand("copy");
-        document.body.removeChild(ta);
-      } catch (e2) { copied = false; }
-    }
-    // Never just say "copied" -- if it failed, the Team Lead needs the URL
-    // itself, not a cheerful lie.
-    showBanner(copied ? "Evaluation Sheet link copied to your clipboard." : "Couldn't reach your clipboard. Here's the link: " + url,
-               copied ? "success" : "error");
-  }
+  // copyEvalLink() lived here: "Get Link" put the Evaluation Sheet URL on
+  // the clipboard so a Team Lead could write their own email. It went with
+  // the dropdown on 10/13/26 -- the one email now carries that link itself.
+  // If it is ever wanted back, it is in the history at cce6c30.
 
   function renderEvalLinkField() {
     const container = $("wf-eval-link");
@@ -1927,24 +1902,17 @@
     // the old checkbox/"live on the dashboard" toggle and CEO-facing CTA
     // button entirely -- there's no dashboard button anymore (removed from
     // client_public.html), just this one button that drafts the email.
-    // Greg (10/6/26): "Move the create email up into the header and make it
-    // have a dropdown that says get link so that a TL can either create an
-    // email or just grab the link to the Evaluation Sheet and write their own
-    // email." Same .wf-change-wrap / .wf-menu dropdown the other three rows
-    // use for Change, so it opens, closes and keys the same way.
+    // Greg (10/6/26) asked for a dropdown here -- "either create an email or
+    // just grab the link to the Evaluation Sheet and write their own email"
+    // -- and on 10/13/26 took it back out: "there is no dropdown on the
+    // Create Email button", with both menu items struck through. The reason
+    // it stopped earning its place is the heading above it: this email now
+    // carries the sheet's link itself, so "Get Link" was a second route to
+    // something the one button already does. One click, no menu.
     actions.innerHTML = `
-      <div class="wf-change-wrap">
-        <button type="button" class="wf-btn wf-btn-icon-email" id="eval-email-create-btn" data-wf-change>${EVAL_TRIGGER_LABEL}</button>
-        <div class="wf-menu hidden">
-          <button type="button" data-eval-email>Create Email</button>
-          <button type="button" data-eval-get-link>Get Link</button>
-        </div>
-      </div>
+      <button type="button" class="wf-btn wf-btn-icon-email" id="eval-email-create-btn">${EVAL_TRIGGER_LABEL}</button>
     `;
-    wireWfChangeMenu(actions, [
-      { sel: "[data-eval-email]", fn: openEvalEmailModal },
-      { sel: "[data-eval-get-link]", fn: copyEvalLink },
-    ]);
+    actions.querySelector("#eval-email-create-btn").addEventListener("click", openEvalEmailModal);
 
     // Greg (9/4/26): "we have the link in the email. can't we just have an
     // open Close-Out Document button that goes to this link" -- same
