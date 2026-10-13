@@ -2737,17 +2737,35 @@
     if (!collides) return u.full_name;
     return u.email ? `${u.full_name} (${u.email})` : `${u.full_name} — ${specialtyDescriptor(u)}`;
   }
-  function consultantOptionsHtml(selectedId) {
-    // The pick list is the visible roster. But if this row is already held by
-    // somebody hidden -- the NCEG Admin house account on Admin/QC, or one of
-    // the hidden admins -- that person has to appear too, or the select falls
+  // Greg (10/13/26): "when you select Digital Marketing 1 it provides a list
+  // of everyone when it should only show the list of roster members who have
+  // ticked DM on their profile." Every row offered all 33 people, so picking
+  // the Digital Marketer meant knowing by heart which of them does digital
+  // marketing -- the specialty ticks on the profile page already say.
+  //
+  // Admin and Quality Control are the exception: nobody ticks either (the
+  // rows are held centrally by the NCEG Admin house account), so filtering
+  // them would leave two empty dropdowns that look broken. Greg, same day:
+  // leave those two alone.
+  const UNFILTERED_SPECIALTIES = new Set(["admin", "quality_control"]);
+
+  function consultantOptionsHtml(selectedId, specialty) {
+    // The pick list is the visible roster, narrowed to whoever does this kind
+    // of work. Somebody with nothing ticked appears nowhere -- that is the
+    // point: an empty profile is the thing to fix, not to route around.
+    let options = allUsers;
+    if (specialty && !UNFILTERED_SPECIALTIES.has(specialty)) {
+      options = allUsers.filter((u) => (userSpecialties[u.id] || []).includes(specialty));
+    }
+    // But if this row is already held by somebody the filter excludes -- the
+    // NCEG Admin house account, a hidden admin, or a person whose ticks have
+    // since changed -- that person has to appear too, or the select falls
     // back to its first option and the row reads "Not assigned" while the
     // database says otherwise. Offer them, but only because they are already
-    // on the row: nobody can PICK a hidden account from here.
-    let options = allUsers;
-    if (selectedId && !allUsers.some((u) => u.id === selectedId)) {
+    // on the row: nobody can PICK their way to them from here.
+    if (selectedId && !options.some((u) => u.id === selectedId)) {
       const held = allUsersIncludingHidden.find((u) => u.id === selectedId);
-      if (held) options = [...allUsers, held];
+      if (held) options = [...options, held];
     }
     return '<option value="">Not assigned</option>' + options.map((u) => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${escapeHtml(consultantOptionLabel(u))}</option>`).join("");
   }
@@ -2903,7 +2921,7 @@
       tr.id = "tw-add-row";
       tr.innerHTML = `
         <td id="tw-add-area-cell"><button type="button" class="add-specialist-link" id="tw-add-specialist">Add Specialist</button></td>
-        <td><select class="row-select" id="tw-add-person" aria-label="Person for the new work area">${consultantOptionsHtml(null)}</select></td>
+        <td><select class="row-select" id="tw-add-person" aria-label="Person for the new work area">${consultantOptionsHtml(null, null)}</select></td>
         <td></td>
         <td></td>
       `;
@@ -2941,7 +2959,7 @@
           )}</div>`
         : "";
       const personCell = (canManage
-        ? `<select class="row-select row-consultant-select">${consultantOptionsHtml(r.user_id)}</select>`
+        ? `<select class="row-select row-consultant-select">${consultantOptionsHtml(r.user_id, r.specialty_type)}</select>`
         : `${person ? escapeHtml(userLabel(person)) : `<span style="color:var(--muted);">Not assigned</span>`}`) + loggedNote;
       // No action buttons on any row (Greg, 9/18/26: "remove the Remove
       // button -- if i later don't want it i can leave it unassigned").

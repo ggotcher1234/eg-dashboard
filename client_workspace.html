@@ -1427,8 +1427,24 @@
     ];
     return '<option value="">Select…</option>' + opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
   }
-  function consultantOptionsHtml(selectedId) {
-    return '<option value="">Unassigned</option>' + allUsers.map((u) => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${escapeHtml(userLabel(u))}</option>`).join("");
+  // Same rule as client_control_center.html (Greg, 10/13/26): a work area
+  // offers the people who ticked it on their profile, not the whole roster.
+  // Admin and Quality Control stay unfiltered -- nobody ticks either, so
+  // filtering them would empty those two dropdowns.
+  const UNFILTERED_SPECIALTIES = new Set(["admin", "quality_control"]);
+
+  function consultantOptionsHtml(selectedId, specialty) {
+    let options = allUsers;
+    if (specialty && !UNFILTERED_SPECIALTIES.has(specialty)) {
+      options = allUsers.filter((u) => (userSpecialties[u.id] || []).includes(specialty));
+    }
+    // Whoever already holds the row is offered regardless, or the select
+    // would fall back to its first option and silently reassign them.
+    if (selectedId && !options.some((u) => u.id === selectedId)) {
+      const held = allUsers.find((u) => u.id === selectedId) || usersById()[selectedId];
+      if (held) options = [...options, held];
+    }
+    return '<option value="">Unassigned</option>' + options.map((u) => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${escapeHtml(userLabel(u))}</option>`).join("");
   }
 
   // ---------- Assignments spreadsheet ----------
@@ -1441,7 +1457,7 @@
       const tr = document.createElement("tr");
       tr.dataset.assignmentId = r.id;
       const consultantCell = canManageAssignments
-        ? `<select class="row-select row-consultant-select">${consultantOptionsHtml(r.user_id)}</select>`
+        ? `<select class="row-select row-consultant-select">${consultantOptionsHtml(r.user_id, r.specialty_type)}</select>`
         : `${person ? escapeHtml(userLabel(person)) : `<span style="color:var(--muted);">Unassigned</span>`}`;
       const isFixed = fixedSlotIndex(r.specialty_type, r.slot_number) !== -1;
       const actionBtn = isFixed
@@ -1543,6 +1559,19 @@
       </td>
     `;
     tbody.appendChild(tr);
+
+    // Both selects sit on this one row, so the person list can follow the
+    // work area as soon as it is chosen (Greg, 10/13/26). Whoever was
+    // already picked is kept if they do that work, and dropped if they
+    // don't -- silently carrying over a Market Researcher into a GIS row is
+    // the mistake this filter exists to prevent.
+    const specialtySelect = tr.querySelector(".new-specialty");
+    const personSelect = tr.querySelector(".new-consultant");
+    specialtySelect.addEventListener("change", () => {
+      const keep = personSelect.value;
+      personSelect.innerHTML = consultantOptionsHtml(null, specialtySelect.value);
+      if (keep && [...personSelect.options].some((o) => o.value === keep)) personSelect.value = keep;
+    });
 
     tr.querySelector(".new-hours").addEventListener("input", recalcUnassigned);
     tr.querySelector("[data-cancel-row]").addEventListener("click", () => { tr.remove(); recalcUnassigned(); });
