@@ -449,28 +449,6 @@
     background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px;
     display: flex; flex-direction: column; gap: 2px;
   }
-  /* The Project Kit button sits under the status control rather than beside
-     it -- the status toggle is the one thing in this masthead people click
-     by reflex, and a second button on that line stole from it. */
-  .ccc-kit { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 12px; }
-  .ccc-kit-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .ccc-kit-note { font-size: 12px; color: var(--muted); }
-  /* Shut by default: the steps matter the first few times and then never
-     again, so they must be reachable without taking up the masthead. */
-  .ccc-kit-help { font-size: 12px; max-width: 640px; }
-  .ccc-kit-help > summary {
-    cursor: pointer; color: var(--accent-dark); font-weight: 600;
-    list-style: none; display: inline-flex; align-items: center; gap: 5px;
-  }
-  .ccc-kit-help > summary::-webkit-details-marker { display: none; }
-  .ccc-kit-help > summary::before { content: "\25B8"; font-size: 10px; transition: transform 0.15s ease; }
-  .ccc-kit-help[open] > summary::before { transform: rotate(90deg); }
-  .ccc-kit-help > summary:hover { text-decoration: underline; }
-  .ccc-kit-steps { margin: 8px 0 0; padding-left: 20px; color: var(--text); line-height: 1.55; }
-  .ccc-kit-steps li { margin-bottom: 5px; }
-  .ccc-kit-steps code { background: #eef1f4; border-radius: 3px; padding: 1px 4px; font-size: 11.5px; }
-  .ccc-kit-warn { margin-top: 8px; color: var(--muted); font-style: italic; }
-
   .cc-nav-btn {
     display: flex; align-items: center; gap: 20px; width: 100%; text-align: left; padding: 12px 6px 12px 9px;
     border: none; border-left: 3px solid transparent; border-radius: 8px; background: transparent;
@@ -1015,6 +993,14 @@
         <div class="cc-more-menu hidden" id="cc-more-menu">
           <button type="button" class="btn-ghost" id="std-export-btn" title="Download this engagement's team &amp; hours as CSV">&#8595; Download CSV</button>
           <button type="button" class="btn-ghost" id="std-import-btn" title="This page manages one engagement -- nothing to bulk import here" disabled>Import</button>
+          <!-- Greg (10/13/26): "i dont want it to show up during my
+               presentations of videos so move it under the 'more' button."
+               It was in the masthead, where it sat in frame on every walk-
+               through of an engagement. Still gated to Greg's accounts (see
+               showProjectKitButton) -- the menu only decides where it lives,
+               not who sees it. The how-to that used to sit under it is gone
+               at his request; the zip's own README.txt still carries it. -->
+          <button type="button" class="btn-ghost hidden" id="cm-kit-btn" title="Download this engagement packed for an AI project">&#128230; Project Kit</button>
         </div>
       </div>
     </div>
@@ -1043,36 +1029,6 @@
                  information available in the project." No API creates an AI
                  project or uploads into one, so this assembles the kit and
                  the specialist drags it in once. -->
-            <div class="ccc-kit hidden" id="cm-kit-row">
-              <div class="ccc-kit-top">
-                <button type="button" class="btn-secondary btn-sm" id="cm-kit-btn">&#128230; Project Kit</button>
-                <span class="ccc-kit-note">Everything on this engagement, packed for your AI project.</span>
-              </div>
-              <!-- Greg (10/12/26): "Add the instructions on how to use the Zip
-                   files including the pdfs, md's and files folder to the notes
-                   under Project Kit so that i don't forget." The same steps are
-                   in the zip's own README.txt, but that is only readable AFTER
-                   unzipping -- and the two things easiest to get wrong (the zip
-                   itself is not uploadable, and project-instructions.md is not a
-                   knowledge file) both bite before anyone opens it. Shut by
-                   default so the masthead stays short. -->
-              <details class="ccc-kit-help">
-                <summary>How to use the zip</summary>
-                <ol class="ccc-kit-steps">
-                  <li><strong>Unzip it first.</strong> Project knowledge won&rsquo;t accept a <code>.zip</code> &mdash; double-click it and work from the folder.</li>
-                  <li>Make a new project named for the engagement.</li>
-                  <li>Drag into the project&rsquo;s files/knowledge: <code>engagement-brief.md</code>, plus everything under <code>files/</code>, <code>files/lists/</code> and <code>files/research/</code> &mdash; the documents the team has actually uploaded.</li>
-                  <li><strong>Skip <code>engagement-brief.pdf</code>.</strong> It is the same document as the <code>.md</code>; upload it <em>instead of</em> the Markdown only if your tool won&rsquo;t take Markdown. Never both &mdash; the model just reads everything twice.</li>
-                  <li><strong><code>project-instructions.md</code> is not a knowledge file.</strong> Open it, copy it, and paste it into the project&rsquo;s custom instructions / system prompt box.</li>
-                  <li><code>README.txt</code> is these same steps. Once you know them, skip it.</li>
-                  <li>Check it took: ask something only the brief would know &mdash; &ldquo;what did the client rank my question, and what&rsquo;s their revenue trend?&rdquo; A hedge means the upload didn&rsquo;t land.</li>
-                  <li>When new research lands, click the button again. Kits are dated, so a new one never overwrites an old one &mdash; add the new files and remove the ones they replace.</li>
-                </ol>
-                <div class="ccc-kit-warn">Confidential: the brief carries the client&rsquo;s self-reported revenue and headcount. Treat the project the way you would the engagement.</div>
-              </details>
-            </div>
-            </div>
-
             <!-- Greg (9/6/26): "make all note boxes in the header the same
                  size." The three pane notes -- Info Wizard, Add Research and
                  the overdue delay box -- were three different widths in two
@@ -1418,7 +1374,7 @@
   // Chris and Rita hold it too -- so this names the accounts.
   //
   // TO OPEN IT UP: delete PROJECT_KIT_BETA_EMAILS and canSeeProjectKit, and
-  // make showProjectKitButton() unhide the row for everyone. The Edge
+  // make showProjectKitButton() unhide the button for everyone. The Edge
   // Function carries the same list and has to be opened in the same pass --
   // this one only decides what shows.
   const PROJECT_KIT_BETA_EMAILS = new Set([
@@ -1429,8 +1385,8 @@
     return !!profile && PROJECT_KIT_BETA_EMAILS.has((profile.email || "").trim().toLowerCase());
   }
   function showProjectKitButton(profile) {
-    const row = document.getElementById("cm-kit-row");
-    if (row) row.classList.toggle("hidden", !canSeeProjectKit(profile));
+    const btn = document.getElementById("cm-kit-btn");
+    if (btn) btn.classList.toggle("hidden", !canSeeProjectKit(profile));
   }
 
   // ---------- Project Kit ----------
@@ -1449,6 +1405,8 @@
   async function downloadProjectKit() {
     const btn = $("cm-kit-btn");
     if (!btn || !activeClient) return;
+    const menu = document.getElementById("cc-more-menu");
+    if (menu) menu.classList.add("hidden");
     const original = btn.innerHTML;
     btn.disabled = true;
     btn.textContent = "Building\u2026";
