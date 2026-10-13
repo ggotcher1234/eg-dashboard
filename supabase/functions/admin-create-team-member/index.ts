@@ -365,6 +365,25 @@ Deno.serve(async (req: Request) => {
                 <a href="${escapeHtml(siteUrl)}" style="font-size:16px; font-weight:700;">${escapeHtml(siteUrl)}</a>
               </p>
               <p>You will sign in with this address: <strong>${escapeHtml(String(target.email))}</strong></p>
+              <!-- Greg (10/13/26): "the email ... should also include
+                   instructions that tell them to go to the Roster page and
+                   update their profile as soon as possible as only skills
+                   they select on that page show up for TL's to chose from."
+                   Since 10/13/26 a work area's Person dropdown offers only
+                   the people who ticked that work area, so an unticked
+                   profile is not merely incomplete -- it is invisible to
+                   every Team Lead staffing an engagement. That consequence
+                   is the whole reason anyone acts on this paragraph, so it
+                   is stated plainly rather than left as "keep your profile
+                   up to date". -->
+              <p style="margin:18px 0; padding:12px 14px; border:1px solid #d6dcd3; border-left:4px solid #a9740f; border-radius:6px;">
+                <strong style="display:block; font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:#a9740f; margin-bottom:5px;">Do this first</strong>
+                Open the <a href="${escapeHtml(siteUrl)}/team_directory.html">Roster</a> page, find your
+                name, and fill in your profile &mdash; above all the work areas you cover
+                (Market Research, Digital Marketing, GIS, Watering Holes, Team Lead).
+                When a Team Lead staffs an engagement, each work area only offers the people who
+                have ticked it, so until you do this no one can put you on a project.
+              </p>
               <p>If the link has already expired by the time you get to it, no problem &mdash; go to
                  <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a>, choose "Forgot your
                  password?" and enter this address. It does exactly the same thing.</p>
