@@ -411,7 +411,7 @@ Deno.serve(async (req: Request) => {
           // sender and reaches only the account owner -- it 403s the whole
           // send the moment anyone else is on it, which is what the first
           // test of this did.
-          from: "EG Dashboard <noreply@send.economicgardening.org>",
+          from: "NCEG Dashboard <noreply@send.economicgardening.org>",
           reply_to: "egdashboard@economicgardening.org",
           to,
           subject: `Evaluation Sheet submitted: ${client.name}`,
@@ -432,7 +432,7 @@ Deno.serve(async (req: Request) => {
       if (!res.ok) throw new Error(`Resend returned ${res.status}: ${await res.text().catch(() => "")}`);
     } catch (e) {
       console.error("Evaluation PDF/email step failed:", e instanceof Error ? e.message : e);
-      warning = "Your evaluation was saved. The copy emailed to your EG team didn't go out — they can still see your answers on the dashboard.";
+      warning = "Your evaluation was saved. The copy emailed to your NCEG team didn't go out — they can still see your answers on the dashboard.";
     }
 
     return jsonResponse({ ok: true, warning });

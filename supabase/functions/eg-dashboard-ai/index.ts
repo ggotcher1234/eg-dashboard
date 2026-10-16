@@ -1,6 +1,6 @@
 // supabase/functions/eg-dashboard-ai/index.ts
 //
-// Ask AI backend for the EG Dashboard. Browser -> this function -> Claude API.
+// Ask AI backend for the NCEG Dashboard. Browser -> this function -> Claude API.
 // The Claude API key never touches the browser; it lives only as the
 // ANTHROPIC_API_KEY secret on this function (set yourself via
 // `supabase secrets set ANTHROPIC_API_KEY=...` or the Supabase dashboard's
@@ -85,20 +85,20 @@ const ROLE_LABELS: Record<string, string> = {
 // tool access at all -- just a how-to-use-this-page answer.
 const PAGE_HELP: Record<string, string> = {
   dashboard:
-    "The main EG Dashboard home page. Shows engagement status counts (Pending, Accepted, In Progress, On Hold, Closed), admin tool shortcuts (Engagement Applications, Programs, EG Team, Invoicing Report), and a searchable list of recent/all engagements.",
+    "The main NCEG Dashboard home page. Shows engagement status counts (Pending, Accepted, In Progress, On Hold, Closed), admin tool shortcuts (Engagement Applications, Programs, NCEG Team, Invoicing Report), and a searchable list of recent/all engagements.",
   applications:
     "The Engagement Applications page, where new client applications are reviewed and accepted or declined.\n\n" +
     "NEW APPLICATION WIZARD (5 steps, used to submit a brand-new application via '+ New Application'):\n" +
     "1. Engagement Details -- engagement name (required), EG Program (required, which partner program this belongs to), website, phone, ownership type (private/public, required), year founded.\n" +
     "2. Company & Address -- street address, city, state, ZIP/postal code, country (defaults to United States), county. All optional.\n" +
-    "3. Contacts -- a Primary Contact (name/title/email/phone) is expected; up to two more optional contacts can be added ('+ Add Secondary Contact', '+ Add 3rd Contact'). Each of the first two contacts has a 'Contact Style / Temperament' field (Guardian / Artisan / Rational / Idealist) describing how EG staff should approach conversations with that person.\n" +
+    "3. Contacts -- a Primary Contact (name/title/email/phone) is expected; up to two more optional contacts can be added ('+ Add Secondary Contact', '+ Add 3rd Contact'). Each of the first two contacts has a 'Contact Style / Temperament' field (Guardian / Artisan / Rational / Idealist) describing how NCEG staff should approach conversations with that person.\n" +
     "4. Financials & Business Profile -- mostly optional: primary NAICS code, a '10-100 FTE employees' checkbox, an optional accordion for detailed FTE and revenue figures by year (2022-2025), a Business Profile accordion (sales $1M-$50M, sales primarily external to region, woman/minority/veteran/disabled-owned, % employees in-state), a free-text Top Business Issues field, a Links & Tags accordion (social links, news links, tags), and a Documents accordion for attaching files (written application, sales sheet, etc.).\n" +
     "5. Review -- a read-only summary of everything entered on steps 1-4; clicking submit here creates the application with status Pending.\n\n" +
-    "AFTER SUBMISSION: a Pending application sits on this page's Pending tab until a Team Lead or Admin opens it and either Accepts or Rejects it. IMPORTANT: Team Lead assignment, budget hours, and Admin/QC hours are NOT part of the 5-step wizard above -- those are set later, at the ACCEPT step (Team Lead/Admin only). Accepting opens a separate form requiring: total Budget Hours, a Team Lead (required, from a dropdown of EG staff), optional Team Lead/Admin/QC hours (which together can't exceed the budget total), and a client-facing URL slug (auto-suggested from the engagement name, editable). Submitting that form runs accept_client_application(), which converts the application into a live engagement (client) and creates the Team Lead's assignment row. Rejecting an application just marks it Rejected -- no engagement is created, and no hours/team-lead fields are involved.",
+    "AFTER SUBMISSION: a Pending application sits on this page's Pending tab until a Team Lead or Admin opens it and either Accepts or Rejects it. IMPORTANT: Team Lead assignment, budget hours, and Admin/QC hours are NOT part of the 5-step wizard above -- those are set later, at the ACCEPT step (Team Lead/Admin only). Accepting opens a separate form requiring: total Budget Hours, a Team Lead (required, from a dropdown of NCEG staff), optional Team Lead/Admin/QC hours (which together can't exceed the budget total), and a client-facing URL slug (auto-suggested from the engagement name, editable). Submitting that form runs accept_client_application(), which converts the application into a live engagement (client) and creates the Team Lead's assignment row. Rejecting an application just marks it Rejected -- no engagement is created, and no hours/team-lead fields are involved.",
   programs:
     "The Programs page (Econ Dev Partners), listing partner organizations, their contacts, and which engagements are linked to each program.",
   team:
-    "The EG Team directory, listing every team member, their role (Specialist / Team Lead / Admin), contact info, and specialties.",
+    "The NCEG Team directory, listing every team member, their role (Specialist / Team Lead / Admin), contact info, and specialties.",
   invoicing:
     "The Invoicing Report, used by the bookkeeper/admin to review hours by specialist, budget alerts, and payroll (Month-to-Date and Year-to-Date) for a selected month.",
   workspace:
@@ -155,7 +155,7 @@ const ADMIN_TOOLS = [
   },
   {
     name: "list_team",
-    description: "List EG team members, optionally filtered by role.",
+    description: "List NCEG team members, optionally filtered by role.",
     input_schema: {
       type: "object",
       properties: {
@@ -246,9 +246,9 @@ Deno.serve(async (req: Request) => {
 
     const pageHelp =
       (pageKey && PAGE_HELP[pageKey]) ||
-      "A page inside the EG Dashboard app, an internal tool EG Group uses to manage economic gardening engagements with client companies.";
+      "A page inside the NCEG Dashboard app, an internal tool NCEG uses to manage economic gardening engagements with client companies.";
 
-    let contextNote = `You're answering a question from ${userName}, signed in as a ${roleLabel}. They are currently on: ${pageContext || pageKey || "an EG Dashboard page"}.\n\nAbout this page: ${pageHelp}`;
+    let contextNote = `You're answering a question from ${userName}, signed in as a ${roleLabel}. They are currently on: ${pageContext || pageKey || "an NCEG Dashboard page"}.\n\nAbout this page: ${pageHelp}`;
     if (clientId) contextNote += `\n\nThe engagement currently open on screen has id: ${clientId}. If the user refers to "this engagement" and you need detail beyond what's already implied, call get_engagement_detail with this client_id.`;
 
     const answer = isAdmin
@@ -294,7 +294,7 @@ async function answerAsNonAdmin(
   contextNote: string,
   history: { role: "user" | "assistant"; content: string }[],
 ): Promise<string> {
-  const system = `You are "Ask AI," a helpful assistant embedded in the EG Dashboard app, an internal tool EG Group's staff use to manage economic gardening engagements.
+  const system = `You are "Ask AI," a helpful assistant embedded in the NCEG Dashboard app, an internal tool NCEG's staff use to manage economic gardening engagements.
 
 ${contextNote}
 
@@ -316,13 +316,13 @@ async function answerAsAdmin(
   contextNote: string,
   history: { role: "user" | "assistant"; content: string }[],
 ): Promise<string> {
-  const system = `You are "Ask AI," a helpful assistant embedded in the EG Dashboard app, an internal tool EG Group's staff use to manage economic gardening engagements.
+  const system = `You are "Ask AI," a helpful assistant embedded in the NCEG Dashboard app, an internal tool NCEG's staff use to manage economic gardening engagements.
 
 ${contextNote}
 
 ${STYLE_INSTRUCTIONS}
 
-This user is an Admin, so you have tools available to query live EG Group data in Supabase -- use them whenever the question needs current figures, names, or status, regardless of what page they're currently on. Call as many tools, in as many rounds, as you need to fully answer. Only state facts that came back from a tool call; never invent names or numbers. If a tool returns no matching data, say so plainly.
+This user is an Admin, so you have tools available to query live NCEG data in Supabase -- use them whenever the question needs current figures, names, or status, regardless of what page they're currently on. Call as many tools, in as many rounds, as you need to fully answer. Only state facts that came back from a tool call; never invent names or numbers. If a tool returns no matching data, say so plainly.
 
 If earlier messages in this conversation are included below, use them for context on follow-up questions (e.g. "what about her hours" referring back to a specialist already mentioned, or "that one" referring back to an engagement already discussed) -- call tools again with the resolved specifics rather than asking the user to repeat themselves.`;
 

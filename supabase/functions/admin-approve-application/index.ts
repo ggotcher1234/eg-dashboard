@@ -4,7 +4,7 @@
 // needs to approve it... Only he can check it. When he checks it an email
 // needs to go out to the PA and Rita letting them know that the new Applicant
 // (Name) has been approved on 'date'. Then Rita will go in and add the hours
-// and TL which will kick off the engagement for the EG Team."
+// and TL which will kick off the engagement for the NCEG Team."
 //
 // WHY A FUNCTION AND NOT A PLAIN UPDATE FROM THE PAGE
 // Two reasons, and either one on its own would be enough:
@@ -245,7 +245,7 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({
           // Same verified sending domain as every other system email --
           // see the long note in public-submit-application.
-          from: "EG Dashboard <noreply@send.economicgardening.org>",
+          from: "NCEG Dashboard <noreply@send.economicgardening.org>",
           reply_to: "egdashboard@economicgardening.org",
           to: recipients,
           // The "(CODE) Subject" convention Greg set on 9/14/26, so everything
@@ -266,7 +266,7 @@ Deno.serve(async (req: Request) => {
               <strong>Approved by:</strong> ${escapeHtml(approverName)}
             </p>
             <p>Open it on the Applications tab to set the hours, Team Lead and CC list. Accepting it creates the engagement and sends the approval letter to the Program Administrator.</p>
-            <p style="color:#6b7280; font-size:13px;">This note is internal to the EG team. The Program has not been told yet.</p>
+            <p style="color:#6b7280; font-size:13px;">This note is internal to the NCEG team. The Program has not been told yet.</p>
           `,
         }),
       });

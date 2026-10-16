@@ -340,14 +340,14 @@ Deno.serve(async (req: Request) => {
           method: "POST",
           headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            from: "EG Dashboard <noreply@send.economicgardening.org>",
+            from: "NCEG Dashboard <noreply@send.economicgardening.org>",
             reply_to: "egdashboard@economicgardening.org",
             to: [target.email],
             cc,
-            subject: "Welcome to the EG Dashboard",
+            subject: "Welcome to the NCEG Dashboard",
             html: `
               <p>Hi ${escapeHtml(firstName)},</p>
-              <p>Welcome aboard &mdash; you have been added to the EG Dashboard, where we run our
+              <p>Welcome aboard &mdash; you have been added to the NCEG Dashboard, where we run our
                  Economic Gardening engagements. Your account is ready; you just need a password.</p>
               <p><a href="${escapeHtml(actionLink)}">Set your password and sign in</a></p>
               <p>That link gets you in the first time. It works once and expires in 24 hours.</p>

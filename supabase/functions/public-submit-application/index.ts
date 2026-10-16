@@ -92,7 +92,7 @@ const REQUIRED_KEYS = [
 // PA. Until we go live make sure that the subject line in the application
 // submission to: and cc: list says TEST".
 //
-// Both emails below reach somebody outside the EG team. The notification
+// Both emails below reach somebody outside the NCEG team. The notification
 // goes to the Program Administrator as well as the Admins, and the
 // confirmation goes to the applicant -- so a rehearsal submission puts two
 // genuine-looking EG emails in two real inboxes.
@@ -113,7 +113,7 @@ const TEST_SUBJECT_PREFIX = "[TEST] ";
 const TEST_BODY_BANNER =
   '<p style="margin:0 0 14px; padding:10px 12px; border:2px solid #b42318; '
   + 'border-radius:6px; color:#b42318; font-weight:700;">'
-  + "*** TEST &mdash; this is a rehearsal of the EG Dashboard. "
+  + "*** TEST &mdash; this is a rehearsal of the NCEG Dashboard. "
   + "Please disregard this message; no action is needed. ***</p>";
 
 function testSubject(subject: string) {
@@ -324,7 +324,7 @@ Deno.serve(async (req: Request) => {
 
       // Greg (9/25/26), writing the Send Link note the Programs page now
       // drafts for Chris: "When the CEO fills out the form and hits submit, it
-      // sends an email to the program manager and the appropriate EG team
+      // sends an email to the program manager and the appropriate NCEG team
       // letting everyone know that the application has been submitted."
       //
       // The EG half has always been here; the Program half had not. The
@@ -380,7 +380,7 @@ Deno.serve(async (req: Request) => {
           // A subdomain rather than the root: the root domain's own mail is
           // untouched by any of this, so EG's day-to-day email cannot be
           // affected by what the dashboard sends.
-          from: "EG Dashboard <noreply@send.economicgardening.org>",
+          from: "NCEG Dashboard <noreply@send.economicgardening.org>",
           // noreply@ has no mailbox behind it, so a reply would vanish.
           // egdashboard@economicgardening.org is the forwarder Eric set up to
           // Chris -- REPLIES BOUNCE IF THAT ADDRESS DOES NOT EXIST, so if the
@@ -404,7 +404,7 @@ Deno.serve(async (req: Request) => {
               <strong>Program:</strong> ${escapeHtml(program.name)} (${escapeHtml(program.code)})<br/>
               <strong>Primary Contact:</strong> ${escapeHtml(officerName)}
             </p>
-            <p>The EG team reviews it from here -- approval, then a Team Lead and hours to start the engagement. No action is needed from the Program.</p>
+            <p>The NCEG team reviews it from here -- approval, then a Team Lead and hours to start the engagement. No action is needed from the Program.</p>
           `),
         }),
       });
@@ -435,7 +435,7 @@ Deno.serve(async (req: Request) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              from: "EG Dashboard <noreply@send.economicgardening.org>",
+              from: "NCEG Dashboard <noreply@send.economicgardening.org>",
               reply_to: "egdashboard@economicgardening.org",
               to: testRecipients([officerEmail]),
               subject: testSubject(`(${program.code}) Application Received - ${companyName}`),
