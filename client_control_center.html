@@ -256,8 +256,10 @@
   /* Standing caption under the status pills. Greg (10/16): the Closed button
      is the drop-dead control now, so the rule it enforces has to be readable
      before someone presses it, not only in the error afterwards. */
-  .cm-close-note { display: block; width: 100%; margin-top: 9px; font-size: 12.5px;
-                   line-height: 1.5; color: var(--muted); max-width: 56ch; }
+  .cm-close-note { flex: 0 0 100%; order: 99; margin: 2px 0 0; padding-top: 9px;
+                   border-top: 1px solid var(--border); font-size: 12.5px;
+                   line-height: 1.5; color: var(--muted); }
+  .cm-close-note strong { color: var(--navy); font-weight: 700; }
 
   .tw-manage-note { margin-top: 12px; padding: 9px 12px; border-radius: 8px; background: var(--note-bg);
                     border: 1px solid var(--border); font-size: 12.5px; color: var(--muted);
@@ -281,6 +283,11 @@
     display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden;
     background: #f6f8fa;
   }
+  /* Locked rather than disabled: a disabled button swallows the click, and
+     the click is the moment the reminder is worth showing. */
+  .segmented-control .status-pill.status-pill-locked { color: var(--muted); opacity: 0.55; cursor: not-allowed; }
+  .segmented-control .status-pill.status-pill-locked:hover { background: transparent; }
+
   .segmented-control .status-pill {
     border: none; border-right: 1px solid var(--border); border-radius: 0; padding: 6px 13px;
     font-size: 11.5px; font-weight: 700; background: transparent; color: var(--muted);
@@ -1045,10 +1052,6 @@
               <span class="badge hidden" id="cm-status-badge"></span>
               <div class="segmented-control hidden" id="cm-status-toggle"></div>
             </span>
-            <!-- Outside status-badge-wrap on purpose: that span is an inline
-                 row, so a block of text inside it becomes a third flex item
-                 and collapses into a narrow column beside the pills. -->
-            <div class="cm-close-note hidden" id="cm-close-note">Engagements are closed on the last day of each month — that date is the billing cut-off, because closing locks the engagement's hours. If one has to close sooner, contact Rita.</div>
             </div>
 
             <!-- Greg (9/6/26): "make all note boxes in the header the same
@@ -1058,6 +1061,13 @@
                  slot now and share one set of sizing rules, so whichever pane
                  you're on the note lands in the same spot at the same size.
                  They're mutually exclusive by pane, so they never collide. -->
+            <!-- A row of its own across the whole card. Inside
+                 .ccc-summary-main it was confined to the left column and ran
+                 to five lines, which made the header taller than the content
+                 it introduces. .ccc-summary already wraps, so flex-basis
+                 100% is all it takes. -->
+            <div class="cm-close-note hidden" id="cm-close-note"></div>
+
             <div class="ccc-summary-notes is-empty" id="cm-notes-col">
               <div class="hdr-note hidden" id="cm-wizard-hint">
                 <div class="hdr-note-top">
@@ -2373,6 +2383,30 @@
     return !!error && /last day of the month/i.test(error.message || "");
   }
 
+  // The same rule the database enforces, read on the page so the Closed
+  // button can say no before anyone presses it. Eastern, to match 170 --
+  // the browser's own midnight would let a Pacific Team Lead press it three
+  // hours after the month closed for billing.
+  function monthEndEastern() {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(new Date());
+    const get = (t) => Number(parts.find((p) => p.type === t).value);
+    const y = get("year"), m = get("month"), d = get("day");
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    return {
+      isLastDay: d === lastDay,
+      // Date.UTC with the real day-of-month, formatted without a timezone
+      // shift, so the label cannot drift off by one.
+      label: new Date(Date.UTC(y, m - 1, lastDay)).toLocaleDateString(undefined, {
+        timeZone: "UTC", weekday: "long", month: "long", day: "numeric",
+      }),
+    };
+  }
+
+  // Admins are exempt (170), which is what "contact Rita" depends on.
+  function mayCloseToday() { return isSuperAdmin || monthEndEastern().isLastDay; }
+
   // ---------- Status control (Admin / Team Lead can change it here) ----------
   function renderStatusToggle(client) {
     const canEdit = isSuperAdmin || isTeamLeadHere;
@@ -2393,15 +2427,31 @@
     $("cm-status-badge").classList.add("hidden");
     const toggle = $("cm-status-toggle");
     toggle.classList.remove("hidden");
+
     // Only worth saying while there is still a close to come.
-    $("cm-close-note").classList.toggle("hidden", client.project_status === "closed");
-    toggle.innerHTML = PROJECT_STATUSES.map((s) => `
-      <button type="button" data-pstatus="${s}" class="status-pill status-pill-${s} ${s === client.project_status ? "active" : ""}">${PROJECT_STATUS_LABELS[s]}</button>
-    `).join("");
+    const note = $("cm-close-note");
+    const { isLastDay, label } = monthEndEastern();
+    note.classList.toggle("hidden", client.project_status === "closed");
+    note.innerHTML = isLastDay
+      ? `<strong>Today is the last day of the month</strong> \u2014 engagements can be closed now. Closing is the billing cut-off: it locks this engagement's hours.`
+      : `Engagements are closed on the last day of each month, next on <strong>${escapeHtml(label)}</strong>. That date is the billing cut-off, because closing locks the engagement's hours. If one has to close sooner, contact Rita.`;
+    const closeLocked = !mayCloseToday();
+    toggle.innerHTML = PROJECT_STATUSES.map((s) => {
+      const locked = s === "closed" && closeLocked && s !== client.project_status;
+      return `
+      <button type="button" data-pstatus="${s}" class="status-pill status-pill-${s} ${s === client.project_status ? "active" : ""}${locked ? " status-pill-locked" : ""}"${locked ? ` title="Engagements are closed on the last day of the month."` : ""}>${PROJECT_STATUS_LABELS[s]}</button>`;
+    }).join("");
     toggle.querySelectorAll("button").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const newStatus = btn.dataset.pstatus;
         if (newStatus === activeClient.project_status) return;
+        // Left clickable on purpose -- a disabled button swallows the click,
+        // and the click is exactly when the reminder is worth showing. The
+        // database refuses it too (170); this only saves the round trip.
+        if (btn.classList.contains("status-pill-locked")) {
+          showBanner(`Engagements are closed on the last day of the month \u2014 the next one is ${monthEndEastern().label}. If this engagement has to close before then, contact Rita.`, "error");
+          return;
+        }
         toggle.querySelectorAll("button").forEach((b) => (b.disabled = true));
         const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", activeClient.id);
         if (error) {
