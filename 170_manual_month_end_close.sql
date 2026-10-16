@@ -107,7 +107,7 @@ begin
      and not is_month_end_eastern()
   then
     raise exception
-      'Engagements are closed on the last day of the month. The next one is %. If this engagement has to close before then, contact Rita.',
+      'Engagements are closed on the last day of the month. The next one is %. If you need assistance, contact Rita.',
       to_char(v_last, 'FMDay, FMMonth FMDD');
   end if;
   return NEW;
