@@ -681,6 +681,20 @@
   .history-entry { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); padding: 4px 0 0 4px; }
   .history-entry-note { color: var(--muted); font-style: italic; }
   .history-empty { text-align: center; color: var(--muted); font-size: 13.5px; padding: 20px 0; }
+  /* Admin correction of a logged entry (10/16, migration 171). The row keeps
+     its shape; the edit control only appears for an Admin, and the "was"
+     line is shown to everyone so a specialist can see why a total moved. */
+  .history-entry-main { display: flex; align-items: center; gap: 8px; }
+  .history-edit-btn { border: 1px solid var(--border); background: #fff; color: var(--navy); border-radius: 5px;
+                      font-size: 11px; font-weight: 700; padding: 1px 7px; cursor: pointer; font-family: inherit; }
+  .history-edit-btn:hover { background: #f3f5f7; }
+  .history-was { display: block; padding: 2px 0 0 4px; font-size: 11.5px; color: #8a6d3b; font-style: italic; }
+  .history-edit-form { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 0 2px 4px; }
+  .history-edit-form input { border: 1px solid var(--border); border-radius: 5px; padding: 4px 6px;
+                             font-size: 12px; font-family: inherit; }
+  .history-edit-form input[type="date"] { width: 140px; }
+  .history-edit-form input[type="number"] { width: 72px; }
+  .history-edit-error { color: var(--danger); font-size: 11.5px; padding: 3px 0 0 4px; }
 
   /* ---------- Top nav + Ask AI ---------- */
   header { position: relative; }
@@ -3713,6 +3727,80 @@
     const d = new Date(key + "-02");
     return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   }
+  // Greg (10/16, from the call): "Admin will have administrative power to
+  // override timestamps on spent hours to correct billing errors." Scope
+  // settled the same day as the date AND the hours, with the correction
+  // visible rather than silent -- a specialist whose total moves should be
+  // able to see why, and an invoice query months later should be answerable.
+  function historyEntryHtml(e) {
+    const wasCorrected = !!e.corrected_at;
+    const corrector = wasCorrected ? usersById()[e.corrected_by] : null;
+    const wasLine = wasCorrected
+      ? `<span class="history-was">Corrected${corrector ? ` by ${escapeHtml(userLabel(corrector))}` : ""} on `
+        + `${escapeHtml(new Date(e.corrected_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }))} `
+        + `&mdash; was ${escapeHtml(String(e.original_entry_date ?? e.entry_date))}, ${e.original_hours ?? e.hours} hrs</span>`
+      : "";
+    return `
+      <div class="history-entry-wrap" data-entry-id="${e.id}">
+        <div class="history-entry">
+          <span class="history-entry-main">
+            ${e.entry_date} — ${e.hours} hrs
+            ${isSuperAdmin ? `<button type="button" class="history-edit-btn" data-edit-entry="${e.id}">Correct</button>` : ""}
+          </span>
+          <span class="history-entry-note">${e.note ? escapeHtml(e.note) : ""}</span>
+        </div>
+        ${wasLine}
+      </div>`;
+  }
+
+  // The correction form replaces the row it belongs to rather than opening a
+  // second overlay on top of this one -- the figures being corrected stay on
+  // screen either way, and one overlay deep is enough.
+  function wireHistoryEditing(entriesById, assignmentId) {
+    $("tw-history-list").querySelectorAll("[data-edit-entry]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const e = entriesById[btn.dataset.editEntry];
+        if (!e) return;
+        const wrap = btn.closest(".history-entry-wrap");
+        wrap.innerHTML = `
+          <div class="history-edit-form">
+            <input type="date" id="he-date-${e.id}" value="${escapeHtml(e.entry_date)}" max="${escapeHtml(todayLocalIso())}" />
+            <input type="number" id="he-hours-${e.id}" min="0" step="0.25" value="${e.hours}" />
+            <span style="font-size:12px;color:var(--muted);">hrs</span>
+            <button type="button" class="btn-primary history-edit-btn" data-save-entry="${e.id}">Save</button>
+            <button type="button" class="history-edit-btn" data-cancel-entry="${e.id}">Cancel</button>
+          </div>
+          <div class="history-edit-error hidden" id="he-error-${e.id}"></div>`;
+
+        wrap.querySelector("[data-cancel-entry]").addEventListener("click", () => openHistory(assignmentId));
+
+        wrap.querySelector("[data-save-entry]").addEventListener("click", async (ev) => {
+          const save = ev.currentTarget;
+          const err = $(`he-error-${e.id}`);
+          err.classList.add("hidden");
+          save.disabled = true;
+          save.textContent = "Saving…";
+          const { error } = await sb.rpc("admin_correct_time_entry", {
+            p_entry_id: e.id,
+            p_entry_date: $(`he-date-${e.id}`).value,
+            p_hours: Number($(`he-hours-${e.id}`).value),
+          });
+          if (error) {
+            err.textContent = error.message;
+            err.classList.remove("hidden");
+            save.disabled = false;
+            save.textContent = "Save";
+            return;
+          }
+          showBanner("Entry corrected.", "success");
+          // Both views move: the pane being read, and the Used column behind it.
+          await openHistory(assignmentId);
+          await reloadTeam();
+        });
+      });
+    });
+  }
+
   async function openHistory(assignmentId) {
     const r = currentAssignments.find((x) => x.id === assignmentId);
     if (!r) return;
@@ -3723,7 +3811,10 @@
     $("tw-history-list").innerHTML = `<div class="history-empty">Loading…</div>`;
     $("tw-history-overlay").classList.add("open");
 
-    const { data: entries, error } = await sb.from("time_entries").select("hours, entry_date, note").eq("assignment_id", assignmentId);
+    const { data: entries, error } = await sb
+      .from("time_entries")
+      .select("id, hours, entry_date, note, corrected_at, corrected_by, original_entry_date, original_hours")
+      .eq("assignment_id", assignmentId);
     if (error) {
       $("tw-history-list").innerHTML = `<div class="history-empty">Couldn't load billing history: ${escapeHtml(error.message)}</div>`;
       return;
@@ -3747,14 +3838,15 @@
           <span>${monthKeyLabel(m.monthKey)} — ${m.total} hrs</span>
           <span class="history-month-meta">Cumulative ${m.cumulative} / ${allotted} · Remaining ${round2(allotted - m.cumulative)}</span>
         </div>
-        ${m.entries.slice().sort((a, b) => b.entry_date.localeCompare(a.entry_date)).map((e) => `
-          <div class="history-entry">
-            <span>${e.entry_date} — ${e.hours} hrs</span>
-            <span class="history-entry-note">${e.note ? escapeHtml(e.note) : ""}</span>
-          </div>
-        `).join("")}
+        ${m.entries.slice().sort((a, b) => b.entry_date.localeCompare(a.entry_date)).map(historyEntryHtml).join("")}
       </div>
     `).join("");
+
+    if (isSuperAdmin) {
+      const byId = {};
+      for (const e of entries) byId[e.id] = e;
+      wireHistoryEditing(byId, assignmentId);
+    }
   }
   $("tw-history-close").addEventListener("click", () => { $("tw-history-overlay").classList.remove("open"); });
 
