@@ -220,6 +220,8 @@
   .history-entry-note { color: var(--muted); font-style: italic; }
   .history-empty { text-align: center; color: var(--muted); font-size: 13.5px; padding: 20px 0; }
 
+  .close-window-note { margin-top: 9px; font-size: 12.5px; line-height: 1.5; color: #6b7280; max-width: 52ch; }
+
   .locked-note { background: #fdf1dc; border: 1px solid #f0dca6; color: #7a5c17; font-size: 13px; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
 
   /* Same bold, colorful treatment as the Engagement Workspace action cards
@@ -642,6 +644,7 @@
         </div>
 
         <div class="status-pill-bar" id="project-status-toggle"></div>
+        <div class="close-window-note" id="ws-close-note">Engagements are closed on the last day of each month — that date is the billing cut-off, because closing locks the engagement's hours. If one has to close sooner, contact Rita.</div>
       </div>
 
       <div class="card">
@@ -1360,6 +1363,8 @@
 
     $("ws-locked-note").classList.toggle("hidden", editable || isSuperAdmin);
 
+    $("ws-close-note").classList.toggle("hidden", c.project_status === "closed" || !(isSuperAdmin || isTeamLeadHere));
+
     $("project-status-toggle").innerHTML = PROJECT_STATUSES.map((s) => `
       <button type="button" data-pstatus="${s}" class="badge badge-${s} status-pill ${s === c.project_status ? "active" : ""}" ${(isSuperAdmin || isTeamLeadHere) ? "" : "disabled"}>${PROJECT_STATUS_LABELS[s]}</button>
     `).join("");
@@ -1370,7 +1375,10 @@
         document.querySelectorAll("#project-status-toggle button").forEach((b) => (b.disabled = true));
         const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", c.id);
         if (error) {
-          showBanner("Couldn't update project status: " + error.message, "error");
+          // Shown whole when it is the month-end close rule (170) -- it already
+          // says what to do, and a prefix pushes that to the end of the line.
+          const closeRule = /last day of the month/i.test(error.message || "");
+          showBanner(closeRule ? error.message : "Couldn't update project status: " + error.message, "error");
           document.querySelectorAll("#project-status-toggle button").forEach((b) => (b.disabled = false));
           return;
         }

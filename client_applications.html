@@ -2457,7 +2457,10 @@
           const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", client.id);
           toggle.querySelectorAll("button").forEach((b) => (b.disabled = false));
           if (error) {
-            showBanner("Couldn't update project status: " + error.message, "error");
+            // Month-end close rule (170) arrives as a finished sentence that
+            // already names the date and who to ask; shown without a prefix.
+            const closeRule = /last day of the month/i.test(error.message || "");
+            showBanner(closeRule ? error.message : "Couldn't update project status: " + error.message, "error");
             return;
           }
           if (clientsByApp[a.id]) clientsByApp[a.id].project_status = newStatus;

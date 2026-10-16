@@ -253,6 +253,11 @@
      seems redundant." On the engagement you lead it repeated the Team Lead
      line directly above it, and for a specialist who isn't on the team the
      Team & Hours pane already spells out who can change what. */
+  /* Standing caption under the status pills. Greg (10/16): the Closed button
+     is the drop-dead control now, so the rule it enforces has to be readable
+     before someone presses it, not only in the error afterwards. */
+  .cm-close-note { margin-top: 9px; font-size: 12.5px; line-height: 1.5; color: var(--muted); max-width: 52ch; }
+
   .tw-manage-note { margin-top: 12px; padding: 9px 12px; border-radius: 8px; background: var(--note-bg);
                     border: 1px solid var(--border); font-size: 12.5px; color: var(--muted);
                     transition: opacity 0.4s ease; }
@@ -1024,6 +1029,7 @@
               <span class="status-dot hidden" id="cm-status-dot" title=""></span>
               <span class="badge hidden" id="cm-status-badge"></span>
               <div class="segmented-control hidden" id="cm-status-toggle"></div>
+              <div class="cm-close-note hidden" id="cm-close-note">Engagements are closed on the last day of each month — that date is the billing cut-off, because closing locks the engagement's hours. If one has to close sooner, contact Rita.</div>
             </span>
             </div>
 
@@ -2342,11 +2348,19 @@
   // window resize always gets picked up even if the observer doesn't fire.
   window.addEventListener("resize", () => fitIframeToContent());
 
+  // An engagement may only be closed on the last day of the month (migration
+  // 170). The database raises it; this just recognises it so the message can
+  // be shown whole instead of behind a generic prefix.
+  function isCloseWindowError(error) {
+    return !!error && /last day of the month/i.test(error.message || "");
+  }
+
   // ---------- Status control (Admin / Team Lead can change it here) ----------
   function renderStatusToggle(client) {
     const canEdit = isSuperAdmin || isTeamLeadHere;
     if (!canEdit) {
       $("cm-status-toggle").classList.add("hidden");
+      $("cm-close-note").classList.add("hidden");
       // Greg (9/6/26): "remove in progress it is redundant." The read-only
       // badge stays hidden -- the status dot beside it already carries the
       // state (and spells it out on hover), and for anyone who can change
@@ -2361,6 +2375,8 @@
     $("cm-status-badge").classList.add("hidden");
     const toggle = $("cm-status-toggle");
     toggle.classList.remove("hidden");
+    // Only worth saying while there is still a close to come.
+    $("cm-close-note").classList.toggle("hidden", client.project_status === "closed");
     toggle.innerHTML = PROJECT_STATUSES.map((s) => `
       <button type="button" data-pstatus="${s}" class="status-pill status-pill-${s} ${s === client.project_status ? "active" : ""}">${PROJECT_STATUS_LABELS[s]}</button>
     `).join("");
@@ -2371,7 +2387,10 @@
         toggle.querySelectorAll("button").forEach((b) => (b.disabled = true));
         const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", activeClient.id);
         if (error) {
-          showBanner("Couldn't update status: " + error.message, "error");
+          // The month-end rule comes back from the database as a finished
+          // sentence (170). Prefixing it with "Couldn't update status:" would
+          // bury the part that tells them what to do, so it is shown as-is.
+          showBanner(isCloseWindowError(error) ? error.message : "Couldn't update status: " + error.message, "error");
           toggle.querySelectorAll("button").forEach((b) => (b.disabled = false));
           return;
         }
