@@ -659,6 +659,21 @@
   .attention-row .att-reason { font-size: 12.5px; color: var(--muted); margin-top: 1px; }
   .attention-row .att-arrow { margin-left: auto; font-size: 12.5px; color: var(--navy-light); font-weight: 700; white-space: nowrap; }
 
+  /* Ready to close (10/16). An engagement whose client has sent back the
+     Evaluation Sheet is finished work waiting on its month-end close; since
+     closing is now a deliberate act on one day a month, it has to be visible
+     on the days in between or it gets missed. */
+  .cr-ready-pill { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 2px 8px;
+                   border-radius: 999px; background: #e7f1e4; border: 1px solid #bcd4b4; color: #37562c;
+                   font-size: 11px; font-weight: 700; letter-spacing: 0.02em; vertical-align: 2px; white-space: nowrap; }
+  .cr-ready-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #5c7248; }
+  .eng-ready-chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px;
+                    border: 1px solid #bcd4b4; background: #eef5ec; color: #37562c; font-size: 12.5px;
+                    font-weight: 700; cursor: pointer; font-family: inherit; }
+  .eng-ready-chip:hover { background: #e2eedd; }
+  .eng-ready-chip.active { background: #37562c; border-color: #37562c; color: #fff; }
+  .eng-ready-chip .erc-when { font-weight: 500; opacity: 0.85; }
+
   .engagements-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
   .eng-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px 18px 12px; }
   .eng-panel-desc { font-size: 13px; color: var(--muted); line-height: 1.4; }
@@ -927,6 +942,7 @@
                removed, and "Recent" went with it. A plain description of
                the panel replaces them. -->
           <div class="eng-panel-desc" id="eng-panel-desc">Engagements currently In Progress, grouped by Program. Click one to open its Engagement Workspace.</div>
+          <button type="button" class="eng-ready-chip hidden" id="eng-ready-chip"></button>
           <!-- Rita (10/2/26): "when I search for a specific TL or Program, it
                takes me back to the roster and the program information. There
                are a lot of times I just want to see the engagements for a
@@ -1131,6 +1147,9 @@
   // user typing the URL gets the normal In Progress list, not a peek at
   // everything (client-side, so it's tidiness rather than a boundary; RLS is
   // what actually governs who can read these rows).
+  let readyToCloseIds = new Set();  // clients whose Evaluation Sheet is back
+  let showOnlyReadyToClose = false; // the chip in the panel header
+
   const requestedStatus = new URLSearchParams(location.search).get("status");
   let archiveStatus = null;         // null | "closed" -- non-null means the
                                     // closed view is what's on screen.
@@ -1425,7 +1444,7 @@
     // one job, showing every active engagement's current next step, is now
     // covered directly by the Next Step column on the list above.)
 
-    await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex(), loadDelayNotes()]);
+    await Promise.all([loadClients(), loadTeamLeads(), loadMyAssignments(), loadNextSteps(), loadTimeEntries(), loadSearchIndex(), loadDelayNotes(), loadReadyToClose()]);
     await loadMyBillableTasks(); // needs allClients + myAssignmentRows, both settled above
     buildTasksDueItems();
     // "Mine" is the default for Team Leads and Specialists -- their own
@@ -1583,6 +1602,35 @@
   window.addEventListener("pageshow", (event) => {
     if (event.persisted) location.reload();
   });
+
+  // Which engagements are finished and waiting to be closed: the client has
+  // sent back their Evaluation Sheet and nobody has closed the engagement yet.
+  // That submission used to close it on the spot; since 10/16 it does not
+  // (migration 170), so the list has to carry the flag the trigger used to act
+  // on, or an engagement sits finished and unclosed with nothing saying so.
+  async function loadReadyToClose() {
+    readyToCloseIds = new Set();
+    const { data, error } = await sb.from("client_evaluation_responses").select("client_id");
+    if (error) return; // the list still works; only the flag is missing
+    for (const r of data || []) readyToCloseIds.add(r.client_id);
+  }
+
+  // The last day of this month, as a date and as words. The rule itself is
+  // enforced in Eastern time (170); this is the label beside it, so the
+  // browser's own month is close enough and never disagrees about which month.
+  function monthEndLabel() {
+    const now = new Date();
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const isLastDay = now.getDate() === last.getDate();
+    return {
+      isLastDay,
+      text: last.toLocaleDateString(undefined, { month: "long", day: "numeric" }),
+    };
+  }
+
+  function isReadyToClose(c) {
+    return c.project_status !== "closed" && readyToCloseIds.has(c.id);
+  }
 
   async function loadClients() {
     const { data, error } = await sb.from("clients").select("*, econ_dev_companies(code, name, bill_admin_qc_upfront)").order("name");
@@ -2134,7 +2182,7 @@
     return `
       <div class="client-row" data-client-id="${c.id}">
         <div>
-          <div class="cr-name">${escapeHtml(c.name)}</div>
+          <div class="cr-name">${escapeHtml(c.name)}${isReadyToClose(c) ? `<span class="cr-ready-pill" title="The client has returned their Evaluation Sheet. Engagements are closed on the last day of the month.">Ready to close</span>` : ""}</div>
         </div>
         <div class="eng-tl-block">
           ${teamLead ? `<div><div class="eng-tl-caption">Team Lead</div><div class="eng-tl-name-row"><div class="avatar-sm">${teamLeadAvatar ? `<img src="${escapeHtml(teamLeadAvatar)}" alt="" />` : escapeHtml(initials(teamLead))}</div><span class="eng-tl-name">${escapeHtml(teamLead)}</span></div></div>` : `<span class="cr-meta">No Team Lead</span>`}
@@ -2366,6 +2414,11 @@
 
     let pool = scopedPool.filter((c) => c.project_status === engagementStatusFilter);
 
+    // The chip counts against the scope in effect (mine / all) but before the
+    // search box, so the number on it does not move while someone is typing.
+    renderReadyChip(pool);
+    if (showOnlyReadyToClose) pool = pool.filter(isReadyToClose);
+
     // Name, Program and Team Lead -- the three things visible on the row, so
     // a match is always something you can see once the list redraws.
     const q = engagementQuery.trim().toLowerCase();
@@ -2391,6 +2444,12 @@
     // there reads like an access problem when really there just aren't any
     // In Progress engagements right now). Now it reflects both filters
     // actually in effect.
+    if (showOnlyReadyToClose && pool.length === 0 && !q) {
+      $("engagements-empty").textContent = "Nothing is waiting to be closed.";
+      $("engagements-empty").classList.remove("hidden");
+      list.innerHTML = "";
+      return;
+    }
     if (q && pool.length === 0) {
       $("engagements-empty").textContent = `No ${archiveStatus ? "closed" : "In Progress"} engagement matches “${engagementQuery.trim()}”.`;
       $("engagements-empty").classList.remove("hidden");
@@ -2414,6 +2473,33 @@
       .join("");
     wireClientRows(list);
   }
+
+  // The count of engagements waiting on their month-end close, and the way to
+  // see just those. Hidden entirely when there are none and in the closed view,
+  // so it is a prompt rather than furniture.
+  function renderReadyChip(pool) {
+    const chip = $("eng-ready-chip");
+    if (!chip) return;
+    const ready = pool.filter(isReadyToClose).length;
+    if (!ready || archiveStatus) {
+      chip.classList.add("hidden");
+      showOnlyReadyToClose = false;
+      return;
+    }
+    const { isLastDay, text } = monthEndLabel();
+    chip.classList.remove("hidden");
+    chip.classList.toggle("active", showOnlyReadyToClose);
+    chip.innerHTML = `${ready} ready to close`
+      + `<span class="erc-when">${isLastDay ? "&middot; today is the day" : `&middot; closes ${escapeHtml(text)}`}</span>`;
+    chip.title = showOnlyReadyToClose
+      ? "Showing only engagements waiting to be closed. Click to show all again."
+      : "These clients have returned their Evaluation Sheet. Click to see just those.";
+  }
+
+  $("eng-ready-chip").addEventListener("click", () => {
+    showOnlyReadyToClose = !showOnlyReadyToClose;
+    renderEngagementsList();
+  });
 
   // ---------- Global search (engagements / specialists / programs / Ask AI) ----------
   function renderGlobalSearchResults(query) {
