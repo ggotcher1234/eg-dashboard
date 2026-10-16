@@ -424,7 +424,7 @@ Deno.serve(async (req: Request) => {
               <strong>Would recommend (1–10):</strong> ${row.nps_score ?? "—"}
             </p>
             <p>It is also on the client's dashboard under Evaluation Sheet.</p>
-            <p style="color:#64748b;font-size:12px;">Submitting the evaluation closes the engagement.</p>
+            <p style="color:#64748b;font-size:12px;">The engagement stays open until it is closed at month end.</p>
           `,
           attachments: [{ filename: fileName, content: bytesToBase64(pdfBytes) }],
         }),

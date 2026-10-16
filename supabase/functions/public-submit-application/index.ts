@@ -397,6 +397,11 @@ Deno.serve(async (req: Request) => {
           // reader to do one specific thing, and Greg's example had none.
           // The company name moves into the body, which already carries it.
           subject: testSubject(`(${program.code}) New Application Received`),
+          // Next steps (Chris, 10/16/26, marked up on a live notification):
+          // the four-step handoff, naming who acts and who is copied at each
+          // stage. It replaces "The NCEG team reviews it from here...", which
+          // Chris struck -- that line told the Program nothing was expected of
+          // them, when step 2 is in fact theirs.
           html: testBody(`
             <p>A new Economic Gardening Program application was just submitted through ${escapeHtml(program.name)}'s application link.</p>
             <p>
@@ -404,7 +409,13 @@ Deno.serve(async (req: Request) => {
               <strong>Program:</strong> ${escapeHtml(program.name)} (${escapeHtml(program.code)})<br/>
               <strong>Primary Contact:</strong> ${escapeHtml(officerName)}
             </p>
-            <p>The NCEG team reviews it from here -- approval, then a Team Lead and hours to start the engagement. No action is needed from the Program.</p>
+            <p style="margin-bottom:6px;"><strong>Next steps:</strong></p>
+            <ol style="margin-top:0; padding-left:22px; line-height:1.6;">
+              <li>Approval by NCEG (Rita) with notice to PA</li>
+              <li>PA sends out approval letter to CEO with cc: to NCEG (Rita and Chris)</li>
+              <li>NCEG assigns team leader (Rita with cc: to Chris and PA)</li>
+              <li>Team leader sends scheduling letter to CEO with cc to Rita, Chris and PA</li>
+            </ol>
           `),
         }),
       });
