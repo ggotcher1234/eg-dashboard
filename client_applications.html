@@ -1537,7 +1537,11 @@
     // if every list respects it.
     const { data, error } = await sb
       .from("users")
-      .select("id, full_name, role")
+      // email, so two people (or two accounts) sharing a name can be told
+      // apart in the Team Lead list; user_specialties, because an Admin
+      // belongs in that list only if they have ticked Team Lead as a work
+      // area they cover.
+      .select("id, full_name, role, email, user_specialties(specialty)")
       .eq("hidden_from_roster", false)
       // Same reasoning one line up, for the other way a person leaves the
       // lists: archived (125, 9/23/26). An archived specialist must not be
@@ -2190,9 +2194,34 @@
       // first -- which meant the default landed on whoever was signed in,
       // usually an Admin, so the form looked pre-answered with an invalid
       // choice.
+      // Rita (10/18): "When I went to assign you as team lead on the Chestnut
+      // Ridge Workshop application, you weren't listed."
+      //
+      // Role alone was too narrow. Greg is an Admin and already leads four
+      // engagements -- every other screen in the app lets an Admin hold the
+      // Team Lead slot; this form was the one place that did not, so the
+      // person Rita was told to assign could not be chosen.
+      //
+      // The rule now matches how the rest of the app decides who does what:
+      // anyone whose ROLE is Team Lead, plus an Admin who has ticked Team
+      // Lead as one of their work areas. That keeps the original decision
+      // intact -- a Specialist still has to be promoted by an Admin changing
+      // their Role, so ticking the box is not a way around it -- while
+      // letting an Admin who genuinely leads engagements say so themselves.
+      const leadsTeams = (u) =>
+        (u.user_specialties || []).some((s) => s.specialty === "team_lead");
       const teamLeads = allUsers
-        .filter((u) => u.role === "team_lead")
+        .filter((u) => u.role === "team_lead" || (u.role === "super_admin" && leadsTeams(u)))
         .sort((x, y) => x.full_name.localeCompare(y.full_name));
+      // Greg holds two accounts under one name. An undifferentiated pair of
+      // "Greg Gotcher" rows is worse than not being listed at all -- Rita
+      // would have no way to tell which one she had picked, and the wrong
+      // one is an engagement assigned to an account nobody signs in to.
+      const nameCounts = teamLeads.reduce((m, u) => {
+        m[u.full_name] = (m[u.full_name] || 0) + 1; return m;
+      }, {});
+      const leadLabel = (u) =>
+        nameCounts[u.full_name] > 1 && u.email ? `${u.full_name} (${u.email})` : u.full_name;
       html += `
         <div class="accept-box">
           <h3>Accept this application</h3>
@@ -2212,7 +2241,7 @@
               <select id="accept-tl" required>
                 <option value="">Select…</option>
                 ${teamLeads.length
-                  ? teamLeads.map((u) => `<option value="${u.id}">${escapeHtml(u.full_name)}</option>`).join("")
+                  ? teamLeads.map((u) => `<option value="${u.id}">${escapeHtml(leadLabel(u))}</option>`).join("")
                   : `<option value="" disabled>No Team Leads on the roster — set someone's Role to Team Lead first</option>`}
               </select>
             </div>
