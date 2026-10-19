@@ -399,9 +399,20 @@
   .inv-total-box .inv-total-label { font-size: 13px; font-weight: 600; opacity: 0.9; }
   .inv-total-box .inv-total-amount { font-size: 22px; font-weight: 700; }
 
+  /* ---------- Invoice email composer (Rita, 10/19/26) ---------- */
+  #invoice-email { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 20px 22px; margin-bottom: 16px; }
+  #invoice-email h3 { margin: 0 0 4px; font-size: 15px; color: var(--navy); }
+  #invoice-email .ie-desc { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; line-height: 1.55; }
+  .ie-field { margin-bottom: 10px; }
+  .ie-field label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); margin-bottom: 4px; }
+  .ie-field input, .ie-field textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 5px; padding: 8px 10px; font: inherit; font-size: 13px; }
+  .ie-field textarea { min-height: 190px; resize: vertical; line-height: 1.55; }
+  .ie-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .ie-actions .spacer { flex: 1; }
+
   @media print {
     body { background: #fff; }
-    .no-print, header, .ai-drawer-overlay, .ai-drawer, #banner, #back-to-invoicing, #builder-section, #invoice-toolbar { display: none !important; }
+    .no-print, header, .ai-drawer-overlay, .ai-drawer, #banner, #back-to-invoicing, #builder-section, #invoice-toolbar, #invoice-email { display: none !important; }
     main { max-width: none; margin: 0; padding: 0; }
     #invoice-sheet { border: none; padding: 0; }
   }
@@ -778,7 +789,31 @@
         <button type="button" class="btn-ghost" id="invoice-back-btn">&larr; Back</button>
         <div style="display:flex; gap:10px;">
           <button type="button" class="btn-danger hidden" id="invoice-void-btn">Void Invoice</button>
+          <button type="button" class="btn-secondary" id="invoice-email-btn">Email Invoice</button>
           <button type="button" class="btn-primary" id="invoice-print-btn">Print / Save as PDF</button>
+        </div>
+      </div>
+
+      <!-- Rita (10/19/26): invoices go out from her own email, not from the
+           dashboard, so a finance contact with a question replies straight
+           to a person. The dashboard fills the draft in; she presses Send.
+           A mailto: cannot carry an attachment, hence the line about saving
+           the PDF first. -->
+      <div id="invoice-email" class="hidden">
+        <h3>Email this invoice</h3>
+        <p class="ie-desc">
+          Save the invoice as a PDF first (Print / Save as PDF), then open the draft and attach it.
+          The draft opens in your own email, from you — replies come back to you, and it lands in your Sent folder.
+        </p>
+        <div class="ie-field"><label for="ie-to">To</label><input type="text" id="ie-to" /></div>
+        <div class="ie-field"><label for="ie-cc">CC</label><input type="text" id="ie-cc" placeholder="Nobody" /></div>
+        <div class="ie-field"><label for="ie-subject">Subject</label><input type="text" id="ie-subject" /></div>
+        <div class="ie-field"><label for="ie-body">Message</label><textarea id="ie-body" spellcheck="true"></textarea></div>
+        <div class="ie-actions">
+          <button type="button" class="btn-primary" id="ie-mailto">Open in email app</button>
+          <button type="button" class="btn-secondary" id="ie-copy">Copy email</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn-secondary" id="ie-close">Close</button>
         </div>
       </div>
       <div id="invoice-sheet">
@@ -867,6 +902,7 @@
   let previewTotalDue = 0;
   let pastInvoices = [];
   let activeInvoiceRow = null; // the invoice currently shown in the print view
+  let activeInvoiceProgram = ""; // its Program's name, for the email subject
 
   const SPECIALTY_LABELS = {
     team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
@@ -1242,6 +1278,7 @@
     $("confirm-generate-btn").addEventListener("click", generateInvoice);
     $("invoice-back-btn").addEventListener("click", showBuilderView);
     $("invoice-print-btn").addEventListener("click", () => window.print());
+    wireInvoiceEmail();
     $("invoice-void-btn").addEventListener("click", () => {
       $("void-reason-input").value = "";
       $("void-overlay").classList.add("open");
@@ -1893,11 +1930,18 @@
 
   function showInvoiceView(row, programName, programAddress) {
     activeInvoiceRow = row;
+    activeInvoiceProgram = programName || "";
+    // Closed by default: a reopened invoice is usually being reprinted, not
+    // re-sent, and a composer left open from the last one would be filled
+    // in for the wrong Program.
+    $("invoice-email").classList.add("hidden");
     $("builder-section").classList.add("hidden");
     $("past-invoices-section").classList.add("hidden");
     $("invoice-view-section").classList.remove("hidden");
 
     $("invoice-void-btn").classList.toggle("hidden", !!row.voided);
+    // Nothing good comes of emailing a voided invoice to a finance contact.
+    $("invoice-email-btn").classList.toggle("hidden", !!row.voided);
     $("inv-program-name").textContent = programName;
     $("inv-program-address").textContent = programAddress || "";
     $("inv-number").textContent = row.invoice_number;
@@ -1918,6 +1962,121 @@
       rows += `<tr class="inv-subtotal-row"><td colspan="4">Subtotal: ${money(c.subtotal)}</td></tr>`;
     }
     $("inv-lines-tbody").innerHTML = rows;
+  }
+
+  // ---------- Email this invoice (Rita, 10/19/26) ----------
+  //
+  // Both money emails -- this and the specialist pay statement -- go out of
+  // the sender's own mail client rather than from the dashboard. Rita asked
+  // for it that way: a finance contact who has a question about an invoice
+  // hits Reply and reaches her, and the sent copy is in her own Sent folder.
+  // The trade is that there is no automatic record of what went out; her
+  // Sent folder is the record.
+
+  // "a@b.org, c@d.org" -> "a@b.org,c@d.org". RFC 6068 wants bare addresses
+  // in a mailto:, and mail clients differ on what they will forgive.
+  function bareAddresses(list) {
+    return String(list || "")
+      .split(",")
+      .map((x) => { const m = /<([^>]*)>/.exec(x); return (m ? m[1] : x).trim(); })
+      .filter(Boolean)
+      .join(",");
+  }
+
+  // Who gets copied is a standing choice rather than something to retype for
+  // every invoice, so it is kept per browser. localStorage throws in a
+  // locked-down browser and the composer has to open anyway.
+  const INVOICE_CC_KEY = "eg_program_invoice_cc";
+  function loadInvoiceCc() { try { return localStorage.getItem(INVOICE_CC_KEY); } catch (e) { return null; } }
+  function saveInvoiceCc(v) { try { localStorage.setItem(INVOICE_CC_KEY, v); } catch (e) { /* nothing to do */ } }
+
+  function invoiceEmailBody(row, programName) {
+    const month = monthLongLabel(row.billing_month);
+    return `Hello,
+
+Attached is the NCEG invoice for ${programName || "your Program"} covering ${month}.
+
+Invoice: ${row.invoice_number}
+Period: ${month}
+Amount due: ${money(row.total_due)}
+
+If you have any questions about this invoice, just reply to this message and I will get them answered.
+
+Thank you,
+${(currentUser && currentUser.full_name) || ""}`;
+  }
+
+  async function openInvoiceEmail() {
+    if (!activeInvoiceRow) return;
+    const row = activeInvoiceRow;
+    const panel = $("invoice-email");
+    const btn = $("invoice-email-btn");
+
+    // The Program's finance contacts, looked up when the composer opens
+    // rather than carried on every invoice row -- it is one small query on a
+    // button press, and it picks up a contact added five minutes ago.
+    btn.disabled = true;
+    const { data, error } = await sb
+      .from("econ_dev_partner_contacts")
+      .select("name, email, is_program_finance, active, sort_order")
+      .eq("partner_id", row.econ_dev_company_id)
+      .eq("is_program_finance", true)
+      .eq("active", true)
+      .order("sort_order", { ascending: true });
+    btn.disabled = false;
+
+    if (error) { showBanner("Couldn't look up the Program's finance contacts: " + error.message, "error"); return; }
+
+    const to = (data || []).map((c) => (c.email || "").trim()).filter(Boolean);
+    $("ie-to").value = to.join(", ");
+    const savedCc = loadInvoiceCc();
+    $("ie-cc").value = savedCc === null ? "" : savedCc;
+    $("ie-subject").value = `NCEG Invoice ${row.invoice_number} \u2014 ${monthLongLabel(row.billing_month)}`;
+    $("ie-body").value = invoiceEmailBody(row, activeInvoiceProgram);
+
+    panel.classList.remove("hidden");
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    // An empty To line is the one thing worth saying out loud -- it means
+    // this Program has no finance contact on file, which is fixed on the
+    // Programs page, not here.
+    if (!to.length) {
+      showBanner(`No finance contact on file for ${activeInvoiceProgram || "this Program"} \u2014 add one on the Programs page, or type the address in.`, "error");
+    }
+  }
+
+  function wireInvoiceEmail() {
+    $("invoice-email-btn").addEventListener("click", openInvoiceEmail);
+    $("ie-close").addEventListener("click", () => $("invoice-email").classList.add("hidden"));
+    $("ie-cc").addEventListener("input", (e) => saveInvoiceCc(e.target.value));
+
+    $("ie-mailto").addEventListener("click", () => {
+      const to = bareAddresses($("ie-to").value);
+      if (!to) { showBanner("Add at least one address on the To line first.", "error"); return; }
+      const params = [];
+      const cc = bareAddresses($("ie-cc").value);
+      if (cc) params.push("cc=" + encodeURIComponent(cc));
+      params.push("subject=" + encodeURIComponent($("ie-subject").value));
+      params.push("body=" + encodeURIComponent($("ie-body").value));
+      window.location.href = `mailto:${to}?${params.join("&")}`;
+    });
+
+    // The fallback for a browser with no mail client wired up, and the way
+    // to get the draft into webmail.
+    $("ie-copy").addEventListener("click", async () => {
+      const cc = $("ie-cc").value.trim();
+      const text = `To: ${$("ie-to").value}\n${cc ? `Cc: ${cc}\n` : ""}Subject: ${$("ie-subject").value}\n\n${$("ie-body").value}`;
+      const b = $("ie-copy");
+      const was = b.textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        b.textContent = "Copied!";
+        setTimeout(() => { b.textContent = was; }, 1500);
+      } catch (e) {
+        $("ie-body").select();
+        showBanner("Couldn't copy automatically — the message is selected, copy it with Cmd+C.", "error");
+      }
+    });
   }
 
   async function confirmVoid() {

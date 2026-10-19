@@ -540,7 +540,7 @@
     <div class="modal-lg-body">
       <div class="preview-not-sent">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-        Preview only — no email has been sent.
+        Nothing sends from here. "Open in email app" puts this in your own email as a draft, addressed and ready — you press Send.
       </div>
 
       <div class="section-label">Pay Statement</div>
@@ -567,17 +567,23 @@
                sender keeping a copy is the normal case. Remembered per
                browser. -->
           <div class="email-meta-row"><span class="em-label">Cc:</span><input type="text" class="em-input" id="email-cc" placeholder="Nobody" title="Who is copied when this statement is sent." /></div>
-          <div class="email-meta-row"><span class="em-label">From:</span><span class="em-value">NCEG Dashboard &lt;payroll@economicgardening.org&gt; (not yet configured)</span></div>
+          <!-- Rita (10/19/26) asked that pay statements and Program
+               invoices both come from her rather than from the dashboard,
+               so a specialist with a question about their pay replies
+               straight to a person. So: no send-from-the-system address
+               here, just whoever is signed in and pressing the button. -->
+          <div class="email-meta-row"><span class="em-label">From:</span><span class="em-value" id="email-from">you</span></div>
           <div class="email-meta-row"><span class="em-label">Subject:</span><span class="em-value" id="email-subject"></span></div>
         </div>
         <div class="email-body" id="email-body"></div>
       </div>
     </div>
     <div class="modal-lg-footer">
-      <div class="footer-note">Email sending isn't enabled yet.</div>
+      <div class="footer-note" id="send-note">Opens as a draft in your email app — nothing goes out until you send it.</div>
       <div style="display:flex; gap:10px;">
         <button class="btn-secondary" id="preview-close-btn">Close</button>
-        <button class="btn-primary" id="send-email-btn" disabled title="Email sending isn't enabled yet">Send Email (Coming Soon)</button>
+        <button class="btn-secondary" id="copy-email-btn">Copy email</button>
+        <button class="btn-primary" id="send-email-btn">Open in email app</button>
       </div>
     </div>
   </div>
@@ -629,9 +635,19 @@
       // only. A saved value -- including one deliberately emptied -- wins.
       const ccEl = document.getElementById("email-cc");
       if (ccEl) {
+        // Seeded blank, not with the signed-in address. That seed made sense
+        // while the plan was for the dashboard to send -- a copy to yourself
+        // was the only way to have one. The draft now goes out of your own
+        // mail client, so it is in your Sent folder already and a self-CC is
+        // just noise. A saved value, including a deliberately emptied one,
+        // still wins. (Rita, 10/19/26.)
         const saved = loadPayCc();
-        ccEl.value = saved === null ? (email || "") : saved;
+        ccEl.value = saved === null ? "" : saved;
       }
+      // The statement goes out of the signed-in person's own mail client,
+      // so the From line shows who that is rather than a dashboard address.
+      const fromEl = document.getElementById("email-from");
+      if (fromEl && email) fromEl.textContent = email;
     } catch (e) { /* non-essential -- the name and role pill still show */ }
   }
 
@@ -653,6 +669,10 @@
   let reportRows = []; // one row per active, hour-tracked, non-sunk-cost client_assignment
   let hourlyRate = 95;
   let specialistGroups = []; // computed for the currently selected month
+  // The statement currently in the preview, as the plain text that goes
+  // into a mailto: / onto the clipboard. Rebuilt by openPreview; null until
+  // a statement has been opened.
+  let previewDraft = null;
 
   const SPECIALTY_LABELS = {
     team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
@@ -1049,6 +1069,38 @@
       <p class="email-signoff">Thanks for your work this month!<br>NCEG</p>
     `;
 
+    // A mailto: body is plain text. Padded columns only line up in a
+    // monospaced font -- in Outlook's default they come out ragged -- so
+    // the same lines go out as a list, the way the approval letter does.
+    const lines = g.lines
+      .map((l) => `${l.client} \u2014 ${l.role} \u2014 ${l.hours} ${l.hours === 1 ? "hour" : "hours"} \u2014 ${money(l.amount)}`)
+      .join("\n");
+    previewDraft = {
+      to: g.email || "",
+      subject: `Your NCEG Pay Statement \u2014 ${monthLabel}`,
+      body: `Hi ${firstName},
+
+Here's a summary of your hours and pay for ${monthLabel}:
+
+${lines}
+
+Total Pay Due: ${money(g.totalPay)}
+
+To process payment, please reply with your own invoice matching these figures — we're not able to pay out until we have it on file.
+
+Thanks for your work this month!
+NCEG`,
+    };
+
+    // Nothing to address it to, nothing to send. The note says why, so the
+    // fix (add the address on the Roster) is obvious.
+    const canSend = !!g.email;
+    $("send-email-btn").disabled = !canSend;
+    $("send-email-btn").title = canSend ? "" : "This specialist has no email address on file.";
+    $("send-note").textContent = canSend
+      ? "Opens as a draft in your email app \u2014 nothing goes out until you send it."
+      : "No email address on file for this specialist \u2014 add one on the Roster to send this.";
+
     $("preview-overlay").classList.add("open");
   }
 
@@ -1056,6 +1108,43 @@
   $("email-cc").addEventListener("input", (e) => savePayCc(e.target.value));
 
   $("preview-close-btn").addEventListener("click", () => $("preview-overlay").classList.remove("open"));
+
+  // "a@b.org, c@d.org" -> "a@b.org,c@d.org". RFC 6068 wants bare addresses
+  // in a mailto:, and clients differ on what they will forgive.
+  function bareAddresses(list) {
+    return String(list || "")
+      .split(",")
+      .map((x) => { const m = /<([^>]*)>/.exec(x); return (m ? m[1] : x).trim(); })
+      .filter(Boolean)
+      .join(",");
+  }
+
+  $("send-email-btn").addEventListener("click", () => {
+    if (!previewDraft || !previewDraft.to) return;
+    const params = [];
+    const cc = bareAddresses($("email-cc").value);
+    if (cc) params.push("cc=" + encodeURIComponent(cc));
+    params.push("subject=" + encodeURIComponent(previewDraft.subject));
+    params.push("body=" + encodeURIComponent(previewDraft.body));
+    window.location.href = `mailto:${bareAddresses(previewDraft.to)}?${params.join("&")}`;
+  });
+
+  // The fallback for a browser with no mail client wired up, and the way to
+  // get the statement into webmail.
+  $("copy-email-btn").addEventListener("click", async () => {
+    if (!previewDraft) return;
+    const cc = $("email-cc").value.trim();
+    const text = `To: ${previewDraft.to}\n${cc ? `Cc: ${cc}\n` : ""}Subject: ${previewDraft.subject}\n\n${previewDraft.body}`;
+    const btn = $("copy-email-btn");
+    const was = btn.textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "Copied!";
+      setTimeout(() => { btn.textContent = was; }, 1500);
+    } catch (e) {
+      showBanner("Couldn't copy automatically — your browser blocked it. Select the preview and copy with Cmd+C.", "error");
+    }
+  });
   $("preview-overlay").addEventListener("click", (e) => {
     if (e.target === $("preview-overlay")) $("preview-overlay").classList.remove("open");
   });
