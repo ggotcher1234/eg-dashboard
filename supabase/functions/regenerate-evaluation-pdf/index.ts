@@ -177,12 +177,14 @@ async function buildEvaluationFormPdf(r: any, logoBytes: Uint8Array | null): Pro
   exLines.forEach((l) => { draw(l, M + 8, ey, { size: 9, color: rgb(0.1, 0.1, 0.1) }); ey -= 9 * 1.4; });
   y -= exH + 14;
 
-  need(50);
-  page.drawRectangle({ x: M, y: y - 44, width: CW, height: 44, color: GREEN_PALE, borderColor: GREEN_LINE, borderWidth: 1 });
-  draw("SUMMARY OF RATINGS", M + 12, y - 15, { font: bold, size: 8.4, color: GREEN_DARK });
-  draw(`Very Useful (3 pts): ${r.very_useful_count ?? 0}      Partially Useful (2 pts): ${r.partially_useful_count ?? 0}      Not Useful (1 pt): ${r.not_useful_count ?? 0}`, M + 12, y - 28, { size: 8.6, color: GREY_700 });
-  draw(`Weighted Score: ${r.weighted_score ?? 0} / ${r.weighted_max ?? 0}`, M + 12, y - 39, { font: bold, size: 8.8, color: GREEN_DARK });
-  y -= 56;
+  // Greg (10/19): "remove the weighted scores on the evaluation sheet." The
+  // counts stay, the points per answer and the weighted total go. The box
+  // loses its third line, so it is 12pt shorter.
+  need(38);
+  page.drawRectangle({ x: M, y: y - 32, width: CW, height: 32, color: GREEN_PALE, borderColor: GREEN_LINE, borderWidth: 1 });
+  draw("SUMMARY OF RATINGS", M + 12, y - 14, { font: bold, size: 8.4, color: GREEN_DARK });
+  draw(`Very Useful: ${r.very_useful_count ?? 0}      Partially Useful: ${r.partially_useful_count ?? 0}      Not Useful: ${r.not_useful_count ?? 0}`, M + 12, y - 26, { size: 8.6, color: GREY_700 });
+  y -= 44;
 
   badge("Q2");
   draw("Were you adequately prepared for the engagement?", M + 32, y - 11.5, { font: bold, size: 10.5, color: GREEN_DARK });

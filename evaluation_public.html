@@ -436,12 +436,16 @@
     </div>
     <div class="ratings-summary" id="ratingsSummary">
       <div class="rs-title">Summary of Ratings</div>
+      <!-- Greg (10/19): "remove the weighted scores on the evaluation sheet."
+           The counts stay; the points per answer and the weighted total go.
+           weightedScore/weightedMax are still SENT on submit, so the stored
+           record and every sheet filed before today still line up -- they
+           are simply no longer shown to the client. -->
       <div class="rs-breakdown">
-        <span>Very Useful (3 pts): <strong id="rsVery">0</strong></span>
-        <span>Partially Useful (2 pts): <strong id="rsPartial">0</strong></span>
-        <span>Not Useful (1 pt): <strong id="rsNot">0</strong></span>
+        <span>Very Useful: <strong id="rsVery">0</strong></span>
+        <span>Partially Useful: <strong id="rsPartial">0</strong></span>
+        <span>Not Useful: <strong id="rsNot">0</strong></span>
       </div>
-      <div class="rs-total">Weighted Score: <strong id="rsScore">0</strong> / <strong id="rsMax">0</strong></div>
     </div>
   </div>
 
@@ -1046,16 +1050,14 @@ const RATING_WEIGHTS = { very: 3, partial: 2, not: 1 };
 function updateRatingsSummary(){
   const counts = { very: 0, partial: 0, not: 0 };
   state.q1Rows.forEach(r => { if(r.rating) counts[r.rating]++; });
-  const rated = counts.very + counts.partial + counts.not;
-  const score = counts.very * RATING_WEIGHTS.very + counts.partial * RATING_WEIGHTS.partial + counts.not * RATING_WEIGHTS.not;
-  const max   = rated * RATING_WEIGHTS.very;
   const veryEl = document.getElementById('rsVery');
   if(!veryEl) return; // guard in case this runs before the DOM is built
   veryEl.textContent = counts.very;
   document.getElementById('rsPartial').textContent = counts.partial;
   document.getElementById('rsNot').textContent = counts.not;
-  document.getElementById('rsScore').textContent = score;
-  document.getElementById('rsMax').textContent = max;
+  // The weighted total is no longer displayed (Greg, 10/19). RATING_WEIGHTS
+  // is still used by submitEvaluation(), which keeps filling the stored
+  // weighted_score/weighted_max columns.
 }
 
 // ── STORAGE ──
