@@ -184,18 +184,29 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "The approval didn't save -- nothing was written." }, 500);
     }
 
-    // ---------- tell Rita it is her turn ----------
-    // THIS EMAIL IS INTERNAL. Until 9/27/26 it also went to the Program
-    // Administrator, which Chris's procedure moved: the Program is told once
-    // the engagement actually exists, by admin-notify-engagement-started,
-    // called from the Accept form. Announcing an engagement before anyone had
-    // been assigned to run it was announcing something that was not yet true.
+    // ---------- tell the other Admins ----------
+    // THIS EMAIL IS INTERNAL, to active Admins only. Until 9/27/26 it also
+    // went to the Program Administrator; that was moved out because the PA
+    // is written to directly, by the letter this same screen opens when
+    // Approved is ticked.
     //
-    // What is left is the handoff. Chris approves; Rita cannot touch the
-    // hours or the Team Lead until he has, and without this she would find
-    // out by checking the Applications tab, which is how a week goes by. So
-    // every active Admin gets a short note saying it is ready -- Rita by
-    // being an Admin, not by name, so it keeps working when the team changes.
+    // A note that claimed otherwise lived here until 10/18. It said the
+    // application was "ready for budget hours and a Team Lead" and that
+    // "accepting it ... sends the approval letter to the Program
+    // Administrator". Both were wrong. Chris: "This is still out of order.
+    // After NCEG approves, then the program manager sends approval letter to
+    // CEO with cc to Rita and Chris." Two steps sit between approval and the
+    // hours -- the letter to the PA, and the PA's own letter to the CEO --
+    // and nothing is sent by the Accept form at all. There is no
+    // admin-notify-engagement-started function; it was named in this comment
+    // for over a year and never built, which is most likely where the belief
+    // came from.
+    //
+    // What the email is FOR is the handoff: whoever approves is not
+    // necessarily whoever sets the hours, and without this the other Admins
+    // would find out by checking the Applications tab, which is how a week
+    // goes by. Addressed by role, not by name, so it keeps working when the
+    // team changes.
     //
     // The approval is saved by this point. Nothing below is allowed to
     // report it as a failure.
@@ -254,19 +265,26 @@ Deno.serve(async (req: Request) => {
           // on purpose -- two mails about the same company reading
           // "(GRE) Application Approved" would be indistinguishable in an
           // Admin's inbox, and only one of them is asking for anything.
+          // Chris (10/18): "This is still out of order. After NCEG approves,
+          // then the program manager sends approval letter to CEO with cc to
+          // Rita and Chris." The old subject, "Ready for hours and Team
+          // Lead", named a step that is two moves away -- the letter to the
+          // Program Administrator, and then theirs to the CEO, both come
+          // first. It now says only what has happened.
           subject: programCode
-            ? `(${programCode}) Ready for hours and Team Lead - ${companyName}`
-            : `Ready for hours and Team Lead - ${companyName}`,
+            ? `(${programCode}) Approved - ${companyName}`
+            : `Approved - ${companyName}`,
           html: `
-            <p><strong>${escapeHtml(companyName)}</strong> was approved for the Economic Gardening Program on ${escapeHtml(dateLabel)} and is ready for budget hours and a Team Lead.</p>
+            <p><strong>${escapeHtml(companyName)}</strong> was approved for the Economic Gardening Program on ${escapeHtml(dateLabel)}.</p>
             <p>
               <strong>Company:</strong> ${escapeHtml(companyName)}<br/>
               ${officerName ? `<strong>Primary Contact:</strong> ${escapeHtml(officerName)}<br/>` : ""}
               ${programName ? `<strong>Program:</strong> ${escapeHtml(programName)}${programCode ? ` (${escapeHtml(programCode)})` : ""}<br/>` : ""}
               <strong>Approved by:</strong> ${escapeHtml(approverName)}
             </p>
-            <p>Open it on the Applications tab to set the hours, Team Lead and CC list. Accepting it creates the engagement and sends the approval letter to the Program Administrator.</p>
-            <p style="color:#6b7280; font-size:13px;">This note is internal to the NCEG team. The Program has not been told yet.</p>
+            <p><strong>Next:</strong> the approval letter to the Program Administrator. Ticking Approved opens that letter ready to send &mdash; it goes out by hand, from whoever approved, not from the dashboard. The Program Administrator then sends the approval letter to the CEO, copying Rita and Chris.</p>
+            <p>Once that has gone out, open the application on the Applications tab to set the budget hours, the Team Lead and the CC list. Accepting it creates the engagement, and the Team Lead sends the scheduling letter to the CEO, copying Rita, Chris and the Program Administrator.</p>
+            <p style="color:#6b7280; font-size:13px;">This note is internal to the NCEG team.</p>
           `,
         }),
       });
