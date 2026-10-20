@@ -260,19 +260,28 @@
   tbody td { padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover { background: #fafbfc; }
-  /* Chris (10/3/26): an x on the right of each roster row. It archives --
-     reversible, and the same confirm the profile's Archive Member opens --
-     never the hard delete Greg retired on 9/23/26. */
+  /* Chris (10/3/26) asked for a control on the right of each roster row so
+     that taking somebody off the Roster does not mean opening their record
+     first. It archives -- reversible, and the same confirm the profile's
+     Archive Member opens -- and never deletes: the hard delete was retired
+     on 9/23/26 and nothing in the app has removed a person since.
+
+     Rita (10/19/26): "what happens to the engagement history when someone is
+     deleted from the system?" Nothing did, but a red x is the universal mark
+     for destroy, so the control was answering a question nobody had asked it
+     out loud. It is an archive box now, and the hover is slate rather than
+     danger red. The behaviour did not change; what it looks like it will do
+     now matches what it does. */
   .row-archive-btn {
     border: none; background: transparent; color: var(--muted); cursor: pointer;
-    font-size: 17px; line-height: 1; padding: 2px 7px; border-radius: 5px;
-    opacity: 0.5; transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+    line-height: 0; padding: 4px 6px; border-radius: 5px;
+    opacity: 0.55; transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
   }
-  /* Visible at rest, not just on hover: Chris asked to have an x there, and
-     a control you have to find by hovering is not one you have been given. */
+  .row-archive-btn svg { width: 15px; height: 15px; display: block; }
+  /* Visible at rest, not just on hover: Chris asked to have it there, and a
+     control you have to find by hovering is not one you have been given. */
   tbody tr:hover .row-archive-btn, .row-archive-btn:focus-visible { opacity: 1; }
-  .row-archive-btn:hover { background: #f6e6e5; color: var(--danger); }
-  .row-archive-btn.restore { font-size: 13px; font-weight: 700; }
+  .row-archive-btn:hover { background: #eceff3; color: var(--navy); }
   .row-archive-btn.restore:hover { background: #e9f0e2; color: var(--accent-dark); }
   td.row-actions { width: 44px; text-align: right; padding-left: 0; }
 
@@ -1675,6 +1684,16 @@
     return result;
   }
 
+  // An archive box, down-arrow for archive and up-arrow for restore, drawn
+  // rather than glyphed so the two read as the same control in two states.
+  const ICON_BOX = '<rect x="2.5" y="4" width="19" height="5" rx="1"/><path d="M4.5 9v10a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V9"/>';
+  const ICON_ARCHIVE =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + ICON_BOX + '<path d="M12 12v4.5"/><path d="M9.8 14.3 12 16.5l2.2-2.2"/></svg>';
+  const ICON_UNARCHIVE =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + ICON_BOX + '<path d="M12 16.5V12"/><path d="M9.8 14.2 12 12l2.2 2.2"/></svg>';
+
   let pendingArchiveId = null;
   let pendingArchiveTo = true;   // true = archive, false = restore
 
@@ -2013,11 +2032,15 @@
       // DELETE one stray click away from a whole column of rows was the
       // riskiest button on the page.
       //
-      // Chris (10/3/26, via Greg) wants an x back on the right. It is safe
-      // to give him one now because the thing it does has changed: the hard
-      // delete was retired on 9/23/26, so this x archives, which is
+      // Chris (10/3/26, via Greg) wants one back on the right. It is safe to
+      // give him one now because the thing it does has changed: the hard
+      // delete was retired on 9/23/26, so this archives, which is
       // reversible, goes through the same confirm dialog as the profile's
       // Archive Member, and leaves every assignment and logged hour intact.
+      //
+      // It was an x until 10/20/26, which Rita and Chris read as a delete
+      // and worried would take the engagement history with it. Same button,
+      // same behaviour; it is drawn as an archive box now.
       //
       // Admins only, and never on your own row -- archiving the login you
       // are signed in with locks you out of undoing it. In the Archived
@@ -2027,8 +2050,8 @@
       const actionCell = !canArchiveThis
         ? '<td class="row-actions"></td>'
         : archived
-          ? `<td class="row-actions"><button type="button" class="row-archive-btn restore" onclick="openArchive('${u.id}', false)" title="Restore ${escapeHtml(u.full_name)} to the roster" aria-label="Restore ${escapeHtml(u.full_name)}">&#8630;</button></td>`
-          : `<td class="row-actions"><button type="button" class="row-archive-btn" onclick="openArchive('${u.id}', true)" title="Remove ${escapeHtml(u.full_name)} from the roster (archive -- reversible)" aria-label="Remove ${escapeHtml(u.full_name)} from the roster">&times;</button></td>`;
+          ? `<td class="row-actions"><button type="button" class="row-archive-btn restore" onclick="openArchive('${u.id}', false)" title="Restore ${escapeHtml(u.full_name)} to the Roster" aria-label="Restore ${escapeHtml(u.full_name)} to the Roster">${ICON_UNARCHIVE}</button></td>`
+          : `<td class="row-actions"><button type="button" class="row-archive-btn" onclick="openArchive('${u.id}', true)" title="Archive ${escapeHtml(u.full_name)} \u2014 they come off the Roster, their hours and assignments are kept, and you can restore them" aria-label="Archive ${escapeHtml(u.full_name)}">${ICON_ARCHIVE}</button></td>`;
 
       tr.innerHTML = `
         <td>
