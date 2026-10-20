@@ -314,6 +314,21 @@
   .tl-linkform .tl-field { flex: 1 1 200px; }
   .tl-linkform input { width: 100%; max-width: none; }
   .tl-del { margin-left: auto; }
+
+  /* ---------- Research email composer (Greg, 10/20/26) ---------- */
+  .tl-mailform { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+  .tl-mailform.open { display: block; }
+  .tl-mailform .tl-mailnote { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin-bottom: 10px; }
+  .tl-mailform .tl-mailwarn { color: var(--danger); font-weight: 600; }
+  .tl-mailrow { margin-bottom: 8px; }
+  .tl-mailrow > span { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px;
+                       font-weight: 700; color: var(--muted); margin-bottom: 3px; }
+  .tl-mailrow input, .tl-mailrow textarea {
+    width: 100%; box-sizing: border-box; font-family: inherit; font-size: 13px;
+    padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--text);
+  }
+  .tl-mailrow textarea { min-height: 300px; resize: vertical; line-height: 1.55; }
+  .tl-mailrow textarea:focus, .tl-mailrow input:focus { border-color: var(--accent); outline: none; }
   .tl-addrow { display: flex; align-items: center; gap: 8px; padding: 12px 0 2px; border-top: 1px solid var(--border); margin-top: 4px; }
   .tl-addrow select { font-family: inherit; font-size: 12.5px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
 
@@ -1592,6 +1607,9 @@
       avatarUrl: (a.users && a.users.avatar_url) || "",
       specialty: a.specialty_type,
       slot: a.slot_number || 1,
+      // Carried so the research email's closing line can name whoever sets
+      // up the review call, rather than saying "your Team Lead".
+      isLead: !!a.is_team_lead,
     }));
   }
 
@@ -2187,6 +2205,7 @@
           <div class="tl-actions">
             <button type="button" class="btn-secondary btn-sm" data-task-add-doc="${q.id}" data-area="${q.research_area}">+ Document</button>
             <button type="button" class="btn-secondary btn-sm" data-task-add-link="${q.id}" data-area="${q.research_area}">+ Link</button>
+            <button type="button" class="btn-secondary btn-sm" data-task-email="${q.id}">Email client</button>
             <button type="button" class="btn-danger btn-sm tl-del" data-task-delete="${q.id}">Delete task</button>
           </div>
           <!-- The link form lives in the task now. It used to live in the
@@ -2204,6 +2223,34 @@
             <div class="tl-actions">
               <button type="button" class="btn-primary btn-sm" data-task-save-link="${q.id}" data-area="${q.research_area}">Save Link</button>
               <button type="button" class="btn-secondary btn-sm" data-task-cancel-link="${q.id}">Cancel</button>
+            </div>
+          </div>
+          <!-- Greg (10/20/26): when a specialist finishes a question they
+               write to the client and the CC list introducing themselves,
+               showing where their question sits among the others, and
+               summarising what they found. This writes that letter; they
+               send it from their own mail.
+
+               One letter per question, not per specialist: "if they own
+               several questions they have one email for each question.
+               they can manually delete their intro on the second email."
+
+               Plain text, and the question list goes out unmarked. Greg
+               wanted the specialist's own question in red, and a mailto
+               body is plain text under RFC 6068 -- the same wall the
+               scheduling letter hit in October. So the letter is written
+               whole and the specialist colours their line in their own mail
+               client, which is one keystroke there and impossible here. -->
+          <div class="tl-mailform" id="tl-mailform-${q.id}">
+            <div class="tl-mailnote" id="tl-mailnote-${q.id}"></div>
+            <div class="tl-mailrow"><span>To</span><input type="text" id="tl-mail-to-${q.id}" /></div>
+            <div class="tl-mailrow"><span>CC</span><input type="text" id="tl-mail-cc-${q.id}" placeholder="Nobody" /></div>
+            <div class="tl-mailrow"><span>Subject</span><input type="text" id="tl-mail-subject-${q.id}" /></div>
+            <div class="tl-mailrow"><span>Message</span><textarea id="tl-mail-body-${q.id}" spellcheck="true"></textarea></div>
+            <div class="tl-actions">
+              <button type="button" class="btn-primary btn-sm" data-task-mail-open="${q.id}">Open in email app</button>
+              <button type="button" class="btn-secondary btn-sm" data-task-mail-copy="${q.id}">Copy email</button>
+              <button type="button" class="btn-secondary btn-sm tl-del" data-task-mail-close="${q.id}">Close</button>
             </div>
           </div>
           ${doneBy ? `<div class="tl-doneline">Completed by ${escapeHtml(doneBy)}</div>` : ""}
@@ -2275,6 +2322,194 @@
     const box = $("tasks-hide-done");
     if (!box) return;
     box.addEventListener("change", () => { hideDoneTasks = box.checked; renderTaskList(); });
+  }
+
+  // ---------- The research email (Greg, 10/20/26) ----------
+  //
+  // "when a specialist completes their research they send a personal email
+  // to the client and cc list. The email introduces themself as the
+  // specialist assigned to the (questions #) from the controlling document.
+  // then they show the list of controlling document questions with theirs
+  // highlighted ... after that they provide a short overview of the results
+  // of their research and then note that they look forward to discussing the
+  // research in more detail when the TL (name) sets up the research review
+  // call."
+  //
+  // One letter per question. A specialist holding three questions sends
+  // three, and deletes the introduction from the second and third by hand.
+  //
+  // Plain text, and the question list goes out unhighlighted. The letter
+  // cannot carry colour: a mailto body is plain text under RFC 6068, which
+  // is the wall the scheduling letter hit in October after four attempts.
+  // Greg's call was to write the whole letter and let the specialist make
+  // their line red in their own mail client, where it is one keystroke.
+
+  // Loud enough that nobody sends the letter without replacing it. Same
+  // device as the scheduling letter's availability line.
+  const RESEARCH_OVERVIEW_MARKER =
+    ">>> REPLACE THIS LINE with a short overview of what your research found <<<";
+
+  const firstNameOf = (n) => String(n || "").trim().split(/\s+/)[0] || "";
+
+  // "Ann", "Ann and Bob", "Ann, Bob and Cal" -- a letter addressed to three
+  // people reads worse with a bare "Hello,".
+  function greetingNames(names) {
+    const f = names.map(firstNameOf).filter(Boolean);
+    if (!f.length) return "";
+    if (f.length === 1) return f[0];
+    return f.slice(0, -1).join(", ") + " and " + f[f.length - 1];
+  }
+
+  // Every question on the engagement, in the order the Controlling Document
+  // numbers them, so the client can see where this one sits. Questions with
+  // no number sort last rather than claiming position zero.
+  function controllingDocList() {
+    return [...allQuestions]
+      .sort((a, b) => (a.question_number || 9999) - (b.question_number || 9999))
+      .map((q) => `${q.question_number ? q.question_number + ". " : "\u2022 "}${String(q.question || "").trim()}`);
+  }
+
+  // companyName is not in the letter itself -- it is in the subject, and in
+  // the body it read as though the team worked for the client. Kept as an
+  // argument because the letter is the obvious place for it to come back.
+  function researchEmailBody(q, specialistName, specialtyLabel, teamLeadName, companyName, greet) {
+    const n = q.question_number;
+    const mine = n ? `Question ${n}` : "one of the questions";
+    const lead = teamLeadName
+      ? `${teamLeadName}, your Team Lead,`
+      : "your Team Lead";
+    return `Hello ${greet || "there"},
+
+I am ${specialistName}, the ${specialtyLabel} specialist on your Economic Gardening team, and I was assigned ${mine} from your Controlling Document.
+
+These are the questions your team is working on, so you can see where mine fits:
+
+${controllingDocList().join("\n\n")}
+
+Here is a short overview of what I found on ${mine}:
+
+${RESEARCH_OVERVIEW_MARKER}
+
+I look forward to going through this with you in more detail when ${lead} sets up the research review call in the near future.
+
+${specialistName}
+${specialtyLabel} — National Center for Economic Gardening`;
+  }
+
+  // Built fresh each time the button is pressed rather than cached, so a
+  // contact added or a question reworded five minutes ago is in the letter.
+  async function openResearchEmail(questionId, btn) {
+    const q = allQuestions.find((x) => x.id === questionId);
+    if (!q || !currentClient) return;
+    const form = $(`tl-mailform-${questionId}`);
+    if (!form) return;
+
+    const who = engagementSpecialists.find((x) => x.userId === q.assigned_user_id) || null;
+    const lead = engagementSpecialists.find((x) => x.isLead) || null;
+    const companyName = currentClient.name || "your company";
+
+    btn.disabled = true;
+    const was = btn.textContent;
+    btn.textContent = "Building…";
+
+    // To: the company's own contacts. CC: this engagement's CC list and the
+    // Program contacts ticked for it. Same sources the scheduling letter
+    // uses, so the two letters reach the same people.
+    const [contactsRes, ccListRes, ccPicksRes] = await Promise.all([
+      sb.from("client_contacts").select("name,email").eq("client_id", currentClient.id).order("sort_order").order("created_at"),
+      sb.from("client_cc_list").select("name,email").eq("client_id", currentClient.id).order("sort_order").order("created_at"),
+      sb.from("client_partner_contacts").select("partner_contact_id").eq("client_id", currentClient.id).eq("on_cc_list", true),
+    ]);
+
+    btn.disabled = false;
+    btn.textContent = was;
+
+    const contacts = contactsRes.data || [];
+    let partnerCc = [];
+    const pickIds = (ccPicksRes.data || []).map((r) => r.partner_contact_id).filter(Boolean);
+    if (pickIds.length) {
+      const { data } = await sb.from("econ_dev_partner_contacts").select("name,email").in("id", pickIds);
+      partnerCc = data || [];
+    }
+
+    const emailsOf = (rows) => rows.map((r) => (r.email || "").trim()).filter(Boolean);
+    const toList = emailsOf(contacts);
+    // Never CC somebody already on the To line, and never twice.
+    const seen = new Set(toList.map((e) => e.toLowerCase()));
+    const ccList = [];
+    for (const e of [...emailsOf(ccListRes.data || []), ...emailsOf(partnerCc)]) {
+      const k = e.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      ccList.push(e);
+    }
+
+    const specialistName = who ? who.name : "";
+    const specialtyLabel = who ? (SPECIALTY_LABELS[who.specialty] || who.specialty) : "research";
+
+    $(`tl-mail-to-${questionId}`).value = toList.join(", ");
+    $(`tl-mail-cc-${questionId}`).value = ccList.join(", ");
+    $(`tl-mail-subject-${questionId}`).value = q.question_number
+      ? `${companyName} Economic Gardening — research on Question ${q.question_number}`
+      : `${companyName} Economic Gardening — research update`;
+    $(`tl-mail-body-${questionId}`).value = researchEmailBody(
+      q, specialistName || "[your name]", specialtyLabel,
+      lead ? lead.name : "", companyName, greetingNames(contacts.map((c) => c.name)),
+    );
+
+    // Everything the specialist has to do before this is sendable, said once
+    // rather than discovered after the fact.
+    const notes = [];
+    notes.push('<span class="tl-mailwarn">Replace the overview line, and make your own question red</span> once the draft is in your email — a draft cannot carry colour on its way there.');
+    if (!who) notes.push("This task has nobody assigned, so the letter says [your name]. Assign it above, or type your name in.");
+    else if (currentUser && who.userId !== currentUser.id) notes.push(`This is written as ${escapeHtml(who.name)}, who holds the task — it will send from your account, not theirs.`);
+    if (!lead) notes.push("No Team Lead is assigned to this engagement, so the closing line says \"your Team Lead\" rather than a name.");
+    if (!toList.length) notes.push(contacts.length
+      ? "This engagement's contacts have no email addresses on file — add them under Company Info."
+      : "This engagement has no company contacts yet — add them under Company Info and they will fill in here.");
+    $(`tl-mailnote-${questionId}`).innerHTML = notes.join("<br>");
+
+    form.classList.add("open");
+    form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  // RFC 6068 wants bare addresses in a mailto, and mail clients differ on
+  // what they will forgive.
+  function bareAddresses(list) {
+    return String(list || "")
+      .split(",")
+      .map((x) => { const m = /<([^>]*)>/.exec(x); return (m ? m[1] : x).trim(); })
+      .filter(Boolean)
+      .join(",");
+  }
+
+  function sendResearchEmail(questionId) {
+    const to = bareAddresses($(`tl-mail-to-${questionId}`).value);
+    if (!to) { showBanner("Add at least one address on the To line first.", "error"); return; }
+    const params = [];
+    const cc = bareAddresses($(`tl-mail-cc-${questionId}`).value);
+    if (cc) params.push("cc=" + encodeURIComponent(cc));
+    params.push("subject=" + encodeURIComponent($(`tl-mail-subject-${questionId}`).value));
+    params.push("body=" + encodeURIComponent($(`tl-mail-body-${questionId}`).value));
+    window.location.href = `mailto:${to}?${params.join("&")}`;
+    showBanner("Your email app is opening with the letter in it — replace the overview line and make your question red before you send.", "success");
+  }
+
+  async function copyResearchEmail(questionId, btn) {
+    const cc = $(`tl-mail-cc-${questionId}`).value.trim();
+    const text = `To: ${$(`tl-mail-to-${questionId}`).value}\n${cc ? `Cc: ${cc}\n` : ""}Subject: ${$(`tl-mail-subject-${questionId}`).value}\n\n${$(`tl-mail-body-${questionId}`).value}`;
+    const was = btn.textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "Copied!";
+      setTimeout(() => { btn.textContent = was; }, 1500);
+    } catch (e) {
+      // A browser that refuses the clipboard call leaves one useful thing to
+      // do: select the letter, so the keyboard copy is one keystroke.
+      const ta = $(`tl-mail-body-${questionId}`);
+      if (ta) { ta.focus(); ta.select(); }
+      showBanner("Couldn't copy automatically — the message is selected, copy it with Cmd+C.", "error");
+    }
   }
 
   function wireTaskHandlers(scope) {
@@ -2380,6 +2615,22 @@
         const f = $(`tl-linkform-${btn.dataset.taskCancelLink}`);
         if (f) f.classList.remove("open");
       });
+    });
+
+    scope.querySelectorAll("[data-task-email]").forEach((btn) => {
+      btn.addEventListener("click", () => openResearchEmail(btn.dataset.taskEmail, btn));
+    });
+    scope.querySelectorAll("[data-task-mail-close]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const f = $(`tl-mailform-${btn.dataset.taskMailClose}`);
+        if (f) f.classList.remove("open");
+      });
+    });
+    scope.querySelectorAll("[data-task-mail-open]").forEach((btn) => {
+      btn.addEventListener("click", () => sendResearchEmail(btn.dataset.taskMailOpen));
+    });
+    scope.querySelectorAll("[data-task-mail-copy]").forEach((btn) => {
+      btn.addEventListener("click", () => copyResearchEmail(btn.dataset.taskMailCopy, btn));
     });
 
     const addBtn = $("tl-add-task");
