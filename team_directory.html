@@ -269,21 +269,22 @@
      Rita (10/19/26): "what happens to the engagement history when someone is
      deleted from the system?" Nothing did, but a red x is the universal mark
      for destroy, so the control was answering a question nobody had asked it
-     out loud. It is an archive box now, and the hover is slate rather than
-     danger red. The behaviour did not change; what it looks like it will do
-     now matches what it does. */
+     out loud. It says "Archive" now -- a drawn archive box was tried first
+     and read as a plus sign (Greg, 10/20/26), and no icon is worth a second
+     round of this. The behaviour never changed; the word is what stops the
+     question being asked again. */
   .row-archive-btn {
     border: none; background: transparent; color: var(--muted); cursor: pointer;
-    line-height: 0; padding: 4px 6px; border-radius: 5px;
-    opacity: 0.55; transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+    font-size: 12px; font-weight: 600; line-height: 1.2; padding: 4px 8px;
+    border-radius: 5px; white-space: nowrap;
+    opacity: 0.75; transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
   }
-  .row-archive-btn svg { width: 15px; height: 15px; display: block; }
   /* Visible at rest, not just on hover: Chris asked to have it there, and a
      control you have to find by hovering is not one you have been given. */
   tbody tr:hover .row-archive-btn, .row-archive-btn:focus-visible { opacity: 1; }
   .row-archive-btn:hover { background: #eceff3; color: var(--navy); }
   .row-archive-btn.restore:hover { background: #e9f0e2; color: var(--accent-dark); }
-  td.row-actions { width: 44px; text-align: right; padding-left: 0; }
+  td.row-actions { width: 84px; text-align: right; padding-left: 0; }
 
   .member-name { font-weight: 700; color: var(--navy); font-size: 13.5px; line-height: 1.3; }
   .member-role-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
@@ -1684,16 +1685,6 @@
     return result;
   }
 
-  // An archive box, down-arrow for archive and up-arrow for restore, drawn
-  // rather than glyphed so the two read as the same control in two states.
-  const ICON_BOX = '<rect x="2.5" y="4" width="19" height="5" rx="1"/><path d="M4.5 9v10a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V9"/>';
-  const ICON_ARCHIVE =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-    + ICON_BOX + '<path d="M12 12v4.5"/><path d="M9.8 14.3 12 16.5l2.2-2.2"/></svg>';
-  const ICON_UNARCHIVE =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-    + ICON_BOX + '<path d="M12 16.5V12"/><path d="M9.8 14.2 12 12l2.2 2.2"/></svg>';
-
   let pendingArchiveId = null;
   let pendingArchiveTo = true;   // true = archive, false = restore
 
@@ -2040,7 +2031,8 @@
       //
       // It was an x until 10/20/26, which Rita and Chris read as a delete
       // and worried would take the engagement history with it. Same button,
-      // same behaviour; it is drawn as an archive box now.
+      // same behaviour; it says "Archive" now, which is the one label
+      // nobody has to interpret.
       //
       // Admins only, and never on your own row -- archiving the login you
       // are signed in with locks you out of undoing it. In the Archived
@@ -2050,8 +2042,8 @@
       const actionCell = !canArchiveThis
         ? '<td class="row-actions"></td>'
         : archived
-          ? `<td class="row-actions"><button type="button" class="row-archive-btn restore" onclick="openArchive('${u.id}', false)" title="Restore ${escapeHtml(u.full_name)} to the Roster" aria-label="Restore ${escapeHtml(u.full_name)} to the Roster">${ICON_UNARCHIVE}</button></td>`
-          : `<td class="row-actions"><button type="button" class="row-archive-btn" onclick="openArchive('${u.id}', true)" title="Archive ${escapeHtml(u.full_name)} \u2014 they come off the Roster, their hours and assignments are kept, and you can restore them" aria-label="Archive ${escapeHtml(u.full_name)}">${ICON_ARCHIVE}</button></td>`;
+          ? `<td class="row-actions"><button type="button" class="row-archive-btn restore" onclick="openArchive('${u.id}', false)" title="Restore ${escapeHtml(u.full_name)} to the Roster" aria-label="Restore ${escapeHtml(u.full_name)} to the Roster">Restore</button></td>`
+          : `<td class="row-actions"><button type="button" class="row-archive-btn" onclick="openArchive('${u.id}', true)" title="Archive ${escapeHtml(u.full_name)} \u2014 they come off the Roster, their hours and assignments are kept, and you can restore them" aria-label="Archive ${escapeHtml(u.full_name)}">Archive</button></td>`;
 
       tr.innerHTML = `
         <td>
