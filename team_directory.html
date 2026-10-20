@@ -1050,6 +1050,18 @@
           <input type="checkbox" id="pf-can-approve-applications" style="width:auto; margin-top:3px;" />
           <span>Can approve applications <span style="color:var(--muted);">— they are the one who ticks "Approved by …" on an application, which is what unlocks the hours and Team Lead. Saved with the Save button.</span></span>
         </label>
+        <!-- Greg (10/20/26): "all dashboards should always include Chris
+             Gibbons on the Economic Gardening Team." A flag rather than his
+             name in the page, for the same reason the CC line above became
+             one: the first time it is two people, a hardcoded name has to be
+             found and edited. Whoever holds this is appended to the team on
+             every client dashboard, after the Team Lead and the specialists,
+             without an assignment and without logging hours against the
+             engagement. -->
+        <label id="pf-client-team-wrap" style="display:flex; align-items:flex-start; gap:8px; font-weight:400; text-transform:none; margin:10px 0 0;">
+          <input type="checkbox" id="pf-show-on-client-team" style="width:auto; margin-top:3px;" />
+          <span>Show on every client dashboard <span style="color:var(--muted);">— listed last on the Economic Gardening Team of every client dashboard, whether or not they are assigned to that engagement. Their title here is what the client sees. Saved with the Save button.</span></span>
+        </label>
       </div>
 
       <div class="modal-actions">
@@ -1787,7 +1799,7 @@
   let rosterView = "active";
   async function loadUsers() {
     let usersQuery = sb.from("users")
-      .select("id, full_name, title, company_name, role, email, secondary_email, phone, address, time_zone, about, default_specialty, avatar_url, hidden_from_roster, archived_at, archived_by, cc_on_client_email, can_approve_applications")
+      .select("id, full_name, title, company_name, role, email, secondary_email, phone, address, time_zone, about, default_specialty, avatar_url, hidden_from_roster, archived_at, archived_by, cc_on_client_email, can_approve_applications, show_on_client_team")
       .order("full_name", { ascending: true });
     if (rosterView === "archived") {
       usersQuery = usersQuery.not("archived_at", "is", null);
@@ -2682,6 +2694,7 @@
     $("pf-hidden-from-roster").checked = !!u.hidden_from_roster;
     $("pf-cc-on-client-email").checked = !!u.cc_on_client_email;
     $("pf-can-approve-applications").checked = !!u.can_approve_applications;
+    $("pf-show-on-client-team").checked = !!u.show_on_client_team;
 
     $("profile-save").classList.toggle("hidden", !canEdit);
     // Archive and Restore are the same decision in two directions, so only one
@@ -2895,6 +2908,7 @@
       // correspondence is not something a specialist sets for themselves.
       payload.cc_on_client_email = $("pf-cc-on-client-email").checked;
       payload.can_approve_applications = $("pf-can-approve-applications").checked;
+      payload.show_on_client_team = $("pf-show-on-client-team").checked;
     }
 
     const saveBtn = $("profile-save");
