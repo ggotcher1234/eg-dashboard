@@ -2450,7 +2450,7 @@
               // plainly, because somebody now has to tell the Program by hand.
               showBanner(result.warning, "error");
             } else if (wanted) {
-              showBanner("Approved. Send the Program Administrator the notice below.", "success");
+              showBanner("Vetted. Send the Program Administrator the notice below.", "success");
             } else {
               showBanner("Approval removed. Nobody was emailed about it.", "success");
             }
@@ -2941,14 +2941,14 @@
     return `
       <div class="thresholds${done ? " is-complete" : ""}" id="thresholds-box">
         <div class="thresholds-head">
-          <h4>Review thresholds</h4>
+          <h4>NCEG Vetting</h4>
           <span class="thresholds-count">${n} of ${THRESHOLDS.length} confirmed</span>
         </div>
         <p class="thresholds-desc">${locked
-          ? "Confirmed and locked by the NCEG approval below. Untick the approval to change one."
+          ? "Confirmed and locked by the vetting below. Untick \u201cVetted by NCEG\u201d to change one."
           : done
-            ? "All five confirmed — the NCEG approval below is now available."
-            : "Confirm each one. The applicant's own answers are shown; tick to record that they were checked. All five are needed before NCEG can approve."}</p>
+            ? "All five confirmed \u2014 NCEG Vetting can be completed below."
+            : "Confirm each one. The applicant's own answers are shown; tick to record that they were checked. All five are needed to complete NCEG Vetting."}</p>
         <label class="th-rural${locked ? " is-locked" : ""}">
           <input type="checkbox" id="accept-rural"${rural ? " checked" : ""}${locked ? " disabled" : ""} />
           <span class="th-rural-label">Rural applicant
@@ -3028,23 +3028,23 @@
     // outside NCEG opens the moment the box goes on.
     let note;
     if (approved) {
-      note = `Approved on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}, against all ${THRESHOLDS.length} review thresholds. Send the Program Administrator the approval notice below so they can notify their client, then set the hours, Team Lead and CC list.`;
+      note = `Vetted on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}, against all ${THRESHOLDS.length} criteria. Send the Program Administrator the approval notice below so they can notify their client, then set the hours, Team Lead and CC list.`;
     } else if (!name) {
       // The one state with no way forward from this page, so it says where to
       // go instead of just refusing.
-      note = `No one is set up to approve applications yet, so this can't move forward. Tick <strong>Can approve applications</strong> on the right profile in the Roster.`;
+      note = `No one is set up to complete NCEG Vetting yet, so this can't move forward. Tick <strong>Can complete NCEG Vetting</strong> on the right profile in the Roster.`;
     } else if (!met) {
       const left = THRESHOLDS.length - thresholdsTickedCount(a);
-      note = `Confirm the ${left} remaining review threshold${left === 1 ? "" : "s"} above first. Approving then opens an email to the Program Administrator so they can notify their client.`;
+      note = `Confirm the ${left} remaining criteri${left === 1 ? "on" : "a"} above first. Completing the vetting then opens an email to the Program Administrator so they can notify their client.`;
     } else {
-      note = `Approving opens an email to the Program Administrator telling them ${escapeHtml(a.company_name || "this applicant")} is approved, so they can notify their client. It also unlocks the hours, Team Lead and CC list below.`;
+      note = `Ticking this opens an email to the Program Administrator telling them ${escapeHtml(a.company_name || "this applicant")} has passed NCEG Vetting, so they can notify their client. It also unlocks the hours, Team Lead and CC list below.`;
     }
 
     return `
       <div class="approval-gate${approved ? " is-approved" : ""}" id="approval-gate">
         <label class="approval-row${iMayApprove && name && (met || approved) ? "" : " is-locked"}" for="accept-approved">
           <input type="checkbox" id="accept-approved"${approved ? " checked" : ""}${iMayApprove && name && (met || approved) ? "" : " disabled"} />
-          <span class="approval-label">Approved by NCEG</span>
+          <span class="approval-label">Vetted by NCEG</span>
         </label>
         <div class="approval-note" id="approval-note">${note}</div>
         ${approved ? `<div class="approval-actions">
@@ -3077,7 +3077,7 @@
       approveBox.disabled = !mayApprove || (!met && !approved);
       approveBox.title = !mayApprove
         ? "Only NCEG can record this approval"
-        : (!met && !approved) ? `Confirm all ${THRESHOLDS.length} review thresholds first` : "";
+        : (!met && !approved) ? `Complete NCEG Vetting first \u2014 all ${THRESHOLDS.length} criteria` : "";
     }
 
     // Everything that turns it into an engagement waits on the approval.
@@ -3087,7 +3087,7 @@
     const btn = $("accept-btn");
     if (btn) {
       btn.disabled = !approved;
-      btn.title = approved ? "" : "Waiting on the NCEG approval above";
+      btn.title = approved ? "" : "Waiting on NCEG Vetting above";
     }
   }
 
@@ -3136,7 +3136,7 @@
     // Backstop for a stale tab, same reasoning as the approval check above.
     if (app && !thresholdsMet(app)) {
       const left = THRESHOLDS.length - thresholdsTickedCount(app);
-      showBanner(`${left} review threshold${left === 1 ? "" : "s"} still to confirm before this can be accepted.`, "error");
+      showBanner(`${left} vetting criteri${left === 1 ? "on" : "a"} still to confirm before this can be accepted.`, "error");
       renderReview();
       return;
     }
