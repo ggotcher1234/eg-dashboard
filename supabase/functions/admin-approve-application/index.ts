@@ -202,11 +202,17 @@ Deno.serve(async (req: Request) => {
     // for over a year and never built, which is most likely where the belief
     // came from.
     //
-    // What the email is FOR is the handoff: whoever approves is not
-    // necessarily whoever sets the hours, and without this the other Admins
-    // would find out by checking the Applications tab, which is how a week
-    // goes by. Addressed by role, not by name, so it keeps working when the
-    // team changes.
+    // Chris again (10/21/26): "We don't send the approval letter; the program
+    // administrator does (and they cc us to trigger team leader assignment).
+    // The only thing we send is 'vetted'." So the one letter NCEG sends is
+    // the vetting notice, and the approval letter named below is the Program
+    // Administrator's own.
+    //
+    // What the email is FOR is the handoff: whoever vets is not necessarily
+    // whoever sets the hours, and without this the other Admins would find
+    // out by checking the Applications tab, which is how a week goes by.
+    // Addressed by role, not by name, so it keeps working when the team
+    // changes.
     //
     // The approval is saved by this point. Nothing below is allowed to
     // report it as a failure.
@@ -261,29 +267,24 @@ Deno.serve(async (req: Request) => {
           to: recipients,
           // The "(CODE) Subject" convention Greg set on 9/14/26, so everything
           // this app sends sorts together in an inbox.
-          // A different subject from the letter the Program gets at accept,
-          // on purpose -- two mails about the same company reading
-          // "(GRE) Application Approved" would be indistinguishable in an
-          // Admin's inbox, and only one of them is asking for anything.
-          // Chris (10/18): "This is still out of order. After NCEG approves,
-          // then the program manager sends approval letter to CEO with cc to
-          // Rita and Chris." The old subject, "Ready for hours and Team
-          // Lead", named a step that is two moves away -- the letter to the
-          // Program Administrator, and then theirs to the CEO, both come
-          // first. It now says only what has happened.
+          // A different subject from the letter the Program gets, on purpose
+          // -- two mails about the same company reading the same way would be
+          // indistinguishable in an Admin's inbox, and only one of them is
+          // asking for anything. It names what has happened and nothing
+          // further along: this application has been vetted.
           subject: programCode
-            ? `(${programCode}) Approved - ${companyName}`
-            : `Approved - ${companyName}`,
+            ? `(${programCode}) Vetted - ${companyName}`
+            : `Vetted - ${companyName}`,
           html: `
-            <p><strong>${escapeHtml(companyName)}</strong> was approved for the Economic Gardening Program on ${escapeHtml(dateLabel)}.</p>
+            <p><strong>${escapeHtml(companyName)}</strong> passed NCEG Vetting on ${escapeHtml(dateLabel)}.</p>
             <p>
               <strong>Company:</strong> ${escapeHtml(companyName)}<br/>
               ${officerName ? `<strong>Primary Contact:</strong> ${escapeHtml(officerName)}<br/>` : ""}
               ${programName ? `<strong>Program:</strong> ${escapeHtml(programName)}${programCode ? ` (${escapeHtml(programCode)})` : ""}<br/>` : ""}
-              <strong>Approved by:</strong> ${escapeHtml(approverName)}
+              <strong>Vetted by:</strong> ${escapeHtml(approverName)}
             </p>
-            <p><strong>Next:</strong> the approval letter to the Program Administrator. Ticking Approved opens that letter ready to send &mdash; it goes out by hand, from whoever approved, not from the dashboard. The Program Administrator then sends the approval letter to the CEO, copying Rita and Chris.</p>
-            <p>Once that has gone out, open the application on the Applications tab to set the budget hours, the Team Lead and the CC list. Accepting it creates the engagement, and the Team Lead sends the scheduling letter to the CEO, copying Rita, Chris and the Program Administrator.</p>
+            <p><strong>Next:</strong> the vetting notice to the Program Administrator, which is the only letter NCEG sends. Ticking the box opens it ready to send &mdash; it goes out by hand, from whoever vetted, not from the dashboard.</p>
+            <p>The approval letter is the Program Administrator&rsquo;s to write. They send it to the CEO and copy Rita and Chris, and that copy is what starts the Team Lead assignment here: open the application on the Applications tab, set the budget hours, the Team Lead and the CC list. Accepting it creates the engagement, and the Team Lead sends the scheduling letter to the CEO, copying Rita, Chris and the Program Administrator.</p>
             <p style="color:#6b7280; font-size:13px;">This note is internal to the NCEG team.</p>
           `,
         }),

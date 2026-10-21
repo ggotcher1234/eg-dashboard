@@ -2450,7 +2450,7 @@
               // plainly, because somebody now has to tell the Program by hand.
               showBanner(result.warning, "error");
             } else if (wanted) {
-              showBanner("Vetted. Send the Program Administrator the notice below.", "success");
+              showBanner("Vetted. Send the Program Administrator the vetting notice below.", "success");
             } else {
               showBanner("Approval removed. Nobody was emailed about it.", "success");
             }
@@ -3028,16 +3028,16 @@
     // outside NCEG opens the moment the box goes on.
     let note;
     if (approved) {
-      note = `Vetted on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}, against all ${THRESHOLDS.length} criteria. Send the Program Administrator the approval notice below so they can notify their client, then set the hours, Team Lead and CC list.`;
+      note = `Vetted on ${escapeHtml(fmtDate(a.approved_at))}${approvedBy ? ` by ${escapeHtml(approvedBy.full_name)}` : ""}, against all ${THRESHOLDS.length} criteria. Send the Program Administrator the vetting notice below; they send the approval letter to the CEO, copying Rita and Chris. Then set the hours, Team Lead and CC list.`;
     } else if (!name) {
       // The one state with no way forward from this page, so it says where to
       // go instead of just refusing.
       note = `No one is set up to complete NCEG Vetting yet, so this can't move forward. Tick <strong>Can complete NCEG Vetting</strong> on the right profile in the Roster.`;
     } else if (!met) {
       const left = THRESHOLDS.length - thresholdsTickedCount(a);
-      note = `Confirm the ${left} remaining criteri${left === 1 ? "on" : "a"} above first. Completing the vetting then opens an email to the Program Administrator so they can notify their client.`;
+      note = `Confirm the ${left} remaining criteri${left === 1 ? "on" : "a"} above first. Completing the vetting then opens the vetting notice to the Program Administrator, who sends the approval letter to the CEO.`;
     } else {
-      note = `Ticking this opens an email to the Program Administrator telling them ${escapeHtml(a.company_name || "this applicant")} has passed NCEG Vetting, so they can notify their client. It also unlocks the hours, Team Lead and CC list below.`;
+      note = `Ticking this opens the vetting notice to the Program Administrator, telling them ${escapeHtml(a.company_name || "this applicant")} has passed NCEG Vetting. They send the approval letter to the CEO from there, copying Rita and Chris. It also unlocks the hours, Team Lead and CC list below.`;
     }
 
     return `
@@ -3048,7 +3048,7 @@
         </label>
         <div class="approval-note" id="approval-note">${note}</div>
         ${approved ? `<div class="approval-actions">
-          <button type="button" class="btn-secondary btn-sm" id="pa-notice-btn">Send the approval notice to the Program Administrator</button>
+          <button type="button" class="btn-secondary btn-sm" id="pa-notice-btn">Send the vetting notice to the Program Administrator</button>
         </div>` : ""}
       </div>`;
   }
@@ -3248,12 +3248,12 @@
     ).join("\n");
     return `${PRE_GO_LIVE ? TEST_BODY_BANNER + "\n\n" : ""}Hello ${paGreeting},
 
-NCEG has reviewed the ${engagementName} application and found that the following thresholds have been met and the application is approved.
+NCEG has vetted the ${engagementName} application against our five criteria and all five are met.
 
-Thresholds passed:
+Criteria met:
 ${rows}
 
-Please proceed with sending the acceptance notification.
+Please proceed with sending your approval letter to the CEO, copying Rita and Chris. That copy is what starts the Team Lead assignment on our side.
 
 Have a great day!!`;
   }
@@ -3339,12 +3339,12 @@ Have a great day!!`;
     box.className = "pa-letter";
     box.id = "pa-letter";
     box.innerHTML = `
-      <h4>Next step — tell the Program Administrator that NCEG has approved this</h4>
+      <h4>Next step — tell the Program Administrator this applicant has been vetted</h4>
       <p class="desc">${paDesc}</p>
       ${PRE_GO_LIVE ? `<p class="desc" style="color:var(--danger-dark); font-weight:600; margin:-4px 0 12px;">Pre-go-live: this letter is marked TEST on the subject, the To and CC lines, and the first line of the message.</p>` : ""}
       <div class="pa-field"><label for="pa-to">To</label><input type="text" id="pa-to" value="${escapeHtml(markTest(pas.map((r) => r.email).join(", ")))}" /></div>
       <div class="pa-field"><label for="pa-cc">CC</label><input type="text" id="pa-cc" value="${escapeHtml(markTest(ccEmails.join(", ")))}" /></div>
-      <div class="pa-field"><label for="pa-subject">Subject</label><input type="text" id="pa-subject" value="${escapeHtml(`${PRE_GO_LIVE ? TEST_SUBJECT_PREFIX : ""}${partner && partner.code ? `(${partner.code}) ` : ""}${a.company_name} — Application Approved`)}" /></div>
+      <div class="pa-field"><label for="pa-subject">Subject</label><input type="text" id="pa-subject" value="${escapeHtml(`${PRE_GO_LIVE ? TEST_SUBJECT_PREFIX : ""}${partner && partner.code ? `(${partner.code}) ` : ""}${a.company_name} — Vetted by NCEG`)}" /></div>
       <div class="pa-field"><label for="pa-body">Message</label><textarea id="pa-body" spellcheck="true"></textarea></div>
       <div class="pa-actions">
         <button type="button" class="btn-primary" id="pa-mailto">Open in email app</button>
