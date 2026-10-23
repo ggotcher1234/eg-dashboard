@@ -43,15 +43,55 @@
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 22px 26px; margin-bottom: 16px; }
 
   .dashboard-kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-dark); margin-bottom: 8px; }
-  .company-top { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 14px; }
-  .company-logo { width: 64px; height: 64px; border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; background: #fafbfc; }
-  .company-logo img { max-width: 100%; max-height: 100%; }
-  .company-name { font-size: 21px; font-weight: 700; color: var(--navy); margin: 0; }
-  .company-address { font-size: 13px; color: var(--muted); margin-top: 3px; }
+  /* Header card, reworked 10/23/26 after Greg asked what a designer would
+     do with it. Six things, and the order below is the order they matter:
+
+     1. The 14px bottom margin is gone. It was spacing for the Company Info
+        block that follows this in preview and is hidden from clients, so
+        the card carried 36px under its content against 22px above it.
+     2. nowrap on this row. The logo and the text are always the two
+        columns; the Program wraps inside the right-hand column instead.
+        Letting the whole row wrap put the logo on a line of its own at
+        narrow widths and left a blank band above the name.
+     3. The logo lost its border and off-white fill -- a box drawn around a
+        mark that already has its own white ground -- and went 64px -> 76px
+        so it stands as tall as the text beside it.
+     4. The kicker moved into the text column. It used to start at the
+        card's edge while everything else began past the logo, so the eye
+        got two different places to start.
+     5. The address takes the body colour and Updated drops to 11.5px. At
+        13px and 12px in the same grey they read as one soft block.
+     6. The icon row gets 13px above it instead of 8px, separating who the
+        company is from where to find them. */
+  .company-top { display: flex; gap: 18px; align-items: flex-start; flex-wrap: nowrap; }
+  .company-logo { width: 76px; flex: 0 0 76px; display: flex; align-items: flex-start; justify-content: center; }
+  .company-logo img { display: block; width: 100%; height: auto; }
+  .company-main { flex: 1 1 auto; min-width: 0; display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+  .company-ident { flex: 1 1 260px; min-width: 0; }
+  .company-name { font-size: 21px; font-weight: 700; color: var(--navy); margin: 0; line-height: 1.2; }
+  .company-address { font-size: 13px; color: var(--text); margin-top: 4px; }
+
+  /* The Program had been in the footer only, which on a client dashboard is
+     the least-read place on the page. Here it balances the empty right side
+     and tells the client who sponsored them. Label and name share a line
+     (Greg, 10/23/26), baseline-aligned so the small uppercase label sits on
+     the same footing as the name rather than against its cap height. */
+  .company-program {
+    flex: 0 1 auto; padding-top: 3px;
+    display: flex; align-items: baseline; justify-content: flex-end; gap: 8px;
+  }
+  .company-program .pl {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); white-space: nowrap; flex: 0 0 auto;
+  }
+  .company-program .pn { font-size: 13px; font-weight: 600; color: var(--accent-dark); line-height: 1.35; }
+  @media (max-width: 620px) {
+    .company-program { width: 100%; justify-content: flex-start; padding-top: 0; margin-top: 4px; }
+  }
   /* "Updated:" under the address (Greg, 9/8/26) -- a quieter line than the
      address above it, since it is a freshness note rather than information
      about the company. */
-  .company-updated { font-size: 12px; color: var(--muted); margin-top: 5px; opacity: 0.85; }
+  .company-updated { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 
   /* Greg (10/23/26): "a single row under Updated" -- the company's own web
      and social presence, as icons rather than the word-links that used to
@@ -61,7 +101,7 @@
      Grey at rest and the platform's own colour on hover. Five brand colours
      in a row would pull the eye off the workflow tracker, which is the
      thing the client is meant to read first. */
-  .company-links { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+  .company-links { display: flex; gap: 10px; align-items: center; margin-top: 13px; }
   .company-links a {
     display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center;
     border-radius: 6px; color: var(--muted); transition: color 0.12s ease, background 0.12s ease;
@@ -415,14 +455,20 @@
 
   <main>
     <div class="card">
-      <div class="dashboard-kicker">Economic Gardening Engagement Dashboard</div>
       <div class="company-top">
         <div class="company-logo hidden" id="company-logo-wrap"><img id="company-logo" alt="" /></div>
-        <div>
-          <h2 class="company-name" id="company-name"></h2>
-          <div class="company-address" id="company-address"></div>
-          <div class="company-updated hidden" id="company-updated"></div>
-          <div class="company-links hidden" id="company-links"></div>
+        <div class="company-main">
+          <div class="company-ident">
+            <div class="dashboard-kicker">Economic Gardening Engagement Dashboard</div>
+            <h2 class="company-name" id="company-name"></h2>
+            <div class="company-address" id="company-address"></div>
+            <div class="company-updated hidden" id="company-updated"></div>
+            <div class="company-links hidden" id="company-links"></div>
+          </div>
+          <div class="company-program hidden" id="company-program">
+            <div class="pl">Program</div>
+            <div class="pn" id="company-program-name"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -836,7 +882,9 @@
     const c = row.company || {};
     if (c.logo_url) {
       $("company-logo-wrap").classList.remove("hidden");
-      $("company-logo").src = c.logo_url;
+      const logoImg = $("company-logo");
+      logoImg.onerror = () => $("company-logo-wrap").classList.add("hidden");
+      logoImg.src = c.logo_url;
     }
     $("company-name").textContent = row.client_name;
     $("company-address").textContent = c.address || "";
@@ -856,6 +904,10 @@
     if (c.program_name) {
       $("footer-program-wrap").classList.remove("hidden");
       $("footer-program").textContent = c.program_name;
+      // Also at the top of the header card now (Greg, 10/23/26), where the
+      // right-hand side was empty and the client would actually read it.
+      $("company-program-name").textContent = c.program_name;
+      $("company-program").classList.remove("hidden");
     }
 
     if (c.description) {
