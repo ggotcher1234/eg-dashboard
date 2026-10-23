@@ -3466,11 +3466,20 @@
   //   a file    (.eml) can carry a formatted letter, but a browser
   //             downloads it -- Chrome showed a Save dialog, which ended it.
   //
-  // So: the letter is text, exactly as it reads on screen, and the two
-  // collateral documents go on as attachments the way Team Leads have
-  // always sent them. The remaining addresses (the videos, the sorter, the
-  // dashboard) are printed as plain URLs, which every mail client turns
-  // into live links by itself.
+  // So: the letter is text, exactly as it reads on screen, and the
+  // addresses in it (the videos, the sorter, the dashboard) are printed as
+  // plain URLs, which every mail client turns into live links by itself.
+  //
+  // Two of those three findings held; the first did not survive contact
+  // with Outlook. 10/23/26: a body that arrives WITH the message is
+  // treated as quoted text, so an inserted signature lands above it --
+  // which is why the letter is on the clipboard now and the draft opens
+  // empty. The clipboard line above turned out to be the answer rather
+  // than the objection; the manual step it costs is one right-click.
+  //
+  // The two collateral documents are no longer attached either. Chris
+  // (10/23/26) asked for links that open them from the dashboard, which
+  // is what /doc/faq and /doc/what-to-expect do.
   const esc = (x) => String(x ?? "")
     .split("&").join("&amp;").split("<").join("&lt;")
     .split(">").join("&gt;").split('"').join("&quot;");
@@ -3535,8 +3544,11 @@
   // The copy happens BEFORE the navigation and without an await in front
   // of it: Safari drops the user-gesture that permits a clipboard write if
   // anything is awaited first.
-  const PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "") ? "⌘V" : "Ctrl+V";
-  const DRAFT_HINT = `Opens an addressed draft with the letter copied. Paste it in with ${PASTE_KEY}, above your signature, then send.`;
+  // Right-click > Paste rather than a keyboard shortcut (Greg, 10/23/26):
+  // it is the same gesture on a PC and a Mac, so one sentence covers a
+  // roster that is mostly Windows with some Macs, and nobody has to be
+  // told which key their machine uses.
+  const DRAFT_HINT = "Opens an addressed draft. The letter is on your clipboard \u2014 right-click in the message and choose Paste.";
 
   function bareAddressList(list) {
     return String(list || "")
@@ -3718,9 +3730,7 @@
     // purpose. The attachment reminder that used to sit here is gone with
     // the attachments (10/9) -- the letter now points at the Resource Vault
     // instead of promising files a mailto could never carry.
-    notes.push(`Before sending: replace the "${WELCOME_AVAILABILITY_MARKER.replace(/^>>> |<<<$/g, "")}" line with your dates and times.`);
     notes.push("Nothing to attach: the FAQs and What to Expect are links in the letter now, and each one opens the current file straight from the dashboard.");
-    notes.push("Open in Email app starts a new message from your own mailbox with the addresses, the subject and the whole letter already in it. Copy Email is there if you would rather paste it into a message yourself.");
     if (!c.slug) {
       notes.push("This engagement has no dashboard address yet, so the letter leaves off the closing paragraph about the dashboard. Set a slug on the engagement and reopen this to get it.");
     }
@@ -3783,7 +3793,7 @@
       subject: $("welcome-subject").value, body: $("welcome-body").value,
     });
     showBanner(copied
-      ? `Draft opening, letter copied \u2014 paste it in with ${PASTE_KEY} above your signature, then replace the availability line.`
+      ? "Draft opening, letter copied \u2014 right-click in the message and choose Paste."
       : "Draft opening, but the letter could not be copied \u2014 use Copy letter only.", copied ? "success" : "error");
   });
 
