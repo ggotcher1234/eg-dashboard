@@ -2173,6 +2173,38 @@
   // "Open in Email App" hands it to the Team Lead's own mail client
   // (Outlook or otherwise) ready to send, and Copy Email Text covers
   // pasting it in by hand instead.
+
+  // ---------- Roster signature (Greg, 10/23/26) ----------
+  // "add a custom signature block for each of the emails that the system
+  // creates ... put a signature block in the Roster cards and have the
+  // create email button pull the roster card signature."
+  //
+  // The signature belongs to the person the letter is written AS, not to
+  // whoever is at the keyboard: the Scheduling Letter is the Team Lead's
+  // even when an Admin opens it, and the research email is the assigned
+  // specialist's. Greg settled that on 10/23.
+  //
+  // Returns "" when the person has turned it off, which is the setting for
+  // anyone whose own mail client already signs them -- Outlook and Gmail
+  // both add a signature to a mailto draft, and ours would sit above
+  // theirs. Falls back to name/title/phone off the profile when nobody has
+  // written one, so a letter is never left unsigned.
+  async function rosterSignature(userId) {
+    if (!userId) return "";
+    const { data } = await sb
+      .from("users")
+      .select("full_name, title, phone, email_signature, use_dashboard_signature")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!data || data.use_dashboard_signature === false) return "";
+    const written = (data.email_signature || "").trim();
+    if (written) return written;
+    return [data.full_name, data.title, data.phone ? `Cell: ${data.phone}` : ""]
+      .map((x) => String(x || "").trim())
+      .filter(Boolean)
+      .join("\n");
+  }
+
   async function openEvalEmailModal() {
     const createBtn = document.querySelector("#eval-email-create-btn");
     if (createBtn) { createBtn.disabled = true; createBtn.innerHTML = "Preparing&hellip;"; }
@@ -2184,6 +2216,9 @@
     const ceoContact = contacts.find((c) => (c.title || "").toLowerCase().includes("ceo")) || contacts[0] || null;
     const teamRows = listData.team || [];
     const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
+    // The Team Lead's own block from the Roster (Greg, 10/23/26); "" when
+    // they have turned it off because their mail client signs them already.
+    const leadSignature = await rosterSignature(leadRow ? leadRow.user_id : null);
     const teamLeadName = leadRow ? leadRow.users.full_name : "";
     const teamLeadFirstName = teamLeadName ? teamLeadName.split(" ")[0] : "";
 
@@ -2226,7 +2261,7 @@ Thank you again for the opportunity to work with you and your team.
 
 Best regards,
 
-${teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
+${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
 
     updateEvalEmailMailto();
     $("eval-email-overlay").classList.add("open");
@@ -2469,6 +2504,9 @@ ${teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
     const ceoContact = contacts.find((c) => (c.title || "").toLowerCase().includes("ceo")) || contacts[0] || null;
     const teamRows = listData.team || [];
     const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
+    // The Team Lead's own block from the Roster (Greg, 10/23/26); "" when
+    // they have turned it off because their mail client signs them already.
+    const leadSignature = await rosterSignature(leadRow ? leadRow.user_id : null);
     const teamLeadFirstName = leadRow && leadRow.users.full_name ? leadRow.users.full_name.split(" ")[0] : "";
 
     $("cdem-to").value = (ceoContact && ceoContact.email) || "";
@@ -2488,7 +2526,7 @@ ${url}
 It only takes a few minutes, and it makes sure we dig into what matters most to you.
 
 Thanks,
-${teamLeadFirstName || "Your NCEG Team Lead"}`;
+${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
 
     updateControllingEmailMailto();
     $("cd-email-overlay").classList.add("open");
@@ -2517,10 +2555,13 @@ ${teamLeadFirstName || "Your NCEG Team Lead"}`;
     container.querySelector("#dd-email-create-btn").addEventListener("click", openDiscoveryEmailModal);
   }
 
-  function openDiscoveryEmailModal() {
+  async function openDiscoveryEmailModal() {
     const recipients = clientContacts();
     const teamRows = listData.team || [];
     const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
+    // The Team Lead's own block from the Roster (Greg, 10/23/26); "" when
+    // they have turned it off because their mail client signs them already.
+    const leadSignature = await rosterSignature(leadRow ? leadRow.user_id : null);
     const teamLeadName = leadRow && leadRow.users.full_name ? leadRow.users.full_name : "";
     const teamLeadFirstName = teamLeadName ? teamLeadName.split(" ")[0] : "";
 
@@ -2552,7 +2593,7 @@ ${dashboardBlock}
 Let me know if you have any questions.
 
 Thanks,
-${teamLeadFirstName || "Your NCEG Team Lead"}`;
+${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
 
     updateDiscoveryEmailMailto();
     $("dd-email-overlay").classList.add("open");
@@ -2608,10 +2649,13 @@ ${teamLeadFirstName || "Your NCEG Team Lead"}`;
     return slug ? new URL(`c/${encodeURIComponent(slug)}`, PUBLIC_SITE_BASE).href : null;
   }
 
-  function openReviewEmailModal() {
+  async function openReviewEmailModal() {
     const recipients = clientContacts();
     const teamRows = listData.team || [];
     const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
+    // The Team Lead's own block from the Roster (Greg, 10/23/26); "" when
+    // they have turned it off because their mail client signs them already.
+    const leadSignature = await rosterSignature(leadRow ? leadRow.user_id : null);
     const teamLeadName = leadRow && leadRow.users.full_name ? leadRow.users.full_name : "";
     const teamLeadFirstName = teamLeadName ? teamLeadName.split(" ")[0] : "";
 
@@ -2648,7 +2692,7 @@ We\u2019ll plan on about 90 minutes for the review.
 Send me a couple of days and times that work well for you, and I\u2019ll send the calendar invitation.
 
 Thanks,
-${teamLeadFirstName || "Your NCEG Team Lead"}`;
+${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
 
     updateReviewEmailMailto();
     $("rr-email-overlay").classList.add("open");

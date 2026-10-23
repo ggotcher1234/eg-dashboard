@@ -3248,7 +3248,7 @@
   // Pure, so the wording can be read and checked without a database behind
   // it, and so the threshold table cannot drift from the checklist Rita just
   // worked through -- both are built from THRESHOLDS.
-  function paLetterBody(paGreeting, engagementName, checkedKeys, rural) {
+  function paLetterBody(paGreeting, engagementName, checkedKeys, rural, signature) {
     // Rita's original is a two-column table, which Outlook renders from HTML.
     // A mailto: body is plain text, and padded columns only line up in a
     // monospaced font -- in Outlook's default they come out ragged, which
@@ -3266,7 +3266,7 @@ ${rows}
 
 Please proceed with sending your approval letter to the CEO, copying Rita and Chris. That copy is what starts the Team Lead assignment on our side.
 
-Have a great day!!`;
+Have a great day!!${signature ? "\n\n" + signature : ""}`;
   }
 
   // Opened by the button on the approval box, NOT by accepting.
@@ -3285,7 +3285,39 @@ Have a great day!!`;
   //
   // The button stays on the box rather than appearing once, so a closed tab
   // or a second thought is no reason to retype it.
-  function renderPaLetter(appId) {
+
+  // ---------- Roster signature (Greg, 10/23/26) ----------
+  // "add a custom signature block for each of the emails that the system
+  // creates ... put a signature block in the Roster cards and have the
+  // create email button pull the roster card signature."
+  //
+  // The signature belongs to the person the letter is written AS, not to
+  // whoever is at the keyboard: the Scheduling Letter is the Team Lead's
+  // even when an Admin opens it, and the research email is the assigned
+  // specialist's. Greg settled that on 10/23.
+  //
+  // Returns "" when the person has turned it off, which is the setting for
+  // anyone whose own mail client already signs them -- Outlook and Gmail
+  // both add a signature to a mailto draft, and ours would sit above
+  // theirs. Falls back to name/title/phone off the profile when nobody has
+  // written one, so a letter is never left unsigned.
+  async function rosterSignature(userId) {
+    if (!userId) return "";
+    const { data } = await sb
+      .from("users")
+      .select("full_name, title, phone, email_signature, use_dashboard_signature")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!data || data.use_dashboard_signature === false) return "";
+    const written = (data.email_signature || "").trim();
+    if (written) return written;
+    return [data.full_name, data.title, data.phone ? `Cell: ${data.phone}` : ""]
+      .map((x) => String(x || "").trim())
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  async function renderPaLetter(appId) {
     const a = allApplications.find((x) => x.id === appId);
     if (!a) return;
     const existing = document.getElementById("pa-letter");
@@ -3370,7 +3402,10 @@ Have a great day!!`;
 
     // Set through .value rather than in the markup: the body carries
     // newlines, and a textarea's initial content is HTML.
-    $("pa-body").value = paLetterBody(greeting, a.company_name || "this", checked, isRural(a));
+    // Signed by whoever vetted it -- they are who the Program
+    // Administrator replies to -- falling back to whoever is sending.
+    $("pa-body").value = paLetterBody(greeting, a.company_name || "this", checked, isRural(a),
+      await rosterSignature(a.approved_by || (currentUser && currentUser.id)));
     box.scrollIntoView({ behavior: "smooth", block: "center" });
 
     $("pa-mailto").addEventListener("click", () => {

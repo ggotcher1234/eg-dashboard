@@ -1003,6 +1003,30 @@
       <label for="pf-about">About</label>
       <textarea id="pf-about" placeholder="A short bio…"></textarea>
 
+      <!-- Greg (10/23/26): "add a custom signature block for each of the
+           emails that the system creates. my idea is to put a signature
+           block in the Roster cards and have the create email button pull
+           the roster card signature."
+
+           Plain text, because every letter the dashboard composes travels
+           in a mailto body and RFC 6068 makes that plain text -- no logo,
+           no link styling, nothing an email client has to understand.
+           It goes under each letter's own closing line ("Thank you,",
+           "Best regards,"), so it starts with the name, not with another
+           sign-off. -->
+      <label for="pf-signature">Email signature</label>
+      <div class="field-hint" style="margin:-4px 0 6px;">
+        Goes under the closing line of every letter the dashboard writes for this person —
+        the Scheduling Letter, the research email, the vetting notice and the rest.
+        Start with their name; the letter has already said "Thank you,". Leave it blank to use
+        their name, title and phone from this profile.
+      </div>
+      <textarea id="pf-signature" rows="4" placeholder="Jane Smith&#10;Team Lead — National Center for Economic Gardening&#10;Cell: 555 123 4567"></textarea>
+      <label style="display:flex; align-items:flex-start; gap:8px; font-weight:400; text-transform:none; margin:8px 0 0;">
+        <input type="checkbox" id="pf-use-signature" style="width:auto; margin-top:3px;" />
+        <span>Add this signature to letters <span style="color:var(--muted);">— turn this off if your own email program already signs your messages, or you will get two. The letter then ends at its closing line.</span></span>
+      </label>
+
       <hr style="margin:18px 0;" />
 
       <label for="pf-company">Company</label>
@@ -1810,7 +1834,7 @@
   let rosterView = "active";
   async function loadUsers() {
     let usersQuery = sb.from("users")
-      .select("id, full_name, title, company_name, role, email, secondary_email, phone, address, time_zone, about, default_specialty, avatar_url, hidden_from_roster, archived_at, archived_by, cc_on_client_email, can_approve_applications, show_on_client_team")
+      .select("id, full_name, title, company_name, role, email, secondary_email, phone, address, time_zone, about, default_specialty, avatar_url, hidden_from_roster, archived_at, archived_by, cc_on_client_email, can_approve_applications, show_on_client_team, email_signature, use_dashboard_signature")
       .order("full_name", { ascending: true });
     if (rosterView === "archived") {
       usersQuery = usersQuery.not("archived_at", "is", null);
@@ -2706,6 +2730,10 @@
     $("pf-cc-on-client-email").checked = !!u.cc_on_client_email;
     $("pf-can-approve-applications").checked = !!u.can_approve_applications;
     $("pf-show-on-client-team").checked = !!u.show_on_client_team;
+    $("pf-signature").value = u.email_signature || "";
+    // Default on for everyone (the column defaults true), so a profile that
+    // has never been opened still signs its letters.
+    $("pf-use-signature").checked = u.use_dashboard_signature !== false;
 
     $("profile-save").classList.toggle("hidden", !canEdit);
     // Archive and Restore are the same decision in two directions, so only one
@@ -2911,6 +2939,10 @@
       phone: $("pf-phone").value.trim() || null,
       address: $("pf-address").value.trim() || null,
       time_zone: $("pf-timezone").value.trim() || null,
+      // Not in the Admin-only block below: a signature is the person's own
+      // words over their own name, the same as About or their phone.
+      email_signature: $("pf-signature").value.trim() || null,
+      use_dashboard_signature: $("pf-use-signature").checked,
     };
     if (isSuperAdmin) {
       payload.role = $("pf-role").value;

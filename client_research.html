@@ -2358,7 +2358,39 @@
   // companyName is not in the letter itself -- it is in the subject, and in
   // the body it read as though the team worked for the client. Kept as an
   // argument because the letter is the obvious place for it to come back.
-  function researchEmailBody(q, specialistName, specialtyLabel, teamLeadName, companyName, greet) {
+
+  // ---------- Roster signature (Greg, 10/23/26) ----------
+  // "add a custom signature block for each of the emails that the system
+  // creates ... put a signature block in the Roster cards and have the
+  // create email button pull the roster card signature."
+  //
+  // The signature belongs to the person the letter is written AS, not to
+  // whoever is at the keyboard: the Scheduling Letter is the Team Lead's
+  // even when an Admin opens it, and the research email is the assigned
+  // specialist's. Greg settled that on 10/23.
+  //
+  // Returns "" when the person has turned it off, which is the setting for
+  // anyone whose own mail client already signs them -- Outlook and Gmail
+  // both add a signature to a mailto draft, and ours would sit above
+  // theirs. Falls back to name/title/phone off the profile when nobody has
+  // written one, so a letter is never left unsigned.
+  async function rosterSignature(userId) {
+    if (!userId) return "";
+    const { data } = await sb
+      .from("users")
+      .select("full_name, title, phone, email_signature, use_dashboard_signature")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!data || data.use_dashboard_signature === false) return "";
+    const written = (data.email_signature || "").trim();
+    if (written) return written;
+    return [data.full_name, data.title, data.phone ? `Cell: ${data.phone}` : ""]
+      .map((x) => String(x || "").trim())
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function researchEmailBody(q, specialistName, specialtyLabel, teamLeadName, companyName, greet, signature) {
     const n = q.question_number;
     const mine = n ? `Question ${n}` : "one of the questions";
     const lead = teamLeadName
@@ -2378,8 +2410,7 @@ ${RESEARCH_OVERVIEW_MARKER}
 
 I look forward to going through this with you in more detail when ${lead} sets up the research review call in the near future.
 
-${specialistName}
-${specialtyLabel} — National Center for Economic Gardening`;
+${signature || `${specialistName}\n${specialtyLabel} — National Center for Economic Gardening`}`;
   }
 
   // Built fresh each time the button is pressed rather than cached, so a
@@ -2441,6 +2472,7 @@ ${specialtyLabel} — National Center for Economic Gardening`;
     $(`tl-mail-body-${questionId}`).value = researchEmailBody(
       q, specialistName || "[your name]", specialtyLabel,
       lead ? lead.name : "", companyName, greetingNames(contacts.map((c) => c.name)),
+      await rosterSignature(who ? who.userId : null),
     );
 
     // Everything the specialist has to do before this is sendable, said once

@@ -2001,7 +2001,39 @@
   function loadInvoiceCc() { try { return localStorage.getItem(INVOICE_CC_KEY); } catch (e) { return null; } }
   function saveInvoiceCc(v) { try { localStorage.setItem(INVOICE_CC_KEY, v); } catch (e) { /* nothing to do */ } }
 
-  function invoiceEmailBody(row, programName) {
+
+  // ---------- Roster signature (Greg, 10/23/26) ----------
+  // "add a custom signature block for each of the emails that the system
+  // creates ... put a signature block in the Roster cards and have the
+  // create email button pull the roster card signature."
+  //
+  // The signature belongs to the person the letter is written AS, not to
+  // whoever is at the keyboard: the Scheduling Letter is the Team Lead's
+  // even when an Admin opens it, and the research email is the assigned
+  // specialist's. Greg settled that on 10/23.
+  //
+  // Returns "" when the person has turned it off, which is the setting for
+  // anyone whose own mail client already signs them -- Outlook and Gmail
+  // both add a signature to a mailto draft, and ours would sit above
+  // theirs. Falls back to name/title/phone off the profile when nobody has
+  // written one, so a letter is never left unsigned.
+  async function rosterSignature(userId) {
+    if (!userId) return "";
+    const { data } = await sb
+      .from("users")
+      .select("full_name, title, phone, email_signature, use_dashboard_signature")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!data || data.use_dashboard_signature === false) return "";
+    const written = (data.email_signature || "").trim();
+    if (written) return written;
+    return [data.full_name, data.title, data.phone ? `Cell: ${data.phone}` : ""]
+      .map((x) => String(x || "").trim())
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function invoiceEmailBody(row, programName, signature) {
     const month = monthLongLabel(row.billing_month);
     return `Hello,
 
@@ -2014,7 +2046,7 @@ Amount due: ${money(row.total_due)}
 If you have any questions about this invoice, just reply to this message and I will get them answered.
 
 Thank you,
-${(currentUser && currentUser.full_name) || ""}`;
+${signature || (currentUser && currentUser.full_name) || ""}`;
   }
 
   async function openInvoiceEmail() {
@@ -2043,7 +2075,7 @@ ${(currentUser && currentUser.full_name) || ""}`;
     const savedCc = loadInvoiceCc();
     $("ie-cc").value = savedCc === null ? "" : savedCc;
     $("ie-subject").value = `NCEG Invoice ${row.invoice_number} \u2014 ${monthLongLabel(row.billing_month)}`;
-    $("ie-body").value = invoiceEmailBody(row, activeInvoiceProgram);
+    $("ie-body").value = invoiceEmailBody(row, activeInvoiceProgram, await rosterSignature(currentUser && currentUser.id));
 
     panel.classList.remove("hidden");
     panel.scrollIntoView({ behavior: "smooth", block: "start" });

@@ -1885,7 +1885,7 @@
         // (10/8/26). Whatever the Roster holds, as typed -- Greg's reads
         // "949.342.4430" and Rita's "253-326-1203", and a letter is not the
         // place to start reformatting someone's own phone number.
-        teamLeadContact = { name: r.users.full_name, email: r.users.email || "", phone: r.users.phone || "" };
+        teamLeadContact = { id: r.user_id, name: r.users.full_name, email: r.users.email || "", phone: r.users.phone || "" };
         break;
       }
     }
@@ -3475,7 +3475,39 @@
     .split("&").join("&amp;").split("<").join("&lt;")
     .split(">").join("&gt;").split('"').join("&quot;");
 
-  function welcomeEmailBody(teamLead, teamLeadCell, companyName, dashboardUrl) {
+
+  // ---------- Roster signature (Greg, 10/23/26) ----------
+  // "add a custom signature block for each of the emails that the system
+  // creates ... put a signature block in the Roster cards and have the
+  // create email button pull the roster card signature."
+  //
+  // The signature belongs to the person the letter is written AS, not to
+  // whoever is at the keyboard: the Scheduling Letter is the Team Lead's
+  // even when an Admin opens it, and the research email is the assigned
+  // specialist's. Greg settled that on 10/23.
+  //
+  // Returns "" when the person has turned it off, which is the setting for
+  // anyone whose own mail client already signs them -- Outlook and Gmail
+  // both add a signature to a mailto draft, and ours would sit above
+  // theirs. Falls back to name/title/phone off the profile when nobody has
+  // written one, so a letter is never left unsigned.
+  async function rosterSignature(userId) {
+    if (!userId) return "";
+    const { data } = await sb
+      .from("users")
+      .select("full_name, title, phone, email_signature, use_dashboard_signature")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!data || data.use_dashboard_signature === false) return "";
+    const written = (data.email_signature || "").trim();
+    if (written) return written;
+    return [data.full_name, data.title, data.phone ? `Cell: ${data.phone}` : ""]
+      .map((x) => String(x || "").trim())
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function welcomeEmailBody(teamLead, teamLeadCell, companyName, dashboardUrl, signature) {
     // Green, not grey. Greg (10/9/26): "replace those ugly grey checkboxes
     // with nice green ones." U+2611 renders as a grey ballot box in Outlook
     // and Gmail; U+2705 is the green check in every client's emoji font, and
@@ -3514,9 +3546,16 @@
 
     L.push("Feel free to let me know if you have questions. We look forward to working with your company.", "");
     L.push("Thank you,");
-    L.push(teamLead);
-    L.push("Cell: " + teamLeadCell);
-    L.push("National Center for Economic Gardening – Team Lead");
+    if (signature) {
+      // The Team Lead's own block from the Roster, in place of the three
+      // lines this letter used to assemble (Greg, 10/23/26). The closing
+      // line above stays -- a signature starts at the name.
+      L.push(signature);
+    } else {
+      L.push(teamLead);
+      L.push("Cell: " + teamLeadCell);
+      L.push("National Center for Economic Gardening – Team Lead");
+    }
 
     return L.join("\n");
   }
@@ -3628,7 +3667,8 @@
       teamLead || "[Team Lead]",
       teamLeadCell || "[cell number]",
       c.name || "your company",
-      welcomeDashboardUrl
+      welcomeDashboardUrl,
+      await rosterSignature(teamLeadContact && teamLeadContact.id)
     );
     $("welcome-note").textContent = notes.join(" ");
   }
