@@ -551,7 +551,7 @@
     <div class="modal-lg-body">
       <div class="preview-not-sent">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-        Nothing sends from here. "Open in email app" puts this in your own email as a draft, addressed and ready — you press Send.
+        Nothing sends from here. The draft opens addressed and empty in your own email, with the statement on your clipboard — paste it in above your signature, then press Send.
       </div>
 
       <div class="section-label">Pay Statement</div>
@@ -593,8 +593,8 @@
       <div class="footer-note" id="send-note">Opens as a draft in your email app — nothing goes out until you send it.</div>
       <div style="display:flex; gap:10px;">
         <button class="btn-secondary" id="preview-close-btn">Close</button>
-        <button class="btn-secondary" id="copy-email-btn">Copy email</button>
-        <button class="btn-primary" id="send-email-btn">Open in email app</button>
+        <button class="btn-secondary" id="copy-email-btn">Copy letter only</button>
+        <button class="btn-primary" id="send-email-btn">Open draft &amp; copy letter</button>
       </div>
     </div>
   </div>
@@ -1067,6 +1067,63 @@
       .join("\n");
   }
 
+
+  // ---------- Addressed draft + letter on the clipboard (Greg, 10/23/26) ----------
+  //
+  // The draft opens ADDRESSED AND EMPTY, and the letter goes to the
+  // clipboard for the sender to paste in.
+  //
+  // Why, after a year of putting the whole letter in the mailto: Outlook
+  // inserts a signature ABOVE a body that arrived with the message. Julie
+  // hit it twice -- once from the mailto itself, once using Insert >
+  // Signature with the cursor deliberately at the bottom -- and it went to
+  // the top both times. A body that arrives with the message is treated
+  // like quoted text, and signatures go above quoted text by design.
+  //
+  // An empty draft has no quoted block, so the client places the signature
+  // the way it does in any new message: at the bottom, cursor above it.
+  // Paste, and the letter lands where it belongs. Greg: "the thing we like
+  // is getting all the mailto and cc addresses correct so i think the
+  // solution is explicit instruction on how to open the mailto and paste
+  // the email from the clipboard then add your signature."
+  //
+  // EG specialists are contractors who sign with their own company's
+  // branding, so the signature has to come from their own mail client.
+  // Nothing the dashboard can put in a mailto body is ever going to be
+  // their logo.
+  //
+  // The copy happens BEFORE the navigation and without an await in front
+  // of it: Safari drops the user-gesture that permits a clipboard write if
+  // anything is awaited first.
+  const PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "") ? "⌘V" : "Ctrl+V";
+  const DRAFT_HINT = `Opens an addressed draft with the letter copied. Paste it in with ${PASTE_KEY}, above your signature, then send.`;
+
+  function bareAddressList(list) {
+    return String(list || "")
+      .split(",")
+      .map((x) => { const m = /<([^>]*)>/.exec(x); return (m ? m[1] : x).trim(); })
+      .filter(Boolean)
+      .join(",");
+  }
+
+  // Returns true when the letter reached the clipboard.
+  async function openAddressedDraft({ to, cc, subject, body }) {
+    const cleanTo = bareAddressList(to);
+    let copied = true;
+    try {
+      await navigator.clipboard.writeText(body || "");
+    } catch (e) {
+      copied = false;
+    }
+    const params = [];
+    const cleanCc = bareAddressList(cc);
+    if (cleanCc) params.push("cc=" + encodeURIComponent(cleanCc));
+    if (subject) params.push("subject=" + encodeURIComponent(subject));
+    // No body parameter. That omission is the whole point.
+    window.location.href = `mailto:${cleanTo}${params.length ? "?" + params.join("&") : ""}`;
+    return copied;
+  }
+
   async function openPreview(userId, monthLabel) {
     const g = specialistGroups.find((s) => s.userId === userId);
     if (!g) return;
@@ -1141,7 +1198,7 @@ ${(await rosterSignature(currentUser && currentUser.id)) || "NCEG"}`,
     $("send-email-btn").disabled = !canSend;
     $("send-email-btn").title = canSend ? "" : "This specialist has no email address on file.";
     $("send-note").textContent = canSend
-      ? "Opens as a draft in your email app \u2014 nothing goes out until you send it."
+      ? DRAFT_HINT
       : "No email address on file for this specialist \u2014 add one on the Roster to send this.";
 
     $("preview-overlay").classList.add("open");
@@ -1162,14 +1219,15 @@ ${(await rosterSignature(currentUser && currentUser.id)) || "NCEG"}`,
       .join(",");
   }
 
-  $("send-email-btn").addEventListener("click", () => {
+  $("send-email-btn").addEventListener("click", async () => {
     if (!previewDraft || !previewDraft.to) return;
-    const params = [];
-    const cc = bareAddresses($("email-cc").value);
-    if (cc) params.push("cc=" + encodeURIComponent(cc));
-    params.push("subject=" + encodeURIComponent(previewDraft.subject));
-    params.push("body=" + encodeURIComponent(previewDraft.body));
-    window.location.href = `mailto:${bareAddresses(previewDraft.to)}?${params.join("&")}`;
+    const copied = await openAddressedDraft({
+      to: previewDraft.to, cc: $("email-cc").value,
+      subject: previewDraft.subject, body: previewDraft.body,
+    });
+    showBanner(copied
+      ? `Draft opening, statement copied \u2014 paste it in with ${PASTE_KEY} above your signature.`
+      : "Draft opening, but the statement could not be copied \u2014 use Copy letter only.", copied ? "success" : "error");
   });
 
   // The fallback for a browser with no mail client wired up, and the way to

@@ -814,15 +814,16 @@
         <h3>Email this invoice</h3>
         <p class="ie-desc">
           Save the invoice as a PDF first (Print / Save as PDF), then open the draft and attach it.
-          The draft opens in your own email, from you — replies come back to you, and it lands in your Sent folder.
+          <span id="ie-paste-hint"></span>
+          It goes out from your own email, so replies come back to you and it lands in your Sent folder.
         </p>
         <div class="ie-field"><label for="ie-to">To</label><input type="text" id="ie-to" /></div>
         <div class="ie-field"><label for="ie-cc">CC</label><input type="text" id="ie-cc" placeholder="Nobody" /></div>
         <div class="ie-field"><label for="ie-subject">Subject</label><input type="text" id="ie-subject" /></div>
         <div class="ie-field"><label for="ie-body">Message</label><textarea id="ie-body" spellcheck="true"></textarea></div>
         <div class="ie-actions">
-          <button type="button" class="btn-primary" id="ie-mailto">Open in email app</button>
-          <button type="button" class="btn-secondary" id="ie-copy">Copy email</button>
+          <button type="button" class="btn-primary" id="ie-mailto">Open draft &amp; copy letter</button>
+          <button type="button" class="btn-secondary" id="ie-copy">Copy letter only</button>
           <span class="spacer"></span>
           <button type="button" class="btn-secondary" id="ie-close">Close</button>
         </div>
@@ -2033,6 +2034,63 @@
       .join("\n");
   }
 
+
+  // ---------- Addressed draft + letter on the clipboard (Greg, 10/23/26) ----------
+  //
+  // The draft opens ADDRESSED AND EMPTY, and the letter goes to the
+  // clipboard for the sender to paste in.
+  //
+  // Why, after a year of putting the whole letter in the mailto: Outlook
+  // inserts a signature ABOVE a body that arrived with the message. Julie
+  // hit it twice -- once from the mailto itself, once using Insert >
+  // Signature with the cursor deliberately at the bottom -- and it went to
+  // the top both times. A body that arrives with the message is treated
+  // like quoted text, and signatures go above quoted text by design.
+  //
+  // An empty draft has no quoted block, so the client places the signature
+  // the way it does in any new message: at the bottom, cursor above it.
+  // Paste, and the letter lands where it belongs. Greg: "the thing we like
+  // is getting all the mailto and cc addresses correct so i think the
+  // solution is explicit instruction on how to open the mailto and paste
+  // the email from the clipboard then add your signature."
+  //
+  // EG specialists are contractors who sign with their own company's
+  // branding, so the signature has to come from their own mail client.
+  // Nothing the dashboard can put in a mailto body is ever going to be
+  // their logo.
+  //
+  // The copy happens BEFORE the navigation and without an await in front
+  // of it: Safari drops the user-gesture that permits a clipboard write if
+  // anything is awaited first.
+  const PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "") ? "⌘V" : "Ctrl+V";
+  const DRAFT_HINT = `Opens an addressed draft with the letter copied. Paste it in with ${PASTE_KEY}, above your signature, then send.`;
+
+  function bareAddressList(list) {
+    return String(list || "")
+      .split(",")
+      .map((x) => { const m = /<([^>]*)>/.exec(x); return (m ? m[1] : x).trim(); })
+      .filter(Boolean)
+      .join(",");
+  }
+
+  // Returns true when the letter reached the clipboard.
+  async function openAddressedDraft({ to, cc, subject, body }) {
+    const cleanTo = bareAddressList(to);
+    let copied = true;
+    try {
+      await navigator.clipboard.writeText(body || "");
+    } catch (e) {
+      copied = false;
+    }
+    const params = [];
+    const cleanCc = bareAddressList(cc);
+    if (cleanCc) params.push("cc=" + encodeURIComponent(cleanCc));
+    if (subject) params.push("subject=" + encodeURIComponent(subject));
+    // No body parameter. That omission is the whole point.
+    window.location.href = `mailto:${cleanTo}${params.length ? "?" + params.join("&") : ""}`;
+    return copied;
+  }
+
   function invoiceEmailBody(row, programName, signature) {
     const month = monthLongLabel(row.billing_month);
     return `Hello,
@@ -2093,15 +2151,18 @@ ${signature || (currentUser && currentUser.full_name) || ""}`;
     $("ie-close").addEventListener("click", () => $("invoice-email").classList.add("hidden"));
     $("ie-cc").addEventListener("input", (e) => saveInvoiceCc(e.target.value));
 
-    $("ie-mailto").addEventListener("click", () => {
-      const to = bareAddresses($("ie-to").value);
-      if (!to) { showBanner("Add at least one address on the To line first.", "error"); return; }
-      const params = [];
-      const cc = bareAddresses($("ie-cc").value);
-      if (cc) params.push("cc=" + encodeURIComponent(cc));
-      params.push("subject=" + encodeURIComponent($("ie-subject").value));
-      params.push("body=" + encodeURIComponent($("ie-body").value));
-      window.location.href = `mailto:${to}?${params.join("&")}`;
+    const hintEl = $("ie-paste-hint");
+    if (hintEl) hintEl.textContent = DRAFT_HINT;
+
+    $("ie-mailto").addEventListener("click", async () => {
+      if (!bareAddressList($("ie-to").value)) { showBanner("Add at least one address on the To line first.", "error"); return; }
+      const copied = await openAddressedDraft({
+        to: $("ie-to").value, cc: $("ie-cc").value,
+        subject: $("ie-subject").value, body: $("ie-body").value,
+      });
+      showBanner(copied
+        ? `Draft opening, letter copied — paste it in with ${PASTE_KEY} above your signature.`
+        : "Draft opening, but the letter could not be copied — select it here and copy it by hand.", copied ? "success" : "error");
     });
 
     // The fallback for a browser with no mail client wired up, and the way

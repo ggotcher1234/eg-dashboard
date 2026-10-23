@@ -3507,6 +3507,63 @@
       .join("\n");
   }
 
+
+  // ---------- Addressed draft + letter on the clipboard (Greg, 10/23/26) ----------
+  //
+  // The draft opens ADDRESSED AND EMPTY, and the letter goes to the
+  // clipboard for the sender to paste in.
+  //
+  // Why, after a year of putting the whole letter in the mailto: Outlook
+  // inserts a signature ABOVE a body that arrived with the message. Julie
+  // hit it twice -- once from the mailto itself, once using Insert >
+  // Signature with the cursor deliberately at the bottom -- and it went to
+  // the top both times. A body that arrives with the message is treated
+  // like quoted text, and signatures go above quoted text by design.
+  //
+  // An empty draft has no quoted block, so the client places the signature
+  // the way it does in any new message: at the bottom, cursor above it.
+  // Paste, and the letter lands where it belongs. Greg: "the thing we like
+  // is getting all the mailto and cc addresses correct so i think the
+  // solution is explicit instruction on how to open the mailto and paste
+  // the email from the clipboard then add your signature."
+  //
+  // EG specialists are contractors who sign with their own company's
+  // branding, so the signature has to come from their own mail client.
+  // Nothing the dashboard can put in a mailto body is ever going to be
+  // their logo.
+  //
+  // The copy happens BEFORE the navigation and without an await in front
+  // of it: Safari drops the user-gesture that permits a clipboard write if
+  // anything is awaited first.
+  const PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "") ? "⌘V" : "Ctrl+V";
+  const DRAFT_HINT = `Opens an addressed draft with the letter copied. Paste it in with ${PASTE_KEY}, above your signature, then send.`;
+
+  function bareAddressList(list) {
+    return String(list || "")
+      .split(",")
+      .map((x) => { const m = /<([^>]*)>/.exec(x); return (m ? m[1] : x).trim(); })
+      .filter(Boolean)
+      .join(",");
+  }
+
+  // Returns true when the letter reached the clipboard.
+  async function openAddressedDraft({ to, cc, subject, body }) {
+    const cleanTo = bareAddressList(to);
+    let copied = true;
+    try {
+      await navigator.clipboard.writeText(body || "");
+    } catch (e) {
+      copied = false;
+    }
+    const params = [];
+    const cleanCc = bareAddressList(cc);
+    if (cleanCc) params.push("cc=" + encodeURIComponent(cleanCc));
+    if (subject) params.push("subject=" + encodeURIComponent(subject));
+    // No body parameter. That omission is the whole point.
+    window.location.href = `mailto:${cleanTo}${params.length ? "?" + params.join("&") : ""}`;
+    return copied;
+  }
+
   function welcomeEmailBody(teamLead, teamLeadCell, companyName, dashboardUrl, signature) {
     // Green, not grey. Greg (10/9/26): "replace those ugly grey checkboxes
     // with nice green ones." U+2611 renders as a grey ballot box in Outlook
@@ -3670,6 +3727,7 @@
       welcomeDashboardUrl,
       await rosterSignature(teamLeadContact && teamLeadContact.id)
     );
+    notes.push(DRAFT_HINT);
     $("welcome-note").textContent = notes.join(" ");
   }
 
@@ -3711,15 +3769,14 @@
   const WELCOME_PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "")
     ? "Cmd+V" : "Ctrl+V";
 
-  $("welcome-open").addEventListener("click", () => {
-    const clean = (v) => v.split(",").map((e) => e.trim()).filter(Boolean).join(",");
-    const params = [];
-    const cc = clean($("welcome-cc").value);
-    if (cc) params.push("cc=" + encodeURIComponent(cc));
-    params.push("subject=" + encodeURIComponent($("welcome-subject").value));
-    params.push("body=" + encodeURIComponent($("welcome-body").value));
-    window.location.href = `mailto:${clean($("welcome-to").value)}?${params.join("&")}`;
-    showBanner("Your email app is opening with the letter in it \u2014 attach the FAQs and What to Expect, replace the availability line, and send.", "success");
+  $("welcome-open").addEventListener("click", async () => {
+    const copied = await openAddressedDraft({
+      to: $("welcome-to").value, cc: $("welcome-cc").value,
+      subject: $("welcome-subject").value, body: $("welcome-body").value,
+    });
+    showBanner(copied
+      ? `Draft opening, letter copied \u2014 paste it in with ${PASTE_KEY} above your signature, attach the FAQs and What to Expect, and replace the availability line.`
+      : "Draft opening, but the letter could not be copied \u2014 use Copy letter only.", copied ? "success" : "error");
   });
 
   $("welcome-copy").addEventListener("click", async () => {

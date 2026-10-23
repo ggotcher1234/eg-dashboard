@@ -3248,6 +3248,63 @@
   // Pure, so the wording can be read and checked without a database behind
   // it, and so the threshold table cannot drift from the checklist Rita just
   // worked through -- both are built from THRESHOLDS.
+
+  // ---------- Addressed draft + letter on the clipboard (Greg, 10/23/26) ----------
+  //
+  // The draft opens ADDRESSED AND EMPTY, and the letter goes to the
+  // clipboard for the sender to paste in.
+  //
+  // Why, after a year of putting the whole letter in the mailto: Outlook
+  // inserts a signature ABOVE a body that arrived with the message. Julie
+  // hit it twice -- once from the mailto itself, once using Insert >
+  // Signature with the cursor deliberately at the bottom -- and it went to
+  // the top both times. A body that arrives with the message is treated
+  // like quoted text, and signatures go above quoted text by design.
+  //
+  // An empty draft has no quoted block, so the client places the signature
+  // the way it does in any new message: at the bottom, cursor above it.
+  // Paste, and the letter lands where it belongs. Greg: "the thing we like
+  // is getting all the mailto and cc addresses correct so i think the
+  // solution is explicit instruction on how to open the mailto and paste
+  // the email from the clipboard then add your signature."
+  //
+  // EG specialists are contractors who sign with their own company's
+  // branding, so the signature has to come from their own mail client.
+  // Nothing the dashboard can put in a mailto body is ever going to be
+  // their logo.
+  //
+  // The copy happens BEFORE the navigation and without an await in front
+  // of it: Safari drops the user-gesture that permits a clipboard write if
+  // anything is awaited first.
+  const PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "") ? "⌘V" : "Ctrl+V";
+  const DRAFT_HINT = `Opens an addressed draft with the letter copied. Paste it in with ${PASTE_KEY}, above your signature, then send.`;
+
+  function bareAddressList(list) {
+    return String(list || "")
+      .split(",")
+      .map((x) => { const m = /<([^>]*)>/.exec(x); return (m ? m[1] : x).trim(); })
+      .filter(Boolean)
+      .join(",");
+  }
+
+  // Returns true when the letter reached the clipboard.
+  async function openAddressedDraft({ to, cc, subject, body }) {
+    const cleanTo = bareAddressList(to);
+    let copied = true;
+    try {
+      await navigator.clipboard.writeText(body || "");
+    } catch (e) {
+      copied = false;
+    }
+    const params = [];
+    const cleanCc = bareAddressList(cc);
+    if (cleanCc) params.push("cc=" + encodeURIComponent(cleanCc));
+    if (subject) params.push("subject=" + encodeURIComponent(subject));
+    // No body parameter. That omission is the whole point.
+    window.location.href = `mailto:${cleanTo}${params.length ? "?" + params.join("&") : ""}`;
+    return copied;
+  }
+
   function paLetterBody(paGreeting, engagementName, checkedKeys, rural, signature) {
     // Rita's original is a two-column table, which Outlook renders from HTML.
     // A mailto: body is plain text, and padded columns only line up in a
@@ -3384,14 +3441,15 @@ Have a great day!!${signature ? "\n\n" + signature : ""}`;
     box.innerHTML = `
       <h4>Next step — tell the Program Administrator this applicant has been vetted</h4>
       <p class="desc">${paDesc}</p>
+      <p class="desc" style="margin:-4px 0 12px;">${escapeHtml(DRAFT_HINT)}</p>
       ${PRE_GO_LIVE ? `<p class="desc" style="color:var(--danger-dark); font-weight:600; margin:-4px 0 12px;">Pre-go-live: this letter is marked TEST on the subject, the To and CC lines, and the first line of the message.</p>` : ""}
       <div class="pa-field"><label for="pa-to">To</label><input type="text" id="pa-to" value="${escapeHtml(markTest(pas.map((r) => r.email).join(", ")))}" /></div>
       <div class="pa-field"><label for="pa-cc">CC</label><input type="text" id="pa-cc" value="${escapeHtml(markTest(ccEmails.join(", ")))}" /></div>
       <div class="pa-field"><label for="pa-subject">Subject</label><input type="text" id="pa-subject" value="${escapeHtml(`${PRE_GO_LIVE ? TEST_SUBJECT_PREFIX : ""}${partner && partner.code ? `(${partner.code}) ` : ""}${a.company_name} — Vetted by NCEG`)}" /></div>
       <div class="pa-field"><label for="pa-body">Message</label><textarea id="pa-body" spellcheck="true"></textarea></div>
       <div class="pa-actions">
-        <button type="button" class="btn-primary" id="pa-mailto">Open in email app</button>
-        <button type="button" class="btn-secondary" id="pa-copy">Copy email</button>
+        <button type="button" class="btn-primary" id="pa-mailto">Open draft &amp; copy letter</button>
+        <button type="button" class="btn-secondary" id="pa-copy">Copy letter only</button>
         <span class="spacer"></span>
         <button type="button" class="btn-secondary" id="pa-close">Close</button>
       </div>`;
@@ -3408,17 +3466,19 @@ Have a great day!!${signature ? "\n\n" + signature : ""}`;
       await rosterSignature(a.approved_by || (currentUser && currentUser.id)));
     box.scrollIntoView({ behavior: "smooth", block: "center" });
 
-    $("pa-mailto").addEventListener("click", () => {
-      // bareAddresses, not a plain split: while PRE_GO_LIVE marks the
-      // fields "TEST <someone@example.org>", a mailto: must still carry
-      // the bare address. The TEST marking rides in the subject and the
-      // first line of the body on this path.
-      const params = [];
-      const cc = bareAddresses($("pa-cc").value);
-      if (cc) params.push("cc=" + encodeURIComponent(cc));
-      params.push("subject=" + encodeURIComponent($("pa-subject").value));
-      params.push("body=" + encodeURIComponent($("pa-body").value));
-      window.location.href = `mailto:${bareAddresses($("pa-to").value)}?${params.join("&")}`;
+    $("pa-mailto").addEventListener("click", async () => {
+      // The addresses still travel in the mailto -- bare, because a
+      // mailto needs a bare addr-spec even while PRE_GO_LIVE writes the
+      // fields as "TEST <someone@example.org>". The letter itself goes to
+      // the clipboard instead of into the body; openAddressedDraft says
+      // why.
+      const copied = await openAddressedDraft({
+        to: $("pa-to").value, cc: $("pa-cc").value,
+        subject: $("pa-subject").value, body: $("pa-body").value,
+      });
+      showBanner(copied
+        ? `Draft opening, letter copied \u2014 paste it in with ${PASTE_KEY} above your signature.`
+        : "Draft opening, but the letter could not be copied \u2014 use Copy letter only.", copied ? "success" : "error");
     });
 
     $("pa-close").addEventListener("click", () => { const el = document.getElementById("pa-letter"); if (el) el.remove(); });

@@ -2390,6 +2390,63 @@
       .join("\n");
   }
 
+
+  // ---------- Addressed draft + letter on the clipboard (Greg, 10/23/26) ----------
+  //
+  // The draft opens ADDRESSED AND EMPTY, and the letter goes to the
+  // clipboard for the sender to paste in.
+  //
+  // Why, after a year of putting the whole letter in the mailto: Outlook
+  // inserts a signature ABOVE a body that arrived with the message. Julie
+  // hit it twice -- once from the mailto itself, once using Insert >
+  // Signature with the cursor deliberately at the bottom -- and it went to
+  // the top both times. A body that arrives with the message is treated
+  // like quoted text, and signatures go above quoted text by design.
+  //
+  // An empty draft has no quoted block, so the client places the signature
+  // the way it does in any new message: at the bottom, cursor above it.
+  // Paste, and the letter lands where it belongs. Greg: "the thing we like
+  // is getting all the mailto and cc addresses correct so i think the
+  // solution is explicit instruction on how to open the mailto and paste
+  // the email from the clipboard then add your signature."
+  //
+  // EG specialists are contractors who sign with their own company's
+  // branding, so the signature has to come from their own mail client.
+  // Nothing the dashboard can put in a mailto body is ever going to be
+  // their logo.
+  //
+  // The copy happens BEFORE the navigation and without an await in front
+  // of it: Safari drops the user-gesture that permits a clipboard write if
+  // anything is awaited first.
+  const PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "") ? "⌘V" : "Ctrl+V";
+  const DRAFT_HINT = `Opens an addressed draft with the letter copied. Paste it in with ${PASTE_KEY}, above your signature, then send.`;
+
+  function bareAddressList(list) {
+    return String(list || "")
+      .split(",")
+      .map((x) => { const m = /<([^>]*)>/.exec(x); return (m ? m[1] : x).trim(); })
+      .filter(Boolean)
+      .join(",");
+  }
+
+  // Returns true when the letter reached the clipboard.
+  async function openAddressedDraft({ to, cc, subject, body }) {
+    const cleanTo = bareAddressList(to);
+    let copied = true;
+    try {
+      await navigator.clipboard.writeText(body || "");
+    } catch (e) {
+      copied = false;
+    }
+    const params = [];
+    const cleanCc = bareAddressList(cc);
+    if (cleanCc) params.push("cc=" + encodeURIComponent(cleanCc));
+    if (subject) params.push("subject=" + encodeURIComponent(subject));
+    // No body parameter. That omission is the whole point.
+    window.location.href = `mailto:${cleanTo}${params.length ? "?" + params.join("&") : ""}`;
+    return copied;
+  }
+
   function researchEmailBody(q, specialistName, specialtyLabel, teamLeadName, companyName, greet, signature) {
     const n = q.question_number;
     const mine = n ? `Question ${n}` : "one of the questions";
@@ -2478,7 +2535,7 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
     // Everything the specialist has to do before this is sendable, said once
     // rather than discovered after the fact.
     const notes = [];
-    notes.push('<span class="tl-mailwarn">Replace the overview line, and make your own question red</span> once the draft is in your email — a draft cannot carry colour on its way there.');
+    notes.push(`<span class="tl-mailwarn">Replace the overview line, and make your own question red</span> once the letter is in your email. ${DRAFT_HINT}`);
     if (!who) notes.push("This task has nobody assigned, so the letter says [your name]. Assign it above, or type your name in.");
     else if (currentUser && who.userId !== currentUser.id) notes.push(`This is written as ${escapeHtml(who.name)}, who holds the task — it will send from your account, not theirs.`);
     if (!lead) notes.push("No Team Lead is assigned to this engagement, so the closing line says \"your Team Lead\" rather than a name.");
@@ -2501,16 +2558,19 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
       .join(",");
   }
 
-  function sendResearchEmail(questionId) {
-    const to = bareAddresses($(`tl-mail-to-${questionId}`).value);
-    if (!to) { showBanner("Add at least one address on the To line first.", "error"); return; }
-    const params = [];
-    const cc = bareAddresses($(`tl-mail-cc-${questionId}`).value);
-    if (cc) params.push("cc=" + encodeURIComponent(cc));
-    params.push("subject=" + encodeURIComponent($(`tl-mail-subject-${questionId}`).value));
-    params.push("body=" + encodeURIComponent($(`tl-mail-body-${questionId}`).value));
-    window.location.href = `mailto:${to}?${params.join("&")}`;
-    showBanner("Your email app is opening with the letter in it — replace the overview line and make your question red before you send.", "success");
+  async function sendResearchEmail(questionId) {
+    if (!bareAddressList($(`tl-mail-to-${questionId}`).value)) {
+      showBanner("Add at least one address on the To line first.", "error"); return;
+    }
+    const copied = await openAddressedDraft({
+      to: $(`tl-mail-to-${questionId}`).value,
+      cc: $(`tl-mail-cc-${questionId}`).value,
+      subject: $(`tl-mail-subject-${questionId}`).value,
+      body: $(`tl-mail-body-${questionId}`).value,
+    });
+    showBanner(copied
+      ? `Draft opening, letter copied \u2014 paste it in with ${PASTE_KEY} above your signature, then replace the overview line.`
+      : "Draft opening, but the letter could not be copied \u2014 use Copy letter only.", copied ? "success" : "error");
   }
 
   async function copyResearchEmail(questionId, btn) {
