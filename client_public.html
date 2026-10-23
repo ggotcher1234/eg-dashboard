@@ -57,14 +57,32 @@
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 22px 26px; margin-bottom: 16px; }
 
-  /* A label, set like one (Greg, 10/23/26: "something seems weird with the
-     rest of the header fonts and sizes"). At 12px bold green it was the
-     second-loudest thing in the card and the one line that is identical on
-     every client's dashboard -- so it competed with the Program name, which
-     is the only unique thing on that top line. Matched to the PROGRAM label
-     instead: same size, weight, tracking and grey. All the green in the
-     header is now spent on the program name. */
-  .dashboard-kicker { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+  /* A masthead, not a kicker (Greg, 10/23/26). Two rounds got here:
+     first I demoted this line to a small grey label, and Greg pushed back --
+     "it seems to me like the most important information in the header is
+     Economic Gardening Engagement Dashboard. After all, that is what the
+     entire app is about. the program sponsor is larger than the EGDB
+     heading." He was right: I had left the sponsor at 12.5px above a 10.5px
+     product name, which is backwards whichever way you rank the two.
+
+     Rather than win it back with font size, the line gets masthead
+     treatment: first in the card, its own band, a rule under it saying
+     everything below belongs to it. A masthead leads a page without being
+     set larger than the headline -- the company name stays the biggest
+     thing on the card, which is right, because that is what tells the
+     client whose dashboard this is.
+
+     It also gets the sponsor out of the client's name block, where it had
+     been sitting as a second column competing with it. */
+  .masthead {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 18px; flex-wrap: wrap;
+    padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--border);
+  }
+  .mh-app {
+    font-size: 12.5px; font-weight: 700; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--accent-dark);
+  }
   /* Header card, reworked 10/23/26 after Greg asked what a designer would
      do with it. Six things, and the order below is the order they matter:
 
@@ -94,28 +112,26 @@
   .company-address { font-size: 13px; color: var(--text); margin-top: 4px; }
 
   /* The Program had been in the footer only, which on a client dashboard is
-     the least-read place on the page. Here it balances the empty right side
-     and tells the client who sponsored them. Label and name share a line
-     (Greg, 10/23/26), baseline-aligned so the small uppercase label sits on
-     the same footing as the name rather than against its cap height. */
-  /* No padding-top any more: it was holding this level with the old 12px
-     kicker by eye. Both labels are 10.5px now, so they share a baseline on
-     their own. */
-  .company-program {
-    flex: 0 1 auto;
-    display: flex; align-items: baseline; justify-content: flex-end; gap: 8px;
+     the least-read place on the page. In the masthead it holds the other
+     end of the band and tells the client who sponsored them.
+
+     Greg (10/23/26): "why is Program so small next to the spelled oout
+     program name. shouldn't they be the same size" -- so they are. The two
+     are still told apart, but on weight and colour rather than size: the
+     label is regular-weight grey, the name is bold navy. One channel of
+     difference is enough, and dropping the size difference is what stops
+     the label reading as a footnote to its own value.
+
+     Navy for the name, green for the product: the brand colour belongs to
+     the dashboard, not to the sponsor. Uppercase with tracking because the
+     name arrives from the database in capitals and capitals set solid read
+     cramped. */
+  .mh-prog {
+    font-size: 12.5px; letter-spacing: 0.09em; text-transform: uppercase;
+    line-height: 1.35;
   }
-  .company-program .pl {
-    font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--muted); white-space: nowrap; flex: 0 0 auto;
-  }
-  /* Tracking, because the name arrives from the database in capitals and
-     capitals set solid always read cramped. 600 -> 700 keeps it from going
-     weak at the smaller size. */
-  .company-program .pn { font-size: 12.5px; font-weight: 700; letter-spacing: 0.055em; color: var(--accent-dark); line-height: 1.35; }
-  @media (max-width: 620px) {
-    .company-program { width: 100%; justify-content: flex-start; padding-top: 0; margin-top: 4px; }
-  }
+  .mh-prog .pl { font-weight: 400; color: var(--muted); }
+  .mh-prog .pn { font-weight: 700; color: var(--navy); margin-left: 4px; }
   /* "Updated:" under the address (Greg, 9/8/26) -- a quieter line than the
      address above it, since it is a freshness note rather than information
      about the company. */
@@ -531,19 +547,21 @@
 
   <main>
     <div class="card">
+      <div class="masthead">
+        <div class="mh-app">Economic Gardening Engagement Dashboard</div>
+        <div class="mh-prog hidden" id="company-program">
+          <span class="pl">Program</span>
+          <span class="pn" id="company-program-name"></span>
+        </div>
+      </div>
       <div class="company-top">
         <div class="company-logo hidden" id="company-logo-wrap"><img id="company-logo" alt="" /></div>
         <div class="company-main">
           <div class="company-ident">
-            <div class="dashboard-kicker">Economic Gardening Engagement Dashboard</div>
             <h2 class="company-name" id="company-name"></h2>
             <div class="company-address" id="company-address"></div>
             <div class="company-updated hidden" id="company-updated"></div>
             <div class="company-links hidden" id="company-links"></div>
-          </div>
-          <div class="company-program hidden" id="company-program">
-            <div class="pl">Program</div>
-            <div class="pn" id="company-program-name"></div>
           </div>
         </div>
       </div>
