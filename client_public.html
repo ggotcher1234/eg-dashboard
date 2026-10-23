@@ -343,7 +343,7 @@
      which reads as broken rather than as "there is more below". 300 shows
      four comfortably. The fixed height and the internal scroll are both kept
      deliberately: they are what keeps the four boxes level in the row. */
-  .research-card .rc-body { padding: 12px 14px; height: 300px; overflow-y: auto; }
+  .research-card .rc-body { padding: 12px 11px; height: 300px; overflow-y: auto; }
   .research-card .rc-empty { color: var(--muted); font-size: 12.5px; font-style: italic; }
   /* The questions, when an engagement opts into showing them: quieter than
      the document links they sit above, since the files are what a client
@@ -367,7 +367,7 @@
   .rc-researcher:last-child { margin-bottom: 0; }
   /* The files answering the question directly above them (Greg, 9/19/26) --
      indented so the pairing is visible at a glance. */
-  .rc-question-docs { margin: 6px 0 10px 12px; }
+  .rc-question-docs { margin: 5px 0 0; }
   .rc-question-docs:last-child { margin-bottom: 0; }
   /* ---------- Click-to-read question and summary (Greg, 10/23/26) ----------
      "We want to make the questions mandatory now but in a dropdown or popup.
@@ -385,22 +385,33 @@
      The Summary row is absent, not greyed, until a specialist has written
      one. A client should not be shown an empty promise on every question
      that is still in progress. */
-  .rc-item { margin-bottom: 12px; }
+  /* Greg (10/23/26): "modify the formatting to get more text per line.
+     wider margins ... smaller font ... remove the dropdown arrow as it's
+     obvious it's a dropdown."
+
+     The arrow cost more than itself: the body text was indented 24px to
+     line up past it. Gone, the paragraph starts at the same left edge as
+     its heading and the column gains that indent plus the card's own
+     padding, which is what actually buys characters per line. The box
+     stays -- with the arrow gone it is the only thing left saying these
+     rows can be clicked. */
+  .rc-item { margin-bottom: 15px; }
   .rc-item:last-child { margin-bottom: 0; }
-  .rc-disclose { border: 1px solid var(--border); border-radius: 7px; overflow: hidden; margin-bottom: 5px; background: #fff; }
+  .rc-disclose { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 4px; background: #fff; }
   .rc-disclose:last-child { margin-bottom: 0; }
   .rc-disclose > summary {
-    list-style: none; cursor: pointer; padding: 7px 10px;
-    font-size: 12.5px; font-weight: 700; color: var(--text);
-    display: flex; align-items: center; gap: 7px;
+    list-style: none; cursor: pointer; padding: 6px 9px;
+    font-size: 12px; font-weight: 700; color: var(--text);
   }
   .rc-disclose > summary::-webkit-details-marker { display: none; }
+  .rc-disclose > summary::marker { content: ""; }
   .rc-disclose > summary:hover { background: #f5f7f4; }
-  .rc-disclose .rc-caret { flex: 0 0 auto; font-size: 10px; color: var(--muted); transition: transform 0.12s ease; }
-  .rc-disclose[open] .rc-caret { transform: rotate(90deg); }
-  .rc-disclose .rc-dtext { font-size: 12.5px; line-height: 1.5; color: var(--text); padding: 0 10px 10px 24px; white-space: pre-wrap; }
+  .rc-disclose .rc-dtext {
+    font-size: 12px; line-height: 1.5; color: var(--text);
+    padding: 0 9px 9px; white-space: pre-wrap; overflow-wrap: anywhere;
+  }
   .rc-disclose.is-summary > summary { color: var(--accent-dark); }
-  .rc-item .rc-researcher { margin: 2px 0 6px 10px; }
+  .rc-item .rc-researcher { margin: 3px 0 5px 2px; }
 
   .rc-question-block { margin-bottom: 12px; }
   .rc-question-block:last-child { margin-bottom: 0; }
@@ -1382,7 +1393,7 @@
   function discloseRow(label, body, cls) {
     return `
       <details class="rc-disclose${cls ? " " + cls : ""}">
-        <summary><span class="rc-caret">&#9656;</span><span>${escapeHtml(label)}</span></summary>
+        <summary>${escapeHtml(label)}</summary>
         <div class="rc-dtext">${escapeHtml(body)}</div>
       </details>`;
   }
@@ -1401,13 +1412,13 @@
     // rows arrive open rather than asking them to click through an archive.
     const open = expandAll ? " open" : "";
     const questionsHtml = questionEntries.map((e) => {
-      const n = e.number ? `${e.number}. ` : "";
+      const qLabel = e.number ? `Question ${e.number}` : "Question";
       const qText = stripTypedNumber(e.question.trim(), e.number);
       const summary = (e.summary || "").trim();
       return `
         <div class="rc-item">
-          ${discloseRow(`${n}Question`, qText).replace("<details ", `<details${open} `)}
-          ${summary ? discloseRow(`${n}Summary`, summary, "is-summary").replace("<details ", `<details${open} `) : ""}
+          ${discloseRow(qLabel, qText).replace("<details ", `<details${open} `)}
+          ${summary ? discloseRow("Summary", summary, "is-summary").replace("<details ", `<details${open} `) : ""}
           ${e.person ? `<div class="rc-researcher">Researched by ${escapeHtml(e.person)}</div>` : ""}
           ${e.documents && e.documents.length ? `<div class="rc-question-docs">${renderDocLinks(e.documents)}</div>` : ""}
         </div>`;
