@@ -764,6 +764,11 @@
      "this needs to have the same red instructions as we just put on
      the Scheduling letter ... on all the appropriate outbound
      customer emails." Grey, it read as boilerplate and nobody did it. */
+  /* The recipient moved off the button and into the form when the
+     buttons were standardised (Greg, 10/23/26: "be consistent on all
+     buttons across all corresponcance"). "Email to Rita" was the only
+     button in the app that named its recipient. */
+  .inv-to-line { font-size: 13.5px; color: var(--text); padding: 2px 0 1px; }
   .inv-draft-hint { font-size: 12.5px; color: var(--danger); line-height: 1.5; padding: 0 24px 2px; }
   .inv-actions .spacer { flex: 1; }
   .inv-status { font-size: 12.5px; color: var(--accent-dark); align-self: center; }
@@ -1098,16 +1103,21 @@
          copy anyone from here -- you had to send it and then forward it.
          Remembered between invoices like the rest of the letterhead. -->
     <div class="inv-field inv-cc-field">
+      <label>To</label>
+      <div class="inv-to-line" id="inv-to-line"></div>
+    </div>
+    <div class="inv-field inv-cc-field">
       <label for="inv-cc">CC <span style="text-transform:none; font-weight:400;">(optional)</span></label>
       <input type="text" id="inv-cc" placeholder="Separate several addresses with commas" />
     </div>
     <p class="inv-draft-hint" id="inv-draft-hint"></p>
     <div class="inv-actions">
-      <button type="button" class="btn-secondary" id="inv-copy">Copy for Outlook</button>
-      <button type="button" class="btn-secondary" id="inv-email-rita">Email to Rita</button>
+      <button type="button" class="btn-primary" id="inv-email-rita">Open draft &amp; copy letter</button>
+      <button type="button" class="btn-secondary" id="inv-copy">Copy letter only</button>
+      <button type="button" class="btn-secondary" id="inv-copy-rich">Copy for Outlook</button>
       <span class="inv-status" id="inv-status"></span>
       <div class="spacer"></div>
-      <button type="button" class="btn-primary" id="inv-done">Done</button>
+      <button type="button" class="btn-secondary" id="inv-done">Done</button>
     </div>
   </div>
 </div>
@@ -2815,10 +2825,16 @@
   async function lookupRitaEmail() {
     invRitaEmail = "";
     $("inv-email-rita").disabled = true;
+    $("inv-to-line").textContent = "Looking up\u2026";
     const { data, error } = await sb.from("users").select("id, full_name, email").ilike("full_name", "Rita%");
     if (!error && data && data.length === 1 && data[0].email) {
       invRitaEmail = data[0].email;
       $("inv-email-rita").disabled = false;
+      $("inv-to-line").textContent = `${data[0].full_name} <${data[0].email}>`;
+    } else {
+      // Says why the button is dead instead of leaving it greyed out with
+      // no explanation -- which is what the old "Email to Rita" label did.
+      $("inv-to-line").textContent = "Couldn't find Rita's account, so the draft button is off. Use Copy letter only.";
     }
   }
 
@@ -2919,6 +2935,17 @@
   }
 
   $("inv-copy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(buildInvoicePlainText());
+      $("inv-status").classList.remove("error");
+      $("inv-status").textContent = "Invoice copied.";
+    } catch (err) {
+      $("inv-status").classList.add("error");
+      $("inv-status").textContent = "Couldn't copy: " + err.message;
+    }
+  });
+
+  $("inv-copy-rich").addEventListener("click", async () => {
     const text = buildInvoicePlainText();
     const html = buildInvoiceHtml();
     try {
