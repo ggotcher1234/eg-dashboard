@@ -35,6 +35,20 @@
   .brand-badge { background: #fff; border-radius: 8px; padding: 6px 12px; display: flex; align-items: center; flex-shrink: 0; }
   .brand-badge img { height: 30px; display: block; }
   header h1 { font-size: 19px; margin: 0; font-weight: 700; }
+
+  /* Greg (10/23/26): the dashboard opens in the same tab now, so a signed-in
+     member of staff needs a way back. It appears ONLY for a real Supabase
+     session -- a client has none, and this is the single piece of NCEG
+     navigation that would otherwise sit on a page meant for them. Checked
+     against the session rather than ?preview=1, which is a URL anyone could
+     type. */
+  .staff-back {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12.5px; font-weight: 600; color: #cfe0cf; text-decoration: none;
+    border: 1px solid rgba(255,255,255,0.28); border-radius: 6px; padding: 5px 11px;
+    white-space: nowrap; transition: background .12s ease, color .12s ease;
+  }
+  .staff-back:hover { background: rgba(255,255,255,0.12); color: #fff; }
   .header-right { text-align: right; font-size: 12px; color: #a9bdd2; }
   .header-right strong { color: #fff; }
 
@@ -415,7 +429,7 @@
      expanded, with none of the click-to-open chrome. */
   @media print {
     body { background: #fff; }
-    #print-btn, .ab-chevron { display: none !important; }
+    #print-btn, #staff-back, .ab-chevron { display: none !important; }
     .action-bar { cursor: default; }
     .action-body { display: block !important; }
     .card, .research-card, .action-bar, .action-body { break-inside: avoid; }
@@ -449,6 +463,7 @@
         <span id="status-line"></span><br />
         <span id="archive-badge-wrap" class="hidden"><span class="archive-badge" id="archive-badge">Final Engagement Archive</span></span>
       </div>
+      <a class="staff-back hidden" id="staff-back" href="index.html">&#8592; Back to EGDB</a>
       <button type="button" id="print-btn">&#128190; Download / Print</button>
     </div>
   </header>
@@ -1434,6 +1449,41 @@
   }
 
   $("print-btn").addEventListener("click", () => window.print());
+
+  // The way back, for staff only.
+  //
+  // Greg (10/23/26) moved every in-app route into this dashboard to the same
+  // tab, which takes away the old way home: closing the tab you came from.
+  // So a signed-in viewer gets a link back, and a client -- who has no
+  // Supabase session and never will -- gets nothing. Checked against the
+  // session, not ?preview=1: that is a URL parameter anyone could type, and
+  // it should not be what decides whether a client is shown the door into
+  // NCEG's side of the app.
+  //
+  // Back goes to the page they came from when that was this same site, so a
+  // Team Lead lands on the engagement they were reading rather than at the
+  // top of the Engagements list. Opened cold, it falls back to index.html,
+  // which is the href already on the anchor.
+  async function showStaffBackLink() {
+    const el = $("staff-back");
+    if (!el) return;
+    let signedIn = false;
+    try {
+      const { data } = await sb.auth.getSession();
+      signedIn = !!(data && data.session);
+    } catch (e) { /* treat an unreadable session as not signed in */ }
+    if (!signedIn) return;
+
+    let cameFromApp = false;
+    try {
+      cameFromApp = !!document.referrer && new URL(document.referrer).origin === location.origin;
+    } catch (e) { /* malformed referrer -- fall through to index.html */ }
+    if (cameFromApp && history.length > 1) {
+      el.addEventListener("click", (e) => { e.preventDefault(); history.back(); });
+    }
+    el.classList.remove("hidden");
+  }
+  showStaffBackLink();
 
   // Company Info's bar is static markup (not regenerated per row like the
   // ACTION_BAR_DEFS ones), so it's wired once here instead of inside
