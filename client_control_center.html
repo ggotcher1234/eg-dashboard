@@ -1127,10 +1127,11 @@
                      right of Spent Hours, under a header that stopped short
                      (Greg, 9/18/26). -->
                 <colgroup id="tw-colgroup">
-                  <col style="width:18%;">
-                  <col style="width:56%;">
+                  <col style="width:17%;">
+                  <col style="width:43%;">
                   <col style="width:13%;">
                   <col style="width:13%;">
+                  <col style="width:14%;">
                   <col style="width:0;">
                 </colgroup>
                 <thead>
@@ -1139,6 +1140,16 @@
                     <th>Person</th>
                     <th style="text-align:right;">Allotted Hours</th>
                     <th>Spent Hours</th>
+                    <!-- Greg (10/23/26): "add a column on the far right side
+                         for Remaining Hours. I know we have it in several
+                         other places but Chris doesn't like to have to push
+                         buttons to see things and this is a reversal of his
+                         previous view to not have this column." It is
+                         allotted minus spent, nothing new -- the same figure
+                         the billing history panel shows, on screen without
+                         opening anything. The Person column gives up the
+                         width, having been the widest on the table at 56%. -->
+                    <th style="text-align:right;">Remaining Hours</th>
                     <th id="tw-actions-header" class="hidden"></th>
                   </tr>
                 </thead>
@@ -1156,6 +1167,7 @@
                     <td colspan="2" style="font-weight:700;">Totals <span id="tw-total-left" class="totals-left"></span></td>
                     <td style="text-align:right; font-weight:700;" id="tw-total-planned">0</td>
                     <td style="text-align:right; font-weight:700;" id="tw-total-used">0</td>
+                    <td style="text-align:right; font-weight:700;" id="tw-total-remaining">0</td>
                     <td id="tw-total-actions"></td>
                   </tr>
                 </tfoot>
@@ -2717,10 +2729,10 @@
       showBanner("Open an engagement first to export its team & hours.", "error");
       return;
     }
-    const rows = [["Work Area", "Person", "Allotted Hours", "Spent Hours"]];
+    const rows = [["Work Area", "Person", "Allotted Hours", "Spent Hours", "Remaining Hours"]];
     for (const r of currentAssignments) {
       const person = usersById()[r.user_id];
-      rows.push([SPECIALTY_LABELS[r.specialty_type] || r.specialty_type, person ? person.full_name : "Not assigned", r.hours_allotted, r.hoursSpent]);
+      rows.push([SPECIALTY_LABELS[r.specialty_type] || r.specialty_type, person ? person.full_name : "Not assigned", r.hours_allotted, r.hoursSpent, round2(Number(r.hours_allotted) - Number(r.hoursSpent))]);
     }
     downloadCsv(`${activeClient.name.replace(/[^a-z0-9]+/gi, "-")}-team-hours-${new Date().toISOString().slice(0, 10)}.csv`, rows);
   });
@@ -3013,7 +3025,7 @@
     // (Greg, 9/18/26: "the right column lines are not right"). The <col> stays
     // at zero rather than being deleted so the header, body and totals rows
     // keep matching cell counts.
-    const widths = [18, 56, 13, 13, 0];
+    const widths = [17, 43, 13, 13, 14, 0];
     [...$("tw-colgroup").children].forEach((col, i) => {
       col.style.width = widths[i] ? widths[i] + "%" : "0";
     });
@@ -3037,6 +3049,7 @@
       tr.innerHTML = `
         <td id="tw-add-area-cell"><button type="button" class="add-specialist-link" id="tw-add-specialist">Add Specialist</button></td>
         <td><select class="row-select" id="tw-add-person" aria-label="Person for the new work area">${consultantOptionsHtml(null, null)}</select></td>
+        <td></td>
         <td></td>
         <td></td>
       `;
@@ -3096,6 +3109,11 @@
         ? `<button type="button" class="spent-link" data-log="${r.id}" title="Log hours">${r.hoursSpent}</button>`
         : `<span>${r.hoursSpent}</span>`;
       const usedCell = `<div class="spent-cell">${usedDisplay}</div>`;
+      // Allotted minus spent. A negative is over budget and says so in red
+      // rather than sitting there as a quiet minus sign; a sunk-cost row
+      // always reads 0, because its spent figure IS its allotment.
+      const remaining = round2(Number(r.hours_allotted) - Number(r.hoursSpent));
+      const remainingCell = `<span${remaining < 0 ? ' style="color:var(--danger); font-weight:700;"' : ""}>${trimHours(remaining)}</span>`;
       const areaCell = canViewHistory
         ? `<button type="button" class="area-link" data-history="${r.id}" title="View billing history">${escapeHtml(label)}</button>`
         : escapeHtml(label);
@@ -3104,6 +3122,7 @@
         <td>${personCell}</td>
         <td style="text-align:right;"><input type="number" class="row-input row-hours-input" min="0" step="0.5" value="${Number(r.hours_allotted)}" ${canManage ? "" : "disabled"} /></td>
         <td style="white-space:nowrap;">${usedCell}</td>
+        <td style="text-align:right; white-space:nowrap;">${remainingCell}</td>
       `;
       tbody.appendChild(tr);
     }
@@ -3210,6 +3229,10 @@
     $("tw-total-planned").textContent = trimHours(totalPlanned);
     const totalUsed = currentAssignments.reduce((sum, r) => sum + Number(r.hoursSpent), 0);
     $("tw-total-used").textContent = trimHours(totalUsed);
+    const totalRemaining = round2(totalPlanned - totalUsed);
+    const remainingEl = $("tw-total-remaining");
+    remainingEl.textContent = trimHours(totalRemaining);
+    remainingEl.style.color = totalRemaining < 0 ? "var(--danger)" : "";
     renderTotalsNote(totalPlanned);
   }
 
