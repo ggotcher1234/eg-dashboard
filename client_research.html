@@ -179,14 +179,6 @@
   .rq-question-group .rq-link-form { margin-left: 22px; border-left: 2px solid var(--border); padding-left: 14px; }
   .rq-question-group .rq-question-docs:empty { display: none; }
   .rq-question-group .rq-question-add { padding-top: 6px; padding-bottom: 2px; }
-  .show-questions-toggle {
-    display: flex; align-items: flex-start; gap: 9px; margin: 0 0 16px; cursor: pointer;
-    font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35;
-    border: 1px solid var(--border); border-radius: 10px; padding: 10px 13px; background: var(--note-bg, #eaeff4);
-  }
-  .show-questions-toggle input { margin: 2px 0 0; width: auto; flex-shrink: 0; }
-  .show-questions-toggle[hidden] { display: none; }
-  .show-questions-hint { display: block; font-size: 11.5px; font-weight: 400; color: var(--muted); margin-top: 2px; }
 
   /* Task list (153, redesigned 10/8/26).
      The first cut laid the row out on a CSS grid and gave it a narrow-width
@@ -314,6 +306,20 @@
   .tl-linkform .tl-field { flex: 1 1 200px; }
   .tl-linkform input { width: 100%; max-width: none; }
   .tl-del { margin-left: auto; }
+
+  /* Greg (10/23/26): "add a Summary box in each task assignment so the
+     specialist can write a paragraph summary about the research." It is
+     client-facing -- it appears on their dashboard under the question --
+     so it is a plain bordered field rather than the borderless
+     type-over-it box the question uses, and the hint above says who reads
+     it. Saved on blur like the question. */
+  .tl-summary {
+    width: 100%; box-sizing: border-box; font-family: inherit; font-size: 13px;
+    line-height: 1.55; color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; background: #fff; resize: vertical; min-height: 92px;
+  }
+  .tl-summary:focus { border-color: var(--accent); outline: none; }
+  .tl-subhint { font-size: 11.5px; color: var(--muted); margin: -4px 0 6px; line-height: 1.5; }
 
   /* ---------- Research email composer (Greg, 10/20/26) ---------- */
   .tl-mailform { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
@@ -854,13 +860,13 @@
              It sits here, above the topics, rather than in the page header:
              embed mode hides #sec-overview entirely, and embedded in the
              workspace is where this page is actually used. -->
-        <label class="show-questions-toggle" id="show-questions-wrap" hidden>
-          <input type="checkbox" id="show-questions" />
-          <span>
-            Show these questions on the client's dashboard
-            <span class="show-questions-hint">Off by default. The research files show either way.</span>
-          </span>
-        </label>
+        <!-- Greg (10/23/26): "we want to make the questions mandatory now."
+             The tickbox that used to live here chose whether this
+             engagement's questions appeared on the client dashboard; they
+             always do now, each with the specialist's summary and its own
+             files beneath it, so a switch promising otherwise would only
+             mislead. clients.show_research_questions is left in the
+             database, no longer read by anything. -->
         <!-- Greg (10/8/26): "let's go forward with a task based system only.
              we can remove the question about tasks and remove the boxes we
              were using to attach documents to questions and just use the
@@ -1277,34 +1283,6 @@
     }
   }
 
-  $("show-questions").addEventListener("change", async () => {
-    if (!currentClient) return;
-    const box = $("show-questions");
-    const next = box.checked;
-    box.disabled = true;
-    const { data, error } = await sb
-      .from("clients")
-      .update({ show_research_questions: next })
-      .eq("id", currentClient.id)
-      .select("id, show_research_questions");
-    box.disabled = false;
-    if (error) {
-      box.checked = !next;
-      showBanner("Couldn't save that: " + error.message, "error");
-      return;
-    }
-    if (!data || !data.length) {
-      box.checked = !next;
-      showBanner(await teamLeadRefusalMessage(), "error");
-      return;
-    }
-    currentClient.show_research_questions = data[0].show_research_questions;
-    box.checked = !!data[0].show_research_questions;
-    showBanner(box.checked
-      ? "The research questions now show on this client's dashboard."
-      : "The research questions are hidden from this client's dashboard.", "success");
-  });
-
   wireHideDoneToggle();
 
   async function loadClient(clientId) {
@@ -1315,14 +1293,6 @@
       return;
     }
     currentClient = client;
-
-    // The switch only makes sense to whoever can change the engagement, and
-    // only once we know its current setting (Greg, 9/19/26).
-    const sqWrap = $("show-questions-wrap");
-    if (sqWrap) {
-      sqWrap.hidden = false;
-      $("show-questions").checked = !!client.show_research_questions;
-    }
 
     $("research-view").classList.remove("hidden");
     $("p-name").textContent = client.name;
@@ -2200,7 +2170,12 @@
               ? `<div class="tl-refnote">&#128206;&#8599; Also answered by the research under <button type="button" class="tl-reflink" data-task-goto="${ref.target.id}">Task ${ref.number}</button>.</div>`
               : `<div class="tl-refnote tl-refnote-dead">This task points at Task ${ref.number}, which does not exist on this engagement.</div>`;
           })()}
-          <div class="tl-sub">Research filed against this question</div>
+          <div class="tl-sub">Summary of what you found</div>
+          <div class="tl-subhint">The client reads this on their dashboard, under the question and above the files. A paragraph is right.</div>
+          <textarea class="tl-summary" data-task-summary="${q.id}"
+                    placeholder="What did the research find? Write it for the client, not for the team.">${escapeHtml(q.summary || "")}</textarea>
+
+          <div class="tl-sub" style="margin-top:14px;">Research filed against this question</div>
           <div id="task-docs-${q.id}"></div>
           <div class="tl-actions">
             <button type="button" class="btn-secondary btn-sm" data-task-add-doc="${q.id}" data-area="${q.research_area}">+ Document</button>
@@ -2600,6 +2575,15 @@ ${specialtyLabel} — National Center for Economic Gardening`;
         const value = ta.value.trim();
         if (value === original) return;
         await saveTaskField(ta.dataset.taskText, { question: value || null });
+      });
+    });
+
+    scope.querySelectorAll("[data-task-summary]").forEach((ta) => {
+      const original = ta.value;
+      ta.addEventListener("blur", async () => {
+        const value = ta.value.trim();
+        if (value === original) return;
+        await saveTaskField(ta.dataset.taskSummary, { summary: value || null });
       });
     });
 
