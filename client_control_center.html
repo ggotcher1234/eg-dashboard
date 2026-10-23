@@ -264,9 +264,20 @@
      seems redundant." On the engagement you lead it repeated the Team Lead
      line directly above it, and for a specialist who isn't on the team the
      Team & Hours pane already spells out who can change what. */
-  /* Standing caption under the status pills. Greg (10/16): the Closed button
-     is the drop-dead control now, so the rule it enforces has to be readable
-     before someone presses it, not only in the error afterwards. */
+  /* The standing month-end caption is gone (Greg, 10/23/26): "i do not want
+     the comment about Engagement close dates in the instructions." It sat
+     directly above the embedded workflow pane, so from the Team Lead's seat
+     it read as the first line of whatever they had opened there -- a
+     Discovery Document card, an email composer -- rather than as a caption
+     on the status pills six lines up.
+
+     The rule is still enforced and still explained, at the moment it
+     matters: the locked Closed pill carries it as a tooltip, and pressing
+     it raises the banner with the next close date in it. Nothing is lost
+     except a sentence nobody had asked a question about yet. The styles
+     stay so this is a one-line revert.
+
+     Added 10/16 when the Closed button became the drop-dead control. */
   .cm-close-note { flex: 0 0 100%; order: 99; margin: 2px 0 0; padding-top: 9px;
                    border-top: 1px solid var(--border); font-size: 12.5px;
                    line-height: 1.5; color: var(--muted); }
@@ -2459,13 +2470,10 @@
     const toggle = $("cm-status-toggle");
     toggle.classList.remove("hidden");
 
-    // Only worth saying while there is still a close to come.
-    const note = $("cm-close-note");
-    const { isLastDay, label } = monthEndEastern();
-    note.classList.toggle("hidden", client.project_status === "closed");
-    note.innerHTML = isLastDay
-      ? `<strong>Today is the last day of the month</strong> \u2014 engagements can be closed now. Closing is the billing cut-off: it locks this engagement's hours.`
-      : `Engagements are closed on the last day of each month, next on <strong>${escapeHtml(label)}</strong>. That date is the billing cut-off, because closing locks the engagement's hours. If you need assistance, contact Rita.`;
+    // No standing caption any more -- see the note beside .cm-close-note.
+    // The rule reaches people through the locked pill's tooltip and the
+    // banner it raises when pressed.
+    $("cm-close-note").classList.add("hidden");
     const closeLocked = !mayCloseToday();
     toggle.innerHTML = PROJECT_STATUSES.map((s) => {
       const locked = s === "closed" && closeLocked && s !== client.project_status;
