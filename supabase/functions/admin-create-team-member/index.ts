@@ -345,48 +345,42 @@ Deno.serve(async (req: Request) => {
             to: [target.email],
             cc,
             subject: "Welcome to the NCEG Dashboard",
+            // Chris, via Greg (10/24/26), supplied this wording and shape:
+            // one opening line and then five numbered steps. It replaces
+            // eight paragraphs that had each been added for a good reason
+            // and together read as a wall. Everything the old version said
+            // survives as a step except the 24-hour warning -- see below.
+            //
+            // The ROSTER step is two bullets in Chris's draft, profile and
+            // specializations. Kept as two, because the second is the one
+            // with a consequence attached: a work area's Person dropdown
+            // offers only the people who ticked that work area, so an
+            // unticked profile is invisible to every Team Lead staffing an
+            // engagement.
             html: `
               <p>Hi ${escapeHtml(firstName)},</p>
-              <p>Welcome aboard &mdash; you have been added to the NCEG Dashboard, where we run our
+              <p>Welcome aboard &ndash; you have been added to the NCEG Dashboard, where we run our
                  Economic Gardening engagements. Your account is ready; you just need a password.</p>
-              <p><a href="${escapeHtml(actionLink)}">Set your password and sign in</a></p>
-              <p>That link gets you in the first time. It works once and expires in 24 hours.</p>
-              <!-- Greg (10/9/26): "give it it's own line with a label". The
-                   address was already here, but as the fifth paragraph of
-                   prose, where it reads as a remark rather than as the one
-                   thing to keep. A labelled block is the only part of this
-                   email anyone needs after the first sign-in.
-                   Inline styles only, and nothing an email client has to
-                   understand for the line to work: a client that drops the
-                   border and spacing still shows the label and the address
-                   on their own lines. -->
-              <p style="margin:18px 0; padding:12px 14px; border:1px solid #d6dcd3; border-left:4px solid #5c7248; border-radius:6px;">
-                <strong style="display:block; font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:#5c7248; margin-bottom:5px;">Bookmark this &mdash; it is where you sign in from now on</strong>
-                <a href="${escapeHtml(siteUrl)}" style="font-size:16px; font-weight:700;">${escapeHtml(siteUrl)}</a>
-              </p>
-              <p>You will sign in with this address: <strong>${escapeHtml(String(target.email))}</strong></p>
-              <!-- Greg (10/13/26): "the email ... should also include
-                   instructions that tell them to go to the Roster page and
-                   update their profile as soon as possible as only skills
-                   they select on that page show up for TL's to chose from."
-                   Since 10/13/26 a work area's Person dropdown offers only
-                   the people who ticked that work area, so an unticked
-                   profile is not merely incomplete -- it is invisible to
-                   every Team Lead staffing an engagement. That consequence
-                   is the whole reason anyone acts on this paragraph, so it
-                   is stated plainly rather than left as "keep your profile
-                   up to date". -->
-              <p style="margin:18px 0; padding:12px 14px; border:1px solid #d6dcd3; border-left:4px solid #a9740f; border-radius:6px;">
-                <strong style="display:block; font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:#a9740f; margin-bottom:5px;">Do this first</strong>
-                Open the <a href="${escapeHtml(siteUrl)}/team_directory.html">Roster</a> page, find your
-                name, and fill in your profile &mdash; above all the work areas you cover
-                (Market Research, Digital Marketing, GIS, Watering Holes, Team Lead).
-                When a Team Lead staffs an engagement, each work area only offers the people who
-                have ticked it, so until you do this no one can put you on a project.
-              </p>
-              <p>If the link has already expired by the time you get to it, no problem &mdash; go to
-                 <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a>, choose "Forgot your
-                 password?" and enter this address. It does exactly the same thing.</p>
+              <ol style="padding-left:20px; line-height:1.7;">
+                <li><a href="${escapeHtml(actionLink)}" style="font-weight:700;">Set your password</a></li>
+                <li>Bookmark this: <a href="${escapeHtml(siteUrl)}" style="font-weight:700;">${escapeHtml(siteUrl)}</a><br />
+                    It is where you sign in from now on.</li>
+                <li>Sign in with this email address: <strong>${escapeHtml(String(target.email))}</strong></li>
+                <li>Click the <a href="${escapeHtml(siteUrl)}/team_directory.html"><strong>ROSTER</strong></a> tab and fill in your profile.</li>
+                <li>Also check your specialization(s). Team leaders use this when picking their teams.</li>
+              </ol>
+              <!-- Chris: "We can delete the time limit for changing
+                   passwords." The limit is not ours to delete -- it is the
+                   project's Email OTP Expiration in Supabase Auth, which
+                   has a 24-hour ceiling and cannot be switched off. So the
+                   sentence naming a number is gone (it was claiming 24
+                   hours against a setting that may well be one), and what
+                   is left is the recovery itself, in one line. Nobody is
+                   locked out by an expired link; they just press Forgot
+                   your password. -->
+              <p style="font-size:13px; color:#5f6b78;">Link stopped working? Go to
+                 <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a>, choose &ldquo;Forgot your
+                 password?&rdquo; and enter this address &mdash; it does the same thing.</p>
               <p>Glad to have you with us.</p>
             `,
           }),
