@@ -264,20 +264,15 @@
      seems redundant." On the engagement you lead it repeated the Team Lead
      line directly above it, and for a specialist who isn't on the team the
      Team & Hours pane already spells out who can change what. */
-  /* The standing month-end caption is gone (Greg, 10/23/26): "i do not want
-     the comment about Engagement close dates in the instructions." It sat
-     directly above the embedded workflow pane, so from the Team Lead's seat
-     it read as the first line of whatever they had opened there -- a
-     Discovery Document card, an email composer -- rather than as a caption
-     on the status pills six lines up.
+  /* Standing caption under the status pills. Added 10/16 when the Closed
+     button became the drop-dead control; pulled on 10/23 when Greg found it
+     reading as the opening line of the embedded workflow pane below it
+     ("i do not want the comment about Engagement close dates in the
+     instructions"); restored 10/24 with the penalty in it rather than the
+     rule.
 
-     The rule is still enforced and still explained, at the moment it
-     matters: the locked Closed pill carries it as a tooltip, and pressing
-     it raises the banner with the next close date in it. Nothing is lost
-     except a sentence nobody had asked a question about yet. The styles
-     stay so this is a one-line revert.
-
-     Added 10/16 when the Closed button became the drop-dead control. */
+     It belongs to the pills above it, not the pane below, so it is worth
+     keeping an eye on whether it still reads that way as this card grows. */
   .cm-close-note { flex: 0 0 100%; order: 99; margin: 2px 0 0; padding-top: 9px;
                    border-top: 1px solid var(--border); font-size: 12.5px;
                    line-height: 1.5; color: var(--muted); }
@@ -2470,10 +2465,22 @@
     const toggle = $("cm-status-toggle");
     toggle.classList.remove("hidden");
 
-    // No standing caption any more -- see the note beside .cm-close-note.
-    // The rule reaches people through the locked pill's tooltip and the
-    // banner it raises when pressed.
-    $("cm-close-note").classList.add("hidden");
+    // Back, and saying the thing that actually costs money (Greg,
+    // 10/24/26): "make the note on this page header that engagements must
+    // be closed on the last day of the month or they will close the last
+    // day of the following month."
+    //
+    // The old wording explained the rule. This one explains the penalty for
+    // missing it, which is the part a Team Lead needs on the day: there is
+    // no closing an engagement on the 1st, so a missed window is a whole
+    // extra month of the engagement sitting open with its hours still
+    // editable.
+    const note = $("cm-close-note");
+    const { isLastDay, label } = monthEndEastern();
+    note.classList.toggle("hidden", client.project_status === "closed");
+    note.innerHTML = isLastDay
+      ? `<strong>Today is the last day of the month</strong> \u2014 close this engagement if it is finished. Miss today and it stays open, and billable, until the last day of next month.`
+      : `Engagements must be closed on the last day of the month, next on <strong>${escapeHtml(label)}</strong>. Miss it and this engagement stays open, and billable, until the last day of the following month. If you need assistance, contact Rita.`;
     const closeLocked = !mayCloseToday();
     toggle.innerHTML = PROJECT_STATUSES.map((s) => {
       const locked = s === "closed" && closeLocked && s !== client.project_status;
