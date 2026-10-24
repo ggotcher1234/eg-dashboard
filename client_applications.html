@@ -3361,21 +3361,21 @@ Have a great day!!${signature ? "\n\n" + signature : ""}`;
   // even when an Admin opens it, and the research email is the assigned
   // specialist's. Greg settled that on 10/23.
   //
-  // Returns "" when the person has turned it off, which is the setting for
-  // anyone whose own mail client already signs them -- Outlook and Gmail
-  // both add a signature to a mailto draft, and ours would sit above
-  // theirs. Falls back to name/title/phone off the profile when nobody has
-  // written one, so a letter is never left unsigned.
+  // NOT an email signature -- the letter's sign-off, which is why the
+  // custom-signature box came back out of the Roster on 10/24 and this
+  // reads only name/title/phone now. The draft opens empty and the letter
+  // is pasted above whatever signature the sender's own mail program put
+  // there, so a second typed block underneath made two signatures in one
+  // message. The closing line stays because it has to name whoever the
+  // letter is WRITTEN as, which is frequently not the sender.
   async function rosterSignature(userId) {
     if (!userId) return "";
     const { data } = await sb
       .from("users")
-      .select("full_name, title, phone, email_signature, use_dashboard_signature")
+      .select("full_name, title, phone")
       .eq("id", userId)
       .maybeSingle();
-    if (!data || data.use_dashboard_signature === false) return "";
-    const written = (data.email_signature || "").trim();
-    if (written) return written;
+    if (!data) return "";
     return [data.full_name, data.title, data.phone ? `Cell: ${data.phone}` : ""]
       .map((x) => String(x || "").trim())
       .filter(Boolean)
