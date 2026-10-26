@@ -89,6 +89,8 @@
   }
   .guide-hint { font-size: 12px; color: var(--muted); margin: 0 0 6px; line-height: 1.45; }
   .guide-hint:empty { display: none; }
+  #guide-hide { color: var(--muted); font-size: 15px; line-height: 1; }
+  #guide-show { font-size: 12px; color: var(--muted); }
   .rt-toolbar button.active { background: var(--navy); color: #fff; border-color: var(--navy); }
   .rt-editor { width: 100%; min-height: 300px; max-height: 60vh; overflow-y: auto;
                padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
@@ -313,9 +315,12 @@
             <button type="button" data-rt="italic" title="Italic"><em>I</em></button>
             <button type="button" data-rt="bullet" title="Bulleted list">&#8226;&nbsp;List</button>
             <button type="button" data-rt="number" title="Numbered list">1.&nbsp;List</button>
-            <span class="rt-sep"></span>
+            <span class="rt-sep" id="guide-sep"></span>
             <select id="guide-pick" aria-label="Question guide"></select>
-            <button type="button" id="guide-insert" title="Drop the questions in at the cursor">Insert guide</button>
+            <button type="button" id="guide-insert" title="Drop these questions in at the cursor">Insert</button>
+            <button type="button" id="guide-save" title="Save what is in the notes below as your own question set">Save as mine</button>
+            <button type="button" id="guide-hide" title="Hide the question guides for good — you can bring them back">&times;</button>
+            <button type="button" id="guide-show" class="hidden" title="Bring the question guides back">Guides</button>
           </div>
           <div class="guide-hint no-print" id="guide-hint"></div>
           <div id="f-notes" class="rt-editor" contenteditable="true" role="textbox" aria-multiline="true"
@@ -947,37 +952,111 @@
     return html;
   }
 
-  function initGuides() {
+  // Selectable, editable, dismissable (Greg, 10/26/26): "some TL's may have
+  // their own list of questions they like to ask while others just like to
+  // wing it."
+  //
+  // Selectable is the picker. Editable is "Save as mine" -- a Team Lead
+  // inserts a built-in set, cuts what they never ask, adds their own, and
+  // saves the result as their personal set. The notes editor they are
+  // already in IS the template editor, which is why there is no second
+  // screen for this. Dismissable is the x: for the wingers, the whole row
+  // goes away on every engagement and every machine.
+  //
+  // Both live on the user's profile (179), not in localStorage: a question
+  // set someone built is worth more than the browser it was built in, and a
+  // preference that quietly resets on a new laptop is worse than none.
+  // Dismissing leaves a small "Guides" link rather than vanishing outright,
+  // because a control with no way back is a trap.
+  let guideUserId = null;
+  let myGuideText = "";
+
+  function guideSetsAvailable() {
+    const sets = QUESTION_GUIDES.slice();
+    if (myGuideText.trim()) {
+      sets.unshift({ id: "__mine", label: "My questions",
+        note: "Your own set, saved from this field. Insert it, change it, and save again to replace it." });
+    }
+    return sets;
+  }
+
+  function guideHtmlFor(set) {
+    if (set.id !== "__mine") return guideHtml(set);
+    // The personal set is stored in the notes' own format, so it comes back
+    // through the same loader the notes use. One extra step: the blank
+    // answer lines were dropped when it was saved (notesCollectLines drops
+    // an empty line, which is what keeps unanswered questions out of the
+    // stored note), so they are put back here. Otherwise a saved set would
+    // paste in as a solid block with nowhere to type, and would behave
+    // differently from the built-in sets for no reason the user can see.
+    const holder = document.createElement("div");
+    holder.innerHTML = notesTextToHtml(myGuideText);
+    Array.from(holder.children).forEach((el) => {
+      if (el.tagName === "UL" || el.tagName === "OL") return;
+      const gap = document.createElement("p");
+      gap.appendChild(document.createElement("br"));
+      el.insertAdjacentElement("afterend", gap);
+    });
+    return holder.innerHTML;
+  }
+
+  function renderGuidePicker() {
+    const pick = document.getElementById("guide-pick");
+    const hint = document.getElementById("guide-hint");
+    if (!pick) return;
+    const sets = guideSetsAvailable();
+    const keep = pick.value;
+    pick.innerHTML = sets
+      .map((g) => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.label)}</option>`).join("");
+    if (keep && sets.some((g) => g.id === keep)) pick.value = keep;
+    const g = sets.find((x) => x.id === pick.value);
+    if (hint) hint.textContent = g ? g.note : "";
+  }
+
+  function setGuidesHidden(hidden) {
+    ["guide-pick", "guide-insert", "guide-save", "guide-hide", "guide-sep"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle("hidden", hidden);
+    });
+    const show = document.getElementById("guide-show");
+    if (show) show.classList.toggle("hidden", !hidden);
+    const hint = document.getElementById("guide-hint");
+    if (hint && hidden) hint.textContent = "";
+    else renderGuidePicker();
+  }
+
+  async function saveGuidePref(patch) {
+    if (!guideUserId) return;
+    const { error } = await sb.from("users").update(patch).eq("id", guideUserId);
+    if (error) showBanner("Couldn't save that preference: " + error.message, "error");
+  }
+
+  async function initGuides(profile) {
     const pick = document.getElementById("guide-pick");
     const btn = document.getElementById("guide-insert");
-    const hint = document.getElementById("guide-hint");
     if (!pick || !btn) return;
 
-    pick.innerHTML = QUESTION_GUIDES
-      .map((g) => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.label)}</option>`).join("");
+    guideUserId = profile ? profile.id : null;
+    myGuideText = (profile && profile.discovery_guide) || "";
+    renderGuidePicker();
+    setGuidesHidden(!!(profile && profile.discovery_guide_hidden));
 
-    const showNote = () => {
-      const g = QUESTION_GUIDES.find((x) => x.id === pick.value);
-      if (hint) hint.textContent = g ? g.note : "";
-    };
-    pick.addEventListener("change", showNote);
-    showNote();
+    pick.addEventListener("change", renderGuidePicker);
 
     btn.addEventListener("click", () => {
-      const g = QUESTION_GUIDES.find((x) => x.id === pick.value);
+      const set = guideSetsAvailable().find((x) => x.id === pick.value);
       const editor = document.getElementById("f-notes");
-      if (!g || !editor) return;
+      if (!set || !editor) return;
+      const html = guideHtmlFor(set);
+      if (!html) { showBanner("That set is empty.", "error"); return; }
 
-      // Inserting a second guide over the top of a part-written note is
-      // almost always a misclick, so it asks. Appending to notes that are
-      // already there is fine and common -- half the questions come up in
-      // the first ten minutes before anyone reaches for this.
+      // Adding a second set on top of a part-written note is nearly always a
+      // misclick. Appending to notes already underway is normal -- half the
+      // questions come up in the first ten minutes.
       if (editor.textContent.trim() && !confirm(
-        "There are already notes here. Add the " + g.label + " questions at the cursor?")) return;
+        "There are already notes here. Add the " + set.label + " questions at the cursor?")) return;
 
       editor.focus();
-      // Put the caret at the end when nothing is selected, so the questions
-      // land under what is written rather than on top of it.
       const sel = document.getSelection();
       if (!sel.rangeCount || !editor.contains(sel.anchorNode)) {
         const range = document.createRange();
@@ -986,7 +1065,53 @@
         sel.removeAllRanges();
         sel.addRange(range);
       }
-      document.execCommand("insertHTML", false, guideHtml(g));
+      document.execCommand("insertHTML", false, html);
+    });
+
+    const saveBtn = document.getElementById("guide-save");
+    if (saveBtn) saveBtn.addEventListener("click", async () => {
+      const editor = document.getElementById("f-notes");
+      if (!editor) return;
+      const text = notesHtmlToText(editor);
+      if (!text.trim()) {
+        showBanner("Nothing in the notes to save as a question set.", "error");
+        return;
+      }
+      // Saving over an existing set is destructive and silent otherwise.
+      if (myGuideText.trim() && !confirm(
+        "Replace your saved question set with what is in the notes now?")) return;
+      // A warning, not a block. Saving a note that still has answers in it
+      // is a legitimate thing to do -- a Team Lead who liked the shape of
+      // last call's notes -- and only they can tell a prompt from an answer.
+      // So: count the lines that are not bold. In a question set nearly
+      // every line is; in a filled-in note most are not.
+      const lines = text.split("\n").filter((l) => l.trim());
+      const plain = lines.filter((l) => !/^\s*\*\*.*\*\*\s*$/.test(l.trim())).length;
+      if (lines.length && plain / lines.length > 0.4 && !confirm(
+        "Most of this looks like answers rather than questions. Save it as your set anyway?")) return;
+
+      saveBtn.disabled = true;
+      const { error } = await sb.from("users")
+        .update({ discovery_guide: text }).eq("id", guideUserId);
+      saveBtn.disabled = false;
+      if (error) { showBanner("Couldn't save your question set: " + error.message, "error"); return; }
+      myGuideText = text;
+      renderGuidePicker();
+      document.getElementById("guide-pick").value = "__mine";
+      renderGuidePicker();
+      showBanner("Saved as your question set. It is on the picker as “My questions”.", "success");
+    });
+
+    const hideBtn = document.getElementById("guide-hide");
+    if (hideBtn) hideBtn.addEventListener("click", () => {
+      setGuidesHidden(true);
+      saveGuidePref({ discovery_guide_hidden: true });
+    });
+
+    const showBtn = document.getElementById("guide-show");
+    if (showBtn) showBtn.addEventListener("click", () => {
+      setGuidesHidden(false);
+      saveGuidePref({ discovery_guide_hidden: false });
     });
   }
 
@@ -1583,7 +1708,9 @@
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return;
 
-    const { data: profile, error: profileErr } = await sb.from("users").select("id, full_name, role").eq("id", user.id).single();
+    const { data: profile, error: profileErr } = await sb.from("users")
+      .select("id, full_name, role, discovery_guide, discovery_guide_hidden")
+      .eq("id", user.id).single();
     if (profileErr || !profile) {
       await sb.auth.signOut();
       redirectToLogin();
@@ -1592,7 +1719,7 @@
 
     $("loading-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");
-    initGuides();
+    initGuides(profile);
 
     const clientId = new URLSearchParams(location.search).get("client");
     if (clientId) {
