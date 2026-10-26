@@ -81,16 +81,68 @@
      into the notes as ordinary editable text, so a question that does not
      apply gets deleted, one that comes up gets typed in, and the whole
      thing reorders by dragging. It is a starting point, not a script. */
-  .rt-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 5px; }
-  .rt-toolbar select {
+  .guide-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+  .guide-bar-spacer { flex: 1 1 auto; }
+  .guide-bar select {
     height: 28px; padding: 0 6px; border: 1px solid var(--border); border-radius: 6px;
     background: #f5f7f9; font: inherit; font-size: 12.5px; color: var(--text); cursor: pointer;
-    max-width: 230px;
+    max-width: 260px;
   }
-  .guide-hint { font-size: 12px; color: var(--muted); margin: 0 0 6px; line-height: 1.45; }
+  .guide-bar button, .guide-editbar button, #guide-show {
+    height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px;
+    background: #f5f7f9; font: inherit; font-size: 12.5px; color: var(--text); cursor: pointer;
+  }
+  .guide-bar button:hover, .guide-editbar button:hover, #guide-show:hover { background: #e2e6ea; }
+  .guide-bar button:disabled { opacity: 0.5; cursor: default; }
+  .guide-editbar .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .guide-editbar .btn-primary:hover { background: var(--accent-dark); }
+  #guide-hide { color: var(--muted); font-size: 15px; line-height: 1; padding: 0 9px; }
+  .guide-hint { font-size: 12px; color: var(--muted); margin: 0 0 8px; line-height: 1.45; max-width: 70ch; }
   .guide-hint:empty { display: none; }
-  #guide-hide { color: var(--muted); font-size: 15px; line-height: 1; }
-  #guide-show { font-size: 12px; color: var(--muted); }
+  .guide-closed { margin-bottom: 14px; }
+
+  /* One heading per row, all closed to start. A discovery call wanders, so
+     the Team Lead opens the heading the conversation has arrived at rather
+     than scrolling a page of eighty questions -- Greg: "so that things
+     don't get messy as we work our way through the conversation." */
+  #guide-panel { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  #guide-panel details { border-bottom: 1px solid var(--border); }
+  #guide-panel details:last-child { border-bottom: none; }
+  #guide-panel summary {
+    cursor: pointer; padding: 8px 12px; font-size: 13px; font-weight: 700; color: var(--navy);
+    background: #f8fafb; list-style: none; display: flex; align-items: center; gap: 8px;
+  }
+  #guide-panel summary::-webkit-details-marker { display: none; }
+  #guide-panel summary::before { content: "\25B8"; color: var(--muted); font-size: 11px; }
+  #guide-panel details[open] > summary::before { content: "\25BE"; }
+  #guide-panel summary:hover { background: #eef1f4; }
+  #guide-panel .gq-count {
+    margin-left: auto; font-weight: 400; font-size: 11px; color: var(--muted);
+    background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px;
+  }
+  #guide-panel ul { margin: 0; padding: 8px 14px 12px 32px; background: #fff; }
+  #guide-panel li { font-size: 13.5px; line-height: 1.5; margin-bottom: 7px; cursor: pointer; }
+  #guide-panel li:last-child { margin-bottom: 0; }
+  /* Click to strike through what has been covered. Session only, nothing
+     saved -- a finger on the page during one call, not a record. The
+     notetaker keeps the record. */
+  #guide-panel li.covered { color: var(--muted); text-decoration: line-through; }
+  #guide-panel.editing li { cursor: text; }
+  #guide-panel.editing li[contenteditable] { outline: none; padding: 2px 5px; border-radius: 4px; background: #f7f9fa; }
+  #guide-panel.editing li[contenteditable]:focus { background: #fff; box-shadow: 0 0 0 2px rgba(92,114,72,0.3); }
+  #guide-panel.editing .gq-heading[contenteditable] { outline: none; padding: 1px 5px; border-radius: 4px; background: #fff; }
+  #guide-panel .gq-del {
+    border: none; background: none; color: var(--muted); cursor: pointer; font-size: 14px;
+    padding: 0 4px; line-height: 1;
+  }
+  #guide-panel .gq-del:hover { color: var(--danger); }
+  #guide-panel .gq-add, #guide-panel .gq-add-section {
+    border: 1px dashed var(--border); background: #fff; color: var(--muted); cursor: pointer;
+    font-size: 12px; padding: 3px 9px; border-radius: 6px; margin: 0 0 10px 32px;
+  }
+  #guide-panel .gq-add:hover, #guide-panel .gq-add-section:hover { color: var(--navy); border-color: var(--navy); }
+  #guide-panel .gq-add-section { margin: 10px 12px; }
+  .guide-editbar { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
   .rt-toolbar button.active { background: var(--navy); color: #fff; border-color: var(--navy); }
   .rt-editor { width: 100%; min-height: 300px; max-height: 60vh; overflow-y: auto;
                padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
@@ -308,6 +360,44 @@
              with a tiny syntax ("- " bullets, "1." numbered, **bold**,
              *italic*), so notes remain readable and greppable in the
              database and nothing downstream has to learn HTML. -->
+        <!-- The question guide (Greg, 10/26/26). It sits ABOVE the notes and
+             outside them: "these questions should be a guide for a general
+             conversation which is being recorded by an AI Notetaker ... i
+             won't be taking notes as we go because the automated note taker
+             is doing that."
+
+             So this is reference material read during a call, not a
+             scaffold typed into. Collapsed headings, opened one at a time:
+             "organized into some general headings like Business Overview,
+             Customers, Competitors, Marketing, Sales, etc. then maybe
+             dropdown question under each one so that things don't get messy
+             as we work our way through the conversation."
+
+             Insert into notes stays, because "i could decide to take notes
+             if i want" and some Team Leads always will. -->
+        <div class="field no-print" id="guide-field">
+          <div class="guide-bar">
+            <label for="guide-pick" style="margin:0;">Question guide</label>
+            <select id="guide-pick" aria-label="Question guide"></select>
+            <span class="guide-bar-spacer"></span>
+            <button type="button" id="guide-expand" title="Open or close every heading">Expand all</button>
+            <button type="button" id="guide-clear" title="Unmark everything and close the headings">Clear</button>
+            <button type="button" id="guide-edit" title="Change the questions and save them as your own set">Edit</button>
+            <button type="button" id="guide-insert" title="Drop these questions into the notes below, to type answers under">Insert into notes</button>
+            <button type="button" id="guide-hide" title="Hide the question guide — you can bring it back">&times;</button>
+          </div>
+          <div class="guide-hint" id="guide-hint"></div>
+          <div id="guide-panel"></div>
+          <div class="guide-editbar hidden" id="guide-editbar">
+            <button type="button" class="btn-primary" id="guide-save">Save as my set</button>
+            <button type="button" id="guide-cancel">Cancel</button>
+            <button type="button" id="guide-revert" class="hidden" title="Delete your saved set and go back to the built-in ones">Delete my set</button>
+          </div>
+        </div>
+        <div class="guide-closed hidden no-print" id="guide-closed">
+          <button type="button" id="guide-show">Show question guide</button>
+        </div>
+
         <div class="field" id="notes-field">
           <label for="f-notes">Notes</label>
           <div class="rt-toolbar no-print">
@@ -315,14 +405,7 @@
             <button type="button" data-rt="italic" title="Italic"><em>I</em></button>
             <button type="button" data-rt="bullet" title="Bulleted list">&#8226;&nbsp;List</button>
             <button type="button" data-rt="number" title="Numbered list">1.&nbsp;List</button>
-            <span class="rt-sep" id="guide-sep"></span>
-            <select id="guide-pick" aria-label="Question guide"></select>
-            <button type="button" id="guide-insert" title="Drop these questions in at the cursor">Insert</button>
-            <button type="button" id="guide-save" title="Save what is in the notes below as your own question set">Save as mine</button>
-            <button type="button" id="guide-hide" title="Hide the question guides for good — you can bring them back">&times;</button>
-            <button type="button" id="guide-show" class="hidden" title="Bring the question guides back">Guides</button>
           </div>
-          <div class="guide-hint no-print" id="guide-hint"></div>
           <div id="f-notes" class="rt-editor" contenteditable="true" role="textbox" aria-multiline="true"
                aria-label="Discovery call notes" data-placeholder="Discovery call notes&hellip;"></div>
         </div>
@@ -491,29 +574,31 @@
     {
       id: "b2b_manufacturer",
       label: "B2B manufacturer / custom shop",
-      note: "For a business that makes something to order — millwork, machining, fabrication. Pushes hard on who specifies the work versus who writes the cheque.",
+      note: "The default, and the one most engagements need: nine clients in ten are B2B and most of those make something. Covers who specifies versus who buys, and the four routes work arrives through.",
       sections: [
         [
-          "Business model — how they make their money",
+          "Business Overview",
           [
             "Walk me through what you make. If I stood in the shop on a Tuesday, what is on the benches?",
+            "How does the business make its money — which work is profitable, and which just keeps people busy?",
             "Take your last five jobs — who bought, what was it, roughly what did it bill?",
             "Which of those five would you want ten more of, and why that one?",
-            "Where does the margin actually come from — which work is profitable and which just keeps people busy?",
-            "What are you turning down right now? Price, capacity, wrong type of work, too far away?",
             "What is a typical job worth, and what is the range from smallest to largest?",
+            "What are you turning down right now? Price, capacity, wrong type of work, too far away?",
+            "How did you get from one person to where you are now — did demand show up, or did you go get it?",
           ],
         ],
         [
-          "Where they want to be",
+          "Growth Goals",
           [
             "Twelve months from now, what has to be true for you to call this a good year? Give me the number.",
+            "Is that number more of the same work, or a different kind of work?",
             "What is the single biggest thing standing between you and that number?",
             "If I could hand you one thing — the right buyers to call, a read on which markets are growing, a picture of what your competitors are doing, or a way for the right people to find you — which do you grab first?",
           ],
         ],
         [
-          "Their best customers — and why they buy",
+          "Customers",
           [
             "Who are your three or four best customers, and what makes them your best?",
             "Why do they buy from you rather than the other shop? In their words, not yours.",
@@ -523,13 +608,13 @@
             "How big is a firm you work well with — headcount, revenue, projects a year? What is too small, and too big?",
             "Name five firms that would be perfect customers but are not customers yet.",
             "What has to be happening at a firm for them to need you right now?",
-            "Which end markets do these customers sit in — healthcare, education, hospitality, retail, offices, residential — and roughly what share is each?",
-            "Which of those markets felt like it was growing this year, and which felt like it was drying up?",
+            "Which end markets do your customers sit in — healthcare, education, hospitality, retail, offices, residential — and roughly what share is each?",
             "How far do you ship, and what is the real limit — freight, install crews, site visits?",
+            "How much of this year's revenue came from customers you already had last year?",
           ],
         ],
         [
-          "Competitors — and why they lose",
+          "Competitors",
           [
             "Name the three or four shops you run into most often.",
             "When you lose a job, who do you lose it to?",
@@ -537,20 +622,23 @@
             "Is there one you keep losing to, and do you know what they do differently?",
             "When you win, what tipped it?",
             "Is anyone newly in your market who was not there two years ago?",
+            "Is there a shop you admire — someone doing it the way you would like to in five years?",
           ],
         ],
         [
-          "What is changing in their industry",
+          "Industry Trends & Disruption",
           [
             "What has changed in your trade in the last two or three years that you have had to adapt to?",
+            "Which of your end markets felt like it was growing this year, and which felt like it was drying up?",
             "Is anything coming that worries you — a material cost, a labour shortage, a code change, a big player moving in?",
             "Are customers asking for things now they were not asking for two years ago?",
             "Is any of this work getting automated, prefabricated or bought offshore?",
+            "Is there a market you have always suspected you would be good at but never gone after? What stopped you?",
             "Where is the opportunity nobody in your trade is taking seriously yet?",
           ],
         ],
         [
-          "Routes to market — where the business comes from",
+          "Sales Channels",
           [
             "Roughly how does the work split across four routes: existing relationships and repeat business, inbound enquiries from the web, your own direct selling, and distributors or reps?",
             "Which of those four is growing, and which has gone flat?",
@@ -560,25 +648,37 @@
             "Is there one carrying your line who sells nothing? What would it take to fix or replace them?",
             "When a distributor sells for you, do you ever meet the end customer, or do they own that relationship?",
             "Does a distributor ever end up bidding against your own direct sales? How do you handle it?",
-            "How much of this year's revenue comes from customers you already had last year?",
           ],
         ],
         [
-          "Marketing and sales activity — what they actually do",
+          "Sales",
           [
-            "What are you doing right now to bring work in? Walk me through everything, even the things you think do not count.",
             "Of those last five jobs, how did each one actually reach you?",
             "Do you do any outbound — calls, emails, visits? Who does it and how often?",
+            "How long is a typical sale, from first contact to purchase order?",
+            "How far ahead of the work does your part get specified or bought?",
+            "Are you on anyone's approved-vendor or prequalified-bidder list? How did you get on it?",
+            "Do you bid public work — school districts, municipalities, state projects? Do you want more of it?",
+            "Where do you hear about projects before they go out to bid?",
+            "Are there seasons to this? Does the phone go quiet in a predictable month?",
+            "If I handed you fifty named people at firms that fit, with a reason to call each one this quarter, what would you do with it?",
+          ],
+        ],
+        [
+          "Marketing",
+          [
+            "What are you doing right now to bring work in? Everything, even the things you think do not count.",
             "Do architects and GCs around here search for this, or is it all relationships and bid lists?",
+            "If someone needed what you make and did not know you, what would they type?",
             "What does your website do for you today, honestly?",
             "What have you got for photographs of finished work, and where can someone see them?",
             "Are you on LinkedIn or Instagram? For a visual trade those are where specifiers look.",
-            "Are you on anyone's approved-vendor or prequalified-bidder list? How did you get on it?",
+            "Have you ever run anything paid? What did it return?",
             "What have you tried before that did not work?",
           ],
         ],
         [
-          "Shows and events — online and offline",
+          "Events & Watering Holes",
           [
             "Which trade shows or industry events do you attend, exhibit at, or wish you could?",
             "If you wanted to meet twenty architects in one afternoon, where would you go?",
@@ -587,19 +687,21 @@
             "Online — are there groups, forums or communities where your buyers talk to each other?",
             "What do your buyers read — a trade magazine, a newsletter, a local business journal?",
             "Who already sends you work — not customers, but people who refer?",
+            "Are there adjacent trades who sit beside you on jobs and could pass work your way?",
           ],
         ],
         [
-          "Capacity and appetite",
+          "Capacity",
           [
             "Who does the selling? Is it all you?",
             "Honestly, how many hours a week go into chasing new business?",
             "If this works and demand doubles, what breaks first?",
+            "Is hiring the constraint, equipment, space, or cash?",
             "Is there anything you are not willing to do?",
           ],
         ],
         [
-          "Before we hang up",
+          "Wrap-Up",
           [
             "What have I not asked about that I should have?",
             "If this engagement delivers one thing and nothing else, what should it be?",
@@ -607,12 +709,12 @@
           ],
         ],
         [
-          "For the controlling document",
+          "After the Call — Controlling Document",
           [
             "Market Dynamics Research — which markets, and which disruptions or emerging trends?",
-            "Outbound Marketing — what should the team look into?",
-            "Inbound Marketing — what should the team look into?",
-            "Watering Holes — what should the team look into?",
+            "Outbound Marketing — which buyers, and what signals say when to reach them?",
+            "Inbound Marketing — what should we look at on search, site and competitors?",
+            "Watering Holes — which channels and events are worth their time?",
           ],
         ],
       ],
@@ -623,25 +725,26 @@
       note: "For a firm selling expertise rather than a product. Reputation and referral usually outrank search.",
       sections: [
         [
-          "Business model — how they make their money",
+          "Business Overview",
           [
             "What do clients actually hire you to do? Describe a typical engagement.",
+            "Which service is most profitable, and which one just fills the calendar?",
             "Take your last five clients — who were they, what did you do, what did it bill?",
             "Project work, retainer, or both? Which do you want more of?",
-            "Which service is most profitable, and which one just fills the calendar?",
             "What share of revenue comes from your biggest client?",
           ],
         ],
         [
-          "Where they want to be",
+          "Growth Goals",
           [
             "Twelve months from now, what has to be true for you to call this a good year? Give me the number.",
+            "Is that number more of the same work, or a different kind of work?",
             "What is the single biggest thing standing between you and that number?",
             "If I could hand you one thing — the right buyers to call, a read on which markets are growing, a picture of what your competitors are doing, or a way for the right people to find you — which do you grab first?",
           ],
         ],
         [
-          "Their best clients — and why they buy",
+          "Customers",
           [
             "Who are your three or four best clients, and what makes them the best?",
             "Why did each of them choose you over the alternative? What do they say when you ask?",
@@ -650,11 +753,11 @@
             "What is going on inside a company at the moment they decide they need you?",
             "Name five organisations that would be perfect clients but are not yet.",
             "Which industries do you serve best — and is that by design or by accident?",
-            "Which of those industries is growing, and which is under pressure?",
+            "How much of this year's revenue came from clients you already had last year?",
           ],
         ],
         [
-          "Competitors — and why they lose",
+          "Competitors",
           [
             "Who else gets considered when you are being considered?",
             "When you lose, who to, and what is the reason?",
@@ -664,9 +767,10 @@
           ],
         ],
         [
-          "What is changing in their industry",
+          "Industry Trends & Disruption",
           [
             "What has changed in your field in the last two or three years that you have had to adapt to?",
+            "Which of the industries you serve is growing, and which is under pressure?",
             "Is anything coming that worries you — a regulation, a technology, clients bringing the work in-house?",
             "Are clients asking for things now they were not asking for two years ago?",
             "Is any part of what you do being automated or sold as software?",
@@ -674,22 +778,30 @@
           ],
         ],
         [
-          "Routes to market — where the work comes from",
+          "Sales Channels",
           [
             "Roughly how does the work split across repeat and referral, inbound enquiries, your own direct selling, and partners who bring you in?",
             "Which of those is growing, and which has gone flat?",
             "Which produces the best clients, not just the most?",
             "If you work through partners or subcontract to larger firms — who are they, and which ones actually produce?",
             "When a partner brings you in, do you own the client relationship afterwards or do they?",
-            "How much of this year's revenue comes from clients you already had last year?",
           ],
         ],
         [
-          "Marketing and sales activity — what they actually do",
+          "Sales",
           [
-            "What are you doing now to bring work in? Everything, including the informal things.",
             "Where did the last five clients come from — referral, repeat, inbound, outbound, a partner?",
             "Do you do outbound at all? Who does it?",
+            "How long is a typical sale, from first conversation to signature?",
+            "What triggers someone to start looking for this help?",
+            "Who else has to approve it once your buyer is sold?",
+            "If I handed you fifty named people at organisations that fit, what would you do with it?",
+          ],
+        ],
+        [
+          "Marketing",
+          [
+            "What are you doing now to bring work in? Everything, including the informal things.",
             "Do people search for what you do, or do they ask someone they trust?",
             "Do you publish anything — writing, speaking, a newsletter, a podcast? Does it bring work?",
             "What does your website do for you today?",
@@ -698,7 +810,7 @@
           ],
         ],
         [
-          "Shows and events — online and offline",
+          "Events & Watering Holes",
           [
             "Which conferences or industry events do your clients attend? Do you?",
             "Have you ever spoken at one? Would you?",
@@ -709,16 +821,17 @@
           ],
         ],
         [
-          "Capacity and appetite",
+          "Capacity",
           [
             "Who does the selling? Is it all you?",
             "Honestly, how many hours a week go into chasing new business?",
             "If this works and demand doubles, what breaks first?",
+            "Is hiring the constraint, equipment, space, or cash?",
             "Is there anything you are not willing to do?",
           ],
         ],
         [
-          "Before we hang up",
+          "Wrap-Up",
           [
             "What have I not asked about that I should have?",
             "If this engagement delivers one thing and nothing else, what should it be?",
@@ -726,12 +839,12 @@
           ],
         ],
         [
-          "For the controlling document",
+          "After the Call — Controlling Document",
           [
             "Market Dynamics Research — which markets, and which disruptions or emerging trends?",
-            "Outbound Marketing — what should the team look into?",
-            "Inbound Marketing — what should the team look into?",
-            "Watering Holes — what should the team look into?",
+            "Outbound Marketing — which buyers, and what signals say when to reach them?",
+            "Inbound Marketing — what should we look at on search, site and competitors?",
+            "Watering Holes — which channels and events are worth their time?",
           ],
         ],
       ],
@@ -742,7 +855,7 @@
       note: "For a business selling to the public. Search, maps and reviews carry real weight, and the buyer is a segment rather than a job title.",
       sections: [
         [
-          "Business model — how they make their money",
+          "Business Overview",
           [
             "What do you sell, and which products or services actually make the money?",
             "What does an average sale look like, and how often does someone come back?",
@@ -752,26 +865,27 @@
           ],
         ],
         [
-          "Where they want to be",
+          "Growth Goals",
           [
             "Twelve months from now, what has to be true for you to call this a good year? Give me the number.",
+            "Is that number more of the same work, or a different kind of work?",
             "What is the single biggest thing standing between you and that number?",
             "If I could hand you one thing — the right buyers to call, a read on which markets are growing, a picture of what your competitors are doing, or a way for the right people to find you — which do you grab first?",
           ],
         ],
         [
-          "Their best customers — and why they buy",
+          "Customers",
           [
             "Describe your best customer. Not demographics — what are they actually trying to do?",
             "Why do they come to you rather than the easy alternative? What do they tell you?",
             "Are there two or three distinct types of customer who want different things?",
             "Who buys once and never comes back, and do you know why?",
             "How far do people travel to you, or how far do you deliver?",
-            "Is the customer base growing, shrinking or changing shape?",
+            "What share of sales is repeat custom?",
           ],
         ],
         [
-          "Competitors — and why they lose",
+          "Competitors",
           [
             "Who else is a real option for your customer — including the big national one and the online one?",
             "When you lose a sale, where does it go and why?",
@@ -781,9 +895,10 @@
           ],
         ],
         [
-          "What is changing in their industry",
+          "Industry Trends & Disruption",
           [
             "What has changed about how your customers buy in the last two or three years?",
+            "Is the customer base growing, shrinking or changing shape?",
             "Is anything coming that worries you — a national chain, an online seller, a cost you cannot pass on?",
             "Are customers asking for things now they were not asking for two years ago?",
             "Has anything changed about the area itself — who lives there, what else has opened or closed?",
@@ -791,7 +906,26 @@
           ],
         ],
         [
-          "Marketing and sales activity — what they actually do",
+          "Sales Channels",
+          [
+            "Roughly how do sales split across walk-in, your own website, online marketplaces, and wholesale or trade accounts?",
+            "Which of those is growing, and which has gone flat?",
+            "Which one actually makes money once you take the fees out?",
+            "If you had to grow one this year, which has the most room?",
+          ],
+        ],
+        [
+          "Sales",
+          [
+            "Who sells, and is it the same people serving customers?",
+            "Do you do anything to bring a customer back, or do you wait for them?",
+            "Do you email or text your customers? How big is that list?",
+            "Do you take trade or commercial accounts? Would you want more?",
+            "What is your average order, and have you tried to move it?",
+          ],
+        ],
+        [
+          "Marketing",
           [
             "What are you doing right now to bring customers in? All of it.",
             "If someone needs what you sell and does not know you, what do they type?",
@@ -799,12 +933,11 @@
             "What do your reviews say, and how many do you have next to the competition?",
             "Are you running anything paid? What is it returning?",
             "Which social channels do you use, and which does your customer actually use?",
-            "Do you email or text your customers? How big is that list?",
             "What have you tried that did not work?",
           ],
         ],
         [
-          "Shows and events — online and offline",
+          "Events & Watering Holes",
           [
             "Which fairs, markets, festivals or local events do you take part in? Which are worth it?",
             "Where does your customer already spend time — clubs, groups, schools, local institutions?",
@@ -814,16 +947,17 @@
           ],
         ],
         [
-          "Capacity and appetite",
+          "Capacity",
           [
             "Who does the selling? Is it all you?",
             "Honestly, how many hours a week go into chasing new business?",
             "If this works and demand doubles, what breaks first?",
+            "Is hiring the constraint, equipment, space, or cash?",
             "Is there anything you are not willing to do?",
           ],
         ],
         [
-          "Before we hang up",
+          "Wrap-Up",
           [
             "What have I not asked about that I should have?",
             "If this engagement delivers one thing and nothing else, what should it be?",
@@ -831,12 +965,12 @@
           ],
         ],
         [
-          "For the controlling document",
+          "After the Call — Controlling Document",
           [
             "Market Dynamics Research — which markets, and which disruptions or emerging trends?",
-            "Outbound Marketing — what should the team look into?",
-            "Inbound Marketing — what should the team look into?",
-            "Watering Holes — what should the team look into?",
+            "Outbound Marketing — which buyers, and what signals say when to reach them?",
+            "Inbound Marketing — what should we look at on search, site and competitors?",
+            "Watering Holes — which channels and events are worth their time?",
           ],
         ],
       ],
@@ -847,25 +981,26 @@
       note: "For a business reselling someone else's product. The live questions are usually territory, lines carried, and who owns the end customer.",
       sections: [
         [
-          "Business model — how they make their money",
+          "Business Overview",
           [
             "What lines do you carry, and which ones actually make the margin?",
-            "Take your last five significant sales — who bought, what, and how much?",
             "Where does the margin sit — the product, the service around it, or the contract?",
+            "Take your last five significant sales — who bought, what, and how much?",
             "What share of revenue is your largest line, and your largest customer?",
             "What territory are you allowed to sell into? Is it in writing?",
           ],
         ],
         [
-          "Where they want to be",
+          "Growth Goals",
           [
             "Twelve months from now, what has to be true for you to call this a good year? Give me the number.",
+            "Is that number more of the same work, or a different kind of work?",
             "What is the single biggest thing standing between you and that number?",
             "If I could hand you one thing — the right buyers to call, a read on which markets are growing, a picture of what your competitors are doing, or a way for the right people to find you — which do you grab first?",
           ],
         ],
         [
-          "Their best customers — and why they buy",
+          "Customers",
           [
             "Who are your best accounts, and what makes them the best?",
             "Why do they buy from you rather than another distributor or direct from the maker?",
@@ -873,42 +1008,60 @@
             "Who is the buyer inside it — purchasing, operations, an engineer, an owner?",
             "What triggers a purchase — a breakdown, a build, a contract renewal, a budget cycle?",
             "Name five accounts you want and do not have.",
-            "Which of the markets you serve is growing, and which is shrinking?",
+            "How much of this year's revenue came from accounts you already had last year?",
           ],
         ],
         [
-          "Competitors — and why they lose",
+          "Competitors",
           [
             "Who else can supply the same thing in your territory?",
             "When you lose, is it price, availability, or the relationship?",
             "Is anyone selling direct around you?",
-            "Is there a line you want to carry and cannot get?",
+            "What do you do that another distributor cannot?",
           ],
         ],
         [
-          "What is changing in their industry",
+          "Industry Trends & Disruption",
           [
             "What has changed in your lines or your territory in the last two or three years?",
+            "Which of the markets you serve is growing, and which is shrinking?",
             "Is anything coming that worries you — a manufacturer going direct, consolidation, a substitute product?",
             "Are customers buying differently now — online, on contract, through a bigger distributor?",
-            "Is any line you carry being disrupted by a new technology or a new entrant?",
+            "Is there a line you want to carry and cannot get, or one you would drop?",
             "Where is the opportunity nobody in your channel is taking seriously yet?",
           ],
         ],
         [
-          "Marketing and sales activity — what they actually do",
+          "Sales Channels",
+          [
+            "Roughly how does business split across existing accounts, inbound enquiries, your own outside sales, and leads the manufacturers send you?",
+            "Which of those is growing, and which has gone flat?",
+            "Do the manufacturers you represent send you leads? Are they any good?",
+            "Do you have sub-dealers or second-tier resellers? Which ones produce?",
+          ],
+        ],
+        [
+          "Sales",
+          [
+            "How many people are selling, and what else do they do all day?",
+            "How long is a typical sale, and does it differ by line?",
+            "Do buyers search, or do they call whoever they bought from last time?",
+            "Do you quote against a spec, or do you help write it?",
+            "If I handed you fifty named accounts that fit, what would you do with it?",
+          ],
+        ],
+        [
+          "Marketing",
           [
             "What are you doing now to bring business in?",
-            "How many people are selling, and what else do they do all day?",
-            "Do buyers search, or do they call whoever they bought from last time?",
-            "Do the manufacturers you represent send you leads? Are they any good?",
-            "Do you do any outbound — calls, emails, visits?",
             "What does your website do for you?",
+            "Do the manufacturers give you marketing material, and do you use it?",
+            "Are you listed anywhere buyers look — directories, marketplaces, manufacturer locators?",
             "What have you tried that did not work?",
           ],
         ],
         [
-          "Shows and events — online and offline",
+          "Events & Watering Holes",
           [
             "Which trade shows matter in your lines? Do you exhibit or just attend?",
             "What associations or trade groups do your customers belong to?",
@@ -918,16 +1071,17 @@
           ],
         ],
         [
-          "Capacity and appetite",
+          "Capacity",
           [
             "Who does the selling? Is it all you?",
             "Honestly, how many hours a week go into chasing new business?",
             "If this works and demand doubles, what breaks first?",
+            "Is hiring the constraint, equipment, space, or cash?",
             "Is there anything you are not willing to do?",
           ],
         ],
         [
-          "Before we hang up",
+          "Wrap-Up",
           [
             "What have I not asked about that I should have?",
             "If this engagement delivers one thing and nothing else, what should it be?",
@@ -935,12 +1089,12 @@
           ],
         ],
         [
-          "For the controlling document",
+          "After the Call — Controlling Document",
           [
             "Market Dynamics Research — which markets, and which disruptions or emerging trends?",
-            "Outbound Marketing — what should the team look into?",
-            "Inbound Marketing — what should the team look into?",
-            "Watering Holes — what should the team look into?",
+            "Outbound Marketing — which buyers, and what signals say when to reach them?",
+            "Inbound Marketing — what should we look at on search, site and competitors?",
+            "Watering Holes — which channels and events are worth their time?",
           ],
         ],
       ],
@@ -948,10 +1102,10 @@
     {
       id: "core",
       label: "Short core set (any business)",
-      note: "The questions worth asking whatever the business is — business model, best customers, competitors, what marketing they do, where their buyers gather. Use it when the engagement does not fit a type, or the call is short.",
+      note: "The questions worth asking whatever the business is. Use it when the engagement does not fit a type, or when the call is short.",
       sections: [
         [
-          "Business model — how they make their money",
+          "Business Overview",
           [
             "How does the business actually make its money today?",
             "Take your last five sales — who bought, what, and roughly how much?",
@@ -960,15 +1114,16 @@
           ],
         ],
         [
-          "Where they want to be",
+          "Growth Goals",
           [
             "Twelve months from now, what has to be true for you to call this a good year? Give me the number.",
+            "Is that number more of the same work, or a different kind of work?",
             "What is the single biggest thing standing between you and that number?",
             "If I could hand you one thing — the right buyers to call, a read on which markets are growing, a picture of what your competitors are doing, or a way for the right people to find you — which do you grab first?",
           ],
         ],
         [
-          "Their best customers — and why they buy",
+          "Customers",
           [
             "Who are your best customers, and what makes them the best?",
             "Why do they buy from you rather than someone else? What do they say?",
@@ -977,7 +1132,7 @@
           ],
         ],
         [
-          "Competitors — and why they lose",
+          "Competitors",
           [
             "Who do you compete with?",
             "When you lose, who do you lose to and why?",
@@ -985,7 +1140,7 @@
           ],
         ],
         [
-          "What is changing in their industry",
+          "Industry Trends & Disruption",
           [
             "What has changed in your industry in the last two or three years that you have had to adapt to?",
             "Is anything coming that worries you — a technology, a regulation, a new kind of competitor?",
@@ -994,16 +1149,30 @@
           ],
         ],
         [
-          "Marketing and sales activity — what they actually do",
+          "Sales Channels",
+          [
+            "Roughly how does business split across repeat and referral, inbound enquiries, your own selling, and anyone who sells on your behalf?",
+            "Which of those is growing, and which has gone flat?",
+          ],
+        ],
+        [
+          "Sales",
+          [
+            "Who does the selling, and how much time do they really have?",
+            "How does work reach you today?",
+            "How long is a typical sale?",
+          ],
+        ],
+        [
+          "Marketing",
           [
             "What are you doing right now to bring business in? All of it.",
-            "How does work reach you today?",
-            "Who does the selling, and how much time do they really have?",
+            "Do people search for what you do?",
             "What have you tried that did not work?",
           ],
         ],
         [
-          "Shows and events — online and offline",
+          "Events & Watering Holes",
           [
             "Which shows, events or associations do you take part in?",
             "Where do your buyers gather, online and off?",
@@ -1011,7 +1180,17 @@
           ],
         ],
         [
-          "Before we hang up",
+          "Capacity",
+          [
+            "Who does the selling? Is it all you?",
+            "Honestly, how many hours a week go into chasing new business?",
+            "If this works and demand doubles, what breaks first?",
+            "Is hiring the constraint, equipment, space, or cash?",
+            "Is there anything you are not willing to do?",
+          ],
+        ],
+        [
+          "Wrap-Up",
           [
             "What have I not asked about that I should have?",
             "If this engagement delivers one thing and nothing else, what should it be?",
@@ -1019,12 +1198,12 @@
           ],
         ],
         [
-          "For the controlling document",
+          "After the Call — Controlling Document",
           [
             "Market Dynamics Research — which markets, and which disruptions or emerging trends?",
-            "Outbound Marketing — what should the team look into?",
-            "Inbound Marketing — what should the team look into?",
-            "Watering Holes — what should the team look into?",
+            "Outbound Marketing — which buyers, and what signals say when to reach them?",
+            "Inbound Marketing — what should we look at on search, site and competitors?",
+            "Watering Holes — which channels and events are worth their time?",
           ],
         ],
       ],
@@ -1048,110 +1227,279 @@
     return html;
   }
 
-  // Selectable, editable, dismissable (Greg, 10/26/26): "some TL's may have
-  // their own list of questions they like to ask while others just like to
-  // wing it."
+  // Selectable, editable, dismissable (Greg, 10/26/26), and now read rather
+  // than typed into. The panel above the notes IS the guide; the notes stay
+  // empty unless the Team Lead wants them.
   //
-  // Selectable is the picker. Editable is "Save as mine" -- a Team Lead
-  // inserts a built-in set, cuts what they never ask, adds their own, and
-  // saves the result as their personal set. The notes editor they are
-  // already in IS the template editor, which is why there is no second
-  // screen for this. Dismissable is the x: for the wingers, the whole row
-  // goes away on every engagement and every machine.
+  //   Selectable   the picker, five built-in sets plus the person's own
+  //   Editable     Edit turns the questions into text you can change, add
+  //                to and delete, saved to the profile as "My questions"
+  //   Dismissable  the x hides it on every engagement and every machine
   //
-  // Both live on the user's profile (179), not in localStorage: a question
-  // set someone built is worth more than the browser it was built in, and a
-  // preference that quietly resets on a new laptop is worse than none.
-  // Dismissing leaves a small "Guides" link rather than vanishing outright,
-  // because a control with no way back is a trap.
+  // Marking is deliberately NOT saved. Clicking a question strikes it
+  // through so a Team Lead can see at a glance what the conversation has
+  // already wandered through; it lasts as long as the page does. A record
+  // of what was asked is the notetaker's job, not this panel's.
+  //
+  // The person's own set is stored as "## Heading" lines with plain
+  // question lines under them -- its own small format, not the notes'
+  // markdown-lite, because a guide is sections of questions and a note is
+  // prose. Both are plain text and greppable in the database.
   let guideUserId = null;
-  let myGuideText = "";
+  let myGuideSections = null;   // null = they have not saved one
+  let guideEditing = false;
+
+  function serializeGuide(sections) {
+    return sections.map(([heading, questions]) =>
+      "## " + heading + "\n" + questions.join("\n")).join("\n\n");
+  }
+
+  function parseGuide(text) {
+    const sections = [];
+    String(text || "").split(/\r?\n/).forEach((raw) => {
+      const line = raw.trim();
+      if (!line) return;
+      const h = /^##\s+(.*)$/.exec(line);
+      if (h) { sections.push([h[1].trim(), []]); return; }
+      // A question before any heading gets one, rather than being dropped.
+      if (!sections.length) sections.push(["Questions", []]);
+      sections[sections.length - 1][1].push(line);
+    });
+    return sections.filter(([, qs]) => qs.length);
+  }
 
   function guideSetsAvailable() {
     const sets = QUESTION_GUIDES.slice();
-    if (myGuideText.trim()) {
-      sets.unshift({ id: "__mine", label: "My questions",
-        note: "Your own set, saved from this field. Insert it, change it, and save again to replace it." });
+    if (myGuideSections && myGuideSections.length) {
+      sets.unshift({ id: "__mine", label: "My questions", sections: myGuideSections,
+        note: "Your own set. Press Edit to change it." });
     }
     return sets;
   }
 
-  function guideHtmlFor(set) {
-    if (set.id !== "__mine") return guideHtml(set);
-    // The personal set is stored in the notes' own format, so it comes back
-    // through the same loader the notes use. One extra step: the blank
-    // answer lines were dropped when it was saved (notesCollectLines drops
-    // an empty line, which is what keeps unanswered questions out of the
-    // stored note), so they are put back here. Otherwise a saved set would
-    // paste in as a solid block with nowhere to type, and would behave
-    // differently from the built-in sets for no reason the user can see.
-    const holder = document.createElement("div");
-    holder.innerHTML = notesTextToHtml(myGuideText);
-    Array.from(holder.children).forEach((el) => {
-      if (el.tagName === "UL" || el.tagName === "OL") return;
-      const gap = document.createElement("p");
-      gap.appendChild(document.createElement("br"));
-      el.insertAdjacentElement("afterend", gap);
-    });
-    return holder.innerHTML;
-  }
-
-  function renderGuidePicker() {
+  function currentGuideSet() {
     const pick = document.getElementById("guide-pick");
-    const hint = document.getElementById("guide-hint");
-    if (!pick) return;
-    const sets = guideSetsAvailable();
-    const keep = pick.value;
-    pick.innerHTML = sets
-      .map((g) => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.label)}</option>`).join("");
-    if (keep && sets.some((g) => g.id === keep)) pick.value = keep;
-    const g = sets.find((x) => x.id === pick.value);
-    if (hint) hint.textContent = g ? g.note : "";
+    return guideSetsAvailable().find((g) => g.id === (pick && pick.value));
   }
 
-  function setGuidesHidden(hidden) {
-    ["guide-pick", "guide-insert", "guide-save", "guide-hide", "guide-sep"].forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) el.classList.toggle("hidden", hidden);
-    });
-    const show = document.getElementById("guide-show");
-    if (show) show.classList.toggle("hidden", !hidden);
+  function renderGuidePanel() {
+    const panel = document.getElementById("guide-panel");
     const hint = document.getElementById("guide-hint");
-    if (hint && hidden) hint.textContent = "";
-    else renderGuidePicker();
+    const set = currentGuideSet();
+    if (!panel) return;
+    if (hint) hint.textContent = set ? set.note : "";
+    if (!set) { panel.innerHTML = ""; return; }
+
+    panel.innerHTML = set.sections.map(([heading, questions], si) => `
+      <details data-section="${si}">
+        <summary><span class="gq-heading">${escapeHtml(heading)}</span><span class="gq-count">${questions.length}</span></summary>
+        <ul>${questions.map((q) => `<li>${escapeHtml(q)}</li>`).join("")}</ul>
+      </details>`).join("");
+    panel.classList.remove("editing");
+  }
+
+  function setGuideEditing(on) {
+    const panel = document.getElementById("guide-panel");
+    if (!panel) return;
+    guideEditing = on;
+    panel.classList.toggle("editing", on);
+    document.getElementById("guide-editbar").classList.toggle("hidden", !on);
+    document.getElementById("guide-edit").textContent = on ? "Editing…" : "Edit";
+    document.getElementById("guide-edit").disabled = on;
+    document.getElementById("guide-revert").classList.toggle(
+      "hidden", !(on && myGuideSections && myGuideSections.length));
+
+    panel.querySelectorAll("details").forEach((d) => {
+      if (on) d.open = true;
+      const sum = d.querySelector("summary .gq-heading");
+      // setAttribute, not the contentEditable property: the attribute is
+      // what the CSS selector [contenteditable] matches, and what a test
+      // can see.
+      if (sum) {
+        if (on) sum.setAttribute("contenteditable", "true");
+        else sum.removeAttribute("contenteditable");
+      }
+      d.querySelectorAll("li").forEach((li) => {
+        if (on) li.setAttribute("contenteditable", "true");
+        else li.removeAttribute("contenteditable");
+        const existing = li.querySelector(".gq-del");
+        if (on && !existing) {
+          const del = document.createElement("button");
+          del.type = "button"; del.className = "gq-del"; del.textContent = "×";
+          del.title = "Remove this question";
+          del.contentEditable = "false";
+          li.appendChild(document.createTextNode(" "));
+          li.appendChild(del);
+        } else if (!on && existing) {
+          existing.remove();
+        }
+      });
+      let add = d.querySelector(".gq-add");
+      if (on && !add) {
+        add = document.createElement("button");
+        add.type = "button"; add.className = "gq-add"; add.textContent = "+ question";
+        d.appendChild(add);
+      } else if (!on && add) { add.remove(); }
+    });
+
+    let addSec = panel.querySelector(".gq-add-section");
+    if (on && !addSec) {
+      addSec = document.createElement("button");
+      addSec.type = "button"; addSec.className = "gq-add-section"; addSec.textContent = "+ heading";
+      panel.appendChild(addSec);
+    } else if (!on && addSec) { addSec.remove(); }
+  }
+
+  function readGuideFromPanel() {
+    const panel = document.getElementById("guide-panel");
+    const sections = [];
+    panel.querySelectorAll("details").forEach((d) => {
+      const heading = (d.querySelector("summary .gq-heading").textContent || "").trim();
+      const questions = [];
+      d.querySelectorAll("li").forEach((li) => {
+        const clone = li.cloneNode(true);
+        clone.querySelectorAll(".gq-del").forEach((b) => b.remove());
+        const t = (clone.textContent || "").trim();
+        if (t) questions.push(t);
+      });
+      if (heading && questions.length) sections.push([heading, questions]);
+    });
+    return sections;
+  }
+
+  function setGuideHidden(hidden) {
+    document.getElementById("guide-field").classList.toggle("hidden", hidden);
+    document.getElementById("guide-closed").classList.toggle("hidden", !hidden);
   }
 
   async function saveGuidePref(patch) {
-    if (!guideUserId) return;
+    if (!guideUserId) return true;
     const { error } = await sb.from("users").update(patch).eq("id", guideUserId);
-    if (error) showBanner("Couldn't save that preference: " + error.message, "error");
+    if (error) { showBanner("Couldn't save that: " + error.message, "error"); return false; }
+    return true;
   }
 
   async function initGuides(profile) {
     const pick = document.getElementById("guide-pick");
-    const btn = document.getElementById("guide-insert");
-    if (!pick || !btn) return;
+    const panel = document.getElementById("guide-panel");
+    if (!pick || !panel) return;
 
     guideUserId = profile ? profile.id : null;
-    myGuideText = (profile && profile.discovery_guide) || "";
-    renderGuidePicker();
-    setGuidesHidden(!!(profile && profile.discovery_guide_hidden));
+    myGuideSections = profile && profile.discovery_guide ? parseGuide(profile.discovery_guide) : null;
 
-    pick.addEventListener("change", renderGuidePicker);
+    const fillPicker = (keep) => {
+      const sets = guideSetsAvailable();
+      pick.innerHTML = sets
+        .map((g) => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.label)}</option>`).join("");
+      if (keep && sets.some((g) => g.id === keep)) pick.value = keep;
+    };
+    fillPicker();
+    renderGuidePanel();
+    setGuideHidden(!!(profile && profile.discovery_guide_hidden));
 
-    btn.addEventListener("click", () => {
-      const set = guideSetsAvailable().find((x) => x.id === pick.value);
+    pick.addEventListener("change", () => { if (!guideEditing) renderGuidePanel(); });
+
+    // Click a question to strike it through. Not while editing, and not
+    // when the click was actually on the little delete button.
+    panel.addEventListener("click", (e) => {
+      const li = e.target.closest("li");
+      if (guideEditing || !li || !panel.contains(li)) return;
+      li.classList.toggle("covered");
+    });
+
+    // --- Expand / collapse ---
+    document.getElementById("guide-expand").addEventListener("click", () => {
+      const all = Array.from(panel.querySelectorAll("details"));
+      const anyClosed = all.some((d) => !d.open);
+      all.forEach((d) => { d.open = anyClosed; });
+      document.getElementById("guide-expand").textContent = anyClosed ? "Collapse all" : "Expand all";
+    });
+
+    // --- Clear (Greg, 10/26/26: "let's add a button to clear the guide too") ---
+    // Unmarks everything and closes the headings, so the panel is back to
+    // how it looked when the call started. Does not touch the notes or the
+    // saved set -- nothing here is destructive.
+    document.getElementById("guide-clear").addEventListener("click", () => {
+      panel.querySelectorAll("li.covered").forEach((li) => li.classList.remove("covered"));
+      panel.querySelectorAll("details").forEach((d) => { d.open = false; });
+      document.getElementById("guide-expand").textContent = "Expand all";
+    });
+
+    // --- Edit mode ---
+    document.getElementById("guide-edit").addEventListener("click", () => {
+      // Strikes are about one conversation, not the question list, so
+      // they come off when the list itself is what is being worked on.
+      panel.querySelectorAll("li.covered").forEach((li) => li.classList.remove("covered"));
+      setGuideEditing(true);
+    });
+
+    document.getElementById("guide-cancel").addEventListener("click", () => {
+      setGuideEditing(false);
+      renderGuidePanel();
+    });
+
+    panel.addEventListener("click", (e) => {
+      if (!guideEditing) return;
+      if (e.target.classList.contains("gq-del")) {
+        e.target.closest("li").remove();
+        return;
+      }
+      if (e.target.classList.contains("gq-add")) {
+        const ul = e.target.closest("details").querySelector("ul");
+        const li = document.createElement("li");
+        li.setAttribute("contenteditable", "true");
+        ul.appendChild(li);
+        li.focus();
+        return;
+      }
+      if (e.target.classList.contains("gq-add-section")) {
+        const d = document.createElement("details");
+        d.open = true;
+        d.innerHTML = '<summary><span class="gq-heading" contenteditable="true">New heading</span>'
+          + '<span class="gq-count"></span></summary><ul><li contenteditable="true"></li></ul>';
+        panel.insertBefore(d, e.target);
+        setGuideEditing(true);
+        d.querySelector(".gq-heading").focus();
+      }
+    });
+
+    document.getElementById("guide-save").addEventListener("click", async () => {
+      const sections = readGuideFromPanel();
+      if (!sections.length) {
+        showBanner("Nothing to save — every heading is empty.", "error");
+        return;
+      }
+      const btn = document.getElementById("guide-save");
+      btn.disabled = true;
+      const ok = await saveGuidePref({ discovery_guide: serializeGuide(sections) });
+      btn.disabled = false;
+      if (!ok) return;
+      myGuideSections = sections;
+      setGuideEditing(false);
+      fillPicker("__mine");
+      pick.value = "__mine";
+      renderGuidePanel();
+      showBanner("Saved. It is on the picker as “My questions”.", "success");
+    });
+
+    document.getElementById("guide-revert").addEventListener("click", async () => {
+      if (!confirm("Delete your saved question set and go back to the built-in ones?")) return;
+      const ok = await saveGuidePref({ discovery_guide: null });
+      if (!ok) return;
+      myGuideSections = null;
+      setGuideEditing(false);
+      fillPicker(QUESTION_GUIDES[0].id);
+      renderGuidePanel();
+      showBanner("Your set is gone. The built-in ones are still here.", "success");
+    });
+
+    // --- Insert into notes, for the Team Leads who do type ---
+    document.getElementById("guide-insert").addEventListener("click", () => {
+      const set = currentGuideSet();
       const editor = document.getElementById("f-notes");
       if (!set || !editor) return;
-      const html = guideHtmlFor(set);
-      if (!html) { showBanner("That set is empty.", "error"); return; }
-
-      // Adding a second set on top of a part-written note is nearly always a
-      // misclick. Appending to notes already underway is normal -- half the
-      // questions come up in the first ten minutes.
       if (editor.textContent.trim() && !confirm(
         "There are already notes here. Add the " + set.label + " questions at the cursor?")) return;
-
       editor.focus();
       const sel = document.getSelection();
       if (!sel.rangeCount || !editor.contains(sel.anchorNode)) {
@@ -1161,52 +1509,16 @@
         sel.removeAllRanges();
         sel.addRange(range);
       }
-      document.execCommand("insertHTML", false, html);
+      document.execCommand("insertHTML", false, guideHtml(set));
     });
 
-    const saveBtn = document.getElementById("guide-save");
-    if (saveBtn) saveBtn.addEventListener("click", async () => {
-      const editor = document.getElementById("f-notes");
-      if (!editor) return;
-      const text = notesHtmlToText(editor);
-      if (!text.trim()) {
-        showBanner("Nothing in the notes to save as a question set.", "error");
-        return;
-      }
-      // Saving over an existing set is destructive and silent otherwise.
-      if (myGuideText.trim() && !confirm(
-        "Replace your saved question set with what is in the notes now?")) return;
-      // A warning, not a block. Saving a note that still has answers in it
-      // is a legitimate thing to do -- a Team Lead who liked the shape of
-      // last call's notes -- and only they can tell a prompt from an answer.
-      // So: count the lines that are not bold. In a question set nearly
-      // every line is; in a filled-in note most are not.
-      const lines = text.split("\n").filter((l) => l.trim());
-      const plain = lines.filter((l) => !/^\s*\*\*.*\*\*\s*$/.test(l.trim())).length;
-      if (lines.length && plain / lines.length > 0.4 && !confirm(
-        "Most of this looks like answers rather than questions. Save it as your set anyway?")) return;
-
-      saveBtn.disabled = true;
-      const { error } = await sb.from("users")
-        .update({ discovery_guide: text }).eq("id", guideUserId);
-      saveBtn.disabled = false;
-      if (error) { showBanner("Couldn't save your question set: " + error.message, "error"); return; }
-      myGuideText = text;
-      renderGuidePicker();
-      document.getElementById("guide-pick").value = "__mine";
-      renderGuidePicker();
-      showBanner("Saved as your question set. It is on the picker as “My questions”.", "success");
-    });
-
-    const hideBtn = document.getElementById("guide-hide");
-    if (hideBtn) hideBtn.addEventListener("click", () => {
-      setGuidesHidden(true);
+    // --- Hide / show ---
+    document.getElementById("guide-hide").addEventListener("click", () => {
+      setGuideHidden(true);
       saveGuidePref({ discovery_guide_hidden: true });
     });
-
-    const showBtn = document.getElementById("guide-show");
-    if (showBtn) showBtn.addEventListener("click", () => {
-      setGuidesHidden(false);
+    document.getElementById("guide-show").addEventListener("click", () => {
+      setGuideHidden(false);
       saveGuidePref({ discovery_guide_hidden: false });
     });
   }

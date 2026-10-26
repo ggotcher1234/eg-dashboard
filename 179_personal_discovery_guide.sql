@@ -9,20 +9,17 @@
 -- columns carry the other two.
 --
 -- discovery_guide        -- this person's OWN question set, if they saved
---                           one. Same markdown-lite the notes themselves
---                           use ("**bold**", "- " bullets), so it goes
---                           through notesTextToHtml on the way in and
---                           notesHtmlToText on the way out, exactly like
---                           the note it was saved from. No second format,
---                           no second parser.
+--                           one. Stored as "## Heading" lines with plain
+--                           question lines under them -- its own small
+--                           format rather than the notes' markdown-lite,
+--                           because a guide is headings of questions and a
+--                           note is prose. Still plain text, still
+--                           greppable in the database.
 --
---                           It is saved FROM the notes field rather than
---                           typed into a template editor: a Team Lead
---                           inserts a built-in set, deletes what they never
---                           ask, adds their own, and presses Save. The
---                           editor they already know is the template
---                           editor, which is why there is no new screen
---                           here.
+--                           Edited in the guide panel itself: press Edit
+--                           and the questions become text you can change,
+--                           add to and delete, with Save writing the lot
+--                           back here. No separate template screen.
 --
 -- discovery_guide_hidden -- the wing-it case. Hides the picker row for this
 --                           person on every engagement and every machine.
