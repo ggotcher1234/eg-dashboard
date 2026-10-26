@@ -440,16 +440,116 @@
     const host = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
     if (host && host.closest && host.closest(".rt-editor")) rtUpdateToolbar();
   });
-  // Paste as plain text: a paragraph dragged in from Word or a browser
-  // arrives with its own fonts, colours and spans, none of which survive the
-  // round trip to the stored format -- so it would look right until the next
-  // time the form was opened.
+  // ---------- Paste ----------
+  // This used to drop everything to plain text, on the grounds that a
+  // paragraph from Word arrives wrapped in fonts, colours and spans that
+  // cannot survive the round trip to the stored format. True, and still
+  // true -- but it threw out the headings, bullets and numbering with
+  // them. Greg (10/26/26), pasting a prepared question list into the
+  // Discovery Call notes: "They have been very nicely laid out but when i
+  // copy and paste them into the Discovery call form they lose all their
+  // nice formatting."
+  //
+  // The field already does bold, italic, bulleted and numbered lists --
+  // that is the whole toolbar. So the answer is not to admit arbitrary
+  // HTML, it is to TRANSLATE the clipboard into the four things the field
+  // can keep and discard the rest.
+  //
+  // How, without a second parser: the pasted markup is normalised and then
+  // pushed through the two converters this file already has --
+  // notesHtmlToText, which is what runs on save, and notesTextToHtml,
+  // which is what runs on load. Anything that survives that pair is by
+  // definition expressible in the stored format, so what lands in the
+  // editor is exactly what will still be there next time the form is
+  // opened. No class of paste can look right now and wrong tomorrow.
+  //
+  // Headings become bold paragraphs, because the stored format has no
+  // heading level and a heading that silently flattened to body text is
+  // how a structured question list turns into a wall.
+  function normalisePastedMarkup(root) {
+    root.querySelectorAll("style, script, meta, link, title, head, img, svg").forEach((n) => n.remove());
+
+    // Google Docs wraps an entire copied selection in <b style="font-weight:normal">,
+    // which would bold the lot if taken at face value.
+    root.querySelectorAll("b[style], strong[style]").forEach((el) => {
+      if (/font-weight\s*:\s*(normal|400)/i.test(el.getAttribute("style") || "")) {
+        el.replaceWith(...el.childNodes);
+      }
+    });
+
+    root.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach((h) => {
+      const text = h.textContent.trim();
+      const p = document.createElement("p");
+      if (text) {
+        const strong = document.createElement("strong");
+        strong.textContent = text;
+        p.appendChild(strong);
+      }
+      h.replaceWith(p);
+    });
+
+    // Word and Docs carry weight and slant on inline styles rather than in
+    // <b> and <i>, so the tags this file understands have to be put back.
+    root.querySelectorAll("[style]").forEach((el) => {
+      const style = el.getAttribute("style") || "";
+      const weight = /font-weight\s*:\s*(bold(?:er)?|[1-9]00)/i.exec(style);
+      const bold = !!weight && (/bold/i.test(weight[1]) || Number(weight[1]) >= 600);
+      const italic = /font-style\s*:\s*italic/i.test(style);
+      el.removeAttribute("style");
+      if (!bold && !italic) return;
+      let inner = el;
+      if (bold) {
+        const strong = document.createElement("strong");
+        strong.append(...inner.childNodes);
+        inner.appendChild(strong);
+        inner = strong;
+      }
+      if (italic) {
+        const em = document.createElement("em");
+        em.append(...inner.childNodes);
+        inner.appendChild(em);
+      }
+    });
+    return root;
+  }
+
   document.addEventListener("paste", (e) => {
     const editor = e.target.closest && e.target.closest(".rt-editor");
     if (!editor) return;
+    const clip = e.clipboardData || window.clipboardData;
+    const html = clip.getData("text/html");
+    const text = clip.getData("text/plain");
     e.preventDefault();
-    const text = (e.clipboardData || window.clipboardData).getData("text/plain");
-    document.execCommand("insertText", false, text);
+
+    // A few words dropped into the middle of a sentence stay a few words.
+    // Only something with structure in it gets rebuilt as blocks, or every
+    // one-line paste would break the paragraph it landed in.
+    if (!html && !/[\r\n]/.test(text || "")) {
+      document.execCommand("insertText", false, text || "");
+      return;
+    }
+
+    let rebuilt = "";
+    try {
+      const holder = document.createElement("div");
+      // Plain text still goes through notesTextToHtml, so a list typed as
+      // "- one" in a mail client arrives as a list rather than as hyphens.
+      holder.innerHTML = html
+        ? notesTextToHtml(notesHtmlToText(normalisePastedMarkup(
+            new DOMParser().parseFromString(html, "text/html").body)))
+        : notesTextToHtml(text);
+      rebuilt = holder.innerHTML;
+    } catch (err) {
+      rebuilt = "";
+    }
+
+    if (!rebuilt) {
+      document.execCommand("insertText", false, text || "");
+      return;
+    }
+    // insertHTML, not innerHTML: the paste has to land at the cursor and
+    // stay undoable.
+    document.execCommand("insertHTML", false, rebuilt);
   });
 
   function htmlToPlainText(html) {
