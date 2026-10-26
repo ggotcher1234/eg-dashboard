@@ -616,18 +616,34 @@
   input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Chris/Rita 9/18/26: "links will be indicated by an underline on hover,
-     preserving a clean default UI." So the underline is the hover state, not
-     the resting one, on both of the table's in-cell links. Colour still marks
-     them as clickable at rest -- take the underline away AND leave them black
-     and nobody would know they do anything. Keyboard focus keeps a visible
-     underline too, since focus has no hover to rely on. */
+     preserving a clean default UI." Colour alone at rest, underline on hover.
+     Keyboard focus keeps the underline too, since focus has no hover.
+     
+     10/26/26: colour alone turned out not to be enough. Rita asked whether
+     we had built a way to change the date on a logged entry -- we had, on
+     10/16, and the only door to it is the work-area name in this table.
+     She had not found the door. If she has not, nobody has.
+
+     So the resting state now carries a DOTTED underline, not the solid one
+     that 9/18 was ruling out. It reads as "this does something" at a glance
+     while keeping the table quieter than a page of blue rules, and hover
+     still promotes it to solid, which is the behaviour that was agreed. */
   .spent-link, .area-link {
     background: none; border: none; padding: 0; font: inherit; color: var(--navy-light);
-    cursor: pointer; text-decoration: none; text-align: inherit;
+    cursor: pointer; text-align: inherit;
+    text-decoration: underline dotted;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    text-decoration-color: rgba(31, 74, 117, 0.45);
   }
   .spent-link { font-weight: 700; }
   .spent-link:hover, .spent-link:focus-visible,
-  .area-link:hover, .area-link:focus-visible { color: var(--navy); text-decoration: underline; }
+  .area-link:hover, .area-link:focus-visible {
+    color: var(--navy);
+    text-decoration: underline solid;
+    text-decoration-thickness: 1px;
+    text-decoration-color: currentColor;
+  }
   .field-error { color: var(--danger); font-size: 12.5px; margin-top: 8px; display: none; }
   .engagement-summary { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 12px; }
   /* Sits beside "Totals" on the footer row: same voice as the summary line it
@@ -3144,7 +3160,7 @@
       const remaining = round2(Number(r.hours_allotted) - Number(r.hoursSpent));
       const remainingCell = `<span${remaining < 0 ? ' style="color:var(--danger); font-weight:700;"' : ""}>${trimHours(remaining)}</span>`;
       const areaCell = canViewHistory
-        ? `<button type="button" class="area-link" data-history="${r.id}" title="View billing history">${escapeHtml(label)}</button>`
+        ? `<button type="button" class="area-link" data-history="${r.id}" title="Billing history \u2014 every entry logged against this row, and where an Admin corrects a date or an hours figure">${escapeHtml(label)}</button>`
         : escapeHtml(label);
       tr.innerHTML = `
         <td>${areaCell}</td>
