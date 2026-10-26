@@ -214,6 +214,16 @@
   .contact-cell-phone { font-size: 12.5px; margin-top: 1px; }
   .contact-phone-link { color: var(--navy-light); text-decoration: none; }
   .contact-phone-link:hover { text-decoration: underline; }
+  /* Rita (10/26/26): "Can the emails be added to the program page? Right
+     now we have to go into the program (click) to see emails." Same
+     complaint that put the phone number here in August, and the same
+     answer. 12px rather than the phone's 12.5 and allowed to break mid-
+     address, because an address is two or three times the width of a
+     phone number and these are three columns on one row. */
+  .contact-cell-email { font-size: 12px; margin-top: 1px; line-height: 1.3;
+                        overflow-wrap: anywhere; }
+  .contact-email-link { color: var(--navy-light); text-decoration: none; }
+  .contact-email-link:hover { text-decoration: underline; }
   tr.archived-row { opacity: 0.6; }
   .archived-badge {
     display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
@@ -1383,10 +1393,16 @@
   // Contract Signer / Program Administrator / Billing columns (Chris/Greg,
   // 9/3/26, from Chris's marked-up Programs sheet): one row now shows the
   // key person for each role straight from the structured contact
-  // categories (089_program_contact_structured_fields.sql) -- name with the
-  // phone number underneath -- so Rita never has to open a Program just to
-  // find a number. "Billing" is the Program Finance contact (who receives
-  // EG's invoices). First contact listed in each category wins.
+  // categories (089_program_contact_structured_fields.sql) -- name, phone
+  // and, since 10/26/26, email -- so Rita never has to open a Program just
+  // to find a number or an address. "Billing" is the Program Finance
+  // contact (who receives EG's invoices). First contact in each category
+  // wins.
+  //
+  // "No email" is shown rather than nothing, the same as the phone line.
+  // A blank space would read as a short row; the words say the field is
+  // empty and worth filling in, which is the other half of what Rita is
+  // scanning this page for.
   function renderRoleContactCell(p, roleField) {
     const list = contactsForRole(p.id, roleField);
     const c = list[0];
@@ -1394,7 +1410,14 @@
     const phoneHtml = c.phone
       ? `<a href="tel:${escapeHtml(c.phone.replace(/[^0-9+]/g, ""))}" class="contact-phone-link">${escapeHtml(c.phone)}</a>`
       : '<span class="cell-muted">No phone</span>';
-    return `<div class="contact-cell-name">${escapeHtml(c.name || "—")}</div><div class="contact-cell-phone">${phoneHtml}</div>`;
+    // mailto only, no body or subject: this is a "start a message to this
+    // person" link, not one of the composed letters.
+    const emailHtml = c.email
+      ? `<a href="mailto:${escapeHtml(c.email)}" class="contact-email-link">${escapeHtml(c.email)}</a>`
+      : '<span class="cell-muted">No email</span>';
+    return `<div class="contact-cell-name">${escapeHtml(c.name || "—")}</div>`
+      + `<div class="contact-cell-phone">${phoneHtml}</div>`
+      + `<div class="contact-cell-email">${emailHtml}</div>`;
   }
 
   // ---------- Archive / Unarchive (soft, keeps everything) ----------
