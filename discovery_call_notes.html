@@ -132,6 +132,11 @@
     outline: none; border-radius: 4px; background: #f7f9fa;
   }
   #guide-panel.editing .gq-opening[contenteditable]:focus { background: #fff; box-shadow: 0 0 0 2px rgba(92,114,72,0.3); }
+  #guide-panel .gq-priorities { margin: 4px 0 0; padding: 0 14px 2px 34px; background: #fff;
+                                font-size: 13.5px; color: var(--navy); font-weight: 600; }
+  #guide-panel .gq-priorities li { cursor: default; margin-bottom: 3px; }
+  #guide-panel .gq-priorities-none { margin: 2px 0 0; padding: 0 14px 2px 14px; background: #fff;
+                                     font-size: 12.5px; color: var(--muted); font-style: italic; }
   #guide-panel li { font-size: 13.5px; line-height: 1.5; margin-bottom: 7px; cursor: pointer; }
   #guide-panel li:last-child { margin-bottom: 0; }
   /* Click to strike through what has been covered. Session only, nothing
@@ -612,7 +617,7 @@
             "What challenges are getting in the way of that growth?",
             "Which of your priorities would be most valuable for our research team to address during this engagement?",
           ],
-          "You listed these three priorities in your application. Tell us a little more about what you’d like to accomplish.",
+          "You listed these priorities in your application. Tell us a little more about what you’d like to accomplish. {priorities}",
         ],
         [
           "Customers",
@@ -653,42 +658,38 @@
         [
           "Sales Channels",
           [
-            "Roughly how does the work split across four routes: existing relationships and repeat business, inbound enquiries from the web, your own direct selling, and distributors or reps?",
-            "Which of those four is growing, and which has gone flat?",
-            "Which one produces your best margin, and which your worst?",
-            "If you had to grow one of the four this year, which has the most room in it?",
-            "If you sell through distributors or reps — who are they, what territory does each cover, and which ones actually produce?",
-            "Is there one carrying your line who sells nothing? What would it take to fix or replace them?",
-            "When a distributor sells for you, do you ever meet the end customer, or do they own that relationship?",
-            "Does a distributor ever end up bidding against your own direct sales? How do you handle it?",
+            "Do you sell directly to customers, through partners, or both?",
+            "What role do distributors, dealers, resellers, or other partners play?",
+            "Which sales channels generate the most business?",
+            "Which channels are working well, and which would you like to grow?",
+            "Are there new channels or types of partners you would like to explore?",
+            "Are there challenges finding or working with partners in your current channels?",
           ],
+          "How do your products or services reach your customers?",
         ],
         [
           "Sales",
           [
-            "Of those last five jobs, how did each one actually reach you?",
-            "Do you do any outbound — calls, emails, visits? Who does it and how often?",
-            "How long is a typical sale, from first contact to purchase order?",
-            "How far ahead of the work does your part get specified or bought?",
-            "Are you on anyone's approved-vendor or prequalified-bidder list? How did you get on it?",
-            "Do you bid public work — school districts, municipalities, state projects? Do you want more of it?",
-            "Where do you hear about projects before they go out to bid?",
-            "Are there seasons to this? Does the phone go quiet in a predictable month?",
-            "If I handed you fifty named people at firms that fit, with a reason to call each one this quarter, what would you do with it?",
+            "Who is responsible for sales and business development?",
+            "How do you identify and reach potential customers?",
+            "What happens from the first contact to a sale?",
+            "What information would help you identify or reach the right prospects?",
+            "Are there events or changes that signal a customer may be ready to buy?",
+            "What are the biggest challenges in finding or winning new business?",
           ],
+          "How do you find and develop new sales opportunities?",
         ],
         [
           "Marketing",
           [
-            "What are you doing right now to bring work in? Everything, even the things you think do not count.",
-            "Do architects and GCs around here search for this, or is it all relationships and bid lists?",
-            "If someone needed what you make and did not know you, what would they type?",
-            "What does your website do for you today, honestly?",
-            "What have you got for photographs of finished work, and where can someone see them?",
-            "Are you on LinkedIn or Instagram? For a visual trade those are where specifiers look.",
-            "Have you ever run anything paid? What did it return?",
-            "What have you tried before that did not work?",
+            "What marketing activities are you using today?",
+            "How do potential customers typically find your business?",
+            "What role does your website play in generating inquiries or sales?",
+            "How are you using search, content, social media, or email to reach potential customers?",
+            "Which marketing activities are working well, and where would you like to improve?",
+            "What marketing resources or outside support do you have available?",
           ],
+          "How do you currently market your business and attract new customers?",
         ],
         [
           "Events & Watering Holes",
@@ -1306,6 +1307,57 @@
     return guideSetsAvailable().find((g) => g.id === (pick && pick.value));
   }
 
+  // {priorities} in an opening is replaced by what the client actually
+  // wrote under "Top Three Business Issues" on their application (Greg,
+  // 10/27/26: "let's add the 3 growth objectives from the application").
+  //
+  // Read off the Business Issues field on this very form rather than
+  // queried again: it is already loaded, and it is editable, so a Team
+  // Lead who tidies up a rambling application entry sees the tidied
+  // version in the prompt too.
+  //
+  // "three" came out of the sentence. The application asks for three and
+  // clients routinely give two, and a prompt that says three above a list
+  // of two is the kind of small wrongness that makes someone distrust the
+  // rest of the screen.
+  // People write these three things every way there is: one per line, semi
+  // colon separated, bulleted, numbered, or all on one line as "1. x 2. y".
+  // Split the obvious separators first, strip a leading bullet or number
+  // from each piece, and only if that leaves a single run containing
+  // embedded numbering split that too.
+  function clientPriorities() {
+    const el = document.getElementById("f-business-issues");
+    const raw = ((el && el.value) || "").trim();
+    if (!raw) return [];
+    const clean = (x) => x.trim()
+      .replace(/^[-*•]\s*/, "")
+      .replace(/^\d+[.)]\s*/, "")
+      .trim();
+    let parts = raw.split(/\r?\n|;/).map(clean).filter(Boolean);
+    if (parts.length === 1 && /\s\d+[.)]\s/.test(parts[0])) {
+      parts = parts[0].split(/\s(?=\d+[.)]\s)/).map(clean).filter(Boolean);
+    }
+    return parts;
+  }
+
+  function prioritiesHtml() {
+    const items = clientPriorities();
+    if (!items.length) {
+      return '<p class="gq-priorities-none">Nothing listed under Business Issues on the application.</p>';
+    }
+    return '<ol class="gq-priorities">'
+      + items.map((x) => `<li>${escapeHtml(x)}</li>`).join("")
+      + "</ol>";
+  }
+
+  function openingHtml(opening) {
+    if (!opening.includes("{priorities}")) {
+      return `<p class="gq-opening">${escapeHtml(opening)}</p>`;
+    }
+    const text = opening.replace("{priorities}", "").trim();
+    return `<p class="gq-opening">${escapeHtml(text)}</p>` + prioritiesHtml();
+  }
+
   function renderGuidePanel() {
     const panel = document.getElementById("guide-panel");
     const set = currentGuideSet();
@@ -1315,7 +1367,7 @@
     panel.innerHTML = set.sections.map(([heading, questions, opening], si) => `
       <details data-section="${si}">
         <summary><span class="gq-heading">${escapeHtml(heading)}</span><span class="gq-count">${questions.length + (opening ? 1 : 0)}</span></summary>
-        ${opening ? `<p class="gq-opening">${escapeHtml(opening)}</p>` : ""}
+        ${opening ? openingHtml(opening) : ""}
         <ol>${questions.map((q) => `<li>${escapeHtml(q)}</li>`).join("")}</ol>
       </details>`).join("");
     panel.classList.remove("editing");
@@ -1430,6 +1482,17 @@
     setGuideHidden(!!(profile && profile.discovery_guide_hidden));
 
     pick.addEventListener("change", () => { if (!guideEditing) renderGuidePanel(); });
+
+    const issues = document.getElementById("f-business-issues");
+    if (issues) issues.addEventListener("input", () => {
+      // Swap just the list. A re-render here would wipe every question
+      // struck through so far, which mid-call is unforgivable.
+      const holder = document.querySelector("#guide-panel .gq-priorities, #guide-panel .gq-priorities-none");
+      if (!holder) return;
+      const tmp = document.createElement("div");
+      tmp.innerHTML = prioritiesHtml();
+      holder.replaceWith(tmp.firstElementChild);
+    });
 
     // Click a question to strike it through. Not while editing, and not
     // when the click was actually on the little delete button.
@@ -2202,6 +2265,10 @@
       $("save-hint").textContent = "Previously saved notes loaded below.";
     }
     renderNotesAttachment();
+    // The guide panel is built before the client's data arrives, so the
+    // Growth Goals priorities are empty on that first pass. Nothing is
+    // marked or open yet at this point, so a full re-render costs nothing.
+    renderGuidePanel();
 
     $("form-view").classList.remove("hidden");
   }
