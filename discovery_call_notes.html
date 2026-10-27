@@ -97,9 +97,8 @@
   .guide-editbar .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   .guide-editbar .btn-primary:hover { background: var(--accent-dark); }
   #guide-hide { color: var(--muted); font-size: 15px; line-height: 1; padding: 0 9px; }
-  .guide-hint { font-size: 12px; color: var(--muted); margin: 0 0 8px; line-height: 1.45; max-width: 70ch; }
-  .guide-hint:empty { display: none; }
   .guide-closed { margin-bottom: 14px; }
+  .rt-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
 
   /* One heading per row, all closed to start. A discovery call wanders, so
      the Team Lead opens the heading the conversation has arrived at rather
@@ -381,12 +380,10 @@
             <select id="guide-pick" aria-label="Question guide"></select>
             <span class="guide-bar-spacer"></span>
             <button type="button" id="guide-expand" title="Open or close every heading">Expand all</button>
-            <button type="button" id="guide-clear" title="Unmark everything and close the headings">Clear</button>
+            <button type="button" id="guide-clear" title="Unmark every question and close the headings">Reset</button>
             <button type="button" id="guide-edit" title="Change the questions and save them as your own set">Edit</button>
-            <button type="button" id="guide-insert" title="Drop these questions into the notes below, to type answers under">Insert into notes</button>
             <button type="button" id="guide-hide" title="Hide the question guide — you can bring it back">&times;</button>
           </div>
-          <div class="guide-hint" id="guide-hint"></div>
           <div id="guide-panel"></div>
           <div class="guide-editbar hidden" id="guide-editbar">
             <button type="button" class="btn-primary" id="guide-save">Save as my set</button>
@@ -405,6 +402,12 @@
             <button type="button" data-rt="italic" title="Italic"><em>I</em></button>
             <button type="button" data-rt="bullet" title="Bulleted list">&#8226;&nbsp;List</button>
             <button type="button" data-rt="number" title="Numbered list">1.&nbsp;List</button>
+            <span class="rt-sep"></span>
+            <button type="button" id="guide-insert" title="Drop the guide questions in here, to type answers under">Insert questions</button>
+            <button type="button" id="guide-strip" title="Take the guide questions back out, keeping anything you typed">Remove questions</button>
+            <span class="rt-sep"></span>
+            <button type="button" id="notes-clear" title="Empty the notes">Clear notes</button>
+            <button type="button" id="notes-undo" class="hidden" title="Put back the notes that were just cleared">Undo clear</button>
           </div>
           <div id="f-notes" class="rt-editor" contenteditable="true" role="textbox" aria-multiline="true"
                aria-label="Discovery call notes" data-placeholder="Discovery call notes&hellip;"></div>
@@ -1248,6 +1251,9 @@
   let guideUserId = null;
   let myGuideSections = null;   // null = they have not saved one
   let guideEditing = false;
+  // Holds the notes through a Clear so Undo can put them back. Page-lifetime
+  // only; clearing and then reloading is the same as clearing and saving.
+  let clearedNotesBackup = null;
 
   function serializeGuide(sections) {
     return sections.map(([heading, questions]) =>
@@ -1284,10 +1290,8 @@
 
   function renderGuidePanel() {
     const panel = document.getElementById("guide-panel");
-    const hint = document.getElementById("guide-hint");
     const set = currentGuideSet();
     if (!panel) return;
-    if (hint) hint.textContent = set ? set.note : "";
     if (!set) { panel.innerHTML = ""; return; }
 
     panel.innerHTML = set.sections.map(([heading, questions], si) => `
@@ -1510,6 +1514,87 @@
         sel.addRange(range);
       }
       document.execCommand("insertHTML", false, guideHtml(set));
+    });
+
+    // --- Take the questions back out of the notes ---
+    // Greg (10/27/26): "we need to be able to remove the questions". Insert
+    // was one-way, so a Team Lead who dropped the wrong set in, or who
+    // decided mid-call to let the notetaker handle it, had to delete
+    // eighty lines by hand.
+    //
+    // It removes only lines that EXACTLY match a heading or question from
+    // one of the known sets -- every set, not just the one showing, since
+    // the one inserted may not be the one now picked. Anything typed is
+    // left alone, including a question someone edited, because an edited
+    // line is no longer the guide's. Conservative on purpose: leaving a
+    // line behind costs one keystroke, deleting somebody's note costs the
+    // call.
+    function knownGuideLines() {
+      const set = new Set();
+      guideSetsAvailable().forEach((g) => g.sections.forEach(([heading, questions]) => {
+        set.add(heading.trim().toUpperCase());
+        questions.forEach((q) => set.add(q.trim()));
+      }));
+      return set;
+    }
+
+    document.getElementById("guide-strip").addEventListener("click", () => {
+      const editor = document.getElementById("f-notes");
+      if (!editor) return;
+      const known = knownGuideLines();
+      const isGuideLine = (el) => {
+        const t = (el.textContent || "").trim();
+        if (!t) return false;
+        return known.has(t) || known.has(t.toUpperCase());
+      };
+      const doomed = Array.from(editor.children).filter(isGuideLine);
+      if (!doomed.length) {
+        showBanner("No guide questions found in the notes.", "error");
+        return;
+      }
+      if (!confirm("Remove " + doomed.length + " guide line"
+          + (doomed.length === 1 ? "" : "s") + " from the notes? Anything you typed stays.")) return;
+      doomed.forEach((el) => {
+        // Take the blank line that was inserted under the question with it,
+        // otherwise stripping leaves a column of empty paragraphs.
+        const next = el.nextElementSibling;
+        if (next && !(next.textContent || "").trim() && next.querySelector("br")) next.remove();
+        el.remove();
+      });
+      showBanner("Removed " + doomed.length + " guide line"
+        + (doomed.length === 1 ? "" : "s") + ".", "success");
+    });
+
+    // --- Clear the notes, with the safety catch Greg asked for ---
+    // Two things make it safe rather than just slow: it says how much it is
+    // about to destroy, and the text goes to a module-level variable so the
+    // banner can offer it straight back. The undo lives as long as the page
+    // does, which is longer than anybody takes to realise.
+    document.getElementById("notes-clear").addEventListener("click", () => {
+      const editor = document.getElementById("f-notes");
+      if (!editor) return;
+      const text = notesHtmlToText(editor);
+      if (!text.trim()) { showBanner("The notes are already empty.", "error"); return; }
+      const lines = text.split("\n").filter((l) => l.trim()).length;
+      const words = text.split(/\s+/).filter(Boolean).length;
+      if (!confirm("Clear the notes?\n\n" + lines + " line" + (lines === 1 ? "" : "s")
+          + ", " + words + " word" + (words === 1 ? "" : "s")
+          + " will be removed from this screen.\n\nNothing is saved until you press Save, "
+          + "and Undo clear will bring it back.")) return;
+      clearedNotesBackup = editor.innerHTML;
+      editor.innerHTML = "";
+      const undo = document.getElementById("notes-undo");
+      if (undo) undo.classList.remove("hidden");
+      showBanner("Notes cleared. Undo clear is beside the toolbar.", "success");
+    });
+
+    document.getElementById("notes-undo").addEventListener("click", () => {
+      const editor = document.getElementById("f-notes");
+      if (clearedNotesBackup === null || !editor) return;
+      editor.innerHTML = clearedNotesBackup;
+      clearedNotesBackup = null;
+      document.getElementById("notes-undo").classList.add("hidden");
+      showBanner("Notes put back.", "success");
     });
 
     // --- Hide / show ---
