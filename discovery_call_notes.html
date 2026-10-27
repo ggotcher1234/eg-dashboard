@@ -120,7 +120,18 @@
     margin-left: auto; font-weight: 400; font-size: 11px; color: var(--muted);
     background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px;
   }
-  #guide-panel ul { margin: 0; padding: 8px 14px 12px 32px; background: #fff; }
+  #guide-panel ul, #guide-panel ol { margin: 0; padding: 8px 14px 12px 34px; background: #fff; }
+  /* The opening question, set apart from the follow-up prompts: you ask it
+     and then stop talking. The numbered list under it is what you reach for
+     if the answer left something out. */
+  #guide-panel .gq-opening {
+    margin: 0; padding: 10px 14px 2px 14px; background: #fff;
+    font-size: 14px; font-weight: 600; color: var(--navy);
+  }
+  #guide-panel.editing .gq-opening[contenteditable] {
+    outline: none; border-radius: 4px; background: #f7f9fa;
+  }
+  #guide-panel.editing .gq-opening[contenteditable]:focus { background: #fff; box-shadow: 0 0 0 2px rgba(92,114,72,0.3); }
   #guide-panel li { font-size: 13.5px; line-height: 1.5; margin-bottom: 7px; cursor: pointer; }
   #guide-panel li:last-child { margin-bottom: 0; }
   /* Click to strike through what has been covered. Session only, nothing
@@ -584,51 +595,48 @@
         [
           "Business Overview",
           [
-            "Walk me through what you make. If I stood in the shop on a Tuesday, what is on the benches?",
-            "How does the business make its money — which work is profitable, and which just keeps people busy?",
-            "Take your last five jobs — who bought, what was it, roughly what did it bill?",
-            "Which of those five would you want ten more of, and why that one?",
-            "What is a typical job worth, and what is the range from smallest to largest?",
-            "What are you turning down right now? Price, capacity, wrong type of work, too far away?",
-            "How did you get from one person to where you are now — did demand show up, or did you go get it?",
+            "What are your primary products or services?",
+            "What types of customers do you serve?",
+            "Which products or services make up the largest part of your business?",
+            "How do customers typically buy from you — directly, through partners, or through other channels?",
+            "What sets your business apart from others offering similar products or services?",
           ],
+          "Tell us a little about your business.",
         ],
         [
           "Growth Goals",
           [
-            "Twelve months from now, what has to be true for you to call this a good year? Give me the number.",
-            "Is that number more of the same work, or a different kind of work?",
-            "What is the single biggest thing standing between you and that number?",
-            "If I could hand you one thing — the right buyers to call, a read on which markets are growing, a picture of what your competitors are doing, or a way for the right people to find you — which do you grab first?",
+            "Where do you see the greatest opportunities for growth?",
+            "Are you looking to grow with existing customers and markets, reach new ones, or both?",
+            "Are there particular products or services you want to grow?",
+            "What challenges are getting in the way of that growth?",
+            "Which of your priorities would be most valuable for our research team to address during this engagement?",
           ],
+          "You listed these three priorities in your application. Tell us a little more about what you’d like to accomplish.",
         ],
         [
           "Customers",
           [
-            "Who are your three or four best customers, and what makes them your best?",
-            "Why do they buy from you rather than the other shop? In their words, not yours.",
-            "Who is on the other side of a good job — a general contractor, a construction manager, an architect, a designer, an owner?",
-            "Who decides you get the work, and who just signs the paperwork?",
-            "Give me a job title. When the call comes in, whose name is on it?",
-            "How big is a firm you work well with — headcount, revenue, projects a year? What is too small, and too big?",
-            "Name five firms that would be perfect customers but are not customers yet.",
-            "What has to be happening at a firm for them to need you right now?",
-            "Which end markets do your customers sit in — healthcare, education, hospitality, retail, offices, residential — and roughly what share is each?",
-            "How far do you ship, and what is the real limit — freight, install crews, site visits?",
-            "How much of this year's revenue came from customers you already had last year?",
+            "What types of customers are the best fit for your business?",
+            "What industries and geographic areas do you currently serve?",
+            "Who typically makes or influences the buying decision?",
+            "What needs or situations lead customers to look for your products or services?",
+            "Are there particular types of customers you would like to reach more of?",
+            "Are there new industries or geographic areas you would like to explore?",
           ],
+          "Tell us about the customers you serve today.",
         ],
         [
           "Competitors",
           [
-            "Name the three or four shops you run into most often.",
-            "When you lose a job, who do you lose it to?",
-            "What reason do they give you? Price, lead time, capability, relationship, something else?",
-            "Is there one you keep losing to, and do you know what they do differently?",
-            "When you win, what tipped it?",
-            "Is anyone newly in your market who was not there two years ago?",
-            "Is there a shop you admire — someone doing it the way you would like to in five years?",
+            "Who are your primary competitors?",
+            "Are they local, regional, national, or a mix?",
+            "What alternatives do customers consider when deciding whether to buy from you?",
+            "Why do customers choose you over your competitors?",
+            "Where do you see competitors having an advantage?",
+            "Are there competitors you would particularly like us to research?",
           ],
+          "Tell us about the companies you compete with.",
         ],
         [
           "Industry Trends & Disruption",
@@ -1223,8 +1231,9 @@
     const esc = (t) => escapeHtml(t);
     let html = "";
     guide.sections.forEach((pair) => {
-      const [heading, questions] = pair;
+      const [heading, questions, opening] = pair;
       html += `<p><strong>${esc(heading.toUpperCase())}</strong></p>`;
+      if (opening) html += `<p><strong>${esc(opening)}</strong></p><p><br></p>`;
       questions.forEach((q) => {
         html += `<p><strong>${esc(q)}</strong></p><p><br></p>`;
       });
@@ -1257,9 +1266,14 @@
   // only; clearing and then reloading is the same as clearing and saving.
   let clearedNotesBackup = null;
 
+  // "## Heading", then "> " for the opening question if there is one, then
+  // the follow-up prompts one per line.
   function serializeGuide(sections) {
-    return sections.map(([heading, questions]) =>
-      "## " + heading + "\n" + questions.join("\n")).join("\n\n");
+    return sections.map(([heading, questions, opening]) => {
+      const head = "## " + heading;
+      const lead = opening ? "\n> " + opening : "";
+      return head + lead + (questions.length ? "\n" + questions.join("\n") : "");
+    }).join("\n\n");
   }
 
   function parseGuide(text) {
@@ -1271,6 +1285,8 @@
       if (h) { sections.push([h[1].trim(), []]); return; }
       // A question before any heading gets one, rather than being dropped.
       if (!sections.length) sections.push(["Questions", []]);
+      const o = /^>\s+(.*)$/.exec(line);
+      if (o) { sections[sections.length - 1][2] = o[1].trim(); return; }
       sections[sections.length - 1][1].push(line);
     });
     return sections.filter(([, qs]) => qs.length);
@@ -1296,10 +1312,11 @@
     if (!panel) return;
     if (!set) { panel.innerHTML = ""; return; }
 
-    panel.innerHTML = set.sections.map(([heading, questions], si) => `
+    panel.innerHTML = set.sections.map(([heading, questions, opening], si) => `
       <details data-section="${si}">
-        <summary><span class="gq-heading">${escapeHtml(heading)}</span><span class="gq-count">${questions.length}</span></summary>
-        <ul>${questions.map((q) => `<li>${escapeHtml(q)}</li>`).join("")}</ul>
+        <summary><span class="gq-heading">${escapeHtml(heading)}</span><span class="gq-count">${questions.length + (opening ? 1 : 0)}</span></summary>
+        ${opening ? `<p class="gq-opening">${escapeHtml(opening)}</p>` : ""}
+        <ol>${questions.map((q) => `<li>${escapeHtml(q)}</li>`).join("")}</ol>
       </details>`).join("");
     panel.classList.remove("editing");
   }
@@ -1317,6 +1334,11 @@
 
     panel.querySelectorAll("details").forEach((d) => {
       if (on) d.open = true;
+      const op = d.querySelector(".gq-opening");
+      if (op) {
+        if (on) op.setAttribute("contenteditable", "true");
+        else op.removeAttribute("contenteditable");
+      }
       const sum = d.querySelector("summary .gq-heading");
       // setAttribute, not the contentEditable property: the attribute is
       // what the CSS selector [contenteditable] matches, and what a test
@@ -1361,6 +1383,8 @@
     const sections = [];
     panel.querySelectorAll("details").forEach((d) => {
       const heading = (d.querySelector("summary .gq-heading").textContent || "").trim();
+      const openEl = d.querySelector(".gq-opening");
+      const opening = openEl ? (openEl.textContent || "").trim() : "";
       const questions = [];
       d.querySelectorAll("li").forEach((li) => {
         const clone = li.cloneNode(true);
@@ -1368,7 +1392,9 @@
         const t = (clone.textContent || "").trim();
         if (t) questions.push(t);
       });
-      if (heading && questions.length) sections.push([heading, questions]);
+      if (heading && (questions.length || opening)) {
+        sections.push(opening ? [heading, questions, opening] : [heading, questions]);
+      }
     });
     return sections;
   }
@@ -1451,7 +1477,7 @@
         return;
       }
       if (e.target.classList.contains("gq-add")) {
-        const ul = e.target.closest("details").querySelector("ul");
+        const ul = e.target.closest("details").querySelector("ol, ul");
         const li = document.createElement("li");
         li.setAttribute("contenteditable", "true");
         ul.appendChild(li);
@@ -1462,7 +1488,7 @@
         const d = document.createElement("details");
         d.open = true;
         d.innerHTML = '<summary><span class="gq-heading" contenteditable="true">New heading</span>'
-          + '<span class="gq-count"></span></summary><ul><li contenteditable="true"></li></ul>';
+          + '<span class="gq-count"></span></summary><ol><li contenteditable="true"></li></ol>';
         panel.insertBefore(d, e.target);
         setGuideEditing(true);
         d.querySelector(".gq-heading").focus();
@@ -1533,8 +1559,9 @@
     // call.
     function knownGuideLines() {
       const set = new Set();
-      guideSetsAvailable().forEach((g) => g.sections.forEach(([heading, questions]) => {
+      guideSetsAvailable().forEach((g) => g.sections.forEach(([heading, questions, opening]) => {
         set.add(heading.trim().toUpperCase());
+        if (opening) set.add(opening.trim());
         questions.forEach((q) => set.add(q.trim()));
       }));
       return set;
