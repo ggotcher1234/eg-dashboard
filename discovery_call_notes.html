@@ -99,6 +99,7 @@
   #guide-hide { color: var(--muted); font-size: 15px; line-height: 1; padding: 0 9px; }
   .guide-closed { margin-bottom: 14px; }
   .rt-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
+  .rt-status { font-size: 12px; color: var(--muted); margin-left: 4px; }
 
   /* One heading per row, all closed to start. A discovery call wanders, so
      the Team Lead opens the heading the conversation has arrived at rather
@@ -408,6 +409,7 @@
             <span class="rt-sep"></span>
             <button type="button" id="notes-clear" title="Empty the notes">Clear notes</button>
             <button type="button" id="notes-undo" class="hidden" title="Put back the notes that were just cleared">Undo clear</button>
+            <span class="rt-status" id="notes-status"></span>
           </div>
           <div id="f-notes" class="rt-editor" contenteditable="true" role="textbox" aria-multiline="true"
                aria-label="Discovery call notes" data-placeholder="Discovery call notes&hellip;"></div>
@@ -1549,11 +1551,16 @@
       };
       const doomed = Array.from(editor.children).filter(isGuideLine);
       if (!doomed.length) {
-        showBanner("No guide questions found in the notes.", "error");
+        notesStatus("No guide questions in the notes.");
         return;
       }
       if (!confirm("Remove " + doomed.length + " guide line"
           + (doomed.length === 1 ? "" : "s") + " from the notes? Anything you typed stays.")) return;
+      // Deleting ninety-odd lines makes the document shorter, so the
+      // viewport lands somewhere else even with nobody scrolling it. Hold
+      // the NOTES FIELD still rather than the scroll offset: that is the
+      // thing being looked at, and it is where the typing goes next.
+      const anchorTop = editor.getBoundingClientRect().top;
       doomed.forEach((el) => {
         // Take the blank line that was inserted under the question with it,
         // otherwise stripping leaves a column of empty paragraphs.
@@ -1561,8 +1568,12 @@
         if (next && !(next.textContent || "").trim() && next.querySelector("br")) next.remove();
         el.remove();
       });
-      showBanner("Removed " + doomed.length + " guide line"
-        + (doomed.length === 1 ? "" : "s") + ".", "success");
+      window.scrollBy(0, editor.getBoundingClientRect().top - anchorTop);
+      notesStatus("Removed " + doomed.length + " guide line"
+        + (doomed.length === 1 ? "" : "s") + ".");
+      // Straight into typing, which is what the Team Lead cleared the way
+      // for. preventScroll, or focus undoes the anchoring just done.
+      editor.focus({ preventScroll: true });
     });
 
     // --- Clear the notes, with the safety catch Greg asked for ---
@@ -1574,27 +1585,33 @@
       const editor = document.getElementById("f-notes");
       if (!editor) return;
       const text = notesHtmlToText(editor);
-      if (!text.trim()) { showBanner("The notes are already empty.", "error"); return; }
+      if (!text.trim()) { notesStatus("The notes are already empty."); return; }
       const lines = text.split("\n").filter((l) => l.trim()).length;
       const words = text.split(/\s+/).filter(Boolean).length;
       if (!confirm("Clear the notes?\n\n" + lines + " line" + (lines === 1 ? "" : "s")
           + ", " + words + " word" + (words === 1 ? "" : "s")
           + " will be removed from this screen.\n\nNothing is saved until you press Save, "
           + "and Undo clear will bring it back.")) return;
+      const clearAnchorTop = editor.getBoundingClientRect().top;
       clearedNotesBackup = editor.innerHTML;
       editor.innerHTML = "";
       const undo = document.getElementById("notes-undo");
       if (undo) undo.classList.remove("hidden");
-      showBanner("Notes cleared. Undo clear is beside the toolbar.", "success");
+      window.scrollBy(0, editor.getBoundingClientRect().top - clearAnchorTop);
+      notesStatus("Notes cleared.");
+      editor.focus({ preventScroll: true });
     });
 
     document.getElementById("notes-undo").addEventListener("click", () => {
       const editor = document.getElementById("f-notes");
       if (clearedNotesBackup === null || !editor) return;
+      const undoAnchorTop = editor.getBoundingClientRect().top;
       editor.innerHTML = clearedNotesBackup;
       clearedNotesBackup = null;
       document.getElementById("notes-undo").classList.add("hidden");
-      showBanner("Notes put back.", "success");
+      window.scrollBy(0, editor.getBoundingClientRect().top - undoAnchorTop);
+      notesStatus("Notes put back.");
+      editor.focus({ preventScroll: true });
     });
 
     // --- Hide / show ---
@@ -1793,11 +1810,32 @@
     location.href = "index.html?return=" + encodeURIComponent(dest);
   }
 
-  function showBanner(message, type) {
+  // The scroll is opt-out now (Greg, 10/27/26): "when you click remove
+  // questions it pops the page back to the top to show this message which
+  // is not needed. i want the screen to stay where it is so i can start
+  // taking notes."
+  //
+  // It is right for Save, where the banner IS the answer and the page is
+  // finished with. It is wrong for anything done in the middle of the
+  // form, which throws away the reader's place to deliver news they did
+  // not ask for. Those actions report through notesStatus instead, which
+  // puts the word next to the button that was pressed.
+  function showBanner(message, type, scroll) {
     const el = $("banner");
     el.textContent = message;
     el.className = type;
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (scroll !== false) window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // A quiet line in the notes toolbar for things that happen in place.
+  // Clears itself, so it never becomes furniture.
+  let notesStatusTimer = null;
+  function notesStatus(message) {
+    const el = document.getElementById("notes-status");
+    if (!el) return;
+    el.textContent = message || "";
+    clearTimeout(notesStatusTimer);
+    if (message) notesStatusTimer = setTimeout(() => { el.textContent = ""; }, 5000);
   }
 
   let currentClient = null;
