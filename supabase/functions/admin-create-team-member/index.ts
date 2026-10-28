@@ -362,7 +362,8 @@ Deno.serve(async (req: Request) => {
               <p>Welcome aboard &ndash; you have been added to the NCEG Dashboard, where we run our
                  Economic Gardening engagements. Your account is ready; you just need a password.</p>
               <ol style="padding-left:20px; line-height:1.7;">
-                <li><a href="${escapeHtml(actionLink)}" style="font-weight:700;">Set your password</a></li>
+                <li><a href="${escapeHtml(actionLink)}" style="font-weight:700;">Set your password</a>
+                    &nbsp;&mdash; do this one first, today: the link is single-use and stops working after a while.</li>
                 <li>Bookmark this: <a href="${escapeHtml(siteUrl)}" style="font-weight:700;">${escapeHtml(siteUrl)}</a><br />
                     It is where you sign in from now on.</li>
                 <li>Sign in with this email address: <strong>${escapeHtml(String(target.email))}</strong></li>
@@ -372,15 +373,20 @@ Deno.serve(async (req: Request) => {
               <!-- Chris: "We can delete the time limit for changing
                    passwords." The limit is not ours to delete -- it is the
                    project's Email OTP Expiration in Supabase Auth, which
-                   has a 24-hour ceiling and cannot be switched off. So the
-                   sentence naming a number is gone (it was claiming 24
-                   hours against a setting that may well be one), and what
-                   is left is the recovery itself, in one line. Nobody is
-                   locked out by an expired link; they just press Forgot
-                   your password. -->
-              <p style="font-size:13px; color:#5f6b78;">Link stopped working? Go to
-                 <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a>, choose &ldquo;Forgot your
-                 password?&rdquo; and enter this address &mdash; it does the same thing.</p>
+                   has a 24-hour ceiling and cannot be switched off. The
+                   sentence naming a number went away in October, and then
+                   Brian (via Greg, 10/28/26) opened his welcome note a day
+                   later: "I can't create an account, as it says the
+                   password reset link has expired." Saying nothing did not
+                   remove the limit, it just meant nobody saw it coming.
+                   So step 1 now says the link is single-use and perishable
+                   without naming a number, and the recovery is a box on
+                   the page the dead link lands on -- this paragraph is the
+                   belt to that braces, and it is no longer fine print. -->
+              <p style="font-size:14px;"><strong>Link stopped working?</strong> It expires, and that is
+                 normal. Open <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a>, choose
+                 &ldquo;Forgot your password?&rdquo; and enter <strong>${escapeHtml(String(target.email))}</strong>
+                 &mdash; a fresh link arrives in a minute. Nobody needs to be asked, and nothing is lost.</p>
               <p>Glad to have you with us.</p>
             `,
           }),
