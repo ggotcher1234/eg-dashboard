@@ -3431,7 +3431,16 @@ Have a great day!!${signature ? "\n\n" + signature : ""}`;
         ? `${paNoEmail.map((r) => `<strong>${escapeHtml(r.name || "The Program Administrator")}</strong>`).join(" and ")} ${paNoEmail.length === 1 ? "is" : "are"} marked Program Administrator for ${programLabel}, but ${paNoEmail.length === 1 ? "has" : "have"} no email address on file, so the To line is empty. Add the address on the Programs page, or type it in.`
         : borrowed.length
           ? `${borrowed.map((r) => `<strong>${escapeHtml(r.name || "The Program Administrator")}</strong>`).join(" and ")} ${borrowed.length === 1 ? "is" : "are"} marked Program Administrator for ${programLabel}, but the Program Administrator entry has no email address — the To line uses the address from ${escapeHtml(borrowed.map((r) => r.borrowedFrom).join(" / "))} on the same Program. Check it before sending, and add it to the Program Administrator entry on the Programs page.`
-          : "Filled in from this engagement. It goes out from your own email, with your signature — edit anything first. Nothing here is saved.";
+          : "Goes to the Program Administrator, copying the standing NCEG list. It leaves from your own email with your signature — edit it after you paste. Nothing here is saved.";
+    // Greg (10/28/26): "change the other pages that show the email to the
+    // same format so that they don't show the email and show the button to
+    // open and copy email." The addresses and letter are hidden -- editing
+    // a copy here has no effect, since the editing that counts happens
+    // after the paste. The exception is the three cases the note above has
+    // just described: no Program Administrator, no address on file, or an
+    // address borrowed from another entry. Then the To line is the one
+    // thing that has to be fixed HERE, so the fields stay on screen.
+    const paNeedsFields = !pas.length || borrowed.length > 0;
     // Everyone at EG who is on the standing CC list, minus whoever is
     // sending -- nobody needs a copy of their own letter.
     const ccEmails = ccAlwaysEmails.filter((e) => e.toLowerCase() !== (myEmail || "").toLowerCase());
@@ -3451,10 +3460,12 @@ Have a great day!!${signature ? "\n\n" + signature : ""}`;
       <p class="desc">${paDesc}</p>
       <p class="draft-hint">${escapeHtml(DRAFT_HINT)}</p>
       ${PRE_GO_LIVE ? `<p class="desc" style="color:var(--danger-dark); font-weight:600; margin:-4px 0 12px;">Pre-go-live: this letter is marked TEST on the subject, the To and CC lines, and the first line of the message.</p>` : ""}
-      <div class="pa-field"><label for="pa-to">To</label><input type="text" id="pa-to" value="${escapeHtml(markTest(pas.map((r) => r.email).join(", ")))}" /></div>
-      <div class="pa-field"><label for="pa-cc">CC</label><input type="text" id="pa-cc" value="${escapeHtml(markTest(ccEmails.join(", ")))}" /></div>
-      <div class="pa-field"><label for="pa-subject">Subject</label><input type="text" id="pa-subject" value="${escapeHtml(`${PRE_GO_LIVE ? TEST_SUBJECT_PREFIX : ""}${partner && partner.code ? `(${partner.code}) ` : ""}${a.company_name} — Vetted by NCEG`)}" /></div>
-      <div class="pa-field"><label for="pa-body">Message</label><textarea id="pa-body" spellcheck="true"></textarea></div>
+      <div id="pa-fields"${paNeedsFields ? "" : ` class="hidden"`}>
+        <div class="pa-field"><label for="pa-to">To</label><input type="text" id="pa-to" value="${escapeHtml(markTest(pas.map((r) => r.email).join(", ")))}" /></div>
+        <div class="pa-field"><label for="pa-cc">CC</label><input type="text" id="pa-cc" value="${escapeHtml(markTest(ccEmails.join(", ")))}" /></div>
+        <div class="pa-field"><label for="pa-subject">Subject</label><input type="text" id="pa-subject" value="${escapeHtml(`${PRE_GO_LIVE ? TEST_SUBJECT_PREFIX : ""}${partner && partner.code ? `(${partner.code}) ` : ""}${a.company_name} — Vetted by NCEG`)}" /></div>
+        <div class="pa-field"><label for="pa-body">Message</label><textarea id="pa-body" spellcheck="true"></textarea></div>
+      </div>
       <div class="pa-actions">
         <button type="button" class="btn-primary" id="pa-mailto">Open draft &amp; copy letter</button>
         <button type="button" class="btn-secondary" id="pa-copy">Copy letter only</button>
@@ -3500,8 +3511,10 @@ Have a great day!!${signature ? "\n\n" + signature : ""}`;
         b.textContent = "Copied!";
         setTimeout(() => { b.textContent = was; }, 1500);
       } catch (e) {
+        // Nothing is on screen to select any more, so put the letter back first.
+        $("pa-fields").classList.remove("hidden");
         $("pa-body").select();
-        showBanner("Couldn't copy automatically — the message is selected, copy it with Cmd+C.", "error");
+        showBanner("Couldn't copy automatically — the letter is below and selected, copy it with Cmd+C.", "error");
       }
     });
   }

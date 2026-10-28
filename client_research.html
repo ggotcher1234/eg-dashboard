@@ -2234,10 +2234,21 @@
                client, which is one keystroke there and impossible here. -->
           <div class="tl-mailform" id="tl-mailform-${q.id}">
             <div class="tl-mailnote" id="tl-mailnote-${q.id}"></div>
-            <div class="tl-mailrow"><span>To</span><input type="text" id="tl-mail-to-${q.id}" /></div>
-            <div class="tl-mailrow"><span>CC</span><input type="text" id="tl-mail-cc-${q.id}" placeholder="Nobody" /></div>
-            <div class="tl-mailrow"><span>Subject</span><input type="text" id="tl-mail-subject-${q.id}" /></div>
-            <div class="tl-mailrow"><span>Message</span><textarea id="tl-mail-body-${q.id}" spellcheck="true"></textarea></div>
+            <!-- Greg (10/28/26): "change the other pages that show the
+                 email to the same format so that they don't show the email
+                 and show the button to open and copy email." Hidden, like
+                 every other letter in the app: the editing that counts --
+                 the overview line, the red question -- happens after the
+                 paste, in the specialist's own mail. The fields stay in
+                 the DOM because the two buttons read them, and they come
+                 back when there is nobody to send to or the clipboard
+                 write fails. -->
+            <div class="tl-mailfields hidden" id="tl-mailfields-${q.id}">
+              <div class="tl-mailrow"><span>To</span><input type="text" id="tl-mail-to-${q.id}" /></div>
+              <div class="tl-mailrow"><span>CC</span><input type="text" id="tl-mail-cc-${q.id}" placeholder="Nobody" /></div>
+              <div class="tl-mailrow"><span>Subject</span><input type="text" id="tl-mail-subject-${q.id}" /></div>
+              <div class="tl-mailrow"><span>Message</span><textarea id="tl-mail-body-${q.id}" spellcheck="true"></textarea></div>
+            </div>
             <div class="tl-actions">
               <button type="button" class="btn-primary btn-sm" data-task-mail-open="${q.id}">Open draft &amp; copy letter</button>
               <button type="button" class="btn-secondary btn-sm" data-task-mail-copy="${q.id}">Copy letter only</button>
@@ -2555,13 +2566,18 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
     const notes = [];
     notes.push(`<span class="tl-mailwarn">Replace the overview line, and make your own question red</span> once the letter is in your email.`);
     notes.push(`<span class="tl-drafthint">${escapeHtml(DRAFT_HINT)}</span>`);
-    if (!who) notes.push("This task has nobody assigned, so the letter says [your name]. Assign it above, or type your name in.");
+    if (!who) notes.push("This task has nobody assigned, so the letter says [your name]. Assign it above, or put your name in after you paste.");
     else if (currentUser && who.userId !== currentUser.id) notes.push(`This is written as ${escapeHtml(who.name)}, who holds the task — it will send from your account, not theirs.`);
     if (!lead) notes.push("No Team Lead is assigned to this engagement, so the closing line says \"your Team Lead\" rather than a name.");
     if (!toList.length) notes.push(contacts.length
       ? "This engagement's contacts have no email addresses on file — add them under Company Info."
       : "This engagement has no company contacts yet — add them under Company Info and they will fill in here.");
     $(`tl-mailnote-${questionId}`).innerHTML = notes.join("<br>");
+
+    // Addresses and letter stay out of sight unless there is nobody to send
+    // to -- then they are the one thing that needs fixing here rather than
+    // after the paste (Greg, 10/28/26).
+    $(`tl-mailfields-${questionId}`).classList.toggle("hidden", toList.length > 0);
 
     form.classList.add("open");
     form.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -2603,9 +2619,11 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
     } catch (e) {
       // A browser that refuses the clipboard call leaves one useful thing to
       // do: select the letter, so the keyboard copy is one keystroke.
+      // Nothing is on screen to select any more, so put the letter back first.
+      $(`tl-mailfields-${questionId}`).classList.remove("hidden");
       const ta = $(`tl-mail-body-${questionId}`);
       if (ta) { ta.focus(); ta.select(); }
-      showBanner("Couldn't copy automatically — the message is selected, copy it with Cmd+C.", "error");
+      showBanner("Couldn't copy automatically — the letter is below and selected, copy it with Cmd+C.", "error");
     }
   }
 

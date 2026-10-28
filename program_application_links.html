@@ -13,6 +13,10 @@
   :root {
     --navy: #14304d; --navy-light: #1f4a75; --accent: #5c7248; --accent-dark: #46592f;
     --bg: #a3b9aa; --card: #ffffff; --border: #dde3e9; --text: #1f2937; --muted: #6b7280;
+    /* --danger was used by .modal .draft-hint and .notif-count but never
+       defined on this page, so the paste instruction rendered in body
+       text rather than red (Greg wants it red everywhere, 10/23/26). */
+    --danger: #b3403a;
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
@@ -385,13 +389,22 @@
     <div id="send-overlay" class="overlay">
       <div class="modal">
         <h3 id="send-title">Send the application link</h3>
-        <p class="modal-hint">Addresses and the link are filled in from this Program &mdash; edit anything before you send. Nothing here is saved.</p>
         <p class="draft-hint" id="send-draft-hint"></p>
+        <!-- Greg (10/28/26): "change the other pages that show the email to
+             the same format so that they don't show the email and show the
+             button to open and copy email." The addresses and the letter
+             are hidden -- editing a copy here has no effect, since the
+             editing that counts happens after the paste. They stay in the
+             DOM because the buttons read them, and they come back when the
+             recipient had to be guessed at or the clipboard write fails. -->
+        <p class="modal-hint" id="send-cc-summary">Goes to this Program&rsquo;s Administrators, copying the standing NCEG list.</p>
         <div id="send-warn" class="mail-warn hidden"></div>
-        <div class="mail-field"><label for="send-to">To</label><input type="text" id="send-to" /></div>
-        <div class="mail-field"><label for="send-cc">CC</label><input type="text" id="send-cc" /></div>
-        <div class="mail-field"><label for="send-subject">Subject</label><input type="text" id="send-subject" /></div>
-        <div class="mail-field"><label for="send-body">Message</label><textarea id="send-body" spellcheck="true"></textarea></div>
+        <div id="send-fields" class="hidden">
+          <div class="mail-field"><label for="send-to">To</label><input type="text" id="send-to" /></div>
+          <div class="mail-field"><label for="send-cc">CC</label><input type="text" id="send-cc" /></div>
+          <div class="mail-field"><label for="send-subject">Subject</label><input type="text" id="send-subject" /></div>
+          <div class="mail-field"><label for="send-body">Message</label><textarea id="send-body" spellcheck="true"></textarea></div>
+        </div>
         <div class="modal-actions">
           <button type="button" class="btn-primary" id="send-mailto">Open draft &amp; copy letter</button>
           <button type="button" class="btn-secondary" id="send-copy">Copy letter only</button>
@@ -596,6 +609,11 @@ If there is a CEO you have been meaning to bring in, this is a good week to send
     warn.classList.toggle("hidden", exact);
     if (!exact) warn.textContent = why;
 
+    // Hidden unless the recipient had to be guessed at -- then the To line
+    // is the one thing worth checking here rather than after the paste
+    // (Greg, 10/28/26).
+    $("send-fields").classList.toggle("hidden", exact);
+
     $("send-overlay").classList.add("open");
   }
 
@@ -684,8 +702,10 @@ If there is a CEO you have been meaning to bring in, this is a good week to send
       btn.textContent = "Copied!";
       setTimeout(() => { btn.textContent = was; }, 1500);
     } catch (e) {
+      // Nothing is on screen to select any more, so put the letter back first.
+      $("send-fields").classList.remove("hidden");
       $("send-body").select();
-      showBanner("Couldn't copy automatically — the message is selected, copy it with Cmd+C.");
+      showBanner("Couldn't copy automatically — the letter is below and selected, copy it with Cmd+C.");
     }
   });
 
