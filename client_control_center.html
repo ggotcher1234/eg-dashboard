@@ -1234,9 +1234,22 @@
                  it for the first time needs. -->
             <div class="welcome-hint">Advises the new client that you are the team lead, provides document &amp; video links, requests a Discovery Call date. Copies Chris, Rita and the assigned Program Administrator.</div>
             <div class="welcome-note" id="welcome-note"></div>
-            <div class="welcome-field"><label for="welcome-to">To</label><input type="text" id="welcome-to" /></div>
-            <div class="welcome-field"><label for="welcome-cc">CC</label><input type="text" id="welcome-cc" /></div>
-            <div class="welcome-field"><label for="welcome-subject">Subject</label><input type="text" id="welcome-subject" /></div>
+            <!-- Addresses hidden too (Greg, 10/28/26): "i think leaving the
+                 To, CC and Subject are confusing. let's try it without
+                 them." Same reasoning as the letter -- the draft arrives
+                 with all three already filled in, so showing a second
+                 editable copy here invites someone to fix an address in the
+                 place where fixing it has no effect.
+
+                 Still in the DOM, still the source the button reads, and
+                 revealed alongside the letter if the clipboard is refused.
+                 The description above says who gets copied, which is the
+                 part a Team Lead actually wants to know in advance. -->
+            <div class="hidden" id="welcome-fields">
+              <div class="welcome-field"><label for="welcome-to">To</label><input type="text" id="welcome-to" /></div>
+              <div class="welcome-field"><label for="welcome-cc">CC</label><input type="text" id="welcome-cc" /></div>
+              <div class="welcome-field"><label for="welcome-subject">Subject</label><input type="text" id="welcome-subject" /></div>
+            </div>
             <!-- The letter is built but not shown (Greg, 10/28/26): "no need
                  to show an editable letter here, we want them to click the
                  button and paste it into their email for edits."
@@ -3827,6 +3840,7 @@
     const welcomeDashboardUrl = c.slug
       ? new URL(`c/${encodeURIComponent(c.slug)}`, PUBLIC_SITE_BASE).href
       : null;
+    $("welcome-fields").classList.add("hidden");
     $("welcome-body-field").classList.add("hidden");
     $("welcome-body").value = welcomeEmailBody(
       teamLead || "[Team Lead]",
@@ -3894,13 +3908,14 @@
     if (!ok) {
       // The letter is hidden now, so a refused clipboard call has to put it
       // back on screen before telling anyone to copy it by hand.
+      $("welcome-fields").classList.remove("hidden");
       $("welcome-body-field").classList.remove("hidden");
       const ta = $("welcome-body");
       ta.focus(); ta.select();
-      showBanner("Your browser wouldn't let the page copy for you \u2014 the letter is below and selected, so press " + (WELCOME_PASTE_KEY === "Cmd+V" ? "Cmd+C" : "Ctrl+C") + " to copy it.", "error");
+      showBanner("Your browser wouldn't let the page copy for you \u2014 the letter and addresses are below, and the letter is selected, so press " + (WELCOME_PASTE_KEY === "Cmd+V" ? "Cmd+C" : "Ctrl+C") + " to copy it.", "error");
       return;
     }
-    showBanner("Letter copied. Paste it into a new message with " + WELCOME_PASTE_KEY + " \u2014 the To, CC and Subject lines above are yours to copy too.", "success");
+    showBanner("Letter copied. Paste it into a new message with " + WELCOME_PASTE_KEY + " \u2014 you will need to add the addresses and subject yourself, or use Open draft & copy letter instead.", "success");
   });
 
   function recalcTeamStats() {
