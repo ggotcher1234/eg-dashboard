@@ -383,10 +383,19 @@ Deno.serve(async (req: Request) => {
                    without naming a number, and the recovery is a box on
                    the page the dead link lands on -- this paragraph is the
                    belt to that braces, and it is no longer fine print. -->
-              <p style="font-size:14px;"><strong>Link stopped working?</strong> It expires, and that is
-                 normal. Open <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a>, choose
-                 &ldquo;Forgot your password?&rdquo; and enter <strong>${escapeHtml(String(target.email))}</strong>
-                 &mdash; a fresh link arrives in a minute. Nobody needs to be asked, and nothing is lost.</p>
+              <div style="border:1px solid #d9e0e6; border-left:4px solid #5c7248; border-radius:6px;
+                          padding:14px 16px; margin:20px 0; background:#fbfcfa;">
+                <p style="margin:0 0 8px; font-weight:700; color:#14304d;">If that link says it has expired</p>
+                <p style="margin:0 0 8px;">That is normal &mdash; it works once, and not for long. You do not
+                   need to ask anyone for a new one:</p>
+                <ol style="margin:0 0 8px; padding-left:20px; line-height:1.7;">
+                  <li>Go to <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a></li>
+                  <li>Click <strong>Forgot your password?</strong></li>
+                  <li>Enter <strong>${escapeHtml(String(target.email))}</strong></li>
+                </ol>
+                <p style="margin:0;">A fresh link lands in a minute or two. Open that one straight away and it
+                   takes you to the same place. Nothing is lost, and you can do this as many times as you need.</p>
+              </div>
               <p>Glad to have you with us.</p>
             `,
           }),
