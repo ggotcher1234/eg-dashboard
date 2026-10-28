@@ -1370,6 +1370,17 @@
     syncNotesColumn();
   }
 
+  // Same rule for the month-end close caption (Greg, 10/28/26: "remove this
+  // text box from every page except the Team Hours page"). It belongs to the
+  // status pills, which are a Team & Hours concern; above the Scheduling
+  // Letter or a workflow document it is just a billing notice shouting over
+  // whatever the Team Lead actually opened.
+  let closeNoteApplicable = false;
+  function refreshCloseNoteVisibility() {
+    $("cm-close-note").classList.toggle("hidden", !closeNoteApplicable || activePane !== "team");
+    syncNotesColumn();
+  }
+
   // The notes column carries the vertical rule that separates it from the
   // client name, so it has to collapse entirely when no note is showing --
   // otherwise a pane with no note leaves a divider hanging in empty space
@@ -2256,6 +2267,7 @@
     $("cm-research-hint").classList.toggle("hidden", key !== "research");
     syncNotesColumn();
     refreshDelayNoteVisibility();
+    refreshCloseNoteVisibility();
 
     // The "open in its own browser tab" button lived here because the company
     // dashboard used to load in the iframe below. It opens in a new tab
@@ -2465,7 +2477,8 @@
     const canEdit = isSuperAdmin || isTeamLeadHere;
     if (!canEdit) {
       $("cm-status-toggle").classList.add("hidden");
-      $("cm-close-note").classList.add("hidden");
+      closeNoteApplicable = false;
+      refreshCloseNoteVisibility();
       // Greg (9/6/26): "remove in progress it is redundant." The read-only
       // badge stays hidden -- the status dot beside it already carries the
       // state (and spells it out on hover), and for anyone who can change
@@ -2493,7 +2506,8 @@
     // editable.
     const note = $("cm-close-note");
     const { isLastDay, label } = monthEndEastern();
-    note.classList.toggle("hidden", client.project_status === "closed");
+    closeNoteApplicable = client.project_status !== "closed";
+    refreshCloseNoteVisibility();
     note.innerHTML = isLastDay
       ? `<strong>Today is the last day of the month</strong> \u2014 close this engagement if it is finished. Miss today and it stays open, and billable, until the last day of next month.`
       : `Engagements must be closed on the last day of the month, next on <strong>${escapeHtml(label)}</strong>. Miss it and this engagement stays open, and billable, until the last day of the following month. If you need assistance, contact Rita.`;
