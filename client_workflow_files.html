@@ -293,6 +293,7 @@
        the Scheduling letter ... on all the appropriate outbound
        customer emails." Grey, it read as boilerplate and nobody did it. */
   .eem-modal-meta { font-size: 12.5px; color: var(--danger); line-height: 1.5; }
+  .eem-cc-summary { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 14px; }
   .eem-modal-close { background: none; border: none; font-size: 20px; line-height: 1; cursor: pointer; color: var(--muted); padding: 2px 6px; }
   /* Was #eem-body only -- the two later modals (Controlling Document,
      Research Complete) never picked it up and fell back to the generic
@@ -966,25 +967,41 @@
       <button class="eem-modal-close" id="rrem-close" aria-label="Close">&times;</button>
     </div>
     <div id="rrem-body">
-      <div class="field">
-        <label>To</label>
-        <input type="text" id="rrem-to" />
+      <!-- Same treatment as the Scheduling Letter (Greg, 10/28/26): "same
+           treatment for the research call letter as we just completed for
+           the Scheduling email. delete the letter."
+
+           Everything the draft carries for itself is hidden -- addresses,
+           subject and the letter. A second editable copy on this screen
+           only invites someone to fix something in the place where fixing
+           it has no effect, since the editing that counts happens after
+           the paste.
+
+           The fields stay in the DOM: they are what the buttons read, and
+           the clipboard fallback reveals them. Who gets copied moves up
+           under the title, because that is the one thing worth knowing
+           BEFORE pressing the button rather than after. -->
+      <div class="eem-cc-summary">Copies the NCEG team on this engagement, the Program&rsquo;s Administrators, this engagement&rsquo;s CC list, Chris and Rita.</div>
+      <div id="rrem-fields" class="hidden">
+        <div class="field">
+          <label>To</label>
+          <input type="text" id="rrem-to" />
+        </div>
+        <div class="field">
+          <label>Cc</label>
+          <textarea id="rrem-cc" rows="3"></textarea>
+        </div>
+        <div class="field">
+          <label>Subject</label>
+          <input type="text" id="rrem-subject" />
+        </div>
+        <div class="field">
+          <label>Body</label>
+          <textarea id="rrem-body-text" class="eem-body-text" rows="14"></textarea>
+        </div>
       </div>
       <div id="rrem-no-contact" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
         No contact emails on file for this client — add them in Company Contacts, or type them in above.
-      </div>
-      <div class="field">
-        <label>Cc</label>
-        <textarea id="rrem-cc" rows="3"></textarea>
-        <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">The NCEG team on this engagement, the Program&rsquo;s Administrators, this engagement&rsquo;s CC list, Chris and Rita. Edit freely before sending.</div>
-      </div>
-      <div class="field">
-        <label>Subject</label>
-        <input type="text" id="rrem-subject" />
-      </div>
-      <div class="field">
-        <label>Body</label>
-        <textarea id="rrem-body-text" class="eem-body-text" rows="14"></textarea>
       </div>
       <div id="rrem-no-dashboard" class="hidden" style="font-size:12.5px; color:var(--amber); margin-bottom:10px;">
         This engagement has no client dashboard link yet, so the email doesn&rsquo;t include one. Set the slug on Company Info and create the email again.
@@ -2755,6 +2772,7 @@ Thanks,
 ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
 
     updateReviewEmailMailto();
+    $("rrem-fields").classList.add("hidden");
     $("rr-email-overlay").classList.add("open");
     autosizeEmailBody($("rrem-body-text"));
     revealEmailModal($("rr-email-overlay"));
@@ -2781,7 +2799,9 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
       await navigator.clipboard.writeText(text);
       showBanner("Email text copied -- paste it into your email client.", "success");
     } catch (e) {
-      showBanner("Couldn't copy automatically -- select the text below and copy manually.", "error");
+      // Nothing is on screen to select any more, so put it back first.
+      $("rrem-fields").classList.remove("hidden");
+      showBanner("Couldn't copy automatically -- the letter is below now, select it and copy manually.", "error");
     }
   });
 
