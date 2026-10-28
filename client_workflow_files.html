@@ -518,6 +518,33 @@
   }
   body.embed-mode .eem-modal { max-height: none; overflow-y: visible; }
   body.embed-mode .eem-body-text { max-height: none; overflow-y: hidden; }
+
+  /* Greg (10/28/26): "i don't want this to open when you click debrief
+     call, i want this to be the page that shows... i don't want to see a
+     flash of the auto-open and i don't want to see a slider to read the
+     page. fit the page to the content."
+     On the Debriefing row the email is not a window over the page -- it IS
+     the page. The same modal box is moved into the row, where it drops
+     every bit of dialog chrome: no backdrop, no shadow, no close button,
+     and no scrollbox of its own. Nothing is ever positioned out of flow,
+     so the document is exactly as tall as the letter and the workspace's
+     ResizeObserver sizes the iframe to it -- no scrollbar either side.
+     The row's own title still names the step (it covers the recording
+     slot underneath too), so the modal's heading would say it twice. */
+  .eem-modal.eem-inline {
+    width: auto; max-height: none; overflow: visible;
+    background: transparent; box-shadow: none; border-radius: 0; padding: 0;
+  }
+  .eem-modal.eem-inline .eem-modal-close,
+  .eem-modal.eem-inline .eem-modal-header h3 { display: none; }
+  .eem-modal.eem-inline .eem-modal-header { margin-bottom: 12px; }
+  .wf-row-email-page .wf-item-hint { display: none; }
+  .wf-row-email-page .eem-modal-meta { margin-top: 6px; }
+  #wf-review-email:not(:empty) { margin-bottom: 14px; }
+  /* With the email out of the action row, the recording controls have
+     nothing to sit opposite, so they come back to the left edge. */
+  .wf-row-email-page .wf-action-row > #wf-review-file > :first-child,
+  .wf-row-email-page .wf-action-row > #wf-review-file:empty + #wf-review-actions > :first-child { margin-left: 0; }
 </style>
 </head>
 <body>
@@ -752,6 +779,10 @@
                 <div class="wf-item-title">Schedule Debriefing Call and Post the Call Recording</div>
               </div>
               <div class="wf-item-hint">Tell the client the research is finished and ask for time to walk them through it. Goes to the CEO, copying the NCEG team and this engagement&rsquo;s CC list.</div>
+              <!-- The email itself lands here, moved out of its overlay, when
+                   this row is the whole page (Greg, 10/28/26). See
+                   mountReviewEmailAsPage(). -->
+              <div id="wf-review-email"></div>
               <div class="wf-action-row">
                 <!-- Greg (10/13/26): "reverse the buttons as shown" -- the
                      email that books the call comes first, the recording is
@@ -841,6 +872,11 @@
           if (rowId) {
             var row = document.getElementById(rowId);
             if (row) row.classList.remove("hidden");
+            // Greg (10/28/26): "i don't want to see a flash." The Debriefing
+            // row is the email, so the things the email replaces -- the hint
+            // here, the Create Email button below -- are gone from the first
+            // paint, not removed once the data arrives.
+            if (doc === "review" && row) row.classList.add("wf-row-email-page");
             document.getElementById("wf-items").classList.add("doc-filtered");
             document.getElementById("wf-card-title").classList.add("hidden");
             document.getElementById("wf-card-hint").classList.add("hidden");
@@ -1627,16 +1663,11 @@
     await loadControllingDocResponse(client.id);
     await loadEvalEmailContext(client.id);
 
-    // Greg (10/28/26): "this should automatically open when you click
-    // Debriefing call." The modal is down to two buttons now, so making the
-    // Team Lead click Create Email first only puts a step in front of the
-    // thing they came for. It has to run here, after loadEvalEmailContext --
-    // the letter needs the contacts and the team row that call loads.
-    // Closing it leaves the row underneath, where the recording gets posted
-    // after the call, and Create Email reopens it.
-    if (new URLSearchParams(location.search).get("doc") === "review") {
-      openReviewEmailModal();
-    }
+    // Greg (10/28/26): "i want this to be the page that shows when you click
+    // debrief call." It runs here, after loadEvalEmailContext -- the letter
+    // needs the contacts and the team row that call loads. The recording
+    // slot stays below it; that half of the step is unchanged.
+    if (REVIEW_EMAIL_IS_PAGE) await mountReviewEmailAsPage();
   }
 
   // Greg (8/31/26): "customize the page for each one to only show that
@@ -2725,6 +2756,9 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
   function renderReviewClientField() {
     const container = $("wf-review-client");
     if (!container) return;
+    // On its own pane the email is already on screen, so a button to
+    // summon it would be a step in front of the thing it summons.
+    if (REVIEW_EMAIL_IS_PAGE) { container.innerHTML = ""; return; }
     container.innerHTML = `<button type="button" class="wf-btn wf-btn-icon-email" id="rr-email-create-btn">Create Email</button>`;
     container.querySelector("#rr-email-create-btn").addEventListener("click", openReviewEmailModal);
   }
@@ -2737,7 +2771,12 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
     return slug ? new URL(`c/${encodeURIComponent(slug)}`, PUBLIC_SITE_BASE).href : null;
   }
 
-  async function openReviewEmailModal() {
+  // Greg (10/28/26) wanted the Debriefing row to BE this email rather than
+  // a window over it, so filling the letter in is now separate from showing
+  // it: inline, the same box is simply moved into the row.
+  const REVIEW_EMAIL_IS_PAGE = new URLSearchParams(location.search).get("doc") === "review";
+
+  async function buildReviewEmail() {
     const recipients = clientContacts();
     const teamRows = listData.team || [];
     const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
@@ -2784,9 +2823,27 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
 
     updateReviewEmailMailto();
     $("rrem-fields").classList.add("hidden");
+  }
+
+  async function openReviewEmailModal() {
+    await buildReviewEmail();
     $("rr-email-overlay").classList.add("open");
     autosizeEmailBody($("rrem-body-text"));
     revealEmailModal($("rr-email-overlay"));
+  }
+
+  // The Debriefing pane: no dialog at all. The letter is built, the modal
+  // box is lifted out of its overlay into the row, and that is the page.
+  // Moving the node rather than rebuilding the markup keeps every handler
+  // and the clipboard fallback (which reveals #rrem-fields) working as-is.
+  async function mountReviewEmailAsPage() {
+    const host = $("wf-review-email");
+    const modal = document.querySelector("#rr-email-overlay .eem-modal");
+    if (!host || !modal) return;
+    await buildReviewEmail();
+    modal.classList.add("eem-inline");
+    host.appendChild(modal);
+    autosizeEmailBody($("rrem-body-text"));
   }
 
   function updateReviewEmailMailto() {
