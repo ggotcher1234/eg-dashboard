@@ -1237,7 +1237,21 @@
             <div class="welcome-field"><label for="welcome-to">To</label><input type="text" id="welcome-to" /></div>
             <div class="welcome-field"><label for="welcome-cc">CC</label><input type="text" id="welcome-cc" /></div>
             <div class="welcome-field"><label for="welcome-subject">Subject</label><input type="text" id="welcome-subject" /></div>
-            <div class="welcome-field">
+            <!-- The letter is built but not shown (Greg, 10/28/26): "no need
+                 to show an editable letter here, we want them to click the
+                 button and paste it into their email for edits."
+
+                 Two editable copies of the same letter is one too many --
+                 edits made here are thrown away when the pane closes, while
+                 edits made after pasting are the ones that get sent. Hiding
+                 the field removes the trap.
+
+                 The textarea stays in the DOM rather than going away,
+                 because it is still where the letter LIVES: both buttons
+                 read it, and the clipboard fallback below reveals it when a
+                 browser refuses to copy, which is the one moment a Team
+                 Lead genuinely needs to see it. -->
+            <div class="welcome-field hidden" id="welcome-body-field">
               <label for="welcome-body">Message</label>
               <textarea id="welcome-body" spellcheck="true"></textarea>
             </div>
@@ -3813,6 +3827,7 @@
     const welcomeDashboardUrl = c.slug
       ? new URL(`c/${encodeURIComponent(c.slug)}`, PUBLIC_SITE_BASE).href
       : null;
+    $("welcome-body-field").classList.add("hidden");
     $("welcome-body").value = welcomeEmailBody(
       teamLead || "[Team Lead]",
       teamLeadCell || "[cell number]",
@@ -3877,11 +3892,12 @@
     btn.disabled = false;
 
     if (!ok) {
-      // A browser that refuses the clipboard call leaves one useful thing
-      // to do: select the letter, so the keyboard copy is one keystroke.
+      // The letter is hidden now, so a refused clipboard call has to put it
+      // back on screen before telling anyone to copy it by hand.
+      $("welcome-body-field").classList.remove("hidden");
       const ta = $("welcome-body");
       ta.focus(); ta.select();
-      showBanner("Your browser wouldn't let the page copy for you \u2014 the letter is selected, so press " + (WELCOME_PASTE_KEY === "Cmd+V" ? "Cmd+C" : "Ctrl+C") + " to copy it.", "error");
+      showBanner("Your browser wouldn't let the page copy for you \u2014 the letter is below and selected, so press " + (WELCOME_PASTE_KEY === "Cmd+V" ? "Cmd+C" : "Ctrl+C") + " to copy it.", "error");
       return;
     }
     showBanner("Letter copied. Paste it into a new message with " + WELCOME_PASTE_KEY + " \u2014 the To, CC and Subject lines above are yours to copy too.", "success");
