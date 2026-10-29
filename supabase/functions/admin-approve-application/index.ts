@@ -283,8 +283,14 @@ Deno.serve(async (req: Request) => {
               ${programName ? `<strong>Program:</strong> ${escapeHtml(programName)}${programCode ? ` (${escapeHtml(programCode)})` : ""}<br/>` : ""}
               <strong>Vetted by:</strong> ${escapeHtml(approverName)}
             </p>
-            <p><strong>Next:</strong> the vetting notice to the Program Administrator, which is the only letter NCEG sends. Ticking the box opens it ready to send &mdash; it goes out by hand, from whoever vetted, not from the dashboard.</p>
-            <p>The approval letter is the Program Administrator&rsquo;s to write. They send it to the CEO and copy Rita and Chris, and that copy is what starts the Team Lead assignment here: open the application on the Applications tab, set the budget hours, the Team Lead and the CC list. Accepting it creates the engagement, and the Team Lead sends the scheduling letter to the CEO, copying Rita, Chris and the Program Administrator.</p>
+            <!-- Chris (10/29/26): "I'm thinking we all know this process and
+                 no one else needs to know. Strip the editorial out?"
+                 Two paragraphs walking through the vetting notice, the
+                 Program Administrator's approval letter and the Team Lead
+                 assignment used to sit here. They were written for a team
+                 learning the process; this notice goes only to people who
+                 run it. What is left is the four facts an Admin reads it
+                 for -- who, which Program, when, and who vetted. -->
             <p style="color:#6b7280; font-size:13px;">This note is internal to the NCEG team.</p>
           `,
         }),
