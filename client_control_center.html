@@ -279,10 +279,6 @@
      status "overdue" actually means anything for (Accepted/On Hold/Closed
      don't have a "should be moving faster" expectation the same way). */
   .status-badge-wrap { display: flex; align-items: center; gap: 7px; margin-top: 10px; }
-  .status-dot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; }
-  .status-dot-green { background: var(--accent); }
-  .status-dot-yellow { background: var(--amber); }
-  .status-dot-red { background: var(--danger); }
 
   /* Editable status control (Team Lead / Admin only) -- lets you change an
      engagement's status right here on its hub page. */
@@ -1066,7 +1062,11 @@
             <div id="cm-program"></div>
             <div id="cm-team-lead"></div>
             <span class="status-badge-wrap">
-              <span class="status-dot hidden" id="cm-status-dot" title=""></span>
+              <!-- Greg (11/1/26): the green status dot that sat here is gone.
+                   An open engagement is in progress by definition, so a dot
+                   whose only job was to say so was tagging the default. The
+                   day count and the overdue escalation are still in the
+                   panel to the right, in words. -->
               <span class="badge hidden" id="cm-status-badge"></span>
               <div class="status-action-row hidden" id="cm-status-toggle"></div>
             </span>
@@ -2702,10 +2702,8 @@
   // still wants the always-visible label plus the delay-reason note and
   // the Super Admin date-correction control.)
   function renderStatusAge(client) {
-    const dot = $("cm-status-dot");
     const note = $("cm-delay-note");
     if (client.project_status !== "in_progress") {
-      dot.classList.add("hidden");
       delayNoteApplicable = false;
       refreshDelayNoteVisibility();
       return;
@@ -2717,13 +2715,6 @@
     // "On schedule" through day 59, "Overdue" from day 60 on (the same
     // 60-day line statusAgeTier() already draws for the red tier).
     const dayWord = `${days} day${days === 1 ? "" : "s"}`;
-    dot.classList.remove("hidden");
-    dot.className = `status-dot status-dot-${tier}`;
-    // The dot is shown for every role again (Greg, 9/6/26: "put the In
-    // Progress dot back in the header"). It was briefly hidden for read-only
-    // viewers when the "In Progress" badge was removed, on the grounds that
-    // an unlabelled circle says little -- its title attribute spells out the
-    // status and day count on hover.
     delayNoteApplicable = true;
     refreshDelayNoteVisibility();
     // Greg (9/6/26): "move On Schedule to the second line under In Progress
@@ -2733,12 +2724,10 @@
     // Shown on both tiers now, not just Overdue.
     $("cm-delay-note-sub").classList.remove("hidden");
     if (tier !== "red") {
-      dot.title = `In Progress for ${dayWord} — On Schedule`;
       note.classList.remove("tier-amber", "tier-red");
       $("cm-delay-note-label").textContent = `In Progress for ${dayWord}`;
       $("cm-delay-note-sub").textContent = "On Schedule";
     } else {
-      dot.title = `In Progress for ${dayWord} — Overdue`;
       note.classList.remove("tier-amber");
       note.classList.add("tier-red");
       // innerHTML rather than textContent: the status word is the same red
