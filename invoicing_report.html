@@ -911,7 +911,14 @@
          one engagement's detail. updateBreadcrumb() keeps the last two
          rungs on the view you are actually looking at. -->
     <div class="breadcrumb">
-      <span>Invoicing</span>
+      <!-- Greg (10/31/26): "the breadcrumbs dont work right because there is
+           no link to Invoicing. Make clicking on Invoicing take you to Time
+           Sheets." The other two invoicing pages already point their
+           Invoicing crumb here; on this page the destination is a tab, so
+           the click is handled in-page. The href stays real so it still
+           works without JS -- a fresh load of this page opens on Time
+           Sheets anyway. -->
+      <a href="invoicing_report.html" id="bc-invoicing">Invoicing</a>
       <span class="sep">›</span>
       <span class="current" id="bc-tab">Time Sheets</span>
       <span class="sep hidden" id="bc-eng-sep">›</span>
@@ -2213,6 +2220,15 @@
     $("bc-eng").classList.toggle("hidden", !drilled);
     $("bc-eng").textContent = engName;
   }
+
+  // Clicking #tab-hours rather than setting the panels directly: that
+  // handler already clears an open engagement detail and refreshes the
+  // crumb, so this stays one step behind the real behaviour instead of a
+  // second copy of it.
+  $("bc-invoicing").addEventListener("click", (e) => {
+    e.preventDefault();
+    $("tab-hours").click();
+  });
 
   // Bound once, not re-bound on every render: the rung is only clickable
   // while it carries crumb-link, and clearing the filter re-renders the
