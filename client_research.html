@@ -897,7 +897,7 @@
         <div class="card tasks-card" id="tasks-card" hidden style="margin-bottom:0;">
           <div class="tasks-head">
             <div class="tasks-head-left">
-              <h2>Tasks</h2>
+              <h2>Questions</h2>
               <span class="tasks-count" id="tasks-count"></span>
             </div>
             <div class="tasks-head-right">
@@ -1737,16 +1737,16 @@
     return `<span class="tl-chip tl-chip-unassigned" title="Unassigned \u2014 ${escapeHtml(taskAreaLabel(q.research_area))} work">${escapeHtml(code)}</span>`;
   }
 
-  // "Answered under Task 1." A paperclip with an arrow, so it reads as an
+  // "Answered under Question 1." A paperclip with an arrow, so it reads as an
   // attachment that lives somewhere else rather than one filed here.
-  // Clicking it opens the task that holds the document.
+  // Clicking it opens the question that holds the document.
   function refChip(q, nDocs) {
     const ref = crossRefOf(q);
     if (!ref) return "";
     if (!ref.target) {
-      return `<span class="tl-chip tl-chip-ref-dead" title="This task points at Task ${ref.number}, which does not exist on this engagement.">&#128206;&#8599; ${ref.number}?</span>`;
+      return `<span class="tl-chip tl-chip-ref-dead" title="This question points at Question ${ref.number}, which does not exist on this engagement.">&#128206;&#8599; ${ref.number}?</span>`;
     }
-    const tip = `Answered under Task ${ref.number}${nDocs ? " as well as here" : ""} \u2014 click to open it`;
+    const tip = `Answered under Question ${ref.number}${nDocs ? " as well as here" : ""} \u2014 click to open it`;
     return `<button type="button" class="tl-chip tl-chip-ref" data-task-goto="${ref.target.id}" title="${escapeHtml(tip)}">&#128206;&#8599; ${ref.number}</button>`;
   }
 
@@ -1795,7 +1795,7 @@
       : ` class="tl-due-readonly"`;
     if (!q.due_date) {
       return viewerIsLead
-        ? `<button type="button" class="tl-due tl-due-none" data-task-due-open="${q.id}" title="Set a due date for this task">No date</button>`
+        ? `<button type="button" class="tl-due tl-due-none" data-task-due-open="${q.id}" title="Set a due date for this question">No date</button>`
         : `<span class="tl-due tl-due-none tl-due-readonly">No date</span>`;
     }
     const st = dueState(q.due_date);
@@ -1913,7 +1913,7 @@
     // rather than anything being lost.
     allQuestions = allQuestions.filter((q) => !sweptTaskIds.has(q.id));
     sb.from("client_research_questions").delete().in("id", ids)
-      .then(({ error }) => { if (error) console.warn("Couldn't clear an empty task:", error.message); });
+      .then(({ error }) => { if (error) console.warn("Couldn't clear an empty question:", error.message); });
   }
 
   // One date for the engagement, at the top of the card rather than on
@@ -1998,7 +1998,7 @@
       .update({ due_date: nextIso })
       .in("id", ids);
     if (error) {
-      showBanner("The engagement date saved, but the tasks could not be moved: " + error.message, "error");
+      showBanner("The engagement date saved, but the questions could not be moved: " + error.message, "error");
       return { moved: 0, stayed };
     }
     // Updated in place rather than reloaded: one round trip is enough, and
@@ -2101,14 +2101,14 @@
     // Document has no questions yet would have had no way to make the first
     // one. Caught by the suite, not by looking at it.
     if (!total) {
-      list.innerHTML = `<div class="task-empty">No tasks yet. They arrive from the Controlling Document, or add one below.</div>`
+      list.innerHTML = `<div class="task-empty">No questions yet. They arrive from the Controlling Document, or add one below.</div>`
         + addTaskRowHtml();
       applyTailSpace(card);
       wireTaskHandlers(list);
       return;
     }
     if (!rows.length) {
-      list.innerHTML = `<div class="task-empty">Every task is complete.</div>` + addTaskRowHtml();
+      list.innerHTML = `<div class="task-empty">Every question is complete.</div>` + addTaskRowHtml();
       applyTailSpace(card);
       wireTaskHandlers(list);
       return;
@@ -2120,7 +2120,7 @@
       const mine = !!(currentUser && q.assigned_user_id === currentUser.id);
       const who = engagementSpecialists.find((x) => x.userId === q.assigned_user_id) || null;
       const nDocs = allDocuments.filter((d) => d.question_id === q.id).length;
-      const text = (q.question || "").trim() || "New task \u2014 type the question below";
+      const text = (q.question || "").trim() || "New question \u2014 type it below";
       const bgHtml = taskBgToHtml(q.background || "");
       const doneBy = done ? (engagementSpecialists.find((x) => x.userId === q.completed_by) || {}).name : null;
 
@@ -2168,7 +2168,7 @@
                question is properly written, with its background and
                numbering, and this is the quick correction. -->
           <textarea class="tl-qtext" rows="1" data-task-text="${q.id}"
-                    placeholder="What is this task asking for?">${escapeHtml(q.question || "")}</textarea>
+                    placeholder="What is this question asking for?">${escapeHtml(q.question || "")}</textarea>
           <div class="tl-fields">
             ${viewerIsLead ? `
             <label class="tl-field">
@@ -2188,8 +2188,8 @@
             const ref = crossRefOf(q);
             if (!ref) return "";
             return ref.target
-              ? `<div class="tl-refnote">&#128206;&#8599; Also answered by the research under <button type="button" class="tl-reflink" data-task-goto="${ref.target.id}">Task ${ref.number}</button>.</div>`
-              : `<div class="tl-refnote tl-refnote-dead">This task points at Task ${ref.number}, which does not exist on this engagement.</div>`;
+              ? `<div class="tl-refnote">&#128206;&#8599; Also answered by the research under <button type="button" class="tl-reflink" data-task-goto="${ref.target.id}">Question ${ref.number}</button>.</div>`
+              : `<div class="tl-refnote tl-refnote-dead">This question points at Question ${ref.number}, which does not exist on this engagement.</div>`;
           })()}
           <div class="tl-sub">Summary of what you found</div>
           <div class="tl-subhint">The client reads this on their dashboard, under the question and above the files. A paragraph is right.</div>
@@ -2202,7 +2202,7 @@
             <button type="button" class="btn-secondary btn-sm" data-task-add-doc="${q.id}" data-area="${q.research_area}">+ Document</button>
             <button type="button" class="btn-secondary btn-sm" data-task-add-link="${q.id}" data-area="${q.research_area}">+ Link</button>
             <button type="button" class="btn-secondary btn-sm" data-task-email="${q.id}">Email client</button>
-            <button type="button" class="btn-danger btn-sm tl-del" data-task-delete="${q.id}">Delete task</button>
+            <button type="button" class="btn-danger btn-sm tl-del" data-task-delete="${q.id}">Delete question</button>
           </div>
           <!-- The link form lives in the task now. It used to live in the
                question block, and the task's + Link jumped you over to it;
@@ -2312,8 +2312,8 @@
   function addTaskRowHtml() {
     return `
       <div class="tl-addrow">
-        <button type="button" class="btn-secondary btn-sm" id="tl-add-task">+ Add Task</button>
-        <select id="tl-add-area" aria-label="Work area for the new task">
+        <button type="button" class="btn-secondary btn-sm" id="tl-add-task">+ Add Question</button>
+        <select id="tl-add-area" aria-label="Work area for the new question">
           ${RESEARCH_AREAS.map(([k, label]) => `<option value="${k}">${escapeHtml(label)}</option>`).join("")}
         </select>
       </div>`;
@@ -2570,7 +2570,7 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
     // rather than discovered after the fact.
     const notes = [];
     notes.push(`<span class="tl-mailwarn">Replace the overview line, and make your own question red</span> once the letter is in your email.`);
-    if (!who) notes.push("This task has nobody assigned, so the letter says [your name]. Assign it above, or put your name in after you paste.");
+    if (!who) notes.push("This question has nobody assigned, so the letter says [your name]. Assign it above, or put your name in after you paste.");
     else if (currentUser && who.userId !== currentUser.id) notes.push(`This is written as ${escapeHtml(who.name)}, who holds the task — it will send from your account, not theirs.`);
     if (!lead) notes.push("No Team Lead is assigned to this engagement, so the closing line says \"your Team Lead\" rather than a name.");
     if (!toList.length) notes.push(contacts.length
@@ -2846,7 +2846,7 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
       due_date: (currentClient && currentClient.research_due_date) || null,
       assigned_user_id: defaultAssigneeFor(area),
     }).select("id").single();
-    if (error) { showBanner("Couldn't add that task: " + error.message, "error"); return; }
+    if (error) { showBanner("Couldn't add that question: " + error.message, "error"); return; }
     // Marked open before the reload, not after: the row is textless for as
     // long as it takes to type into it, and sweepContentlessTasks() spares
     // open rows only.
@@ -2865,15 +2865,15 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
     // group; that group no longer exists, so the files would be reachable
     // by nobody but the client. Say so.
     const msg = tied
-      ? `${tied} file${tied === 1 ? "" : "s"} sit under this task. Deleting it leaves ${tied === 1 ? "that file" : "them"} on the client's dashboard with no task to reach ${tied === 1 ? "it" : "them"} from. Move ${tied === 1 ? "it" : "them"} to another task first, or delete anyway?`
-      : "Delete this task?";
+      ? `${tied} file${tied === 1 ? "" : "s"} sit under this question. Deleting it leaves ${tied === 1 ? "that file" : "them"} on the client's dashboard with no question to reach ${tied === 1 ? "it" : "them"} from. Move ${tied === 1 ? "it" : "them"} to another question first, or delete anyway?`
+      : "Delete this question?";
     if (!confirm(msg)) return;
     const { error } = await sb.from("client_research_questions").delete().eq("id", questionId);
-    if (error) { showBanner("Couldn't delete that task: " + error.message, "error"); return; }
+    if (error) { showBanner("Couldn't delete that question: " + error.message, "error"); return; }
     openTaskIds.delete(questionId);
     await Promise.all([loadResearchQuestions(), loadDocuments()]);
     renderTaskList();
-    showBanner("Task deleted.", "success");
+    showBanner("Question deleted.", "success");
   }
 
   async function saveTaskField(questionId, patch, control) {
@@ -2982,7 +2982,7 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
         // security filters down to nothing comes back as a success, so
         // without it the page would cheerfully redraw the row it had just
         // claimed to delete.
-        if (!confirm("Remove this file from the task? This cannot be undone.")) return;
+        if (!confirm("Remove this file from the question? This cannot be undone.")) return;
         // A link row has no storage_path -- nothing to remove from storage.
         const { data: gone, error } = await sb.from("documents")
           .delete().eq("id", btn.dataset.deleteDoc).select("id");
@@ -2996,7 +2996,7 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
         if (btn.dataset.path) await sb.storage.from("client-documents").remove([btn.dataset.path]);
         await loadDocuments();
         renderTaskList();
-        showBanner("File removed from the task.", "success");
+        showBanner("File removed from the question.", "success");
       });
     });
     wireDocDragHandlers(scopeEl);
