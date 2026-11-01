@@ -662,6 +662,8 @@
      character what the client receives. */
   .welcome-field textarea { line-height: 1.6; resize: vertical; min-height: 460px; }
   .welcome-field textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .welcome-paste-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase;
+                         letter-spacing: 0.4px; color: var(--muted); margin-bottom: 7px; }
   .welcome-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   /* Two buttons in the order they are pressed, and the order said out loud:
      the clipboard has to be loaded before the message is open, or the Team
@@ -1207,7 +1209,12 @@
                  below already says what to do with it. This says what the
                  letter is FOR, which is the only thing a Team Lead opening
                  it for the first time needs. -->
-            <div class="welcome-hint">Advises the new client that you are the team lead, provides document &amp; video links, requests a Discovery Call date. Copies Chris, Rita and the assigned Program Administrator.</div>
+            <!-- Greg (11/1/26): "make consistent through the app" -- the
+                 same treatment the four email modals got. The description
+                 and the red paste instruction are gone; the two buttons
+                 under "Paste to:" say what each one does. #welcome-note
+                 stays for the warnings only (missing slug, missing Team
+                 Lead) -- things this screen cannot work out for itself. -->
             <div class="welcome-note" id="welcome-note"></div>
             <!-- Addresses hidden too (Greg, 10/28/26): "i think leaving the
                  To, CC and Subject are confusing. let's try it without
@@ -1251,9 +1258,10 @@
                  message as well -- that half was what produced an empty
                  compose window and a full clipboard, which is the thing he
                  did not want a Team Lead left holding. -->
+            <div class="welcome-paste-label">Paste to:</div>
             <div class="welcome-actions">
-              <button type="button" class="btn-primary btn-sm" id="welcome-open">Open draft &amp; copy letter</button>
-              <button type="button" class="btn-secondary btn-sm" id="welcome-copy">Copy letter only</button>
+              <button type="button" class="btn-primary btn-sm" id="welcome-open">Outlook Email</button>
+              <button type="button" class="btn-secondary btn-sm" id="welcome-copy">Your Email</button>
             </div>
           </div>
 
@@ -3555,7 +3563,6 @@
   // it is the same gesture on a PC and a Mac, so one sentence covers a
   // roster that is mostly Windows with some Macs, and nobody has to be
   // told which key their machine uses.
-  const DRAFT_HINT = "Click the Open draft & copy letter button, the email draft will automatically be on your clipboard. Paste it into your email, edit and add your signature.";
 
   function bareAddressList(list) {
     return String(list || "")
@@ -3755,7 +3762,6 @@
       welcomeDashboardUrl,
       await rosterSignature(teamLeadContact && teamLeadContact.id)
     );
-    notes.push(DRAFT_HINT);
     $("welcome-note").textContent = notes.join("\n");
   }
 
@@ -3797,7 +3803,7 @@
     });
     showBanner(copied
       ? "Draft opening, letter copied \u2014 right-click in the message and choose Paste."
-      : "Draft opening, but the letter could not be copied \u2014 use Copy letter only.", copied ? "success" : "error");
+      : "Draft opening, but the letter could not be copied \u2014 use Your Email.", copied ? "success" : "error");
   });
 
   $("welcome-copy").addEventListener("click", async () => {
