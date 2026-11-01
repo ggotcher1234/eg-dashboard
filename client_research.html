@@ -282,14 +282,10 @@
 
   /* Everything editable lives here, so the resting row stays a list. */
   .tl-detail { padding: 2px 8px 14px 36px; }
-  .tl-detail-q { font-size: 13.5px; line-height: 1.5; color: var(--text); margin-bottom: 10px; }
-  .tl-fields { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 12px; }
   .tl-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .tl-field > span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; color: var(--muted); }
   .tl-field input, .tl-field select { font-family: inherit; font-size: 13px; padding: 5px 8px;
                                       border: 1px solid var(--border); border-radius: 6px; background: #fff; max-width: 240px; }
-  .tl-sub { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700;
-            color: var(--muted); margin: 0 0 5px; }
   .tl-bg { font-size: 13px; line-height: 1.55; color: var(--text); background: #f7f9f6;
            border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
   .tl-bg p { margin: 0 0 6px; }
@@ -324,6 +320,50 @@
   }
   .tl-summary:focus { border-color: var(--accent); outline: none; }
   .tl-subhint { font-size: 11.5px; color: var(--muted); margin: -4px 0 6px; line-height: 1.5; }
+
+  /* ---------- Open-question panel (Greg, 11/1/26) ----------
+     "when you click the question you see the question plus the Assigned to
+     person only, plus a pill to open the background, and another pill to
+     open the Summary, plus another pill to Upload Research." The three
+     pills are the whole middle of the panel; each opens one stacked
+     section below them. An unpressed pill is a quiet outline, a pressed
+     one fills with the accent so the open section is obviously its. */
+  .tl-field-assignee { margin-bottom: 14px; }
+  .tl-field-assignee select { min-width: 200px; }
+
+  .tl-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0; }
+  .tl-pill {
+    font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1;
+    color: var(--text); background: #fff; border: 1px solid var(--border);
+    border-radius: 999px; padding: 8px 14px; cursor: pointer; white-space: nowrap;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+  }
+  .tl-pill:hover { border-color: var(--accent); color: var(--accent); }
+  .tl-pill.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tl-pill.is-on:hover { color: #fff; }
+  .tl-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* The opened section hangs off the pill row rather than floating: one
+     rule, a little breathing room, and no box inside a box. */
+  .tl-panel { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .tl-panel .tl-bg { margin-bottom: 0; }
+  .tl-panel .tl-linkform { margin-top: 12px; }
+
+  /* Due date, Email client, Delete question -- the three things that are
+     neither the question nor the work. Quiet row at the bottom. */
+  .tl-footrow {
+    display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px;
+    margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border);
+  }
+  .tl-field-due { margin-right: auto; }
+  .tl-footbtn {
+    font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--muted);
+    background: none; border: 1px solid transparent; border-radius: 6px;
+    padding: 6px 10px; cursor: pointer;
+  }
+  .tl-footbtn:hover { color: var(--text); border-color: var(--border); background: #fff; }
+  .tl-footbtn-danger:hover { color: var(--danger-dark); border-color: #f0d6d4; background: #fbeceb; }
+  .tl-footbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* ---------- Research email composer (Greg, 10/20/26) ---------- */
   .tl-mailform { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
@@ -1542,6 +1582,16 @@
   // stays for the other case -- closing a tall panel can shrink the
   // document past the scroll position and the browser pulls it back.
   let openTaskIds = new Set();
+  // Greg (11/1/26): "when you click the question you see the question plus
+  // the Assigned to person only, plus a pill to open the background, and
+  // another pill to open the Summary, plus another pill to Upload Research.
+  // You will not see all the other questions that currently show at the
+  // bottom." So an open question is a room of its own: the list collapses to
+  // that one row, and everything that used to be laid out at once is behind
+  // a pill. Which pills are showing, reset whenever a different question is
+  // opened -- they are a property of looking at THIS question, not a
+  // preference.
+  let openTaskPanels = new Set(); // "bg" | "summary" | "files"
 
   // Which specialty row a work area's task falls to by default. The two
   // enums were built separately and do not line up one-for-one: outbound and
@@ -2101,20 +2151,28 @@
     // Document has no questions yet would have had no way to make the first
     // one. Caught by the suite, not by looking at it.
     if (!total) {
-      list.innerHTML = `<div class="task-empty">No questions yet. They arrive from the Controlling Document, or add one below.</div>`
-        + addTaskRowHtml();
+      list.innerHTML = `<div class="task-empty">No questions yet. They arrive from the Controlling Document.</div>`;
       applyTailSpace(card);
       wireTaskHandlers(list);
       return;
     }
     if (!rows.length) {
-      list.innerHTML = `<div class="task-empty">Every question is complete.</div>` + addTaskRowHtml();
+      list.innerHTML = `<div class="task-empty">Every question is complete.</div>`;
       applyTailSpace(card);
       wireTaskHandlers(list);
       return;
     }
 
-    list.innerHTML = rows.map((q) => {
+    // An open question takes the whole card: the other rows go away so the
+    // one being worked on is the only thing on screen (Greg, 11/1/26).
+    // Clicking it again rolls it up and the list comes back. If the open
+    // question is no longer in rows -- completed with Hide completed on --
+    // the focus is dropped rather than leaving an empty card.
+    let focusId = openTaskIds.size === 1 ? [...openTaskIds][0] : null;
+    if (focusId && !rows.some((q) => q.id === focusId)) { openTaskIds.clear(); openTaskPanels.clear(); focusId = null; }
+    const visible = focusId ? rows.filter((q) => q.id === focusId) : rows;
+
+    list.innerHTML = visible.map((q) => {
       const done = !!q.completed_at;
       const open = openTaskIds.has(q.id);
       const mine = !!(currentUser && q.assigned_user_id === currentUser.id);
@@ -2169,21 +2227,6 @@
                numbering, and this is the quick correction. -->
           <textarea class="tl-qtext" rows="1" data-task-text="${q.id}"
                     placeholder="What is this question asking for?">${escapeHtml(q.question || "")}</textarea>
-          <div class="tl-fields">
-            ${viewerIsLead ? `
-            <label class="tl-field">
-              <span>Due</span>
-              <input type="date" data-task-due="${q.id}" value="${escapeHtml(q.due_date || "")}" />
-            </label>` : ""}
-            <label class="tl-field">
-              <span>Assigned to</span>
-              <select data-task-assignee="${q.id}">${specialistOptionsHtml(q.assigned_user_id)}</select>
-            </label>
-          </div>
-          <div class="tl-sub">Background</div>
-          ${bgHtml
-            ? `<div class="tl-bg">${bgHtml}</div>`
-            : `<div class="tl-quiet" style="margin-bottom:12px;">No background was written for this question on the Controlling Document.</div>`}
           ${(() => {
             const ref = crossRefOf(q);
             if (!ref) return "";
@@ -2191,35 +2234,74 @@
               ? `<div class="tl-refnote">&#128206;&#8599; Also answered by the research under <button type="button" class="tl-reflink" data-task-goto="${ref.target.id}">Question ${ref.number}</button>.</div>`
               : `<div class="tl-refnote tl-refnote-dead">This question points at Question ${ref.number}, which does not exist on this engagement.</div>`;
           })()}
-          <div class="tl-sub">Summary of what you found</div>
-          <div class="tl-subhint">The client reads this on their dashboard, under the question and above the files. A paragraph is right.</div>
-          <textarea class="tl-summary" data-task-summary="${q.id}"
-                    placeholder="What did the research find? Write it for the client, not for the team.">${escapeHtml(q.summary || "")}</textarea>
+          <label class="tl-field tl-field-assignee">
+            <span>Assigned to</span>
+            <select data-task-assignee="${q.id}">${specialistOptionsHtml(q.assigned_user_id)}</select>
+          </label>
 
-          <div class="tl-sub" style="margin-top:14px;">Research filed against this question</div>
-          <div id="task-docs-${q.id}"></div>
-          <div class="tl-actions">
-            <button type="button" class="btn-secondary btn-sm" data-task-add-doc="${q.id}" data-area="${q.research_area}">+ Document</button>
-            <button type="button" class="btn-secondary btn-sm" data-task-add-link="${q.id}" data-area="${q.research_area}">+ Link</button>
-            <button type="button" class="btn-secondary btn-sm" data-task-email="${q.id}">Email client</button>
-            <button type="button" class="btn-danger btn-sm tl-del" data-task-delete="${q.id}">Delete question</button>
+          <!-- Three pills, nothing open until one is pressed. Each carries a
+               mark when it has something in it, so a glance says where the
+               work already is without opening anything. -->
+          <div class="tl-pills">
+            <button type="button" class="tl-pill ${openTaskPanels.has("bg") ? "is-on" : ""}"
+                    data-task-panel="bg" aria-expanded="${openTaskPanels.has("bg")}">Background${bgHtml ? "" : " \u00b7 none"}</button>
+            <button type="button" class="tl-pill ${openTaskPanels.has("summary") ? "is-on" : ""}"
+                    data-task-panel="summary" aria-expanded="${openTaskPanels.has("summary")}">Summary${(q.summary || "").trim() ? " \u2713" : ""}</button>
+            <button type="button" class="tl-pill ${openTaskPanels.has("files") ? "is-on" : ""}"
+                    data-task-panel="files" aria-expanded="${openTaskPanels.has("files")}">Upload Research${nDocs ? ` \u00b7 ${nDocs}` : ""}</button>
           </div>
-          <!-- The link form lives in the task now. It used to live in the
-               question block, and the task's + Link jumped you over to it;
-               with those blocks gone there was nowhere to jump. -->
-          <div class="tl-linkform" id="tl-linkform-${q.id}">
-            <div class="tl-field">
-              <span>Label</span>
-              <input type="text" id="tl-link-label-${q.id}" placeholder="e.g. Listening Post" />
-            </div>
-            <div class="tl-field">
-              <span>URL</span>
-              <input type="text" id="tl-link-url-${q.id}" placeholder="https://…" />
-            </div>
+
+          ${openTaskPanels.has("bg") ? `
+          <div class="tl-panel">
+            ${bgHtml
+              ? `<div class="tl-bg">${bgHtml}</div>`
+              : `<div class="tl-quiet">No background was written for this question on the Controlling Document.</div>`}
+          </div>` : ""}
+
+          ${openTaskPanels.has("summary") ? `
+          <div class="tl-panel">
+            <div class="tl-subhint">The client reads this on their dashboard, under the question and above the files. A paragraph is right.</div>
+            <textarea class="tl-summary" data-task-summary="${q.id}"
+                      placeholder="What did the research find? Write it for the client, not for the team.">${escapeHtml(q.summary || "")}</textarea>
+          </div>` : ""}
+
+          ${openTaskPanels.has("files") ? `
+          <div class="tl-panel">
+            <div id="task-docs-${q.id}"></div>
             <div class="tl-actions">
-              <button type="button" class="btn-primary btn-sm" data-task-save-link="${q.id}" data-area="${q.research_area}">Save Link</button>
-              <button type="button" class="btn-secondary btn-sm" data-task-cancel-link="${q.id}">Cancel</button>
+              <button type="button" class="btn-secondary btn-sm" data-task-add-doc="${q.id}" data-area="${q.research_area}">+ Document</button>
+              <button type="button" class="btn-secondary btn-sm" data-task-add-link="${q.id}" data-area="${q.research_area}">+ Link</button>
             </div>
+            <!-- The link form lives in the question now. It used to live in
+                 the question block, and + Link jumped you over to it; with
+                 those blocks gone there was nowhere to jump. -->
+            <div class="tl-linkform" id="tl-linkform-${q.id}">
+              <div class="tl-field">
+                <span>Label</span>
+                <input type="text" id="tl-link-label-${q.id}" placeholder="e.g. Listening Post" />
+              </div>
+              <div class="tl-field">
+                <span>URL</span>
+                <input type="text" id="tl-link-url-${q.id}" placeholder="https://\u2026" />
+              </div>
+              <div class="tl-actions">
+                <button type="button" class="btn-primary btn-sm" data-task-save-link="${q.id}" data-area="${q.research_area}">Save Link</button>
+                <button type="button" class="btn-secondary btn-sm" data-task-cancel-link="${q.id}">Cancel</button>
+              </div>
+            </div>
+          </div>` : ""}
+
+          <!-- The three things that are neither the question nor the work:
+               when it is due, telling the client, and getting rid of it.
+               Quiet, at the bottom, out of the way of the pills above. -->
+          <div class="tl-footrow">
+            ${viewerIsLead ? `
+            <label class="tl-field tl-field-due">
+              <span>Due</span>
+              <input type="date" data-task-due="${q.id}" value="${escapeHtml(q.due_date || "")}" />
+            </label>` : ""}
+            <button type="button" class="tl-footbtn" data-task-email="${q.id}">Email client</button>
+            <button type="button" class="tl-footbtn tl-footbtn-danger" data-task-delete="${q.id}">Delete question</button>
           </div>
           <!-- Greg (10/20/26): when a specialist finishes a question they
                write to the client and the CC list introducing themselves,
@@ -2267,7 +2349,7 @@
     }).join("");
 
     openTaskIds.forEach((id) => {
-      const el = $(`task-docs-${id}`);
+      const el = $(`task-docs-${id}`); // null unless the Upload Research pill is open
       const q = allQuestions.find((x) => x.id === id);
       if (!el || !q) return;
       const docs = allDocuments.filter((d) => d.question_id === q.id);
@@ -2281,7 +2363,6 @@
       if (docs.length) wireDocRowHandlers(el);
     });
 
-    list.insertAdjacentHTML("beforeend", addTaskRowHtml());
     applyTailSpace(card);
     wireTaskHandlers(list);
   }
@@ -2309,15 +2390,12 @@
   // task is. Anything written properly -- with background, numbering and a
   // ranking -- still comes from the Controlling Document; this is for
   // research nobody put in there.
-  function addTaskRowHtml() {
-    return `
-      <div class="tl-addrow">
-        <button type="button" class="btn-secondary btn-sm" id="tl-add-task">+ Add Question</button>
-        <select id="tl-add-area" aria-label="Work area for the new question">
-          ${RESEARCH_AREAS.map(([k, label]) => `<option value="${k}">${escapeHtml(label)}</option>`).join("")}
-        </select>
-      </div>`;
-  }
+  // Greg (11/1/26): "remove the +Add Question button as all questions will
+  // be added through Controlling Document changes." The row that used to sit
+  // under the list is gone, and with it the only way to create a question
+  // from this page -- which is the point: the Controlling Document is where
+  // a question gets written, numbered and given its background, and a
+  // question typed here had none of that.
 
   // Esc closes the open task, the other half of "make it obvious how to
   // close this open box" -- the visible button says how, this is the reflex
@@ -2673,6 +2751,8 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
     scope.querySelectorAll("[data-task-goto]").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
+        openTaskIds.clear();
+        openTaskPanels.clear();
         openTaskIds.add(btn.dataset.taskGoto);
         renderTaskList();
         const row = document.querySelector(`[data-task-row="${btn.dataset.taskGoto}"]`);
@@ -2702,6 +2782,15 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
     });
     // The same upload path the question block uses, so the file is filed
     // against the question once and shows in both places.
+    // The three pills inside an open question.
+    scope.querySelectorAll("[data-task-panel]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.taskPanel;
+        if (openTaskPanels.has(key)) openTaskPanels.delete(key); else openTaskPanels.add(key);
+        renderTaskList();
+      });
+    });
+
     scope.querySelectorAll("[data-task-add-doc]").forEach((btn) => {
       btn.addEventListener("click", () => pickAreaDocuments(btn.dataset.area, btn.dataset.taskAddDoc));
     });
@@ -2761,8 +2850,6 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
       btn.addEventListener("click", () => copyResearchEmail(btn.dataset.taskMailCopy, btn));
     });
 
-    const addBtn = $("tl-add-task");
-    if (addBtn) addBtn.addEventListener("click", () => addTask($("tl-add-area").value));
     scope.querySelectorAll("[data-task-add-link]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const f = $(`tl-linkform-${btn.dataset.taskAddLink}`);
@@ -2808,7 +2895,17 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
     const before = el0 ? el0.getBoundingClientRect().top : null;
     const scroller = el0 ? scrollParentOf(el0) : window;
 
-    if (openTaskIds.has(id)) openTaskIds.delete(id); else openTaskIds.add(id);
+    // One at a time, because the list hides itself behind whichever is
+    // open: two open rows would mean neither is the thing you are looking
+    // at. Clicking the open one again rolls it up and the list comes back
+    // (Greg, 11/1/26).
+    if (openTaskIds.has(id)) {
+      openTaskIds.delete(id);
+    } else {
+      openTaskIds.clear();
+      openTaskIds.add(id);
+    }
+    openTaskPanels.clear();
     renderTaskList();
 
     if (before === null) return;
@@ -2831,32 +2928,11 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
     el.style.height = el.scrollHeight + "px";
   }
 
-  async function addTask(area) {
-    if (!area) return;
-    const existing = allQuestions.filter((q) => q.research_area === area);
-    const sortOrder = existing.length ? Math.max(...existing.map((q) => q.sort_order || 0)) + 1 : 1;
-    const { data, error } = await sb.from("client_research_questions").insert({
-      client_id: currentClient.id,
-      research_area: area,
-      question: "",
-      sort_order: sortOrder,
-      // Seeded from the engagement, which is what makes the master date a
-      // default rather than a separate thing to remember. isContentlessTask
-      // knows to discount a date that still equals this one.
-      due_date: (currentClient && currentClient.research_due_date) || null,
-      assigned_user_id: defaultAssigneeFor(area),
-    }).select("id").single();
-    if (error) { showBanner("Couldn't add that question: " + error.message, "error"); return; }
-    // Marked open before the reload, not after: the row is textless for as
-    // long as it takes to type into it, and sweepContentlessTasks() spares
-    // open rows only.
-    const newId = data ? data.id : null;
-    if (newId) openTaskIds.add(newId);
-    await loadResearchQuestions();
-    renderTaskList();
-    const ta = document.querySelector(`[data-task-text="${newId}"]`);
-    if (ta) { ta.focus(); ta.scrollIntoView({ behavior: "smooth", block: "center" }); }
-  }
+  // addTask() lived here and was the only caller of the removed + Add
+  // Question row (Greg, 11/1/26). Gone with it: a question created here had
+  // no number and no background, because those come from the Controlling
+  // Document, so every one of them arrived as a half-made row that the
+  // contentless sweep then had to reason about.
 
   async function deleteTask(questionId) {
     const tied = allDocuments.filter((d) => d.question_id === questionId).length;
