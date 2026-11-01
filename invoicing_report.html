@@ -281,6 +281,10 @@
   .breadcrumb a:hover { text-decoration: underline; }
   .breadcrumb .sep { opacity: 0.5; }
   .breadcrumb .current { color: var(--navy); font-weight: 700; }
+  /* Drilled into one engagement, the tab rung stops being where you are and
+     becomes the way back to the full list, so it reads as a link. */
+  .breadcrumb .crumb-link { color: var(--navy-light); font-weight: 400; cursor: pointer; }
+  .breadcrumb .crumb-link:hover { text-decoration: underline; }
   #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
   #not-admin-note { max-width: 460px; margin: 90px auto; text-align: center; color: var(--muted); font-size: 14px; }
 
@@ -893,7 +897,18 @@
   </header>
 
   <nav class="breadcrumb-bar no-print">
-    <div class="breadcrumb"><span>Invoicing</span><span class="sep">›</span><span class="current">Time Sheets</span></div>
+    <!-- Greg (10/31/26): "the bread crumb trail stops at 'time sheets'."
+         It was three fixed spans, so it said Time Sheets on the Payroll
+         tabs too, and said nothing at all once you had clicked through to
+         one engagement's detail. updateBreadcrumb() keeps the last two
+         rungs on the view you are actually looking at. -->
+    <div class="breadcrumb">
+      <span>Invoicing</span>
+      <span class="sep">›</span>
+      <span class="current" id="bc-tab">Time Sheets</span>
+      <span class="sep hidden" id="bc-eng-sep">›</span>
+      <span class="current hidden" id="bc-eng"></span>
+    </div>
   </nav>
 
   <!-- Billing history -->
@@ -1599,6 +1614,7 @@
         $("panel-payroll-mtd").classList.toggle("hidden", tab !== "payroll-mtd");
         $("panel-payroll-ytd").classList.toggle("hidden", tab !== "payroll-ytd");
         updateStickyToolbarVisibility();
+        updateBreadcrumb();
       });
     });
   }
@@ -2167,6 +2183,38 @@
     if (prevValue && seen.has(prevValue)) select.value = prevValue;
   }
 
+  // Greg (10/31/26): "the bread crumb trail stops at 'time sheets'."
+  // The last two rungs follow the view: which tab is open, and -- when the
+  // Time Sheets tab is drilled into a single engagement -- which engagement.
+  // In that case the tab rung turns into the way back out, which is the same
+  // step the "All Engagements" button above the detail takes.
+  function updateBreadcrumb() {
+    const active = document.querySelector(".tab-btn[data-tab].active");
+    const tabLabel = active ? active.textContent.trim() : "Time Sheets";
+    const engSelect = $("eng-filter");
+    const engId = engSelect ? engSelect.value : "";
+    const engName = engId && clientsById[engId] ? (clientsById[engId].name || "Untitled Engagement") : "";
+    const drilled = !!engName;
+
+    const tabCrumb = $("bc-tab");
+    tabCrumb.textContent = tabLabel;
+    tabCrumb.classList.toggle("current", !drilled);
+    tabCrumb.classList.toggle("crumb-link", drilled);
+
+    $("bc-eng-sep").classList.toggle("hidden", !drilled);
+    $("bc-eng").classList.toggle("hidden", !drilled);
+    $("bc-eng").textContent = engName;
+  }
+
+  // Bound once, not re-bound on every render: the rung is only clickable
+  // while it carries crumb-link, and clearing the filter re-renders the
+  // crumb through applyEngagementFilter below.
+  $("bc-tab").addEventListener("click", () => {
+    if (!$("bc-tab").classList.contains("crumb-link")) return;
+    $("eng-filter").value = "";
+    applyEngagementFilter();
+  });
+
   function applyEngagementFilter() {
     const clientId = $("eng-filter").value;
     const isDetail = !!clientId;
@@ -2175,6 +2223,7 @@
     $("engagement-detail-wrap").classList.toggle("hidden", !isDetail);
     if (isDetail) renderEngagementDetail(clientId);
     updateStickyToolbarVisibility();
+    updateBreadcrumb();
   }
 
   function monthKeyOf(dateStr) { return String(dateStr).slice(0, 7); }
