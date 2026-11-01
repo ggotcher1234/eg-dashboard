@@ -1,0 +1,559 @@
+
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #a3b9aa;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  .hidden { display: none !important; }
+  /* Greg (9/6/26): "hide the dropdowns on Programs and Roster for Specialists
+     and Team Members." Everything in those two submenus is an Admin action
+     (Add Program, Application Links, Add Roster Member), so for everyone else
+     the caret opens an empty menu -- the label stays a plain link instead.
+     This needs its own rule rather than leaning on .hidden: the <=900px nav
+     sets `.nav-submenu { display: block !important }` further down the sheet,
+     which beats a bare .hidden at equal specificity and would pop the menu
+     back open on a phone. Two classes outrank one. */
+  [data-super-admin-only].hidden { display: none !important; }
+  /* Chris/Greg (9/2/26): retire the header Ask AI drawer, and drop the name/role chip (the account menu stays). */
+  .ask-ai-wrap, .ai-drawer, .ai-drawer-overlay, .ai-nudge { display: none !important; }
+  #user-name { display: none !important; }
+  /* Chris (9/4/26): breadcrumb moved out of the dark header (where it sat
+     jammed against the logo) into its own light bar below, matching
+     Podio's own breadcrumb strip -- centered, colors flipped for a light
+     background. */
+  .breadcrumb-bar { background: #fff; border-bottom: 1px solid var(--border); padding: 10px 20px; }
+  .breadcrumb-extra { text-align: center; margin-top: 4px; font-size: 12px; }
+  .breadcrumb-extra a { color: var(--navy-light); text-decoration: none; }
+  .breadcrumb-extra a:hover { text-decoration: underline; }
+  .breadcrumb { font-size: 13px; color: var(--muted); margin: 0; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; justify-content: center; line-height: 1.4; }
+  .breadcrumb a { color: var(--navy-light); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  /* Greg (10/31/26): "the little carrots on the bread crumbs is very
+     light. Make them darker." They were inheriting the muted grey at
+     half opacity, which on white is near-invisible. Navy at 0.75 reads
+     clearly and still sits behind the labels either side of it. */
+  .breadcrumb .sep { color: var(--navy); opacity: 0.75; }
+
+  header { background: var(--navy); color: #fff; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 16.5px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 12px; color: #c9d6e3; margin-top: 2px; }
+  header a.back-link { color: #c9d6e3; font-size: 12px; text-decoration: none; }
+  header a.back-link:hover { color: #fff; text-decoration: underline; }
+  header a.back-link.disabled-link { opacity: 0.5; pointer-events: none; }
+  header .sub .crumb-sep { margin: 0 6px; opacity: 0.6; }
+  #userbox { display: flex; align-items: center; gap: 14px; font-size: 13.5px; }
+  #userbox .role-pill { background: var(--accent); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  #userbox .user-email { color: #c9d6e3; font-size: 11px; opacity: 0.7; margin-left: 2px; white-space: nowrap; }
+  @media (max-width: 900px) { #userbox .user-email { display: none; } }
+
+  button { font-family: inherit; cursor: pointer; border: none; border-radius: 6px; font-size: 13.5px; padding: 8px 14px; font-weight: 600; transition: background 0.15s ease; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #eef1f4; color: var(--text); }
+  .btn-secondary:hover { background: #e2e6ea; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: var(--danger-dark); }
+  .btn-ghost { background: transparent; color: var(--navy-light); padding: 6px 10px; }
+  .btn-ghost:hover { background: #eef1f4; }
+  header .btn-ghost { color: #c9d6e3; }
+  header .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12.5px; }
+  button:disabled { opacity: 0.55; cursor: default; }
+
+  /* Standardized Search/Print/Export/Import toolbar (Greg, 8/27/26) -- same
+     four controls, same order, on every internal page. */
+  .std-toolbar-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .global-search-wrap { position: relative; flex: 1; max-width: 480px; }
+  .global-search-wrap .search-box { position: relative; }
+  .global-search-wrap .search-box input {
+    width: 100%; height: 36px; padding: 0 14px 0 38px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13.5px; background: #fff;
+  }
+  .global-search-wrap .search-box input:focus { outline: none; border-color: var(--navy-light); }
+  .global-search-wrap .search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
+  .global-search-results {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #fff;
+    border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(20,48,77,0.15);
+    z-index: 70; max-height: 420px; overflow-y: auto;
+  }
+  .gsr-group-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; padding: 10px 14px 4px; }
+  .gsr-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; cursor: pointer; font-size: 13.5px; }
+  .gsr-item:hover { background: #f4f6f8; }
+  .gsr-item .gsr-name { font-weight: 600; color: var(--text); }
+  .gsr-item .gsr-meta { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .std-toolbar-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .std-toolbar-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #fff; }
+    main, .page-shell { max-width: none; margin: 0; padding: 0; }
+  }
+
+  /* Account menu -- Change Password + Sign out tucked into one dropdown. */
+  #profile-wrap { position: relative; }
+  #profile-btn { display: flex; align-items: center; gap: 4px; padding: 4px 6px; }
+  #profile-btn .avatar-icon {
+    width: 24px; height: 24px; border-radius: 999px; background: rgba(255,255,255,0.14);
+    display: flex; align-items: center; justify-content: center; color: #c9d6e3;
+  }
+  #profile-btn .avatar-icon svg { width: 14px; height: 14px; }
+  #profile-btn .chevron { font-size: 9px; color: #c9d6e3; }
+  .profile-dropdown {
+    position: absolute; top: 40px; right: 0; width: 150px; padding: 6px; background: #fff; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60;
+  }
+  .profile-dropdown button, header .profile-dropdown button {
+    width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--text);
+  }
+  .profile-dropdown button:hover, header .profile-dropdown button:hover { background: #eef1f4; color: var(--text); }
+  .profile-dropdown .pd-role { padding: 5px 10px 7px; margin-bottom: 4px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+  .profile-dropdown .pd-role:empty { display: none; }
+
+  /* Notification bell (Chris, 9/4/26): same styling as the Home page,
+     added everywhere so it's "prominently displayed on every page." */
+  #notif-wrap { position: relative; }
+  #notif-bell { position: relative; font-size: 15px; line-height: 1; }
+  .notif-count { position: absolute; top: -3px; right: -3px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; min-width: 16px; height: 16px; border-radius: 999px; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
+  .notif-dropdown { position: absolute; top: 40px; right: 0; width: min(320px, calc(100vw - 24px)); max-height: 420px; overflow-y: auto; background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 60; }
+  .notif-dropdown-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; font-weight: 700; }
+  .notif-item { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .notif-item:last-child { border-bottom: none; }
+  .notif-item .notif-msg { margin-bottom: 5px; line-height: 1.4; }
+  .notif-item .notif-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--muted); gap: 8px; }
+  .notif-item .notif-meta a { color: var(--navy-light); font-weight: 600; text-decoration: none; }
+  .notif-item .notif-meta a:hover { text-decoration: underline; }
+  .notif-empty { padding: 22px 14px; text-align: center; color: var(--muted); font-size: 13px; }
+
+  .page-shell { max-width: 900px; margin: 24px auto; padding: 0 20px 80px; }
+
+  #banner { display: none; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px; }
+  #banner.error { display: block; background: #fbe9e9; color: #922f2b; border: 1px solid #f0c2c0; }
+  #banner.success { display: block; background: #e9f5ee; color: #24614a; border: 1px solid #bfe3cf; }
+
+  .badge { font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; padding: 3px 9px; border-radius: 999px; }
+  .badge-accepted { background: #e9f5ee; color: var(--accent-dark); }
+  .badge-in_progress { background: #e7eef7; color: var(--navy-light); }
+  .badge-on_hold { background: #fdf1dc; color: var(--amber); }
+  .badge-closed { background: #eef1f4; color: var(--muted); }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 22px 26px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
+  .card h2 { margin-top: 0; font-size: 16px; color: var(--navy); }
+  .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  .card-hint { font-size: 12.5px; color: var(--muted); margin: -4px 0 16px; }
+
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
+  .field input[type="text"], .field textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; }
+
+  /* Project Files (Workflow Docs) makeover -- numbered navy badge +
+     bordered row per item, outlined pill action buttons (Greg, 8/31/26,
+     matching a reference mockup). Moved verbatim off the Setup Wizard
+     (Greg, 8/31/26: "remove this page from the wizard and create a new
+     page and left menu item called Workflow Files (TL)"). */
+  .wf-items { display: flex; flex-direction: column; gap: 12px; }
+  .wf-item-row {
+    display: flex; align-items: flex-start; gap: 16px;
+    border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px;
+  }
+  /* Greg (8/31/26): "customize the page for each one to only show that
+     document not all of them." When the CCC left-nav Documents group
+     links here with ?doc=, only the matching row shows and the numbered
+     badge (meaningless for a single item) is hidden. */
+  .wf-items.doc-filtered .wf-item-num { display: none; }
+  .wf-item-num {
+    width: 30px; height: 30px; border-radius: 50%; background: var(--navy); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .wf-item-body { flex: 1; min-width: 0; }
+  .wf-item-title { font-size: 14.5px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+  /* Greg (9/4/26): "The change button moves to the header where you can add
+     a new one." The title and its Change/+ Add trigger now share one row;
+     the document itself (link, upload, or empty state) renders below,
+     wired up separately in renderWorkflowFileField(). */
+  .wf-item-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .wf-item-header .wf-item-title { margin-bottom: 0; }
+  /* Greg (11/1/26): "just needs a little more space between Discovery
+     Document and the buttons." On rows that still carry a hint its 10px
+     bottom margin does this; the Discovery row lost its hint, so the title
+     sat straight on the buttons. Keyed on the adjacency rather than the
+     row, so any row whose hint goes away gets the same gap. */
+  .wf-item-header + .wf-action-row { margin-top: 14px; }
+  /* Greg (10/2/26): "all attachments should have the two buttons on the
+     same row. starting with the doc button and then the email button."
+     The document button and the email button were stacked with the hint
+     text wedged between them, and the Evaluation Sheet put its email
+     button up in the header instead -- three rows with three different
+     arrangements of the same two actions. One row, same order, every
+     time: open the document, then write the email about it. */
+  .wf-action-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  /* A prompt, not a button: the row already has two of those and this is an
+     aside about one of them (Greg, 11/1/26). */
+  .wf-form-link {
+    background: none; border: none; padding: 0; font-family: inherit; font-size: 12.5px;
+    color: var(--navy-light); cursor: pointer; text-decoration: underline;
+    text-underline-offset: 2px; text-decoration-color: rgba(31,74,117,0.35);
+  }
+  .wf-form-link:hover { text-decoration-color: currentColor; }
+  .wf-action-row > div { display: contents; }
+  /* Greg (10/2/26): "yes add file on the left and create email on the
+     right." The two ends of the row are two different jobs -- everything
+     to do with the document itself on the left, the one thing you send to
+     the client on the right -- so the email button takes the slack between
+     them rather than sitting shoulder to shoulder with the file controls. */
+  .wf-action-row > [id$="-client"]:not(#wf-review-client) > :first-child { margin-left: auto; }
+  /* Close-Out and the Debriefing Call reverse that pair: the email is the
+     first thing used, so it holds the left edge and the file controls take
+     the slack on the right (Greg, 10/10/26, then 10/13/26 for Debriefing).
+     Either the file cell or, before anything is attached, the "+ Add file"
+     trigger is the one that gets pushed. */
+  .wf-action-row > #wf-closeout-file > :first-child,
+  .wf-action-row > #wf-closeout-file:empty + #wf-closeout-actions > :first-child,
+  .wf-action-row > #wf-review-file > :first-child,
+  .wf-action-row > #wf-review-file:empty + #wf-review-actions > :first-child { margin-left: auto; }
+  /* At phone width the row wraps and the email button lands on its own
+     line; pushed right there it would float away from everything, so it
+     goes back to the left edge. */
+  @media (max-width: 520px) {
+    .wf-action-row > [id$="-client"] > :first-child,
+    .wf-action-row > #wf-closeout-file > :first-child,
+    .wf-action-row > #wf-closeout-file:empty + #wf-closeout-actions > :first-child,
+    .wf-action-row > #wf-review-file > :first-child,
+    .wf-action-row > #wf-review-file:empty + #wf-review-actions > :first-child { margin-left: 0; }
+  }
+  /* Greg (10/6/26): "when you click on the evaluation sheet in the left menu
+     have it open up in the right column window." The sheet renders in place
+     instead of only behind an Open button. It is the &preview=1 view on
+     purpose: preview refuses to submit, and submitting closes the engagement
+     (091) -- a Team Lead looking at the form must not be one stray click from
+     closing it on the client's behalf. */
+  #wf-eval-embed { margin: 12px 0 2px; }
+  .wf-embed-frame {
+    width: 100%; height: min(70vh, 760px); min-height: 420px; border: 1px solid var(--border);
+    border-radius: 10px; background: #fff; display: block;
+  }
+  @media print { .wf-embed-frame { height: auto; min-height: 0; } }
+  .wf-btn {
+    display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--navy-light);
+    border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 7px 16px;
+    font-size: 12.5px; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  /* The Create Email button used to inherit flex-shrink:0 from the
+     .wf-change-wrap it sat in; that wrapper went with its dropdown
+     (10/13/26), so the button holds its own width now. Every other .wf-btn
+     is still inside a wrap, so this is belt and braces for them. */
+  .wf-btn { flex-shrink: 0; }
+  .wf-btn:hover { background: #eef4fb; }
+  .wf-btn-danger { border-color: var(--danger); color: var(--danger); }
+  .wf-btn-danger:hover { background: #fdecea; }
+  /* Close Engagement: the same shape as its two neighbours so the row still
+     reads as one set of three, filled navy because it is the one that ends
+     the engagement rather than adding to it. */
+  .wf-btn-close { background: var(--navy); border-color: var(--navy); color: #fff;
+                  text-decoration: none; display: inline-flex; align-items: center; }
+  .wf-btn-close:hover { background: var(--navy-light); border-color: var(--navy-light); }
+  .wf-btn-icon-upload::before { content: "\2B06\00A0"; }
+  .wf-btn-icon-upload:disabled::before { content: ""; }
+  .wf-btn-icon-link::before { content: "\1F517\00A0"; }
+  .wf-btn-icon-email::before { content: "\2709\00A0"; }
+  .wf-btn-icon-email:disabled::before { content: ""; }
+  .wf-file-cell { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  /* Greg (9/4/26): a small text link required two clicks to actually see
+     the document (nav item, then this link) with no visual weight of its
+     own. A primary button makes "open it" the obvious one-click action on
+     this page; Change/Replace stays a separate control up in the header. */
+  .wf-open-btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; border-radius: 6px; padding: 9px 16px; font-size: 13.5px; font-weight: 600; }
+  .wf-file-name { font-size: 12.5px; color: var(--muted); word-break: break-all; }
+  .wf-change-wrap { position: relative; flex-shrink: 0; }
+  .wf-menu {
+    position: absolute; top: calc(100% + 6px); left: 0; min-width: 150px; background: #fff;
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    padding: 6px; z-index: 20;
+  }
+  .wf-menu button {
+    display: block; width: 100%; text-align: left; background: none; border: none; padding: 8px 10px;
+    border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; font-family: inherit;
+  }
+  .wf-menu button:hover { background: #f4f6f8; }
+  .wf-menu button.wf-menu-danger { color: var(--danger); }
+  .wf-menu button.wf-menu-danger:hover { background: #fdecea; }
+
+  /* Close-Out Evaluation email modal */
+  .eem-overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); z-index: 200; align-items: center; justify-content: center; }
+  .eem-overlay.open { display: flex; }
+  /* Greg (9/14/26): "open up the email box/window making it longer like you
+     did in the dashboard window." 560px wrapped the body into a narrow
+     column and pushed a five-address Cc onto four lines; 760 lets a
+     paragraph sit on two lines instead of four and shortens the whole
+     window as a side effect. Still capped to the viewport, so it never
+     grows past the screen on a laptop. */
+  .eem-modal { background: #fff; border-radius: 10px; width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; padding: 22px 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+  .eem-modal-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+  .eem-modal-header h3 { margin: 0 0 4px; color: var(--navy); }
+  /* The paste instruction, red wherever it appears (Greg, 10/23/26):
+       "this needs to have the same red instructions as we just put on
+       the Scheduling letter ... on all the appropriate outbound
+       customer emails." Grey, it read as boilerplate and nobody did it. */
+  /* .eem-modal-meta (the red paste instruction) and .eem-cc-summary (the
+     description under it) went with the instructions on 11/1/26. */
+  .eem-paste-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase;
+                     letter-spacing: 0.4px; color: var(--muted); margin-bottom: 7px; }
+  .eem-modal-close { background: none; border: none; font-size: 20px; line-height: 1; cursor: pointer; color: var(--muted); padding: 2px 6px; }
+  /* Was #eem-body only -- the two later modals (Controlling Document,
+     Research Complete) never picked it up and fell back to the generic
+     .field styling at a different font size. All three now match. */
+  #eem-body input, #eem-body textarea,
+  #rrem-body input, #rrem-body textarea,
+  #cdem-body input, #cdem-body textarea {
+    width: 100%; font-family: inherit; font-size: 13.5px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box;
+  }
+  #eem-body textarea, #rrem-body textarea, #cdem-body textarea { resize: vertical; }
+  /* The body grows to fit the draft (autosizeEmailBody below) rather than
+     sitting at a fixed row count with the end of the email out of sight.
+     Capped so a very long one scrolls inside the box instead of pushing the
+     buttons off the bottom of the screen. */
+  .eem-body-text { max-height: 46vh; overflow-y: auto; line-height: 1.5; }
+
+  #loading-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); font-size: 14px; }
+  .no-client-note { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 14px; }
+  header .brand-row { display: flex; align-items: center; gap: 12px; }
+  /* Chris (9/4/26): logo same size everywhere as the Home page. */
+  .brand-badge { background: #fff; border-radius: 8px; padding: 8px 14px; display: flex; align-items: center; flex-shrink: 0; }
+  .brand-badge img { height: 36px; display: block; }
+  /* Greg (10/6/26): "we are very inconsistent with the name next to the logo...
+     Standardize all to NCEG Dashboard." This reverses the 9/11/26 logo-alone
+     call -- one name, the same name, on every page. .brand-subline stays gone. */
+  .brand-tagline { font-size: 16px; font-weight: 600; color: #fff; white-space: nowrap; }
+  /* Greg (10/23/26), for Chris: "Chris would like a Home Button. Maybe
+     replace the NCEG Dashboard with Home in the header or your suggestion."
+     The name stays -- it is the one name on every page, standardised on
+     10/6/26, and "Home" in its place would leave each page unnamed. What
+     was missing is that the logo beside it has linked home since the
+     beginning and gave no sign of it. The name is now part of that same
+     link, and both underline on hover, which is the thing everybody
+     already tries. */
+  a.brand-tagline { text-decoration: none; }
+  a.brand-tagline:hover, a.brand-tagline:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
+  a.brand-badge:hover { box-shadow: 0 0 0 2px rgba(255,255,255,0.35); }
+
+  /* ---------- Top nav + Ask AI (same pattern as every other internal page) ---------- */
+  header { position: relative; }
+  header .site-nav { display: flex; align-items: center; gap: 4px; }
+  /* Greg (10/6/26): "center the main menu on the page and make them spaced
+     evenly between each other." The header is space-between, so the nav only
+     ever sat in whatever gap the brand block and the account block left it --
+     it drifts every time either side changes width (the role pill, the
+     Applications menu appearing). Giving the two outer blocks the same flex
+     basis makes them split the leftover space evenly, which lands the nav on
+     the true centre of the page instead of the centre of the gap. */
+  header > .brand-row { flex: 1 1 0; min-width: 0; }
+  header > #userbox, header > #userbox2 { flex: 1 1 0; min-width: 0; justify-content: flex-end; }
+  header .site-nav { flex: 0 0 auto; }
+  header .nav-link { color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 8px 12px; border-radius: 6px; position: relative; }
+  header .nav-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  header .nav-link.active { color: #fff; }
+  header .nav-link.active::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -14px; height: 2px; background: #fff; }
+  .nav-toggle {
+    display: none; align-items: center; justify-content: center; width: 34px; height: 34px;
+    background: rgba(255,255,255,0.1); border: none; border-radius: 6px; color: #fff; cursor: pointer; flex-shrink: 0;
+  }
+  .nav-toggle:hover { background: rgba(255,255,255,0.18); }
+  /* Chris (9/4/26): dropdown top-nav submenu, piloted on Invoicing --
+     Time Sheets / Program Invoices / Pay Statements. Click-to-toggle
+     (not hover-only) so it matches the account-menu pattern already used
+     elsewhere and stays usable on touch. Active state (parent + child) is
+     set by JS below based on the current page, not hardcoded per file. */
+  .nav-item-dropdown { position: relative; }
+  .nav-link-dropdown-btn { display: inline-flex; align-items: center; gap: 4px; font: inherit; background: none; border: none; cursor: pointer; }
+  .nav-link-dropdown-btn .nav-caret { font-size: 9px; opacity: 0.7; }
+  .nav-submenu {
+    position: absolute; top: 100%; left: 0; margin-top: 8px; min-width: 230px; max-width: 320px; background: var(--navy);
+    border-radius: 10px; padding: 6px; box-shadow: 0 10px 24px rgba(0,0,0,0.28); display: none; z-index: 97;
+  }
+  .nav-item-dropdown.open .nav-submenu { display: block; }
+  /* Greg (9/6/26): the top-nav dropdowns open on hover, not click-only.
+     .nav-submenu sits 8px below its nav item (margin-top), and that gap is
+     dead space the pointer would cross on the way down -- the ::before
+     bridge covers it so the menu doesn't blink shut mid-travel. Click still
+     works for touch and keyboard; the nav script clears the clicked-open
+     state on mouseleave so it can't stay stuck open. */
+  @media (hover: hover) {
+    .nav-item-dropdown:hover .nav-submenu { display: block; }
+    .nav-submenu::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
+  }
+  .nav-submenu a { display: block; padding: 9px 12px; border-radius: 6px; color: #c9d6e3; font-size: 13.5px; font-weight: 600; text-decoration: none; white-space: normal; }
+  .nav-submenu a:hover, .nav-submenu a.active { background: rgba(255,255,255,0.14); color: #fff; }
+  /* Applications nav dropdown content (Chris, 9/4/26) -- dynamic, unlike
+     Invoicing's fixed 3 links, so it needs a meta line, an empty state,
+     and a "View All" footer row the static dropdown didn't. */
+  .nav-submenu .nav-submenu-meta { display: block; font-size: 11px; font-weight: 400; color: #9fb3c8; margin-top: 1px; }
+  .nav-submenu .nav-submenu-empty { padding: 9px 12px; font-size: 12.5px; color: #9fb3c8; font-weight: 400; }
+  .nav-submenu .nav-submenu-viewall { font-weight: 700; border-top: 1px solid rgba(255,255,255,0.14); margin-top: 4px; padding-top: 10px; }
+  @media (max-width: 980px) {
+    .nav-item-dropdown { position: static; }
+    .nav-submenu { position: static; display: block !important; box-shadow: none; background: transparent; padding: 0 0 4px 26px; margin-top: 0; }
+    .nav-submenu::before { display: none; }
+    .nav-link-dropdown-btn .nav-caret { display: none; }
+    .nav-caret-only { display: none; }
+  }
+  /* "Programs" needs to stay a real link to the Programs list (Greg,
+     9/6/26 -- a plain dropdown-toggle button with no href broke direct
+     navigation there from every other page), while still offering "Add
+     Program" / "Application Links" as a dropdown -- so unlike Invoicing
+     (one button does both), Programs splits into a normal nav-link plus a
+     small separate caret button that only toggles the submenu. */
+  .nav-split-item { display: flex; align-items: center; }
+  .nav-split-item .nav-link { padding-right: 4px; }
+  /* Greg (10/6/26), on spacing: the Programs and Roster carets are
+     Admin-only, so for a Team Lead or Specialist they were display:none and
+     those two items collapsed against each other -- 36px between Engagements
+     and Programs, 20px between Programs and Roster. Keep the gated caret in
+     the layout and just make it invisible: every split item then has the same
+     geometry whoever is signed in, the gaps come out even, and the menu no
+     longer shifts between an Admin and a Specialist viewing the same page.
+     visibility:hidden also takes it out of the tab order. */
+  .nav-caret-only[data-super-admin-only].hidden {
+    display: inline-flex !important; visibility: hidden; pointer-events: none;
+  }
+  .nav-caret-only {
+    display: inline-flex; align-items: center; font: inherit; background: none; border: none; cursor: pointer;
+    color: #c9d6e3; padding: 8px 10px 8px 2px; border-radius: 6px;
+  }
+  .nav-caret-only:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  .nav-caret-only .nav-caret { font-size: 9px; opacity: 0.7; }
+  .nav-toggle svg { width: 20px; height: 20px; display: block; }
+  @media (max-width: 980px) {
+    .nav-toggle { display: inline-flex; }
+    header .site-nav {
+      display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; gap: 2px;
+      background: var(--navy); padding: 8px; box-shadow: 0 10px 24px rgba(0,0,0,0.28); z-index: 96;
+      border-radius: 0 0 10px 10px;
+    }
+    header .site-nav.open { display: flex; }
+    header .nav-link { padding: 12px 14px; border-radius: 6px; }
+    header .nav-link.active { background: rgba(255,255,255,0.14); }
+    header .nav-link.active::after { display: none; }
+  }
+
+  .ask-ai-btn {
+    display: inline-flex; align-items: center; gap: 6px; background: rgba(124,63,196,0.18); color: #d9c8f5;
+    border: 1px solid rgba(124,63,196,0.5); padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  }
+  .ask-ai-btn:hover { background: rgba(124,63,196,0.3); color: #fff; }
+  .ask-ai-btn svg { width: 14px; height: 14px; }
+  .ask-ai-wrap { position: relative; }
+  .ai-nudge { position: absolute; top: calc(100% + 12px); right: 0; width: 220px; background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.22); padding: 12px 26px 12px 14px; font-size: 12.5px; line-height: 1.45; z-index: 95; }
+  .ai-nudge.hidden { display: none; }
+  .ai-nudge::before { content: ""; position: absolute; top: -6px; right: 22px; width: 11px; height: 11px; background: #fff; border-left: 1px solid var(--border); border-top: 1px solid var(--border); transform: rotate(45deg); }
+  .ai-nudge-close { position: absolute; top: 6px; right: 8px; background: transparent; border: none; color: var(--muted); font-size: 15px; line-height: 1; padding: 2px; cursor: pointer; }
+
+  .ai-drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.25); z-index: 90; }
+  .ai-drawer-overlay.open { display: block; }
+  .ai-drawer {
+    position: fixed; top: 0; right: -460px; width: 440px; max-width: 92vw; height: 100vh; background: #fff;
+    box-shadow: -8px 0 28px rgba(20,48,77,0.18); z-index: 91; display: flex; flex-direction: column; transition: right 0.22s ease;
+  }
+  .ai-drawer.open { right: 0; }
+  .ai-drawer-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 20px 22px 14px; border-bottom: 1px solid var(--border); }
+  .ai-drawer-header h3 { margin: 0; font-size: 18px; color: var(--navy); display: flex; align-items: center; gap: 8px; }
+  .ai-drawer-header h3 svg { color: #7c3fc4; width: 19px; height: 19px; }
+  .ai-drawer-header .card-hint { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+  .ai-drawer-close { background: transparent; border: none; color: var(--muted); font-size: 20px; padding: 4px; cursor: pointer; line-height: 1; }
+  .ai-drawer-close:hover { color: var(--text); }
+  .ai-drawer-body { flex: 1; overflow-y: auto; padding: 18px 22px; }
+  .ai-context-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 6px; }
+  .ai-context-chip { display: flex; align-items: center; gap: 8px; background: #f4f6f8; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--text); margin-bottom: 18px; }
+  .ai-context-chip svg { color: var(--navy-light); flex-shrink: 0; width: 15px; height: 15px; }
+  .ai-greeting-bubble { background: #f4f0fb; color: var(--text); border: 1px solid #e3d5f7; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.5; margin-bottom: 18px; }
+  .ai-ask-label { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+  .ai-ask-row { display: flex; gap: 8px; margin-bottom: 18px; }
+  .ai-ask-row input { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13.5px; font-family: inherit; }
+  .ai-ask-row input:focus { outline: none; border-color: #7c3fc4; }
+  .ai-ask-send { width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #7c3fc4; color: #fff; border-radius: 8px; }
+  .ai-ask-send:hover { background: #6528a3; }
+  .ai-ask-send svg { width: 17px; height: 17px; }
+  .ai-suggested-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 8px; }
+  .ai-suggested-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 20px; }
+  .ai-suggested-chip { text-align: left; background: #f4f0fb; color: #5a2494; border: 1px solid #e3d5f7; border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; width: 100%; }
+  .ai-suggested-chip:hover { background: #ecdffa; }
+  .ai-suggested-chip svg { width: 13px; height: 13px; flex-shrink: 0; color: #7c3fc4; }
+  .ai-answer-block { border-top: 1px solid var(--border); padding-top: 16px; }
+  .ai-answer-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .ai-answer-meta .ai-answer-title { font-size: 13px; font-weight: 700; color: var(--navy); }
+  .ai-answer-meta .ai-answer-time { font-size: 11.5px; color: var(--muted); }
+  .ai-answer-card { background: #f4f0fb; border-radius: 10px; padding: 14px 16px; font-size: 13.5px; line-height: 1.55; color: var(--text); }
+  .ai-answer-card ul { margin: 8px 0; padding-left: 18px; }
+  .ai-answer-card li { margin-bottom: 3px; }
+  .ai-answer-card strong { color: var(--navy); }
+  .ai-answer-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .ai-answer-actions button { background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; color: var(--muted); font-size: 12px; }
+  .ai-answer-actions button:hover { color: var(--text); background: #f4f6f8; }
+  .ai-drawer-footer { padding: 12px 22px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); text-align: center; }
+
+  /* Embed mode (Greg, 8/30/26) -- when this page is loaded inside an
+     iframe pane on client_control_center.html's left-nav workspace
+     (?embed=1), the masthead header (logo/nav/Ask AI/breadcrumb) is
+     redundant with the workspace's own header one level up. */
+  body.embed-mode header,
+  body.embed-mode .breadcrumb-bar,
+  body.embed-mode .ai-drawer,
+  body.embed-mode .ai-drawer-overlay,
+  body.embed-mode .std-toolbar-row,
+  body.embed-mode #sec-overview { display: none !important; }
+  body.embed-mode .page-shell { max-width: none; margin: 0; padding: 0 0 40px; }
+
+  /* Greg (9/15/26): "i thought we extended this email window so it's not so
+     tiny with continuous scrolling."
+     It WAS extended -- and then this page gets embedded in the Engagement
+     Workspace's iframe, where every vh unit means the IFRAME's height, not
+     the screen's. The iframe is sized to this page's content, so it is
+     often only ~300px tall; `max-height: calc(100vh - 48px)` then resolved
+     to about 250px and the 46vh body box to about 140px. The window was
+     capping itself to a box the size of its own container.
+     In embed mode the overlay therefore leaves the viewport box entirely:
+     absolutely positioned in the document, so opening it makes the PAGE
+     taller, the parent's ResizeObserver sees that, and the iframe grows to
+     fit. No caps -- the window ends up exactly as long as the email. */
+  body.embed-mode { position: relative; }
+  body.embed-mode .eem-overlay.open {
+    position: absolute; inset: 0 0 auto 0; min-height: 100%;
+    align-items: flex-start; padding: 16px 0 24px;
+  }
+  body.embed-mode .eem-modal { max-height: none; overflow-y: visible; }
+  body.embed-mode .eem-body-text { max-height: none; overflow-y: hidden; }
+
+  /* Greg (10/28/26): "i don't want this to open when you click debrief
+     call, i want this to be the page that shows... i don't want to see a
+     flash of the auto-open and i don't want to see a slider to read the
+     page. fit the page to the content."
+     On the Debriefing row the email is not a window over the page -- it IS
+     the page. The same modal box is moved into the row, where it drops
+     every bit of dialog chrome: no backdrop, no shadow, no close button,
+     and no scrollbox of its own. Nothing is ever positioned out of flow,
+     so the document is exactly as tall as the letter and the workspace's
+     ResizeObserver sizes the iframe to it -- no scrollbar either side.
+     The row's own title still names the step (it covers the recording
+     slot underneath too), so the modal's heading would say it twice. */
+  .eem-modal.eem-inline {
+    width: auto; max-height: none; overflow: visible;
+    background: transparent; box-shadow: none; border-radius: 0; padding: 0;
+  }
+  .eem-modal.eem-inline .eem-modal-close,
+  .eem-modal.eem-inline .eem-modal-header h3 { display: none; }
+  .eem-modal.eem-inline .eem-modal-header { margin-bottom: 12px; }
+  #wf-review-email:not(:empty) { margin-bottom: 14px; }
+  /* With the email out of the action row, the recording controls have
+     nothing to sit opposite, so they come back to the left edge. */
+  .wf-row-email-page .wf-action-row > #wf-review-file > :first-child,
+  .wf-row-email-page .wf-action-row > #wf-review-file:empty + #wf-review-actions > :first-child { margin-left: 0; }
