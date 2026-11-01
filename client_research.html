@@ -319,7 +319,6 @@
     border-radius: 6px; padding: 8px 10px; background: #fff; resize: vertical; min-height: 92px;
   }
   .tl-summary:focus { border-color: var(--accent); outline: none; }
-  .tl-subhint { font-size: 11.5px; color: var(--muted); margin: -4px 0 6px; line-height: 1.5; }
 
   /* ---------- Open-question panel (Greg, 11/1/26) ----------
      "when you click the question you see the question plus the Assigned to
@@ -1591,7 +1590,10 @@
   // a pill. Which pills are showing, reset whenever a different question is
   // opened -- they are a property of looking at THIS question, not a
   // preference.
-  let openTaskPanels = new Set(); // "bg" | "summary" | "files"
+  // Greg (11/1/26): "Make the box below a display box that shows the
+  // information for whichever button you pushed." One box, one pill lit.
+  // Pressing the lit pill again puts the box away.
+  let openTaskPanel = null; // null | "bg" | "summary" | "files"
 
   // Which specialty row a work area's task falls to by default. The two
   // enums were built separately and do not line up one-for-one: outbound and
@@ -2169,7 +2171,7 @@
     // question is no longer in rows -- completed with Hide completed on --
     // the focus is dropped rather than leaving an empty card.
     let focusId = openTaskIds.size === 1 ? [...openTaskIds][0] : null;
-    if (focusId && !rows.some((q) => q.id === focusId)) { openTaskIds.clear(); openTaskPanels.clear(); focusId = null; }
+    if (focusId && !rows.some((q) => q.id === focusId)) { openTaskIds.clear(); openTaskPanel = null; focusId = null; }
     const visible = focusId ? rows.filter((q) => q.id === focusId) : rows;
 
     list.innerHTML = visible.map((q) => {
@@ -2239,33 +2241,34 @@
             <select data-task-assignee="${q.id}">${specialistOptionsHtml(q.assigned_user_id)}</select>
           </label>
 
-          <!-- Three pills, nothing open until one is pressed. Each carries a
-               mark when it has something in it, so a glance says where the
-               work already is without opening anything. -->
+          <!-- Three pills over one display box: the box shows whichever
+               pill is lit, pressing another switches it, pressing the lit
+               one puts it away. Nothing is open until a pill is pressed.
+               Each pill carries a mark when it has something in it, so a
+               glance says where the work already is without opening it. -->
           <div class="tl-pills">
-            <button type="button" class="tl-pill ${openTaskPanels.has("bg") ? "is-on" : ""}"
-                    data-task-panel="bg" aria-expanded="${openTaskPanels.has("bg")}">Background${bgHtml ? "" : " \u00b7 none"}</button>
-            <button type="button" class="tl-pill ${openTaskPanels.has("summary") ? "is-on" : ""}"
-                    data-task-panel="summary" aria-expanded="${openTaskPanels.has("summary")}">Summary${(q.summary || "").trim() ? " \u2713" : ""}</button>
-            <button type="button" class="tl-pill ${openTaskPanels.has("files") ? "is-on" : ""}"
-                    data-task-panel="files" aria-expanded="${openTaskPanels.has("files")}">Upload Research${nDocs ? ` \u00b7 ${nDocs}` : ""}</button>
+            <button type="button" class="tl-pill ${openTaskPanel === "bg" ? "is-on" : ""}"
+                    data-task-panel="bg" aria-expanded="${openTaskPanel === "bg"}">Background${bgHtml ? "" : " \u00b7 none"}</button>
+            <button type="button" class="tl-pill ${openTaskPanel === "summary" ? "is-on" : ""}"
+                    data-task-panel="summary" aria-expanded="${openTaskPanel === "summary"}">Summary${(q.summary || "").trim() ? " \u2713" : ""}</button>
+            <button type="button" class="tl-pill ${openTaskPanel === "files" ? "is-on" : ""}"
+                    data-task-panel="files" aria-expanded="${openTaskPanel === "files"}">Upload Research${nDocs ? ` \u00b7 ${nDocs}` : ""}</button>
           </div>
 
-          ${openTaskPanels.has("bg") ? `
+          ${openTaskPanel === "bg" ? `
           <div class="tl-panel">
             ${bgHtml
               ? `<div class="tl-bg">${bgHtml}</div>`
               : `<div class="tl-quiet">No background was written for this question on the Controlling Document.</div>`}
           </div>` : ""}
 
-          ${openTaskPanels.has("summary") ? `
+          ${openTaskPanel === "summary" ? `
           <div class="tl-panel">
-            <div class="tl-subhint">The client reads this on their dashboard, under the question and above the files. A paragraph is right.</div>
             <textarea class="tl-summary" data-task-summary="${q.id}"
-                      placeholder="What did the research find? Write it for the client, not for the team.">${escapeHtml(q.summary || "")}</textarea>
+                      placeholder="What did the research find?">${escapeHtml(q.summary || "")}</textarea>
           </div>` : ""}
 
-          ${openTaskPanels.has("files") ? `
+          ${openTaskPanel === "files" ? `
           <div class="tl-panel">
             <div id="task-docs-${q.id}"></div>
             <div class="tl-actions">
@@ -2752,7 +2755,7 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         openTaskIds.clear();
-        openTaskPanels.clear();
+        openTaskPanel = null;
         openTaskIds.add(btn.dataset.taskGoto);
         renderTaskList();
         const row = document.querySelector(`[data-task-row="${btn.dataset.taskGoto}"]`);
@@ -2786,7 +2789,7 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
     scope.querySelectorAll("[data-task-panel]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const key = btn.dataset.taskPanel;
-        if (openTaskPanels.has(key)) openTaskPanels.delete(key); else openTaskPanels.add(key);
+        openTaskPanel = openTaskPanel === key ? null : key;
         renderTaskList();
       });
     });
@@ -2905,7 +2908,7 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
       openTaskIds.clear();
       openTaskIds.add(id);
     }
-    openTaskPanels.clear();
+    openTaskPanel = null;
     renderTaskList();
 
     if (before === null) return;
