@@ -422,6 +422,16 @@
   .dm-note-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
   .dm-when { font-size: 11.5px; font-weight: 700; color: var(--text); }
   .dm-who { font-size: 11.5px; color: var(--muted); }
+  .dm-edited { font-size: 11px; color: var(--muted); font-style: italic; }
+  .dm-edit { margin-left: auto; border: none; background: none; padding: 0 4px; font-size: 11.5px;
+             font-weight: 700; color: var(--navy-light); cursor: pointer; border-radius: 4px; }
+  .dm-edit:hover { text-decoration: underline; }
+  /* With Edit present it is the one that takes the slack, so the × sits
+     tight against it rather than claiming the gap for itself. */
+  .dm-edit + .dm-del { margin-left: 0; }
+  .dm-edit-box { width: 100%; min-height: 70px; font-family: inherit; font-size: 13.5px; line-height: 1.45;
+                 padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; resize: vertical; }
+  .dm-edit-actions { display: flex; gap: 8px; margin-top: 7px; }
   .dm-del { margin-left: auto; border: none; background: none; padding: 0 4px; font-size: 14px; line-height: 1; color: var(--muted); cursor: pointer; border-radius: 4px; }
   .dm-del:hover { color: var(--danger); background: #fdecea; }
   .dm-body { font-size: 13.5px; line-height: 1.45; white-space: pre-wrap; }
@@ -1679,7 +1689,7 @@
     delayNotesByClient = {};
     const { data, error } = await sb
       .from("client_delay_notes")
-      .select("id, client_id, body, created_at, author_id, users(full_name)")
+      .select("id, client_id, body, created_at, edited_at, author_id, users(full_name)")
       .order("created_at", { ascending: false });
     if (error) return; // the input still works; only the history is missing
     for (const n of data || []) {
@@ -1687,11 +1697,14 @@
         id: n.id,
         body: n.body,
         created_at: n.created_at,
+        edited_at: n.edited_at,
         author: (n.users && n.users.full_name) || "",
         // Your own comment, or anything at all if you are an admin. The
-        // database enforces the same rule; this only decides whether the
-        // × is drawn.
+        // database enforces the same rule (181 for the edit, and the delete
+        // policy before it); this only decides whether the controls are
+        // drawn.
         canDelete: isSuperAdminUser || (!!currentUser && n.author_id === currentUser.id),
+        canEdit: isSuperAdminUser || (!!currentUser && n.author_id === currentUser.id),
       });
     }
   }
@@ -1716,18 +1729,35 @@
 
   // Every note, newest first, for the Comments popup. Nothing is folded away
   // here: the popup exists precisely so the whole history can be read.
+  // Greg (11/1/26): "the Overdue comment needs to be editable here on the
+  // engagements page by the team lead." It was append-and-delete only, so
+  // fixing a word meant losing the date the explanation was first given.
+  // One note at a time is open for editing; delayEditingId says which.
+  let delayEditingId = null;
+
   function delayHistoryHtml(clientId) {
     const notes = delayNotesByClient[clientId] || [];
     if (!notes.length) return `<p class="dm-empty">No comments yet.</p>`;
-    return notes.map((n) => `
+    return notes.map((n) => {
+      const editing = n.id === delayEditingId;
+      return `
       <div class="dm-note">
         <div class="dm-note-head">
           <span class="dm-when">${escapeHtml(delayNoteDate(n.created_at))}</span>
           ${n.author ? `<span class="dm-who">${escapeHtml(n.author)}</span>` : ""}
+          ${n.edited_at ? `<span class="dm-edited" title="Edited ${escapeHtml(delayNoteDate(n.edited_at))}">edited</span>` : ""}
+          ${n.canEdit && !editing ? `<button type="button" class="dm-edit" data-delay-edit="${n.id}">Edit</button>` : ""}
           ${n.canDelete ? `<button type="button" class="dm-del" data-delay-del="${n.id}" title="Remove this comment">&times;</button>` : ""}
         </div>
-        <div class="dm-body">${escapeHtml(n.body)}</div>
-      </div>`).join("");
+        ${editing ? `
+          <textarea class="dm-edit-box" id="dm-edit-${n.id}" maxlength="300">${escapeHtml(n.body)}</textarea>
+          <div class="dm-edit-actions">
+            <button type="button" class="btn-primary btn-sm" data-delay-edit-save="${n.id}">Save</button>
+            <button type="button" class="btn-secondary btn-sm" data-delay-edit-cancel="1">Cancel</button>
+          </div>`
+        : `<div class="dm-body">${escapeHtml(n.body)}</div>`}
+      </div>`;
+    }).join("");
   }
 
   // Lightweight index for the global search bar's "specialists" and
@@ -2258,6 +2288,7 @@
     const client = allClients.find((x) => x.id === clientId);
     if (!client) return;
     delayModalClientId = clientId;
+    delayEditingId = null;
     $("delay-sub").textContent = client.name || "";
     $("delay-new").value = "";
     $("delay-status").textContent = "";
@@ -2271,6 +2302,7 @@
     // Anything typed and not saved is discarded, which is only safe because
     // saving is a button press away and nothing here saves by itself.
     delayModalClientId = null;
+    delayEditingId = null;
     $("delay-overlay").classList.remove("open");
   }
 
@@ -2325,10 +2357,71 @@
     renderEngagementsList(); // the link's count changed
   });
 
-  // Delete is the way out of a comment saved too early -- the rows cannot be
-  // edited, so a mistake is removed and rewritten.
+  // Edit a comment in place (Greg, 11/1/26). Delete is still there for a
+  // comment that should not exist at all; this is for the ones that should,
+  // but say the wrong thing. The database allows it for the author and for
+  // Admins (181); canEdit only decides whether the control is drawn.
   document.addEventListener("click", async (e) => {
-    const del = e.target.closest ? e.target.closest("[data-delay-del]") : null;
+    if (!e.target.closest) return;
+
+    const openEdit = e.target.closest("[data-delay-edit]");
+    if (openEdit) {
+      delayEditingId = openEdit.dataset.delayEdit;
+      renderDelayModal();
+      const box = $("dm-edit-" + delayEditingId);
+      if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+      return;
+    }
+
+    if (e.target.closest("[data-delay-edit-cancel]")) {
+      delayEditingId = null;
+      renderDelayModal();
+      return;
+    }
+
+    const save = e.target.closest("[data-delay-edit-save]");
+    if (save) {
+      const noteId = save.dataset.delayEditSave;
+      const clientId = delayModalClientId;
+      const box = $("dm-edit-" + noteId);
+      const body = box ? box.value.trim() : "";
+      // An empty comment is a delete asking to be made by mistake, so it is
+      // refused rather than silently blanking the explanation.
+      if (!clientId || !body) return;
+      save.disabled = true;
+      $("delay-status").classList.remove("error");
+      $("delay-status").textContent = "Saving\u2026";
+      const editedAt = new Date().toISOString();
+      // .select() for the same reason the insert uses it: a write the
+      // database refuses must not read back as saved.
+      const { data, error } = await sb.from("client_delay_notes")
+        .update({ body, edited_at: editedAt })
+        .eq("id", noteId)
+        .select("id");
+      if (error || !data || !data.length) {
+        save.disabled = false;
+        $("delay-status").classList.add("error");
+        $("delay-status").textContent = error ? "Couldn't save: " + error.message : "Couldn't save that edit.";
+        return;
+      }
+      const note = (delayNotesByClient[clientId] || []).find((n) => n.id === noteId);
+      if (note) { note.body = body; note.edited_at = editedAt; }
+      // clients.delay_reason mirrors the NEWEST comment, which is what the
+      // engagement row shows -- so it only changes when the newest one did.
+      const newest = (delayNotesByClient[clientId] || [])[0];
+      if (newest && newest.id === noteId) {
+        await sb.from("clients").update({ delay_reason: body }).eq("id", clientId);
+        const row = allClients.find((x) => x.id === clientId);
+        if (row) row.delay_reason = body;
+      }
+      delayEditingId = null;
+      $("delay-status").textContent = "Saved.";
+      renderDelayModal();
+      renderEngagementsList();
+      return;
+    }
+
+    const del = e.target.closest("[data-delay-del]");
     if (!del) return;
     const noteId = del.dataset.delayDel;
     const id = delayModalClientId;
