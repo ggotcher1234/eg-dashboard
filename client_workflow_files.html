@@ -268,6 +268,12 @@
   .wf-btn:hover { background: #eef4fb; }
   .wf-btn-danger { border-color: var(--danger); color: var(--danger); }
   .wf-btn-danger:hover { background: #fdecea; }
+  /* Close Engagement: the same shape as its two neighbours so the row still
+     reads as one set of three, filled navy because it is the one that ends
+     the engagement rather than adding to it. */
+  .wf-btn-close { background: var(--navy); border-color: var(--navy); color: #fff;
+                  text-decoration: none; display: inline-flex; align-items: center; }
+  .wf-btn-close:hover { background: var(--navy-light); border-color: var(--navy-light); }
   .wf-btn-icon-upload::before { content: "\2B06\00A0"; }
   .wf-btn-icon-upload:disabled::before { content: ""; }
   .wf-btn-icon-link::before { content: "\1F517\00A0"; }
@@ -864,6 +870,13 @@
                 <div id="wf-eval-link"></div>
                 <div id="wf-eval-file"></div>
                 <div id="wf-eval-actions"></div>
+                <!-- Greg (11/1/26): "add a 3rd button called Close
+                     Engagement which will take you to a checklist of
+                     things to check-off before you can click close."
+                     Its own container, because wf-eval-actions is
+                     rebuilt from scratch every time the attachment
+                     changes. -->
+                <div id="wf-eval-close"></div>
               </div>
               <div id="wf-eval-embed"></div>
               <div id="wf-eval-response"></div>
@@ -1793,7 +1806,7 @@
     // signed PDF. Same two columns the dashboard's Evaluation Sheet step has
     // always read, so an attachment here simply becomes what that step
     // opens, ahead of the live form.
-    { key: "eval", label: "Evaluation Sheet", addLabel: "Add Close-out call notes/video", pathColumn: "closeout_survey_storage_path", urlColumn: "closeout_survey_url" },
+    { key: "eval", label: "Evaluation Sheet", addLabel: "Add Close-out Video", pathColumn: "closeout_survey_storage_path", urlColumn: "closeout_survey_url" },
   ];
   let workflowData = null;
 
@@ -2114,6 +2127,15 @@
         <button type="button" class="btn-primary wf-open-btn" id="eval-open-btn">&#128279; Open Evaluation Sheet &#8599;</button>
       </div>
     `;
+
+    // The last thing on the last row of the last page: everything above is
+    // the engagement, this ends it. It goes to the checklist rather than
+    // closing anything itself -- nothing on this screen knows whether the
+    // invoice went out or the Program was told.
+    const closeBox = $("wf-eval-close");
+    if (closeBox && currentClient) {
+      closeBox.innerHTML = `<a class="wf-btn wf-btn-close" href="close_engagement.html?client=${currentClient.id}">Close Engagement &rarr;</a>`;
+    }
     // The sheet itself, in the right column, rather than only behind the
     // button above -- which stays, because a full-tab read beats a 70vh
     // scroller when you actually want to study it.

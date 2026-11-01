@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Close Engagement</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --navy: #14304d;
+    --navy-light: #1f4a75;
+    --accent: #5c7248;
+    --accent-dark: #46592f;
+    --amber: #a9740f;
+    --danger: #b3403a;
+    --danger-dark: #922f2b;
+    --bg: #a3b9aa;
+    --card: #ffffff;
+    --border: #dde3e9;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--text); }
+  .hidden { display: none !important; }
+
+  #loading-view { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 14px; }
+
+  .util-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+              padding: 14px 20px; max-width: 880px; margin: 0 auto; }
+  .back-link { color: var(--navy); font-size: 13px; font-weight: 600; text-decoration: none; }
+  .back-link:hover { text-decoration: underline; }
+
+  .page-shell { max-width: 880px; margin: 0 auto; padding: 0 20px 60px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+          padding: 22px 24px; margin-bottom: 18px; }
+
+  .eng-name { font-size: 24px; font-weight: 800; color: var(--navy); margin: 0 0 6px; }
+  .eng-meta { font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+
+  h2 { font-size: 17px; font-weight: 700; color: var(--navy); margin: 0 0 4px; }
+
+  /* The two halves of the list, labelled by who establishes the fact rather
+     than by what the item is about. An item the app proved and an item a
+     person swore to are not the same kind of tick, and the reader should
+     never have to guess which one they are looking at. */
+  .group-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+                 color: var(--muted); margin: 0 0 14px; }
+
+  .ck { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; border-top: 1px solid var(--border); }
+  .ck:first-of-type { border-top: none; padding-top: 2px; }
+  .ck-mark { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: inline-flex;
+             align-items: center; justify-content: center; font-size: 12px; font-weight: 700; margin-top: 1px; }
+  .ck-mark-on { background: var(--accent); color: #fff; }
+  .ck-mark-off { background: #fff; border: 1.5px dashed #c3ccd4; color: #c3ccd4; }
+  .ck-body { min-width: 0; flex: 1; }
+  .ck-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .ck.is-off .ck-title { color: var(--muted); }
+  .ck-why { font-size: 12.5px; color: var(--danger-dark); margin-top: 3px; line-height: 1.5; }
+  .ck-fix { font-size: 12.5px; font-weight: 600; color: var(--navy); text-decoration: none; white-space: nowrap; }
+  .ck-fix:hover { text-decoration: underline; }
+
+  /* Manual items are a real checkbox, because a person is making a claim
+     here and the control should feel like signing rather than reading. */
+  .ck-manual { cursor: pointer; }
+  .ck-manual input { flex: 0 0 auto; width: 18px; height: 18px; margin: 2px 1px 0; accent-color: var(--accent); }
+  .ck-manual input:disabled { cursor: not-allowed; }
+  .ck-who { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+
+  .tally { font-size: 13px; color: var(--muted); margin: 0 0 16px; }
+  .tally strong { color: var(--text); }
+
+  .close-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .btn-close {
+    font-family: inherit; font-size: 14px; font-weight: 700; color: #fff; background: var(--danger);
+    border: none; border-radius: 8px; padding: 11px 20px; cursor: pointer;
+  }
+  .btn-close:hover:not(:disabled) { background: var(--danger-dark); }
+  .btn-close:disabled { background: #d7dde2; color: #96a0a8; cursor: not-allowed; }
+  .close-blocked { font-size: 12.5px; color: var(--muted); }
+
+  .closed-stamp { font-size: 14px; color: var(--accent-dark); font-weight: 600; }
+  .closed-sub { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+
+  #banner { margin-bottom: 14px; }
+  .banner { padding: 10px 14px; border-radius: 8px; font-size: 13.5px; font-weight: 600; }
+  .banner-error { background: #fbeceb; color: var(--danger-dark); border: 1px solid #f0d6d4; }
+  .banner-success { background: #eef3e9; color: var(--accent-dark); border: 1px solid #cfdcc2; }
+
+  .no-client-note { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+                    padding: 22px 24px; font-size: 14px; }
+
+  @media (max-width: 560px) {
+    .page-shell, .util-bar { padding-left: 14px; padding-right: 14px; }
+    .card { padding: 18px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading-view">Loading&hellip;</div>
+
+<div id="app-view" class="hidden">
+  <div class="util-bar">
+    <a class="back-link" id="back-link" href="#">&larr; Back to the engagement</a>
+  </div>
+
+  <div class="page-shell">
+    <div id="banner"></div>
+
+    <div id="no-client-view" class="no-client-note hidden">
+      Open an engagement from <a href="index.html">Engagements</a> first.
+    </div>
+
+    <div id="close-view" class="hidden">
+      <div class="card">
+        <h1 class="eng-name" id="eng-name"></h1>
+        <div class="eng-meta" id="eng-meta"></div>
+      </div>
+
+      <div class="card">
+        <h2>Close Engagement</h2>
+        <div class="tally" id="tally"></div>
+        <div class="close-row" id="close-row"></div>
+      </div>
+
+      <div class="card">
+        <div class="group-label">Checked for you</div>
+        <div id="auto-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="group-label">Confirm yourself</div>
+        <div id="manual-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const $ = (id) => document.getElementById(id);
+  const escapeHtml = (str) => { const d = document.createElement("div"); d.textContent = str == null ? "" : String(str); return d.innerHTML; };
+
+  let currentUser = null;
+  let isSuperAdmin = false;
+  let currentClient = null;
+
+  // project_status is the truth, not closed_at. Two live engagements carry a
+  // closed_at stamped by the old status toggle and never cleared when they
+  // were put back to In Progress, so a page that trusted that column would
+  // tell a Team Lead their running engagement was already closed.
+  const isClosed = () => currentClient && currentClient.project_status === "closed";
+  let autoItems = [];          // [{ key, title, ok, why, fixHref, fixLabel }]
+  let manualTicks = {};        // item_key -> { checked, checked_at, checked_by_name }
+
+  // ---------- The manual half ----------
+  // Everything the app can prove, it proves below in buildAutoItems(). What
+  // is left here is the work that happens somewhere this app cannot see:
+  // the invoice, the word to the Program, the last look at what the CEO
+  // actually gets. Those are a person's word, so they are a person's tick.
+  //
+  // Deliberately short. A checklist long enough to skim is a checklist
+  // nobody reads, and every item here is something that has genuinely been
+  // forgotten on a real engagement.
+  const MANUAL_ITEMS = [
+    { key: "invoice", title: "The final invoice for this engagement has been submitted" },
+    { key: "dashboard", title: "The client dashboard has been opened and read through as the CEO sees it" },
+    { key: "program", title: "The Program Administrator has been told the engagement is complete" },
+    { key: "handoff", title: "The CEO knows what happens next and who to contact" },
+  ];
+
+  function showBanner(msg, kind) {
+    $("banner").innerHTML = `<div class="banner banner-${kind === "error" ? "error" : "success"}">${escapeHtml(msg)}</div>`;
+    if (kind !== "error") setTimeout(() => { $("banner").innerHTML = ""; }, 6000);
+  }
+
+  function redirectToLogin() {
+    const dest = location.pathname.split("/").pop() + location.search;
+    location.href = "index.html?return=" + encodeURIComponent(dest);
+  }
+
+  const filed = (row, base) => !!(row && ((row[base + "_storage_path"] || "").trim() || (row[base + "_url"] || "").trim()));
+
+  // ---------- The automatic half ----------
+  // Each item is a question the database can already answer, so it answers
+  // it. An unmet item says what is missing in its own words and links to the
+  // page that fixes it -- a checklist that only tells you "no" sends you off
+  // to hunt for the screen, which is how a close stalls for a week.
+  function buildAutoItems(content, questions, evalRows, hours) {
+    const id = currentClient.id;
+    const files = (doc) => `client_workflow_files.html?client=${id}&doc=${doc}`;
+    const items = [];
+
+    items.push({
+      key: "discovery",
+      title: "Discovery Document is on file",
+      ok: filed(content, "discovery_doc") || filed(content, "discovery_notes"),
+      why: "Nothing is attached and the fillable Discovery Call Notes form has not been submitted.",
+      fixHref: files("discovery"), fixLabel: "Open",
+    });
+
+    items.push({
+      key: "controlling",
+      title: "Controlling Document is on file",
+      ok: filed(content, "controlling_doc") || !!((content && content.controlling_doc_link_url || "").trim()),
+      why: "Nothing is attached and no Controlling Document has been built.",
+      fixHref: files("controlling"), fixLabel: "Open",
+    });
+
+    const open = questions.filter((q) => !q.completed_at);
+    items.push({
+      key: "questions_done",
+      title: "Every research question is marked complete",
+      ok: questions.length > 0 && open.length === 0,
+      why: questions.length === 0
+        ? "This engagement has no research questions, so there is nothing to have finished."
+        : `${open.length} question${open.length === 1 ? " is" : "s are"} still open: ${open.map((q) => q.question_number || "?").join(", ")}.`,
+      fixHref: `client_research.html?client=${id}`, fixLabel: "Open",
+    });
+
+    // The summary is the only part of a question the CEO actually reads on
+    // their dashboard, so a complete question with no summary closes the
+    // engagement with a blank where the answer should be.
+    const noSummary = questions.filter((q) => !(q.summary || "").trim());
+    items.push({
+      key: "questions_summary",
+      title: "Every question has a summary the client can read",
+      ok: questions.length > 0 && noSummary.length === 0,
+      why: questions.length === 0
+        ? "This engagement has no research questions."
+        : `${noSummary.length} question${noSummary.length === 1 ? "" : "s"} still ${noSummary.length === 1 ? "has" : "have"} an empty Summary: ${noSummary.map((q) => q.question_number || "?").join(", ")}.`,
+      fixHref: `client_research.html?client=${id}`, fixLabel: "Open",
+    });
+
+    items.push({
+      key: "review",
+      title: "Research Review document is on file",
+      ok: filed(content, "research_review"),
+      why: "Nothing is attached to the Research Review step.",
+      fixHref: files("review"), fixLabel: "Open",
+    });
+
+    items.push({
+      key: "closeout_recording",
+      title: "Close-Out call recording is on file",
+      ok: filed(content, "closeout_recording"),
+      why: "No recording or link has been attached to the Close-Out call.",
+      fixHref: files("closeout"), fixLabel: "Open",
+    });
+
+    // Either path counts: the CEO submitted the live form, or somebody
+    // uploaded the signed PDF they sent back instead.
+    items.push({
+      key: "evaluation",
+      title: "Evaluation Sheet has come back",
+      ok: evalRows.length > 0 || filed(content, "closeout_survey"),
+      why: "The CEO has not submitted the sheet and no completed copy has been uploaded.",
+      fixHref: files("eval"), fixLabel: "Open",
+    });
+
+    const budget = Number(currentClient.budget_hours_available || 0);
+    const over = budget > 0 && hours > budget;
+    items.push({
+      key: "hours",
+      title: "Hours are logged and inside the budget",
+      ok: hours > 0 && !over,
+      why: hours === 0
+        ? "No hours have been logged against this engagement."
+        : `${hours} hours logged against a budget of ${budget}.`,
+      fixHref: `client_control_center.html?client=${id}`, fixLabel: "Open",
+    });
+
+    return items;
+  }
+
+  function renderAuto() {
+    $("auto-list").innerHTML = autoItems.map((it) => `
+      <div class="ck ${it.ok ? "" : "is-off"}">
+        <span class="ck-mark ${it.ok ? "ck-mark-on" : "ck-mark-off"}" aria-hidden="true">${it.ok ? "&#10003;" : ""}</span>
+        <div class="ck-body">
+          <div class="ck-title">${escapeHtml(it.title)}</div>
+          ${it.ok ? "" : `<div class="ck-why">${escapeHtml(it.why)}</div>`}
+        </div>
+        ${it.ok ? "" : `<a class="ck-fix" href="${it.fixHref}">${escapeHtml(it.fixLabel)} &rarr;</a>`}
+      </div>`).join("");
+  }
+
+  function renderManual() {
+    const locked = isClosed();
+    $("manual-list").innerHTML = MANUAL_ITEMS.map((it) => {
+      const t = manualTicks[it.key] || {};
+      return `
+      <label class="ck ck-manual ${t.checked ? "" : "is-off"}">
+        <input type="checkbox" data-manual="${it.key}" ${t.checked ? "checked" : ""} ${locked ? "disabled" : ""} />
+        <div class="ck-body">
+          <div class="ck-title">${escapeHtml(it.title)}</div>
+          ${t.checked && t.when ? `<div class="ck-who">${escapeHtml(t.who || "Ticked")} &middot; ${escapeHtml(t.when)}</div>` : ""}
+        </div>
+      </label>`;
+    }).join("");
+
+    $("manual-list").querySelectorAll("[data-manual]").forEach((box) => {
+      box.addEventListener("change", () => saveManual(box.dataset.manual, box.checked, box));
+    });
+  }
+
+  async function saveManual(key, checked, box) {
+    box.disabled = true;
+    const { error } = await sb.from("client_close_checklist").upsert({
+      client_id: currentClient.id,
+      item_key: key,
+      checked,
+      checked_at: new Date().toISOString(),
+      checked_by: currentUser.id,
+    }, { onConflict: "client_id,item_key" });
+    box.disabled = false;
+    if (error) {
+      box.checked = !checked;
+      showBanner("Couldn't save that: " + error.message, "error");
+      return;
+    }
+    manualTicks[key] = {
+      checked,
+      when: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      who: currentUser.full_name,
+    };
+    renderManual();
+    renderCloseRow();
+  }
+
+  function allDone() {
+    return autoItems.every((i) => i.ok) && MANUAL_ITEMS.every((i) => (manualTicks[i.key] || {}).checked);
+  }
+
+  function renderCloseRow() {
+    const done = autoItems.filter((i) => i.ok).length + MANUAL_ITEMS.filter((i) => (manualTicks[i.key] || {}).checked).length;
+    const total = autoItems.length + MANUAL_ITEMS.length;
+
+    if (isClosed()) {
+      const when = currentClient.closed_at
+        ? " " + new Date(currentClient.closed_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+        : "";
+      $("tally").innerHTML = "";
+      $("close-row").innerHTML = `
+        <div>
+          <div class="closed-stamp">&#10003; Closed${escapeHtml(when)}</div>
+          <div class="closed-sub">${escapeHtml(currentClient.closed_by_name ? "by " + currentClient.closed_by_name : "")}</div>
+        </div>`;
+      return;
+    }
+
+    $("tally").innerHTML = `<strong>${done}</strong> of ${total} done.`;
+    const ready = allDone();
+    $("close-row").innerHTML = `
+      <button type="button" class="btn-close" id="btn-close" ${ready && isSuperAdmin ? "" : "disabled"}>Close Engagement</button>
+      <span class="close-blocked">${
+        !ready ? "Every item above has to be ticked first."
+        : !isSuperAdmin ? "An Admin presses this one."
+        : ""}</span>`;
+    $("btn-close")?.addEventListener("click", closeEngagement);
+  }
+
+  async function closeEngagement() {
+    // Closing freezes the client's dashboard to a snapshot -- from here on
+    // the CEO sees what was true today, not whatever the team edits later.
+    // That is the whole point of closing, and it is also the one thing that
+    // cannot be undone from this screen, so it is said out loud first.
+    if (!confirm(
+      "Close this engagement?\n\n" +
+      "The client's dashboard is frozen to how it looks right now, and the engagement moves to Closed. " +
+      "This is not something you can undo here."
+    )) return;
+
+    const btn = $("btn-close");
+    btn.disabled = true;
+    btn.textContent = "Closing…";
+
+    // finalize_client() writes the snapshot the public dashboard serves from
+    // and sets status = 'finalized'. It has existed since migration 032 and
+    // nothing ever called it, which is why a closed engagement used to keep
+    // showing live data to the client. This is the call.
+    const { error: finErr } = await sb.rpc("finalize_client", { p_client_id: currentClient.id });
+    if (finErr) {
+      btn.disabled = false;
+      btn.textContent = "Close Engagement";
+      showBanner("Couldn't freeze the dashboard, so nothing was closed: " + finErr.message, "error");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const { error: updErr } = await sb.from("clients")
+      .update({ project_status: "closed", closed_at: now, closed_by: currentUser.id })
+      .eq("id", currentClient.id)
+      .select("id");
+    if (updErr) {
+      btn.disabled = false;
+      btn.textContent = "Close Engagement";
+      showBanner("The dashboard was frozen but the engagement did not move to Closed: " + updErr.message, "error");
+      return;
+    }
+
+    currentClient.project_status = "closed";
+    currentClient.closed_at = now;
+    currentClient.closed_by_name = currentUser.full_name;
+    renderManual();
+    renderCloseRow();
+    showBanner("Engagement closed.", "success");
+  }
+
+  async function loadClient(clientId) {
+    const { data: client, error } = await sb.from("clients")
+      .select("id, name, slug, project_status, closed_at, closed_by, budget_hours_available, econ_dev_companies(name)")
+      .eq("id", clientId).maybeSingle();
+    if (error || !client) {
+      $("no-client-view").classList.remove("hidden");
+      return;
+    }
+    currentClient = client;
+    $("back-link").href = `client_workflow_files.html?client=${client.id}&doc=eval`;
+
+    const [
+      { data: content },
+      { data: questions },
+      { data: evalRows },
+      { data: assignments },
+      { data: closer },
+      { data: ticks },
+    ] = await Promise.all([
+      sb.from("client_content").select("*").eq("client_id", clientId).maybeSingle(),
+      sb.from("client_research_questions").select("id, question_number, completed_at, summary").eq("client_id", clientId).order("question_number"),
+      sb.from("client_evaluation_responses").select("id").eq("client_id", clientId),
+      sb.from("client_assignments").select("id, user_id, is_team_lead, users(full_name)").eq("client_id", clientId),
+      client.closed_by
+        ? sb.from("users").select("full_name").eq("id", client.closed_by).maybeSingle()
+        : Promise.resolve({ data: null }),
+      sb.from("client_close_checklist").select("item_key, checked, checked_at, checked_by, users:checked_by(full_name)").eq("client_id", clientId),
+    ]);
+
+    if (closer) currentClient.closed_by_name = closer.full_name;
+
+    const assignmentIds = (assignments || []).map((a) => a.id);
+    let hours = 0;
+    if (assignmentIds.length) {
+      const { data: entries } = await sb.from("time_entries").select("hours").in("assignment_id", assignmentIds);
+      hours = Math.round((entries || []).reduce((n, e) => n + Number(e.hours || 0), 0) * 100) / 100;
+    }
+
+    const lead = (assignments || []).find((a) => a.is_team_lead);
+    $("eng-name").textContent = client.name;
+    $("eng-meta").innerHTML = [
+      client.econ_dev_companies ? `Program: ${escapeHtml(client.econ_dev_companies.name)}` : "",
+      `Team Lead: ${escapeHtml((lead && lead.users && lead.users.full_name) || "—")}`,
+    ].filter(Boolean).join("<br>");
+
+    (ticks || []).forEach((t) => {
+      manualTicks[t.item_key] = {
+        checked: !!t.checked,
+        when: t.checked_at ? new Date(t.checked_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "",
+        who: (t.users && t.users.full_name) || "",
+      };
+    });
+
+    autoItems = buildAutoItems(content, questions || [], evalRows || [], hours);
+    $("close-view").classList.remove("hidden");
+    renderAuto();
+    renderManual();
+    renderCloseRow();
+  }
+
+  async function afterSignIn() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return redirectToLogin();
+
+    const { data: profile, error: profileErr } = await sb.from("users")
+      .select("id, full_name, role").eq("id", user.id).single();
+    if (profileErr || !profile) {
+      await sb.auth.signOut();
+      return redirectToLogin();
+    }
+    currentUser = profile;
+    isSuperAdmin = profile.role === "super_admin";
+
+    $("loading-view").classList.add("hidden");
+    $("app-view").classList.remove("hidden");
+
+    const clientId = new URLSearchParams(location.search).get("client");
+    if (clientId) await loadClient(clientId);
+    else location.href = "index.html";
+  }
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) afterSignIn();
+    else redirectToLogin();
+  });
+</script>
+</body>
+</html>
