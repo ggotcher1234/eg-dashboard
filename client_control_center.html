@@ -290,20 +290,14 @@
      button to press; once it is closed the badge says so and the way back
      is Admin-only, because reopening is a correction, not a step. */
   .status-action-row { display: inline-flex; align-items: center; gap: 8px; }
-  .status-close, .status-reopen {
-    font-family: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: 0.3px;
+  .status-reopen {
+    font-family: inherit; font-size: 11.5px; font-weight: 600; letter-spacing: 0.3px;
     padding: 6px 13px; border-radius: 9px; cursor: pointer; border: 1px solid var(--border);
+    background: transparent; color: var(--muted);
     transition: background 0.15s ease, color 0.15s ease;
   }
-  .status-close { background: #eef1f4; color: var(--navy); }
-  .status-close:hover:not(:disabled) { background: var(--navy); color: #fff; border-color: var(--navy); }
-  /* Locked rather than disabled: a disabled button swallows the click, and
-     the click is the moment the month-end reminder is worth showing. */
-  .status-close.status-close-locked { color: var(--muted); opacity: 0.55; cursor: not-allowed; }
-  .status-close.status-close-locked:hover { background: #eef1f4; color: var(--muted); border-color: var(--border); }
-  .status-reopen { background: transparent; color: var(--muted); font-weight: 600; }
   .status-reopen:hover:not(:disabled) { color: var(--navy); border-color: var(--navy); }
-  .status-close:disabled, .status-reopen:disabled { cursor: default; opacity: 0.6; }
+  .status-reopen:disabled { cursor: default; opacity: 0.6; }
 
   /* ---------- Header notes (Greg, 9/6/26, to his mockup) ----------
      One panel design for all three notes that can appear in the client
@@ -2448,74 +2442,39 @@
     return !!error && /last day of the month/i.test(error.message || "");
   }
 
-  // The same rule the database enforces, read on the page so the Closed
-  // button can say no before anyone presses it. Eastern, to match 170 --
-  // the browser's own midnight would let a Pacific Team Lead press it three
-  // hours after the month closed for billing.
-  function monthEndEastern() {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
-    }).formatToParts(new Date());
-    const get = (t) => Number(parts.find((p) => p.type === t).value);
-    const y = get("year"), m = get("month"), d = get("day");
-    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
-    return {
-      isLastDay: d === lastDay,
-      // Date.UTC with the real day-of-month, formatted without a timezone
-      // shift, so the label cannot drift off by one.
-      label: new Date(Date.UTC(y, m - 1, lastDay)).toLocaleDateString(undefined, {
-        timeZone: "UTC", weekday: "long", month: "long", day: "numeric",
-      }),
-    };
-  }
-
-  // Admins are exempt (170), which is what "contact Rita" depends on.
-  function mayCloseToday() { return isSuperAdmin || monthEndEastern().isLastDay; }
+  // The month-end helpers that used to live here -- monthEndEastern() and
+  // mayCloseToday(), the page-side mirror of migration 170 -- went with the
+  // Close button. The rule itself is the database's, not this page's, so
+  // nothing is weakened by their going; the close checklist page will want
+  // its own copy when it is built.
 
   // ---------- Status control (Admin / Team Lead can change it here) ----------
+  // Greg (11/1/26): "you will never close a document from any of the
+  // engagement workflow pages that exist today. i'm going to create a new
+  // page with a checklist of what needs to be done to close an engagement."
+  // Then: "remove it now. we are not live."
+  //
+  // So there is no Close control on this page at all. An open engagement is
+  // in progress by definition and gets no badge, no dot and no button --
+  // the header says what the engagement IS, not what state it is in.
+  // Closing moves to the checklist page when that exists.
+  //
+  // Reopen stays, Admin-only, because engagements closed before this change
+  // are still in the data and that is the only way back for them. It is a
+  // correction, not a step, and it disappears on its own once nothing can
+  // reach the closed state from here.
   function renderStatusToggle(client) {
-    const canEdit = isSuperAdmin || isTeamLeadHere;
     const box = $("cm-status-toggle");
-
-    // Closed is the only state worth saying out loud, so it is the only one
-    // that gets a badge. The way back is Admin-only: reopening is a
-    // correction after a mis-click, not a step in the workflow, and a Team
-    // Lead who can flip it back turns a one-time action into a toggle.
-    if (client.project_status === "closed") {
-      // Greg (10/31/26): "remove all in progress and closed badges for now until i figure out where to put the 1 close badge."
-      // The Closed badge that sat here is gone with the rest of them; the
-      // Reopen button below is what tells an Admin the engagement is closed
-      // until Greg decides where the one badge belongs.
-      $("cm-status-badge").classList.add("hidden");
-      box.innerHTML = isSuperAdmin
-        ? `<button type="button" class="status-reopen" id="cm-reopen-btn">Reopen</button>`
-        : "";
-      box.classList.toggle("hidden", !isSuperAdmin);
-      if (isSuperAdmin) {
-        $("cm-reopen-btn").addEventListener("click", () => setProjectStatus("in_progress"));
-      }
-      return;
-    }
-
-    // Open. Nothing to tag -- the status dot beside this already carries how
-    // long it has been running -- so all that is left is the one action, and
-    // only for the people who can take it.
     $("cm-status-badge").classList.add("hidden");
-    if (!canEdit) {
-      box.innerHTML = "";
-      box.classList.add("hidden");
-      return;
+    const closed = client.project_status === "closed";
+    const showReopen = closed && isSuperAdmin;
+    box.innerHTML = showReopen
+      ? `<button type="button" class="status-reopen" id="cm-reopen-btn">Reopen</button>`
+      : "";
+    box.classList.toggle("hidden", !showReopen);
+    if (showReopen) {
+      $("cm-reopen-btn").addEventListener("click", () => setProjectStatus("in_progress"));
     }
-    const locked = !mayCloseToday();
-    box.classList.remove("hidden");
-    box.innerHTML = `<button type="button" class="status-close${locked ? " status-close-locked" : ""}" id="cm-close-btn"${locked ? ` title="Engagements are closed on the last day of the month."` : ""}>Close Engagement</button>`;
-    $("cm-close-btn").addEventListener("click", () => {
-      if (locked) {
-        showBanner(`Engagements are closed on the last day of the month \u2014 the next one is ${monthEndEastern().label}. If you need assistance, contact Rita.`, "error");
-        return;
-      }
-      setProjectStatus("closed");
-    });
   }
 
   async function setProjectStatus(newStatus) {
