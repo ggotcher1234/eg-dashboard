@@ -143,10 +143,6 @@
      fields above it, because these two are decisions about the person's
      standing rather than more details about them (Greg, 9/23/26). */
   .pf-standing { margin-top: 18px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: #f7f9fb; font-size: 13px; }
-  .show-hidden-wrap {
-    display: flex; align-items: center; gap: 6px; font-size: 12.5px;
-    color: var(--muted); cursor: pointer; white-space: nowrap;
-  }
   .search-wrap { position: relative; }
   .search-wrap svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); opacity: 0.45; }
   .search-wrap input[type="text"] {
@@ -607,7 +603,7 @@
 
   @media print {
     body { background: #fff; }
-    .no-print, header, .ai-drawer-overlay, .ai-drawer, #banner, .search-wrap, #roster-import-btn,
+    .no-print, header, .ai-drawer-overlay, .ai-drawer, #banner, .search-wrap,
     #roster-print-btn, #import-btn, #workload-section { display: none !important; }
     main { max-width: none; margin: 0; padding: 0; }
     table { border: 1px solid #ccc; }
@@ -764,14 +760,11 @@
         </div>
       </div>
       <div class="std-toolbar-actions">
-        <button type="button" class="btn-secondary" id="roster-print-btn">Print / Save as PDF</button>
+        <!-- Greg (10/31/26): 'Change to "Print"'. It opens the browser's
+             print dialog, where saving a PDF is one of the choices; the
+             longer label spelled out a menu item the dialog already has. -->
+        <button type="button" class="btn-secondary" id="roster-print-btn">Print</button>
         <button type="button" class="btn-secondary btn-sm" id="std-export-btn" title="Download the roster as CSV">&#8595; Download CSV</button>
-        <!-- Import Roster (CSV) moved up onto this row (Greg, 9/6/26) so the
-             three CSV/print actions sit together instead of Import being
-             stranded on its own line below. Still super_admin-only -- the
-             .hidden toggle in the profile-load block below governs it. -->
-        <button class="btn-secondary btn-sm hidden" id="roster-import-btn">Import Roster (CSV)</button>
-        <input type="file" accept=".csv" id="roster-csv-file" style="display:none;" />
       </div>
     </div>
 
@@ -802,19 +795,14 @@
           <button class="btn-secondary hidden" id="import-menu-btn">Import &#9662;</button>
           <div class="dropdown-panel" id="import-dropdown">
             <button type="button" id="import-menu-eg">Import NCEG Roster List</button>
-            <button type="button" id="import-menu-csv">Import CSV</button>
           </div>
         </div>
         <button class="btn-secondary hidden" id="import-btn" style="display:none;">Import NCEG Roster List</button>
-        <!-- Greg (9/6/26): "Show hidden" is super_admin-only. It used to carry
-             its layout as an inline style="display:flex", which the .hidden
-             class could only beat because .hidden is !important -- one step
-             away from leaking to team leads and specialists. Styles moved to
-             .show-hidden-wrap so the class toggle is the only thing deciding
-             visibility. -->
-        <label id="show-hidden-wrap" class="show-hidden-wrap hidden">
-          <input type="checkbox" id="show-hidden-toggle" style="width:auto;" /> Show hidden
-        </label>
+        <!-- Greg (10/31/26), marking up the Roster page: "Delete" against
+             the Show hidden checkbox. Gone, along with the state it drove --
+             hidden people now stay hidden in the active list for everyone,
+             which is what the box said when it was unticked. Archiving is
+             the control that is left, and it has its own button below. -->
         <!-- Greg (9/23/26): "we will need a view archived button." Hidden and
              archived are different questions, so they get different controls:
              "Show hidden" widens the active list, this swaps the list for the
@@ -915,19 +903,6 @@
     <div class="modal-actions">
       <button type="button" class="btn-secondary" id="import-close">Close</button>
       <button type="button" class="btn-primary" id="import-run">Start Import</button>
-    </div>
-  </div>
-</div>
-
-<!-- Import Roster (CSV) modal -->
-<div class="overlay" id="roster-import-overlay">
-  <div class="modal" style="width:520px;">
-    <h3 style="margin:0 0 4px; font-size:16.5px;">Import Roster (CSV)</h3>
-    <div id="roster-import-intro" style="font-size:12.5px; color:var(--muted); margin-bottom:10px;"></div>
-    <div id="roster-import-log" style="max-height:360px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:8px 10px; display:none;"></div>
-    <div class="modal-actions">
-      <button type="button" class="btn-secondary" id="roster-import-close">Close</button>
-      <button type="button" class="btn-primary hidden" id="roster-import-run">Apply Changes</button>
     </div>
   </div>
 </div>
@@ -1572,11 +1547,6 @@
     $("import-dropdown").classList.remove("open");
     $("import-btn").click();
   });
-  $("import-menu-csv").addEventListener("click", () => {
-    $("import-dropdown").classList.remove("open");
-    $("roster-import-btn").click();
-  });
-
   document.addEventListener("click", (e) => {
     if (!e.target.closest(".dropdown-wrap")) {
       $("filter-dropdown").classList.remove("open");
@@ -1637,9 +1607,7 @@
     $("user-role").textContent = roleLabel(profile.role);
     document.querySelectorAll("[data-super-admin-only]").forEach((el) => el.classList.toggle("hidden", profile.role !== "super_admin"));
     $("import-menu-btn").classList.toggle("hidden", !isSuperAdmin);
-    $("roster-import-btn").classList.toggle("hidden", !isSuperAdmin);
     $("workload-section").classList.toggle("hidden", !isSuperAdmin);
-    $("show-hidden-wrap").classList.toggle("hidden", !isSuperAdmin);
     $("view-archived-btn").classList.toggle("hidden", !isSuperAdmin);
     // Greg: "admin's only of course." Creating a member mints a real login,
     // so this follows the same rule as the edge function behind it, which
@@ -1847,7 +1815,6 @@
   // "Hidden admins" (Chris/Rita/Greg -- users.hidden_from_roster, 108) are
   // left out of the Roster and every pick list. A Super Admin can flip
   // "Show hidden" in the toolbar to see and un-hide them.
-  let showHiddenMembers = false;
   // "active" | "archived" -- which population the table is showing. Greg
   // (9/23/26) asked for a View Archived button rather than another checkbox,
   // and the distinction matters: Show hidden WIDENS the active list, this
@@ -1865,7 +1832,7 @@
       // Hidden only narrows the ACTIVE list. In the archived view everyone is
       // shown -- hiding a departed person from a list of departed people would
       // make the archive lie about who is in it.
-      if (!showHiddenMembers) usersQuery = usersQuery.eq("hidden_from_roster", false);
+      usersQuery = usersQuery.eq("hidden_from_roster", false);
     }
     const [{ data, error }, { data: specialtyRows, error: specErr }] = await Promise.all([
       usersQuery,
@@ -2139,11 +2106,6 @@
 
   $("global-search-input").addEventListener("input", renderList);
 
-  $("show-hidden-toggle").addEventListener("change", async () => {
-    showHiddenMembers = $("show-hidden-toggle").checked;
-    await loadUsers();
-  });
-
   $("view-archived-btn").addEventListener("click", async () => {
     rosterView = rosterView === "archived" ? "active" : "archived";
     applyRosterViewChrome();
@@ -2156,9 +2118,6 @@
     const archived = rosterView === "archived";
     $("view-archived-btn").textContent = archived ? "← Back to Roster" : "View Archived";
     $("view-archived-btn").classList.toggle("active-filter", archived);
-    // "Show hidden" only means something in the active list, so it goes away
-    // rather than sitting there doing nothing.
-    $("show-hidden-wrap").classList.toggle("hidden", archived || !isSuperAdmin);
     // Same for the Team Lead Workload card -- it counts In Progress engagements
     // per active lead, which says nothing about a list of people who have left.
     $("workload-section").classList.toggle("hidden", archived || !isSuperAdmin);
@@ -2326,287 +2285,13 @@
     await loadUsers();
   });
 
-  // ---------- Import Roster (CSV) ----------
-  // The National Team Roster arrives a few times a year as an Excel file
-  // (POSITION, NAME, COMPANY, MAILING ADDRESS, TIME ZONE, EMAIL, PHONE) —
-  // save it as CSV first, then upload here. Same parseCsv/csvField shape
-  // used by the Econ Dev Partner Contacts import elsewhere in the app.
-  // Unlike "Import NCEG Roster List" above (which only ever creates brand-new
-  // people once), this one is meant to be run every time the roster
-  // changes: it matches existing people by email and updates their
-  // name/phone/title/specialty in place, so re-running it keeps the
-  // directory in sync instead of just skipping everyone who already exists.
-  function parseCsv(text) {
-    const rows = [];
-    let row = [], field = "", inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-      const c = text[i];
-      if (inQuotes) {
-        if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
-        else if (c === '"') { inQuotes = false; }
-        else { field += c; }
-      } else if (c === '"') {
-        inQuotes = true;
-      } else if (c === ",") {
-        row.push(field); field = "";
-      } else if (c === "\n" || c === "\r") {
-        if (c === "\r" && text[i + 1] === "\n") i++;
-        row.push(field); field = "";
-        if (row.some((v) => v !== "")) rows.push(row);
-        row = [];
-      } else {
-        field += c;
-      }
-    }
-    if (field !== "" || row.length) { row.push(field); if (row.some((v) => v !== "")) rows.push(row); }
-    return rows;
-  }
-
-  // POSITION column values (from the source spreadsheet) mapped to this
-  // app's specialty keys. Normalized (lowercased, trimmed, whitespace
-  // collapsed) before lookup so trailing spaces / stray variants in the
-  // spreadsheet ("Team Leader ", "Digital Marketing ") still match.
-  const POSITION_SPECIALTY_MAP = {
-    "team leader": "team_lead",
-    "team lead": "team_lead",
-    "market research": "market_research",
-    "digital marketing": "digital_marketing",
-    "gis": "gis",
-    "geographic intelligence systems": "gis",
-    "watering holes": "watering_holes",
-    "admin": "admin",
-    "administration": "admin",
-    "quality control": "quality_control",
-  };
-  // A person can appear on multiple rows (one per specialty they cover) --
-  // ALL of those become real specialty tags now (Greg's NCEG Team List
-  // Rules: one email can have multiple specialties). This priority order
-  // is only used to pick ONE representative specialty for the auto-filled
-  // Title and the Team-Lead role-upgrade check below, not to drop the rest.
-  const SPECIALTY_PRIORITY = ["team_lead", "market_research", "digital_marketing", "gis", "watering_holes"];
-
-  function normalizePosition(pos) {
-    return (pos || "").trim().toLowerCase().replace(/\s+/g, " ");
-  }
-
-  // "Admin" positions in the source spreadsheet map to nothing here on
-  // purpose (SPECIALTY_LABELS no longer has an "admin" entry -- Greg
-  // dropped it as a specialty, it's a role now) -- matches this importer's
-  // existing cautious stance of never changing anyone's role/permissions
-  // on its own.
-  function matchedSpecialties(positions) {
-    const found = new Set();
-    for (const pos of positions) {
-      const key = POSITION_SPECIALTY_MAP[pos];
-      if (key && SPECIALTY_LABELS[key]) found.add(key);
-    }
-    return [...found];
-  }
-
-  let rosterPlan = []; // built on file select, executed on "Apply Changes"
-
-  $("roster-import-btn").addEventListener("click", () => $("roster-csv-file").click());
+  // Greg (10/31/26), marking up the Roster page: "Delete
+  // button/functionality" against Import Roster (CSV). The button, its
+  // file input, its preview modal and the whole importer behind it are
+  // gone -- the CSV parser, the POSITION-to-specialty map and the
+  // create/update plan existed only to serve it. "Import NCEG Roster List"
+  // above is a different, older importer and is untouched.
   $("roster-print-btn").addEventListener("click", () => window.print());
-
-  $("roster-csv-file").addEventListener("change", async () => {
-    const fileInput = $("roster-csv-file");
-    const file = fileInput.files[0];
-    fileInput.value = "";
-    if (!file) return;
-
-    const text = await file.text();
-    const allRows = parseCsv(text);
-
-    // Find the real header row (title row + blank spacer rows above it in
-    // the source file mean we can't just assume row 0). Originally this
-    // required "position"/"name" to land in the exact first two columns,
-    // which broke the moment a real export from Excel/Numbers/Sheets added
-    // or dropped a leading column (Greg, 8/21/26) -- now it just looks
-    // anywhere in the row for "name" and "email" cells, case-insensitive,
-    // so column order/count no longer matters here.
-    const headerIdx = allRows.findIndex((r) => {
-      const cells = r.map((c) => (c || "").trim().toLowerCase());
-      return cells.includes("name") && cells.includes("email");
-    });
-    if (headerIdx === -1) {
-      showBanner("Couldn't find a header row with Name and Email columns in that file — make sure it's exported from the roster spreadsheet as-is.", "error");
-      return;
-    }
-    const header = allRows[headerIdx].map((h) => (h || "").trim().toLowerCase());
-    const col = (name) => header.indexOf(name);
-    const iPos = col("position"), iName = col("name"), iEmail = col("email"), iPhone = col("phone"), iCompany = col("company");
-    const iAddress = col("mailing address"), iTimeZone = col("time zone");
-    if (iName === -1 || iEmail === -1) {
-      showBanner("That file is missing a Name or Email column.", "error");
-      return;
-    }
-
-    // Group rows by email — the same person can appear once per specialty.
-    const people = new Map(); // lowercased email -> { full_name, phone, company_name, address, time_zone, positions:Set }
-    let noEmailCount = 0;
-    for (const r of allRows.slice(headerIdx + 1)) {
-      const name = (r[iName] || "").trim();
-      const emailRaw = (r[iEmail] || "").replace(/ /g, " ").trim().toLowerCase();
-      const email = (emailRaw.split(/\s+/)[0] || "").replace(/[<>]/g, "");
-      const phone = iPhone !== -1 ? (r[iPhone] || "").trim() : "";
-      const company = iCompany !== -1 ? (r[iCompany] || "").trim() : "";
-      const address = iAddress !== -1 ? (r[iAddress] || "").trim() : "";
-      const timeZone = iTimeZone !== -1 ? (r[iTimeZone] || "").trim() : "";
-      const position = iPos !== -1 ? (r[iPos] || "").trim() : "";
-      if (!name && !email) continue; // blank spacer row
-      if (!email) { noEmailCount++; continue; }
-      if (!people.has(email)) people.set(email, { full_name: name, phone: "", company_name: "", address: "", time_zone: "", positions: new Set() });
-      const person = people.get(email);
-      if (name && !person.full_name) person.full_name = name;
-      if (phone && !person.phone) person.phone = phone;
-      if (company && !person.company_name) person.company_name = company;
-      if (address && !person.address) person.address = address;
-      if (timeZone && !person.time_zone) person.time_zone = timeZone;
-      if (position) person.positions.add(normalizePosition(position));
-    }
-
-    const existingByEmail = {};
-    allUsers.forEach((u) => { if (u.email) existingByEmail[u.email.toLowerCase()] = u; });
-
-    rosterPlan = [];
-    for (const [email, p] of people) {
-      const specialties = matchedSpecialties([...p.positions]);
-      const primary = SPECIALTY_PRIORITY.find((s) => specialties.includes(s)) || null;
-      const title = primary ? SPECIALTY_LABELS[primary] : "";
-      const existing = existingByEmail[email];
-
-      if (!existing) {
-        rosterPlan.push({
-          action: "create",
-          label: p.full_name || email,
-          specialties,
-          payload: {
-            full_name: p.full_name || email,
-            email,
-            role: primary === "team_lead" ? "team_lead" : "consultant",
-            title,
-            company_name: p.company_name,
-            phone: p.phone,
-            address: p.address,
-            time_zone: p.time_zone,
-            default_specialty: primary || "",
-          },
-        });
-        continue;
-      }
-
-      const updates = {};
-      if (p.full_name && p.full_name !== existing.full_name) updates.full_name = p.full_name;
-      if (p.phone && p.phone !== (existing.phone || "")) updates.phone = p.phone;
-      if (p.company_name && p.company_name !== (existing.company_name || "")) updates.company_name = p.company_name;
-      if (p.address && p.address !== (existing.address || "")) updates.address = p.address;
-      if (p.time_zone && p.time_zone !== (existing.time_zone || "")) updates.time_zone = p.time_zone;
-      if (title && title !== (existing.title || "")) updates.title = title;
-      if (primary && primary !== (existing.default_specialty || "")) updates.default_specialty = primary;
-      // Role is only ever *upgraded* by an import, and only Consultant ->
-      // Team Lead. An existing Super Admin (or Team Lead) is never touched
-      // here -- the spreadsheet has no Super Admin concept, so a stale
-      // "Consultant"/"Team Leader" position line must not be allowed to
-      // demote a hidden admin. (A downgrade like that is what knocked Greg
-      // off the admin dashboard on 9/3/26.) The execute step re-checks this
-      // against the live row as a backstop.
-      if (primary === "team_lead" && existing.role === "consultant") updates.role = "team_lead";
-      // Additive only — never remove a specialty someone already has just
-      // because this particular file doesn't mention it.
-      const specialtiesToAdd = specialties.filter((s) => !(existing.specialties || []).includes(s));
-
-      rosterPlan.push({
-        action: (Object.keys(updates).length || specialtiesToAdd.length) ? "update" : "none",
-        label: existing.full_name,
-        userId: existing.id,
-        updates,
-        specialtiesToAdd,
-      });
-    }
-
-    const toCreate = rosterPlan.filter((x) => x.action === "create").length;
-    const toUpdate = rosterPlan.filter((x) => x.action === "update").length;
-    const unchanged = rosterPlan.filter((x) => x.action === "none").length;
-
-    $("roster-import-intro").textContent =
-      `Found ${rosterPlan.length} people in this file: ${toCreate} new, ${toUpdate} to update, ${unchanged} already up to date.` +
-      (noEmailCount ? ` ${noEmailCount} row(s) skipped — no email address.` : "");
-    const log = $("roster-import-log");
-    log.style.display = "block";
-    log.innerHTML = rosterPlan
-      .map((x) => `<div class="import-row"><span>${escapeHtml(x.label)}</span><span class="import-status ${x.action === "create" ? "created" : x.action === "update" ? "updated" : "skipped"}">${x.action === "create" ? "New" : x.action === "update" ? "Will update" : "No changes"}</span></div>`)
-      .join("");
-    $("roster-import-run").classList.toggle("hidden", toCreate + toUpdate === 0);
-    $("roster-import-run").disabled = false;
-    $("roster-import-run").textContent = "Apply Changes";
-    $("roster-import-overlay").classList.add("open");
-  });
-
-  $("roster-import-close").addEventListener("click", () => $("roster-import-overlay").classList.remove("open"));
-
-  $("roster-import-run").addEventListener("click", async () => {
-    const runBtn = $("roster-import-run");
-    runBtn.disabled = true;
-    runBtn.textContent = "Applying…";
-
-    const log = $("roster-import-log");
-    const rowEls = [...log.querySelectorAll(".import-status")];
-
-    let created = 0, updated = 0, failed = 0;
-    for (let i = 0; i < rosterPlan.length; i++) {
-      const plan = rosterPlan[i];
-      const statusEl = rowEls[i];
-      if (plan.action === "none") continue;
-
-      try {
-        if (plan.action === "create") {
-          statusEl.textContent = "Creating…";
-          await callCreateTeamMember(plan.payload);
-          if (plan.specialties && plan.specialties.length) {
-            const { data: newUser } = await sb.from("users").select("id").eq("email", plan.payload.email).maybeSingle();
-            if (newUser) await addUserSpecialties(newUser.id, plan.specialties);
-          }
-          statusEl.textContent = "Created";
-          statusEl.className = "import-status created";
-          created++;
-        } else {
-          statusEl.textContent = "Updating…";
-          // Backstop: whatever the plan says, an import must never write
-          // `role` or `hidden_from_roster` onto a live Super Admin. Re-check
-          // the current row here (not the snapshot the plan was built from)
-          // and strip those keys before the write.
-          const liveUser = allUsers.find((x) => x.id === plan.userId);
-          if (liveUser && liveUser.role === "super_admin") {
-            delete plan.updates.role;
-            delete plan.updates.hidden_from_roster;
-          }
-          if (Object.keys(plan.updates).length) {
-            const { error } = await sb.from("users").update(plan.updates).eq("id", plan.userId);
-            if (error) throw new Error(error.message);
-          }
-          if (plan.specialtiesToAdd && plan.specialtiesToAdd.length) {
-            await addUserSpecialties(plan.userId, plan.specialtiesToAdd);
-          }
-          statusEl.textContent = "Updated";
-          statusEl.className = "import-status updated";
-          updated++;
-        }
-      } catch (err) {
-        if (/already been registered|already exists/i.test(err.message)) {
-          statusEl.textContent = "Already exists";
-          statusEl.className = "import-status skipped";
-        } else {
-          statusEl.textContent = err.message;
-          statusEl.className = "import-status failed";
-          failed++;
-        }
-      }
-    }
-
-    runBtn.classList.add("hidden");
-    showBanner(`Roster import finished: ${created} created, ${updated} updated, ${failed} failed.`, failed > 0 ? "error" : "success");
-    await loadUsers();
-  });
 
   // ---------- Profile photo upload ----------
   // Same pattern as the client logo upload in client_profile.html: a
