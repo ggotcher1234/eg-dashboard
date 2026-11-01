@@ -45,13 +45,6 @@
 
   h2 { font-size: 17px; font-weight: 700; color: var(--navy); margin: 0 0 4px; }
 
-  /* The two halves of the list, labelled by who establishes the fact rather
-     than by what the item is about. An item the app proved and an item a
-     person swore to are not the same kind of tick, and the reader should
-     never have to guess which one they are looking at. */
-  .group-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-                 color: var(--muted); margin: 0 0 14px; }
-
   .ck { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; border-top: 1px solid var(--border); }
   .ck:first-of-type { border-top: none; padding-top: 2px; }
   .ck-mark { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: inline-flex;
@@ -64,13 +57,6 @@
   .ck-why { font-size: 12.5px; color: var(--danger-dark); margin-top: 3px; line-height: 1.5; }
   .ck-fix { font-size: 12.5px; font-weight: 600; color: var(--navy); text-decoration: none; white-space: nowrap; }
   .ck-fix:hover { text-decoration: underline; }
-
-  /* Manual items are a real checkbox, because a person is making a claim
-     here and the control should feel like signing rather than reading. */
-  .ck-manual { cursor: pointer; }
-  .ck-manual input { flex: 0 0 auto; width: 18px; height: 18px; margin: 2px 1px 0; accent-color: var(--accent); }
-  .ck-manual input:disabled { cursor: not-allowed; }
-  .ck-who { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
 
   .tally { font-size: 13px; color: var(--muted); margin: 0 0 16px; }
   .tally strong { color: var(--text); }
@@ -124,19 +110,18 @@
       </div>
 
       <div class="card">
-        <h2>Close Engagement</h2>
-        <div class="tally" id="tally"></div>
-        <div class="close-row" id="close-row"></div>
-      </div>
-
-      <div class="card">
-        <div class="group-label">Checked for you</div>
         <div id="auto-list"></div>
       </div>
 
+      <!-- Greg (11/1/26): "add a final button to Close after all the
+           checkboxes have been checked." It reads in the order it happens
+           now -- the list, then the thing the list was for -- rather than
+           offering the button before anyone has seen what it is waiting
+           on. -->
       <div class="card">
-        <div class="group-label">Confirm yourself</div>
-        <div id="manual-list"></div>
+        <h2>Close Engagement</h2>
+        <div class="tally" id="tally"></div>
+        <div class="close-row" id="close-row"></div>
       </div>
     </div>
   </div>
@@ -160,23 +145,14 @@
   // tell a Team Lead their running engagement was already closed.
   const isClosed = () => currentClient && currentClient.project_status === "closed";
   let autoItems = [];          // [{ key, title, ok, why, fixHref, fixLabel }]
-  let manualTicks = {};        // item_key -> { checked, checked_at, checked_by_name }
 
-  // ---------- The manual half ----------
-  // Everything the app can prove, it proves below in buildAutoItems(). What
-  // is left here is the work that happens somewhere this app cannot see:
-  // the invoice, the word to the Program, the last look at what the CEO
-  // actually gets. Those are a person's word, so they are a person's tick.
-  //
-  // Deliberately short. A checklist long enough to skim is a checklist
-  // nobody reads, and every item here is something that has genuinely been
-  // forgotten on a real engagement.
-  const MANUAL_ITEMS = [
-    { key: "invoice", title: "The final invoice for this engagement has been submitted" },
-    { key: "dashboard", title: "The client dashboard has been opened and read through as the CEO sees it" },
-    { key: "program", title: "The Program Administrator has been told the engagement is complete" },
-    { key: "handoff", title: "The CEO knows what happens next and who to contact" },
-  ];
+  // Greg (11/1/26): "remove the confirm for yourself section." There was a
+  // second half here -- the final invoice, the word to the Program, a
+  // read-through of the client dashboard -- that a person ticked by hand.
+  // Every item on this page is now one the app can prove for itself, which
+  // is the only kind of tick worth gating a close on. The
+  // client_close_checklist table (182) is what those ticks were stored in
+  // and is no longer written to or read.
 
   function showBanner(msg, kind) {
     $("banner").innerHTML = `<div class="banner banner-${kind === "error" ? "error" : "success"}">${escapeHtml(msg)}</div>`;
@@ -294,56 +270,9 @@
       </div>`).join("");
   }
 
-  function renderManual() {
-    const locked = isClosed();
-    $("manual-list").innerHTML = MANUAL_ITEMS.map((it) => {
-      const t = manualTicks[it.key] || {};
-      return `
-      <label class="ck ck-manual ${t.checked ? "" : "is-off"}">
-        <input type="checkbox" data-manual="${it.key}" ${t.checked ? "checked" : ""} ${locked ? "disabled" : ""} />
-        <div class="ck-body">
-          <div class="ck-title">${escapeHtml(it.title)}</div>
-          ${t.checked && t.when ? `<div class="ck-who">${escapeHtml(t.who || "Ticked")} &middot; ${escapeHtml(t.when)}</div>` : ""}
-        </div>
-      </label>`;
-    }).join("");
-
-    $("manual-list").querySelectorAll("[data-manual]").forEach((box) => {
-      box.addEventListener("change", () => saveManual(box.dataset.manual, box.checked, box));
-    });
-  }
-
-  async function saveManual(key, checked, box) {
-    box.disabled = true;
-    const { error } = await sb.from("client_close_checklist").upsert({
-      client_id: currentClient.id,
-      item_key: key,
-      checked,
-      checked_at: new Date().toISOString(),
-      checked_by: currentUser.id,
-    }, { onConflict: "client_id,item_key" });
-    box.disabled = false;
-    if (error) {
-      box.checked = !checked;
-      showBanner("Couldn't save that: " + error.message, "error");
-      return;
-    }
-    manualTicks[key] = {
-      checked,
-      when: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      who: currentUser.full_name,
-    };
-    renderManual();
-    renderCloseRow();
-  }
-
-  function allDone() {
-    return autoItems.every((i) => i.ok) && MANUAL_ITEMS.every((i) => (manualTicks[i.key] || {}).checked);
-  }
-
   function renderCloseRow() {
-    const done = autoItems.filter((i) => i.ok).length + MANUAL_ITEMS.filter((i) => (manualTicks[i.key] || {}).checked).length;
-    const total = autoItems.length + MANUAL_ITEMS.length;
+    const done = autoItems.filter((i) => i.ok).length;
+    const total = autoItems.length;
 
     if (isClosed()) {
       const when = currentClient.closed_at
@@ -359,7 +288,7 @@
     }
 
     $("tally").innerHTML = `<strong>${done}</strong> of ${total} done.`;
-    const ready = allDone();
+    const ready = autoItems.every((i) => i.ok);
     $("close-row").innerHTML = `
       <button type="button" class="btn-close" id="btn-close" ${ready && isSuperAdmin ? "" : "disabled"}>Close Engagement</button>
       <span class="close-blocked">${
@@ -411,7 +340,6 @@
     currentClient.project_status = "closed";
     currentClient.closed_at = now;
     currentClient.closed_by_name = currentUser.full_name;
-    renderManual();
     renderCloseRow();
     showBanner("Engagement closed.", "success");
   }
@@ -433,7 +361,6 @@
       { data: evalRows },
       { data: assignments },
       { data: closer },
-      { data: ticks },
     ] = await Promise.all([
       sb.from("client_content").select("*").eq("client_id", clientId).maybeSingle(),
       sb.from("client_research_questions").select("id, question_number, completed_at, summary").eq("client_id", clientId).order("question_number"),
@@ -442,7 +369,6 @@
       client.closed_by
         ? sb.from("users").select("full_name").eq("id", client.closed_by).maybeSingle()
         : Promise.resolve({ data: null }),
-      sb.from("client_close_checklist").select("item_key, checked, checked_at, checked_by, users:checked_by(full_name)").eq("client_id", clientId),
     ]);
 
     if (closer) currentClient.closed_by_name = closer.full_name;
@@ -461,18 +387,9 @@
       `Team Lead: ${escapeHtml((lead && lead.users && lead.users.full_name) || "—")}`,
     ].filter(Boolean).join("<br>");
 
-    (ticks || []).forEach((t) => {
-      manualTicks[t.item_key] = {
-        checked: !!t.checked,
-        when: t.checked_at ? new Date(t.checked_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "",
-        who: (t.users && t.users.full_name) || "",
-      };
-    });
-
     autoItems = buildAutoItems(content, questions || [], evalRows || [], hours);
     $("close-view").classList.remove("hidden");
     renderAuto();
-    renderManual();
     renderCloseRow();
   }
 
