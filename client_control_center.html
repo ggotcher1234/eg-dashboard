@@ -286,35 +286,28 @@
 
   /* Editable status control (Team Lead / Admin only) -- lets you change an
      engagement's status right here on its hub page. */
-  .segmented-control {
-    display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden;
-    background: #f6f8fa;
+  /* Greg (10/31/26): "an open engagement is by definition 'in progress' so
+     we don't need to tag that. the only thing we need to tag is 'Close' and
+     we'll only do that once at the very end."
+     So this stopped being a two-way status toggle and became one action.
+     While the engagement is open there is nothing to announce and one
+     button to press; once it is closed the badge says so and the way back
+     is Admin-only, because reopening is a correction, not a step. */
+  .status-action-row { display: inline-flex; align-items: center; gap: 8px; }
+  .status-close, .status-reopen {
+    font-family: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: 0.3px;
+    padding: 6px 13px; border-radius: 9px; cursor: pointer; border: 1px solid var(--border);
+    transition: background 0.15s ease, color 0.15s ease;
   }
+  .status-close { background: #eef1f4; color: var(--navy); }
+  .status-close:hover:not(:disabled) { background: var(--navy); color: #fff; border-color: var(--navy); }
   /* Locked rather than disabled: a disabled button swallows the click, and
-     the click is the moment the reminder is worth showing. */
-  .segmented-control .status-pill.status-pill-locked { color: var(--muted); opacity: 0.55; cursor: not-allowed; }
-  .segmented-control .status-pill.status-pill-locked:hover { background: transparent; }
-
-  .segmented-control .status-pill {
-    border: none; border-right: 1px solid var(--border); border-radius: 0; padding: 6px 13px;
-    font-size: 11.5px; font-weight: 700; background: transparent; color: var(--muted);
-    cursor: pointer; font-family: inherit; transition: background 0.15s ease, color 0.15s ease;
-  }
-  .segmented-control .status-pill:last-child { border-right: none; }
-  .segmented-control .status-pill:disabled { cursor: default; }
-  /* Each status pill carries its own color (same palette as the .badge-*
-     classes above), so the toggle reads at a glance instead of everything
-     being gray-until-active. The active pill gets the bolder/solid variant
-     of its own color; inactive pills stay in the pale variant. */
-  .segmented-control .status-pill-accepted { background: #e9f5ee; color: var(--accent-dark); }
-  .segmented-control .status-pill-in_progress { background: #e7eef7; color: var(--navy-light); }
-  .segmented-control .status-pill-on_hold { background: #fdf1dc; color: var(--amber); }
-  .segmented-control .status-pill-closed { background: #eef1f4; color: var(--muted); }
-  .segmented-control .status-pill:hover:not(:disabled):not(.active) { filter: brightness(0.96); }
-  .segmented-control .status-pill-accepted.active { background: var(--accent-dark); color: #fff; }
-  .segmented-control .status-pill-in_progress.active { background: var(--navy); color: #fff; }
-  .segmented-control .status-pill-on_hold.active { background: var(--amber); color: #fff; }
-  .segmented-control .status-pill-closed.active { background: var(--muted); color: #fff; }
+     the click is the moment the month-end reminder is worth showing. */
+  .status-close.status-close-locked { color: var(--muted); opacity: 0.55; cursor: not-allowed; }
+  .status-close.status-close-locked:hover { background: #eef1f4; color: var(--muted); border-color: var(--border); }
+  .status-reopen { background: transparent; color: var(--muted); font-weight: 600; }
+  .status-reopen:hover:not(:disabled) { color: var(--navy); border-color: var(--navy); }
+  .status-close:disabled, .status-reopen:disabled { cursor: default; opacity: 0.6; }
 
   /* ---------- Header notes (Greg, 9/6/26, to his mockup) ----------
      One panel design for all three notes that can appear in the client
@@ -1075,7 +1068,7 @@
             <span class="status-badge-wrap">
               <span class="status-dot hidden" id="cm-status-dot" title=""></span>
               <span class="badge hidden" id="cm-status-badge"></span>
-              <div class="segmented-control hidden" id="cm-status-toggle"></div>
+              <div class="status-action-row hidden" id="cm-status-toggle"></div>
             </span>
             </div>
 
@@ -1434,7 +1427,6 @@
   const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
   // Greg (9/4/26), per Chris: applications go straight to In Progress once
   // a Team Lead is assigned -- no more Accepted-waiting-stage or On Hold.
-  const PROJECT_STATUSES = ["in_progress", "closed"];
   const SPECIALTY_LABELS = {
     team_lead: "Team Lead", market_research: "Market Research", digital_marketing: "Digital Marketing",
     gis: "GIS", watering_holes: "Watering Holes", admin: "Admin", quality_control: "Quality Control",
@@ -2483,56 +2475,63 @@
   // ---------- Status control (Admin / Team Lead can change it here) ----------
   function renderStatusToggle(client) {
     const canEdit = isSuperAdmin || isTeamLeadHere;
-    if (!canEdit) {
-      $("cm-status-toggle").classList.add("hidden");
-      // Greg (9/6/26): "remove in progress it is redundant." The read-only
-      // badge stays hidden -- the status dot beside it already carries the
-      // state (and spells it out on hover), and for anyone who can change
-      // the status the segmented control below shows it anyway. The element
-      // and its className/textContent wiring are left in place so this is a
-      // one-line revert rather than a re-build.
-      $("cm-status-badge").classList.add("hidden");
-      $("cm-status-badge").className = `badge badge-${client.project_status}`;
-      $("cm-status-badge").textContent = PROJECT_STATUS_LABELS[client.project_status] || client.project_status;
+    const box = $("cm-status-toggle");
+
+    // Closed is the only state worth saying out loud, so it is the only one
+    // that gets a badge. The way back is Admin-only: reopening is a
+    // correction after a mis-click, not a step in the workflow, and a Team
+    // Lead who can flip it back turns a one-time action into a toggle.
+    if (client.project_status === "closed") {
+      $("cm-status-badge").className = "badge badge-closed";
+      $("cm-status-badge").textContent = PROJECT_STATUS_LABELS.closed;
+      $("cm-status-badge").classList.remove("hidden");
+      box.innerHTML = isSuperAdmin
+        ? `<button type="button" class="status-reopen" id="cm-reopen-btn">Reopen</button>`
+        : "";
+      box.classList.toggle("hidden", !isSuperAdmin);
+      if (isSuperAdmin) {
+        $("cm-reopen-btn").addEventListener("click", () => setProjectStatus("in_progress"));
+      }
       return;
     }
-    $("cm-status-badge").classList.add("hidden");
-    const toggle = $("cm-status-toggle");
-    toggle.classList.remove("hidden");
 
-    const closeLocked = !mayCloseToday();
-    toggle.innerHTML = PROJECT_STATUSES.map((s) => {
-      const locked = s === "closed" && closeLocked && s !== client.project_status;
-      return `
-      <button type="button" data-pstatus="${s}" class="status-pill status-pill-${s} ${s === client.project_status ? "active" : ""}${locked ? " status-pill-locked" : ""}"${locked ? ` title="Engagements are closed on the last day of the month."` : ""}>${PROJECT_STATUS_LABELS[s]}</button>`;
-    }).join("");
-    toggle.querySelectorAll("button").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const newStatus = btn.dataset.pstatus;
-        if (newStatus === activeClient.project_status) return;
-        // Left clickable on purpose -- a disabled button swallows the click,
-        // and the click is exactly when the reminder is worth showing. The
-        // database refuses it too (170); this only saves the round trip.
-        if (btn.classList.contains("status-pill-locked")) {
-          showBanner(`Engagements are closed on the last day of the month \u2014 the next one is ${monthEndEastern().label}. If you need assistance, contact Rita.`, "error");
-          return;
-        }
-        toggle.querySelectorAll("button").forEach((b) => (b.disabled = true));
-        const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", activeClient.id);
-        if (error) {
-          // The month-end rule comes back from the database as a finished
-          // sentence (170). Prefixing it with "Couldn't update status:" would
-          // bury the part that tells them what to do, so it is shown as-is.
-          showBanner(isCloseWindowError(error) ? error.message : "Couldn't update status: " + error.message, "error");
-          toggle.querySelectorAll("button").forEach((b) => (b.disabled = false));
-          return;
-        }
-        activeClient.project_status = newStatus;
-        showBanner("Status updated.", "success");
-        renderStatusToggle(activeClient);
-        renderStatusAge(activeClient);
-      });
+    // Open. Nothing to tag -- the status dot beside this already carries how
+    // long it has been running -- so all that is left is the one action, and
+    // only for the people who can take it.
+    $("cm-status-badge").classList.add("hidden");
+    if (!canEdit) {
+      box.innerHTML = "";
+      box.classList.add("hidden");
+      return;
+    }
+    const locked = !mayCloseToday();
+    box.classList.remove("hidden");
+    box.innerHTML = `<button type="button" class="status-close${locked ? " status-close-locked" : ""}" id="cm-close-btn"${locked ? ` title="Engagements are closed on the last day of the month."` : ""}>Close Engagement</button>`;
+    $("cm-close-btn").addEventListener("click", () => {
+      if (locked) {
+        showBanner(`Engagements are closed on the last day of the month \u2014 the next one is ${monthEndEastern().label}. If you need assistance, contact Rita.`, "error");
+        return;
+      }
+      setProjectStatus("closed");
     });
+  }
+
+  async function setProjectStatus(newStatus) {
+    const box = $("cm-status-toggle");
+    box.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", activeClient.id);
+    if (error) {
+      // The month-end rule comes back from the database as a finished
+      // sentence (170). Prefixing it with "Couldn't update status:" would
+      // bury the part that tells them what to do, so it is shown as-is.
+      showBanner(isCloseWindowError(error) ? error.message : "Couldn't update status: " + error.message, "error");
+      box.querySelectorAll("button").forEach((b) => (b.disabled = false));
+      return;
+    }
+    activeClient.project_status = newStatus;
+    showBanner(newStatus === "closed" ? "Engagement closed." : "Engagement reopened.", "success");
+    renderStatusToggle(activeClient);
+    renderStatusAge(activeClient);
   }
 
   // ---------- Why-overdue comments (shared with the Engagements list) ----------
