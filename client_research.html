@@ -311,14 +311,17 @@
      specialist can write a paragraph summary about the research." It is
      client-facing -- it appears on their dashboard under the question --
      so it is a plain bordered field rather than the borderless
-     type-over-it box the question uses, and the hint above says who reads
-     it. Saved on blur like the question. */
+     type-over-it box the question uses. Saved on blur like the question,
+     and capped at SUMMARY_MAX with a count underneath. */
   .tl-summary {
     width: 100%; box-sizing: border-box; font-family: inherit; font-size: 13px;
     line-height: 1.55; color: var(--text); border: 1px solid var(--border);
-    border-radius: 6px; padding: 8px 10px; background: #fff; resize: vertical; min-height: 92px;
+    border-radius: 6px; padding: 8px 10px; background: #fff; resize: vertical; min-height: 84px;
   }
   .tl-summary:focus { border-color: var(--accent); outline: none; }
+  .tl-count { font-size: 11px; color: var(--muted); text-align: right; margin-top: 4px;
+              font-variant-numeric: tabular-nums; }
+  .tl-count.is-full { color: var(--danger-dark); font-weight: 700; }
 
   /* ---------- Open-question panel (Greg, 11/1/26) ----------
      "when you click the question you see the question plus the Assigned to
@@ -348,8 +351,8 @@
   .tl-panel .tl-bg { margin-bottom: 0; }
   .tl-panel .tl-linkform { margin-top: 12px; }
 
-  /* Due date, Email client, Delete question -- the three things that are
-     neither the question nor the work. Quiet row at the bottom. */
+  /* Due date and Email client -- the two things that are neither the
+     question nor the work. Quiet row at the bottom. */
   .tl-footrow {
     display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px;
     margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border);
@@ -361,7 +364,6 @@
     padding: 6px 10px; cursor: pointer;
   }
   .tl-footbtn:hover { color: var(--text); border-color: var(--border); background: #fff; }
-  .tl-footbtn-danger:hover { color: var(--danger-dark); border-color: #f0d6d4; background: #fbeceb; }
   .tl-footbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* ---------- Research email composer (Greg, 10/20/26) ---------- */
@@ -1595,6 +1597,12 @@
   // Pressing the lit pill again puts the box away.
   let openTaskPanel = null; // null | "bg" | "summary" | "files"
 
+  // Greg (11/1/26): "Limit the # of characters for the summary to about two
+  // sentences." Two sentences of plain English run 240-300 characters, so
+  // the box stops at 280 and counts down to it rather than truncating a
+  // paste without saying so.
+  const SUMMARY_MAX = 280;
+
   // Which specialty row a work area's task falls to by default. The two
   // enums were built separately and do not line up one-for-one: outbound and
   // inbound are both Digital Marketing (one person, two areas), and
@@ -2264,8 +2272,10 @@
 
           ${openTaskPanel === "summary" ? `
           <div class="tl-panel">
-            <textarea class="tl-summary" data-task-summary="${q.id}"
+            <textarea class="tl-summary" data-task-summary="${q.id}" maxlength="${SUMMARY_MAX}"
                       placeholder="What did the research find?">${escapeHtml(q.summary || "")}</textarea>
+            <div class="tl-count ${(q.summary || "").length >= SUMMARY_MAX ? "is-full" : ""}"
+                 data-task-count="${q.id}">${(q.summary || "").length} / ${SUMMARY_MAX}</div>
           </div>` : ""}
 
           ${openTaskPanel === "files" ? `
@@ -2294,9 +2304,9 @@
             </div>
           </div>` : ""}
 
-          <!-- The three things that are neither the question nor the work:
-               when it is due, telling the client, and getting rid of it.
-               Quiet, at the bottom, out of the way of the pills above. -->
+          <!-- The two things that are neither the question nor the work:
+               when it is due, and telling the client. Quiet, at the
+               bottom, out of the way of the pills above. -->
           <div class="tl-footrow">
             ${viewerIsLead ? `
             <label class="tl-field tl-field-due">
@@ -2304,7 +2314,6 @@
               <input type="date" data-task-due="${q.id}" value="${escapeHtml(q.due_date || "")}" />
             </label>` : ""}
             <button type="button" class="tl-footbtn" data-task-email="${q.id}">Email client</button>
-            <button type="button" class="tl-footbtn tl-footbtn-danger" data-task-delete="${q.id}">Delete question</button>
           </div>
           <!-- Greg (10/20/26): when a specialist finishes a question they
                write to the client and the CC list introducing themselves,
@@ -2816,15 +2825,18 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
 
     scope.querySelectorAll("[data-task-summary]").forEach((ta) => {
       const original = ta.value;
+      const counter = scope.querySelector(`[data-task-count="${ta.dataset.taskSummary}"]`);
+      if (counter) {
+        ta.addEventListener("input", () => {
+          counter.textContent = `${ta.value.length} / ${SUMMARY_MAX}`;
+          counter.classList.toggle("is-full", ta.value.length >= SUMMARY_MAX);
+        });
+      }
       ta.addEventListener("blur", async () => {
         const value = ta.value.trim();
         if (value === original) return;
         await saveTaskField(ta.dataset.taskSummary, { summary: value || null });
       });
-    });
-
-    scope.querySelectorAll("[data-task-delete]").forEach((btn) => {
-      btn.addEventListener("click", () => deleteTask(btn.dataset.taskDelete));
     });
 
     scope.querySelectorAll("[data-task-save-link]").forEach((btn) => {
@@ -2937,23 +2949,11 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
   // Document, so every one of them arrived as a half-made row that the
   // contentless sweep then had to reason about.
 
-  async function deleteTask(questionId) {
-    const tied = allDocuments.filter((d) => d.question_id === questionId).length;
-    // Different warning from the one the question block used to show. Back
-    // then a deleted question left its files in a "Not tied to a question"
-    // group; that group no longer exists, so the files would be reachable
-    // by nobody but the client. Say so.
-    const msg = tied
-      ? `${tied} file${tied === 1 ? "" : "s"} sit under this question. Deleting it leaves ${tied === 1 ? "that file" : "them"} on the client's dashboard with no question to reach ${tied === 1 ? "it" : "them"} from. Move ${tied === 1 ? "it" : "them"} to another question first, or delete anyway?`
-      : "Delete this question?";
-    if (!confirm(msg)) return;
-    const { error } = await sb.from("client_research_questions").delete().eq("id", questionId);
-    if (error) { showBanner("Couldn't delete that question: " + error.message, "error"); return; }
-    openTaskIds.delete(questionId);
-    await Promise.all([loadResearchQuestions(), loadDocuments()]);
-    renderTaskList();
-    showBanner("Question deleted.", "success");
-  }
+  // Greg (11/1/26): "remove the Delete question option." deleteTask() went
+  // with the button. Questions arrive from the Controlling Document and
+  // leave the same way, so there is no longer a path that removes one from
+  // this page -- which also closes the hole the old warning described,
+  // where deleting a question orphaned its files on the client dashboard.
 
   async function saveTaskField(questionId, patch, control) {
     const q = allQuestions.find((x) => x.id === questionId);
