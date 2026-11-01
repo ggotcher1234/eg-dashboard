@@ -268,20 +268,6 @@
      seems redundant." On the engagement you lead it repeated the Team Lead
      line directly above it, and for a specialist who isn't on the team the
      Team & Hours pane already spells out who can change what. */
-  /* Standing caption under the status pills. Added 10/16 when the Closed
-     button became the drop-dead control; pulled on 10/23 when Greg found it
-     reading as the opening line of the embedded workflow pane below it
-     ("i do not want the comment about Engagement close dates in the
-     instructions"); restored 10/24 with the penalty in it rather than the
-     rule.
-
-     It belongs to the pills above it, not the pane below, so it is worth
-     keeping an eye on whether it still reads that way as this card grows. */
-  .cm-close-note { flex: 0 0 100%; order: 99; margin: 2px 0 0; padding-top: 9px;
-                   border-top: 1px solid var(--border); font-size: 12.5px;
-                   line-height: 1.5; color: var(--muted); }
-  .cm-close-note strong { color: var(--navy); font-weight: 700; }
-
   .tw-manage-note { margin-top: 12px; padding: 9px 12px; border-radius: 8px; background: var(--note-bg);
                     border: 1px solid var(--border); font-size: 12.5px; color: var(--muted);
                     transition: opacity 0.4s ease; }
@@ -1100,12 +1086,10 @@
                  slot now and share one set of sizing rules, so whichever pane
                  you're on the note lands in the same spot at the same size.
                  They're mutually exclusive by pane, so they never collide. -->
-            <!-- A row of its own across the whole card. Inside
-                 .ccc-summary-main it was confined to the left column and ran
-                 to five lines, which made the header taller than the content
-                 it introduces. .ccc-summary already wraps, so flex-basis
-                 100% is all it takes. -->
-            <div class="cm-close-note hidden" id="cm-close-note"></div>
+            <!-- Greg (10/31/26): "remove the highlighted text." The standing
+                 month-end caption that sat here is gone. The rule it
+                 described is still enforced -- the Closed pill stays locked
+                 except on the last day of the month, and says so on hover. -->
 
             <div class="ccc-summary-notes is-empty" id="cm-notes-col">
               <div class="hdr-note hidden" id="cm-wizard-hint">
@@ -1403,17 +1387,6 @@
   let delayNoteApplicable = false;
   function refreshDelayNoteVisibility() {
     $("cm-delay-note").classList.toggle("hidden", !delayNoteApplicable || activePane !== "team");
-    syncNotesColumn();
-  }
-
-  // Same rule for the month-end close caption (Greg, 10/28/26: "remove this
-  // text box from every page except the Team Hours page"). It belongs to the
-  // status pills, which are a Team & Hours concern; above the Scheduling
-  // Letter or a workflow document it is just a billing notice shouting over
-  // whatever the Team Lead actually opened.
-  let closeNoteApplicable = false;
-  function refreshCloseNoteVisibility() {
-    $("cm-close-note").classList.toggle("hidden", !closeNoteApplicable || activePane !== "team");
     syncNotesColumn();
   }
 
@@ -2303,7 +2276,6 @@
     $("cm-research-hint").classList.toggle("hidden", key !== "research");
     syncNotesColumn();
     refreshDelayNoteVisibility();
-    refreshCloseNoteVisibility();
 
     // The "open in its own browser tab" button lived here because the company
     // dashboard used to load in the iframe below. It opens in a new tab
@@ -2513,8 +2485,6 @@
     const canEdit = isSuperAdmin || isTeamLeadHere;
     if (!canEdit) {
       $("cm-status-toggle").classList.add("hidden");
-      closeNoteApplicable = false;
-      refreshCloseNoteVisibility();
       // Greg (9/6/26): "remove in progress it is redundant." The read-only
       // badge stays hidden -- the status dot beside it already carries the
       // state (and spells it out on hover), and for anyone who can change
@@ -2530,23 +2500,6 @@
     const toggle = $("cm-status-toggle");
     toggle.classList.remove("hidden");
 
-    // Back, and saying the thing that actually costs money (Greg,
-    // 10/24/26): "make the note on this page header that engagements must
-    // be closed on the last day of the month or they will close the last
-    // day of the following month."
-    //
-    // The old wording explained the rule. This one explains the penalty for
-    // missing it, which is the part a Team Lead needs on the day: there is
-    // no closing an engagement on the 1st, so a missed window is a whole
-    // extra month of the engagement sitting open with its hours still
-    // editable.
-    const note = $("cm-close-note");
-    const { isLastDay, label } = monthEndEastern();
-    closeNoteApplicable = client.project_status !== "closed";
-    refreshCloseNoteVisibility();
-    note.innerHTML = isLastDay
-      ? `<strong>Today is the last day of the month</strong> \u2014 close this engagement if it is finished. Miss today and it stays open, and billable, until the last day of next month.`
-      : `Engagements must be closed on the last day of the month, next on <strong>${escapeHtml(label)}</strong>. Miss it and this engagement stays open, and billable, until the last day of the following month. If you need assistance, contact Rita.`;
     const closeLocked = !mayCloseToday();
     toggle.innerHTML = PROJECT_STATUSES.map((s) => {
       const locked = s === "closed" && closeLocked && s !== client.project_status;
