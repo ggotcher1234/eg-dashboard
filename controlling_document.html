@@ -926,9 +926,15 @@
 
   // ---------- Attach a File or Link (Controlling Document) ----------
   // Same upload-or-link + Change-menu pattern as Discovery Call Notes'
-  // "Attach a File or Link" -- controlling_doc_storage_path/_url on
-  // client_content, the exact same columns client_workflow_files.html's
-  // Project Files row for Controlling Document already reads.
+  // "Attach a File or Link".
+  //
+  // Greg (11/2/26): "do the same thing for the controlling document." The
+  // same trap was here. This attachment wrote to controlling_doc_* --
+  // the pair Submit fills with a self-link to this form, and the pair
+  // Project Files reads to decide what "Open Document" opens -- so filing
+  // anything here replaced the link to the document it was filed inside.
+  // controlling_notes_* (184) is its own slot, same shape as the
+  // discovery_notes_* pair the Discovery form now uses.
   function closeAllWfMenus() {
     document.querySelectorAll(".wf-menu").forEach((m) => m.classList.add("hidden"));
   }
@@ -951,8 +957,8 @@
 
   function renderDocAttachment() {
     const container = $("doc-attachment");
-    const path = contentRow && contentRow.controlling_doc_storage_path;
-    const url = contentRow && contentRow.controlling_doc_url;
+    const path = contentRow && contentRow.controlling_notes_storage_path;
+    const url = contentRow && contentRow.controlling_notes_url;
 
     if (path) {
       container.innerHTML = `
@@ -1031,10 +1037,10 @@
 
   async function saveDocLink(url) {
     if (!url) { renderDocAttachment(); return; }
-    const { error } = await sb.from("client_content").update({ controlling_doc_url: url, controlling_doc_storage_path: null }).eq("client_id", currentClient.id);
+    const { error } = await sb.from("client_content").update({ controlling_notes_url: url, controlling_notes_storage_path: null }).eq("client_id", currentClient.id);
     if (error) { showBanner("Couldn't save link: " + error.message, "error"); return; }
-    contentRow.controlling_doc_url = url;
-    contentRow.controlling_doc_storage_path = null;
+    contentRow.controlling_notes_url = url;
+    contentRow.controlling_notes_storage_path = null;
     renderDocAttachment();
     showBanner("Link saved.", "success");
   }
@@ -1052,25 +1058,25 @@
   }
 
   async function uploadDocFile(file) {
-    const oldPath = contentRow && contentRow.controlling_doc_storage_path;
+    const oldPath = contentRow && contentRow.controlling_notes_storage_path;
     const path = `${currentClient.id}/${Date.now()}-${sanitizeFilename(file.name)}`;
     const { error: upErr } = await sb.storage.from("client-documents").upload(path, file);
     if (upErr) { showBanner("Couldn't upload file: " + upErr.message, "error"); return; }
-    const { error } = await sb.from("client_content").update({ controlling_doc_storage_path: path, controlling_doc_url: null }).eq("client_id", currentClient.id);
+    const { error } = await sb.from("client_content").update({ controlling_notes_storage_path: path, controlling_notes_url: null }).eq("client_id", currentClient.id);
     if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
-    contentRow.controlling_doc_storage_path = path;
-    contentRow.controlling_doc_url = null;
+    contentRow.controlling_notes_storage_path = path;
+    contentRow.controlling_notes_url = null;
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
     renderDocAttachment();
     showBanner("File uploaded.", "success");
   }
 
   async function removeDocAttachment() {
-    const oldPath = contentRow && contentRow.controlling_doc_storage_path;
-    const { error } = await sb.from("client_content").update({ controlling_doc_storage_path: null, controlling_doc_url: null }).eq("client_id", currentClient.id);
+    const oldPath = contentRow && contentRow.controlling_notes_storage_path;
+    const { error } = await sb.from("client_content").update({ controlling_notes_storage_path: null, controlling_notes_url: null }).eq("client_id", currentClient.id);
     if (error) { showBanner("Couldn't remove: " + error.message, "error"); return; }
-    contentRow.controlling_doc_storage_path = null;
-    contentRow.controlling_doc_url = null;
+    contentRow.controlling_notes_storage_path = null;
+    contentRow.controlling_notes_url = null;
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
     renderDocAttachment();
   }
@@ -1163,11 +1169,11 @@
         controlling_doc_link_url: `https://egdb.netlify.app/controlling_document_public.html?client=${currentClient.id}`,
       };
 
-      // Same rule as the Discovery Document: submitting is what makes
-      // this show up in Project Files -- if nothing's been manually
-      // attached via "Attach a File or Link" above, submit links the
-      // Controlling Document back to this filled-out form itself (a real
-      // attachment there always takes precedence and is left alone).
+      // Same rule as the Discovery Document: submitting is what makes this
+      // show up in Project Files, by pointing the row back at this form.
+      // The guard is only about a real Controlling Document attached on
+      // the Project Files row itself; the attachment at the bottom of THIS
+      // form has its own columns since 11/2/26 and no longer trips it.
       if (!contentRow.controlling_doc_storage_path && !contentRow.controlling_doc_url) {
         const selfLink = new URL(location.pathname, location.origin);
         selfLink.search = `?client=${currentClient.id}`;

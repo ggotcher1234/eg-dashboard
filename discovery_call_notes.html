@@ -2335,6 +2335,100 @@
 
   $("print-btn").addEventListener("click", () => window.print());
 
+  // Greg (11/2/26): "make sure the names/email addresses i added to the
+  // Discovery Document flow through to the rest of the documents."
+  //
+  // They did not, and the reason is that this form kept its own copy.
+  // Company Contacts and the CC List were saved as text in
+  // discovery_company_contacts / discovery_cc_list and read back by
+  // nothing but this page, while every letter the app drafts builds its
+  // To and CC from client_contacts and client_cc_list. On Chestnut Ridge
+  // that meant two people Greg added here -- the owner's wife and the
+  // business manager -- were copied on nothing.
+  //
+  // So submitting now writes them where the letters look.
+  //
+  // CC List is replaced outright: it is structured rows, this form is
+  // where it gets edited, and client_cc_list was empty on every
+  // engagement in the system.
+  //
+  // Company Contacts is a textarea of "Name, Title, Email, Phone" lines,
+  // so it is merged rather than replaced -- matched on email, updated in
+  // place, new ones added, and anything already on the engagement that is
+  // not in the text is LEFT ALONE. Deleting a line here is not treated as
+  // "remove this person from the engagement"; a textarea is too easy to
+  // clear by accident for that to be a safe reading.
+  function parseContactLine(line) {
+    const parts = line.split(",").map((x) => x.trim()).filter(Boolean);
+    if (!parts.length) return null;
+    const emailAt = parts.findIndex((x) => x.includes("@"));
+    const email = emailAt >= 0 ? parts[emailAt].replace(/^[^A-Za-z0-9]+/, "") : "";
+    const rest = parts.filter((_, i) => i !== emailAt);
+    // Anything that is mostly digits after the email is the phone.
+    const phoneAt = rest.findIndex((x) => /^[+()\d][\d\s().-]{6,}$/.test(x));
+    const phone = phoneAt >= 0 ? rest[phoneAt] : "";
+    const words = rest.filter((_, i) => i !== phoneAt);
+    return { name: words[0] || "", title: words.slice(1).join(", ") || "", email, phone };
+  }
+
+  async function pushContactsToEngagement() {
+    const notes = [];
+    try {
+      // ---- CC List ----
+      // Pasted rows arrive with stray spaces and the odd leading emoji on
+      // the address -- Extremis had a CC row whose email read
+      // "\u{1F4E7} mkyoung@..." -- and a mailto built from that is simply
+      // broken. Cleaned on the way in rather than on every read.
+      const clean = (x) => (x || "").trim();
+      const cleanEmail = (x) => clean(x).replace(/^[^A-Za-z0-9]+/, "");
+      const cc = ccListRows
+        .map((r) => ({ name: clean(r.name), title: clean(r.title), email: cleanEmail(r.email) }))
+        .filter((r) => r.name || r.email);
+      const { error: wipeErr } = await sb.from("client_cc_list").delete().eq("client_id", currentClient.id);
+      if (wipeErr) throw new Error(wipeErr.message);
+      if (cc.length) {
+        const { error: ccErr } = await sb.from("client_cc_list")
+          .insert(cc.map((r, i) => ({ client_id: currentClient.id, ...r, sort_order: i + 1 })));
+        if (ccErr) throw new Error(ccErr.message);
+      }
+
+      // ---- Company Contacts ----
+      const typed = ($("f-company-contacts").value || "")
+        .split(/\r?\n/).map(parseContactLine).filter((c) => c && (c.name || c.email));
+      const { data: existing, error: exErr } = await sb.from("client_contacts")
+        .select("id, name, title, email, phone, sort_order").eq("client_id", currentClient.id);
+      if (exErr) throw new Error(exErr.message);
+      const byEmail = new Map((existing || [])
+        .filter((c) => (c.email || "").trim())
+        .map((c) => [c.email.trim().toLowerCase(), c]));
+      let added = 0;
+      let nextOrder = Math.max(0, ...(existing || []).map((c) => c.sort_order || 0));
+      for (const c of typed) {
+        const match = c.email ? byEmail.get(c.email.toLowerCase()) : null;
+        if (match) {
+          const patch = {};
+          if (c.name && c.name !== match.name) patch.name = c.name;
+          if (c.title && c.title !== match.title) patch.title = c.title;
+          if (c.phone && c.phone !== match.phone) patch.phone = c.phone;
+          if (Object.keys(patch).length) await sb.from("client_contacts").update(patch).eq("id", match.id);
+        } else {
+          nextOrder += 1;
+          const { error: insErr } = await sb.from("client_contacts")
+            .insert({ client_id: currentClient.id, name: c.name, title: c.title || null, email: c.email || null, phone: c.phone || null, sort_order: nextOrder });
+          if (insErr) throw new Error(insErr.message);
+          added += 1;
+        }
+      }
+      if (cc.length) notes.push(`${cc.length} on the CC list`);
+      if (added) notes.push(`${added} new contact${added === 1 ? "" : "s"}`);
+    } catch (e) {
+      // The notes themselves saved. Say what did not spread rather than
+      // reporting the whole submit as a failure.
+      return " The notes saved, but the contacts did not reach the engagement: " + (e.message || e);
+    }
+    return notes.length ? ` ${notes.join(" and ")} now flow into the letters.` : "";
+  }
+
   $("save-btn").addEventListener("click", async () => {
     const btn = $("save-btn");
     btn.disabled = true;
@@ -2384,8 +2478,9 @@
       const { error } = await sb.from("client_content").update(payload).eq("client_id", currentClient.id);
       if (error) { showBanner("Couldn't submit: " + error.message, "error"); return; }
       Object.assign(contentRow, payload);
+      const spread = await pushContactsToEngagement();
       renderNotesAttachment();
-      showBanner("Discovery Call Notes submitted -- it now shows up in Project Files.", "success");
+      showBanner("Discovery Call Notes submitted -- it now shows up in Project Files." + spread, "success");
       $("save-hint").textContent = "Submitted.";
     } finally {
       btn.disabled = false;
