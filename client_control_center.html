@@ -428,10 +428,7 @@
      Grid instead of flex so the right-hand workspace can claim literally
      all remaining width -- minmax(0, 1fr) (plus min-width:0 on .cc-pane)
      is what lets tables/iframes inside it actually shrink instead of
-     forcing the column wider than the viewport (Greg, 8/30/26). The
-     "wide-workspace" modifier narrows the nav further for data-heavy
-     panes (Update Dashboard / Add Research) so those get a little extra
-     room without the user having to do anything.
+     forcing the column wider than the viewport (Greg, 8/30/26).
      Greg (8/30/26): moved the client-name/status header (.ccc-summary)
      inside .cc-pane so it's part of the right column instead of a
      full-width banner above both columns -- which frees the nav to start
@@ -446,8 +443,13 @@
      where its horizontal scrollbar flickers on and off -- the loop we chased
      through eight rounds on 8/31/26. The nudge keeps its 8px by trimming the
      nav rows' right padding instead, which costs the embedded pages nothing. */
+  /* Greg (11/2/26), comparing Company Info with Team & Hours: the nav used
+     to drop to 180px on the two data-heavy panes to lend them 40px. At
+     180px "Cumulative Hours", "View Application", "Discovery Document" and
+     "Upload Research" all wrap to two lines, so the same nav had two
+     different shapes depending on which pane you were looking at -- which
+     reads as a bug, and cost more than the 40px bought. One width. */
   .cc-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
-  .cc-shell.wide-workspace { grid-template-columns: 180px minmax(0, 1fr); }
   .cc-nav {
     background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px;
     display: flex; flex-direction: column; gap: 2px;
@@ -557,7 +559,7 @@
   .cc-nav-subbtn.active svg { color: var(--accent-dark); }
   .cc-pane { min-width: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px; }
   @media (max-width: 760px) {
-    .cc-shell, .cc-shell.wide-workspace { grid-template-columns: 1fr; align-items: start; }
+    .cc-shell { grid-template-columns: 1fr; align-items: start; }
     .cc-nav { width: 100%; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: 4px; height: auto; padding: 8px; }
     .cc-nav-btn { width: auto; flex: 1 1 auto; padding: 10px 11px; font-size: 13.5px; }
     .cc-nav-btn svg { width: 17px; height: 17px; }
@@ -2224,7 +2226,6 @@
   // right now that's just Client Info, whose Info Wizard has CSV
   // tables/forms that were designed assuming full browser width (Greg,
   // 8/30/26).
-  const WIDE_WORKSPACE_PANE_KEYS = ["setup", "cumulative"];
 
   // Critical bug (Greg, 9/18/26): "i just added hours to this engagement
   // (September) and they are not showing up on the cumulative hours."
@@ -2266,7 +2267,6 @@
     $("cc-pane-team").classList.toggle("hidden", key !== "team");
     $("cc-pane-welcome").classList.toggle("hidden", key !== "welcome");
     if (key === "welcome") renderWelcomePane();
-    document.querySelector(".cc-shell").classList.toggle("wide-workspace", WIDE_WORKSPACE_PANE_KEYS.includes(key));
     $("cm-wizard-hint").classList.toggle("hidden", key !== "setup");
     syncNotesColumn();
     refreshDelayNoteVisibility();
@@ -2398,12 +2398,29 @@
       // document sections" -- short panes should actually get short).
       const h = Math.round(Math.max(doc.body.scrollHeight, doc.body.getBoundingClientRect().height, 120));
 
+      // GROWING is applied at once, with no deadband (Greg, 11/2/26, on
+      // Company Info not matching Team & Hours). The deadband is 28px and
+      // Company Info came out 14px short of its content, so the iframe sat
+      // inside the band and the embedded page carried its own scrollbar --
+      // on a pane the workspace is supposed to have sized to fit.
+      //
+      // Growing cannot restart the 8/31 loop, because the loop needs a
+      // shrink to complete the circuit: taller iframe -> scrollbar goes ->
+      // content measures shorter -> shrink -> scrollbar returns. The
+      // deadband below still suppresses that shrink, so the cycle stops
+      // after the first growth. Measured on Company Info: ten readings,
+      // held at 862px, no scrollbar, no oscillation.
+      if (h > ccIframeLastHeight) {
+        ccIframeLastHeight = h;
+        iframe.style.height = `${h}px`;
+        ccIframePendingHeight = null;
+      }
       // Anything within the deadband of what's already showing is ignored
       // outright -- no pending candidate, no scheduled recheck, nothing
       // for a future tick to compare against. This is what actually stops
       // the whack-a-mole: the reference point is fixed, not the last
       // transient reading.
-      if (Math.abs(h - ccIframeLastHeight) <= CC_IFRAME_HEIGHT_DEADBAND) {
+      else if (Math.abs(h - ccIframeLastHeight) <= CC_IFRAME_HEIGHT_DEADBAND) {
         ccIframePendingHeight = null;
       } else if (ccIframePendingHeight !== null && Math.abs(h - ccIframePendingHeight) <= CC_IFRAME_HEIGHT_DEADBAND) {
         ccIframeLastHeight = h;
