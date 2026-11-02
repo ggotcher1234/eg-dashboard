@@ -2070,10 +2070,26 @@
     });
   }
 
+  // Greg (11/2/26): "i added the AI notes from the Discovery call and then
+  // i attached the video file to the bottom of the form. Now when i click
+  // on Discovery Document i only get the Video file and the notes and form
+  // are gone."
+  //
+  // They were not gone -- the pointer to them was. This attachment used to
+  // write to discovery_doc_url / discovery_doc_storage_path, which is the
+  // same pair the workflow row's "Open Document" reads AND the pair the
+  // Submit below fills with a self-link to this form. So filing the
+  // recording overwrote the link to the form it was filed inside, and the
+  // row that should open the notes opened the video instead.
+  //
+  // It has its own pair now. discovery_notes_* already existed, was written
+  // by nothing, and is what the project kit exports as "Discovery Call
+  // Notes" -- which is exactly what an attachment at the bottom of this
+  // form is.
   function renderNotesAttachment() {
     const container = $("notes-attachment");
-    const path = contentRow && contentRow.discovery_doc_storage_path;
-    const url = contentRow && contentRow.discovery_doc_url;
+    const path = contentRow && contentRow.discovery_notes_storage_path;
+    const url = contentRow && contentRow.discovery_notes_url;
 
     if (path) {
       container.innerHTML = `
@@ -2157,10 +2173,10 @@
   async function saveNotesLink(url) {
     if (!url) { showBanner("Enter a URL first.", "error"); return; }
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-    const { error } = await sb.from("client_content").update({ discovery_doc_url: url, discovery_doc_storage_path: null }).eq("client_id", currentClient.id);
+    const { error } = await sb.from("client_content").update({ discovery_notes_url: url, discovery_notes_storage_path: null }).eq("client_id", currentClient.id);
     if (error) { showBanner("Couldn't save the link: " + error.message, "error"); return; }
-    contentRow.discovery_doc_url = url;
-    contentRow.discovery_doc_storage_path = null;
+    contentRow.discovery_notes_url = url;
+    contentRow.discovery_notes_storage_path = null;
     renderNotesAttachment();
     showBanner("Link saved.", "success");
   }
@@ -2173,26 +2189,26 @@
   }
 
   async function uploadNotesFile(file) {
-    const oldPath = contentRow && contentRow.discovery_doc_storage_path;
-    const path = `clients/${currentClient.id}/workflow/discovery/${Date.now()}-${sanitizeFilename(file.name)}`;
+    const oldPath = contentRow && contentRow.discovery_notes_storage_path;
+    const path = `clients/${currentClient.id}/workflow/discovery-notes/${Date.now()}-${sanitizeFilename(file.name)}`;
     const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
     if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
-    const { error } = await sb.from("client_content").update({ discovery_doc_storage_path: path, discovery_doc_url: null }).eq("client_id", currentClient.id);
+    const { error } = await sb.from("client_content").update({ discovery_notes_storage_path: path, discovery_notes_url: null }).eq("client_id", currentClient.id);
     if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
-    contentRow.discovery_doc_storage_path = path;
-    contentRow.discovery_doc_url = null;
+    contentRow.discovery_notes_storage_path = path;
+    contentRow.discovery_notes_url = null;
     renderNotesAttachment();
     showBanner("File uploaded.", "success");
   }
 
   async function removeNotesAttachment() {
-    const oldPath = contentRow && contentRow.discovery_doc_storage_path;
-    const { error } = await sb.from("client_content").update({ discovery_doc_storage_path: null, discovery_doc_url: null }).eq("client_id", currentClient.id);
+    const oldPath = contentRow && contentRow.discovery_notes_storage_path;
+    const { error } = await sb.from("client_content").update({ discovery_notes_storage_path: null, discovery_notes_url: null }).eq("client_id", currentClient.id);
     if (error) { showBanner("Couldn't remove it: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
-    contentRow.discovery_doc_storage_path = null;
-    contentRow.discovery_doc_url = null;
+    contentRow.discovery_notes_storage_path = null;
+    contentRow.discovery_notes_url = null;
     renderNotesAttachment();
     showBanner("Attachment removed.", "success");
   }
@@ -2350,11 +2366,15 @@
       // Greg (8/31/26): "when i go back and look at the Workflow Documents
       // page it is not showing up... perhaps we should hit a submit
       // button instead of save." Submitting is what makes this show up
-      // in Project Files as the Discovery Document -- if nothing's been
-      // manually attached yet via "Attach a File or Link" above, submit
-      // links the Discovery Document back to this filled-out form itself
-      // (a real attachment there always takes precedence and is left
-      // alone).
+      // in Project Files as the Discovery Document: it points the row back
+      // at this filled-out form.
+      //
+      // The guard is only about a real Discovery Document someone attached
+      // on the Project Files row itself -- that still wins and is left
+      // alone. Until 11/2/26 the attachment at the bottom of THIS form
+      // shared those columns and tripped this guard too, so filing a
+      // recording here silently cost you the link to the notes. It has
+      // its own columns now, and this is the only thing that writes here.
       if (!contentRow.discovery_doc_storage_path && !contentRow.discovery_doc_url) {
         const selfLink = new URL(location.pathname, location.origin);
         selfLink.search = `?client=${currentClient.id}`;
