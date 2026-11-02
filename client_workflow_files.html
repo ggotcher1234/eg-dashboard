@@ -1609,6 +1609,22 @@
     const { data: contacts } = await sb.from("client_contacts").select("*").eq("client_id", clientId)
       .order("sort_order", { ascending: true }).order("created_at", { ascending: true });
     listData.contacts = contacts || [];
+
+    // Greg (11/2/26): "i just opened the discovery document menu and clicked
+    // Create Email and the new contacts that i added on the Discovery Call
+    // were not on the CC list of the email... the two new contacts i added
+    // should be on every email going forward."
+    //
+    // client_cc_list is the ENGAGEMENT's own CC list -- the client-side
+    // people the Team Lead adds on the Discovery form, like the owner's wife
+    // and the business manager on Chestnut Ridge. Every other composer in
+    // the app already read it; the five on this page never did. They built
+    // CC from the Program side only (Program Administrators, Program
+    // contacts ticked for the engagement, Chris and Rita), so a client-side
+    // name added anywhere simply had nowhere to land.
+    const { data: engCc } = await sb.from("client_cc_list").select("name,email")
+      .eq("client_id", clientId).order("sort_order").order("created_at");
+    listData.engagementCc = engCc || [];
     const { data: team } = await sb
       .from("client_assignments")
       .select("id, user_id, specialty_type, is_team_lead, users(full_name, email, phone)")
@@ -1700,6 +1716,7 @@
       ...(extra || []),
       ...(listData.programAdmins || []).map((c) => c && c.email),
       ...(listData.ccContacts || []).map((c) => c && c.email),
+      ...(listData.engagementCc || []).map((c) => c && c.email),
       ...CUSTOMER_CC_ALWAYS,
     ];
     const seen = new Set();
