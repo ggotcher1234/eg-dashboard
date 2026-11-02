@@ -278,6 +278,32 @@
   .wf-btn-icon-link::before { content: "\1F517\00A0"; }
   .wf-btn-icon-email::before { content: "\2709\00A0"; }
   .wf-btn-icon-email:disabled::before { content: ""; }
+  /* ---------- Debriefing list (Greg, 11/1/26) ----------
+     One line per call: what was reviewed, when, and a way in. It is a list
+     rather than the single file cell the other rows use, so it gets its own
+     rules instead of bending .wf-file-cell to hold several things. */
+  .db-list { display: flex; flex-direction: column; width: 100%; }
+  .db-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--border); }
+  .db-row:first-child { border-top: none; padding-top: 0; }
+  .db-main { flex: 1; min-width: 0; }
+  .db-label { font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .db-date { font-size: 12px; color: var(--muted); margin-top: 1px; font-variant-numeric: tabular-nums; }
+  .db-open { font-family: inherit; font-size: 12.5px; font-weight: 700; color: var(--navy-light);
+             background: none; border: none; padding: 4px 2px; cursor: pointer; text-decoration: none; white-space: nowrap; }
+  .db-open:hover { text-decoration: underline; }
+  .db-remove { font-family: inherit; font-size: 17px; line-height: 1; color: #b6bfc7; background: none;
+               border: none; padding: 2px 6px; cursor: pointer; border-radius: 6px; }
+  .db-remove:hover { color: var(--danger); background: #fbeceb; }
+
+  .db-form { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; width: 100%; }
+  .db-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .db-field-wide { flex: 1 1 240px; }
+  .db-field > span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; color: var(--muted); }
+  .db-field input { font-family: inherit; font-size: 13px; padding: 6px 9px; border: 1px solid var(--border);
+                    border-radius: 6px; background: #fff; width: 100%; }
+  .db-field input:focus { border-color: var(--accent); outline: none; }
+  .db-form-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
   .wf-file-cell { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   /* Greg (9/4/26): a small text link required two clicks to actually see
      the document (nav item, then this link) with no visual weight of its
@@ -1835,6 +1861,9 @@
     const { data, error } = await sb.from("client_content").select("*").eq("client_id", clientId).maybeSingle();
     if (error) { showBanner("Couldn't load workflow documents: " + error.message, "error"); return; }
     workflowData = data || {};
+    // Before the fields render, because the Debriefing row draws from this
+    // rather than from workflowData.
+    await loadDebriefings();
     WORKFLOW_FIELDS.forEach(renderWorkflowFileField);
     renderEvalLinkField();
     renderDiscoveryClientField();
@@ -1848,6 +1877,15 @@
   // rule for the empty state too: one "+ Add file" trigger opening
   // {Upload file, Add a link} instead of two buttons sitting side by side.
   function renderWorkflowFileField(f) {
+    // Greg (11/1/26): "we need to make sure we can accommodate multiple
+    // research review call recordings/files... maybe a file and a name to
+    // indicate which research was reviewed on what date." The Debriefing
+    // row is a list now, not a slot, so it has its own renderer. Its old
+    // pair of columns still exists and a trigger keeps them pointed at the
+    // newest entry, which is why index.html's progress strip and the close
+    // checklist did not have to change.
+    if (f.key === "review") { renderDebriefingList(); return; }
+
     const container = $(`wf-${f.key}-file`);
     const actions = $(`wf-${f.key}-actions`);
     const path = workflowData && workflowData[f.pathColumn];
@@ -1959,6 +1997,147 @@
     actions.forEach(({ sel, fn }) => {
       menu.querySelector(sel).addEventListener("click", () => { closeAllWfMenus(); fn(); });
     });
+  }
+
+  // ---------- Debriefing: a list, not a slot ----------
+  // A debriefing is not one artefact. The team walks the client through the
+  // research over as many calls as the research needs, and each one covers
+  // a different part of it, so an entry carries a name saying WHAT was
+  // reviewed and a date saying WHEN. Newest first, because the question
+  // being asked of this list is almost always "where did we get to".
+  let debriefings = [];
+
+  async function loadDebriefings() {
+    const { data, error } = await sb.from("client_debriefings")
+      .select("id, label, call_date, storage_path, url")
+      .eq("client_id", currentClient.id)
+      .order("call_date", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false });
+    if (error) { showBanner("Couldn't load the debriefings: " + error.message, "error"); return; }
+    debriefings = data || [];
+  }
+
+  const prettyDate = (d) => d
+    ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "No date";
+
+  function renderDebriefingList() {
+    const container = $("wf-review-file");
+    const actions = $("wf-review-actions");
+    if (!container || !actions) return;
+
+    container.innerHTML = debriefings.length ? `
+      <div class="db-list">
+        ${debriefings.map((d) => `
+          <div class="db-row" data-db-row="${d.id}">
+            <div class="db-main">
+              <div class="db-label">${escapeHtml(d.label)}</div>
+              <div class="db-date">${escapeHtml(prettyDate(d.call_date))}</div>
+            </div>
+            ${d.url
+              ? `<a class="db-open" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">Open &#8599;</a>`
+              : `<button type="button" class="db-open" data-db-open="${d.id}">Open &#8599;</button>`}
+            <button type="button" class="db-remove" data-db-remove="${d.id}" aria-label="Remove this debriefing">&times;</button>
+          </div>`).join("")}
+      </div>` : "";
+
+    container.querySelectorAll("[data-db-open]").forEach((b) => {
+      const d = debriefings.find((x) => x.id === b.dataset.dbOpen);
+      b.addEventListener("click", () => openStoredDocument(d.storage_path));
+    });
+    container.querySelectorAll("[data-db-remove]").forEach((b) => {
+      b.addEventListener("click", () => removeDebriefing(b.dataset.dbRemove));
+    });
+
+    actions.innerHTML = `<button type="button" class="wf-btn" id="db-add-btn">+ Add Debriefing</button>`;
+    $("db-add-btn").addEventListener("click", renderDebriefingForm);
+  }
+
+  // Name and date are asked for up front rather than after the upload,
+  // because they are the whole point of the entry -- a list of four
+  // recordings called "Zoom Recording" is the thing this replaced.
+  function renderDebriefingForm() {
+    const actions = $("wf-review-actions");
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    actions.innerHTML = `
+      <div class="db-form">
+        <label class="db-field db-field-wide">
+          <span>What was reviewed</span>
+          <input type="text" id="db-label" placeholder="e.g. Market sizing and competitors" />
+        </label>
+        <label class="db-field">
+          <span>Date reviewed</span>
+          <input type="date" id="db-date" value="${iso}" />
+        </label>
+        <label class="db-field db-field-wide">
+          <span>Recording link</span>
+          <input type="url" id="db-url" placeholder="https://\u2026 (or upload a file instead)" />
+        </label>
+        <div class="db-form-actions">
+          <button type="button" class="btn-primary btn-sm" id="db-save">Save</button>
+          <button type="button" class="btn-secondary btn-sm" id="db-upload">Upload a file</button>
+          <button type="button" class="btn-secondary btn-sm" id="db-cancel">Cancel</button>
+        </div>
+      </div>`;
+    $("db-label").focus();
+    $("db-save").addEventListener("click", () => saveDebriefing(null));
+    $("db-upload").addEventListener("click", pickDebriefingFile);
+    $("db-cancel").addEventListener("click", renderDebriefingList);
+  }
+
+  function readDebriefingForm() {
+    const label = ($("db-label").value || "").trim();
+    if (!label) { showBanner("Give it a name, so the list says what was reviewed.", "error"); $("db-label").focus(); return null; }
+    return { label, call_date: $("db-date").value || null };
+  }
+
+  function pickDebriefingFile() {
+    if (!readDebriefingForm()) return;
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.addEventListener("change", async () => {
+      if (!picker.files.length) return;
+      const file = picker.files[0];
+      const path = `clients/${currentClient.id}/workflow/review/${Date.now()}-${sanitizeFilename(file.name)}`;
+      const { error } = await sb.storage.from("client-documents").upload(path, file);
+      if (error) { showBanner("Couldn't upload file: " + error.message, "error"); return; }
+      saveDebriefing(path);
+    });
+    picker.click();
+  }
+
+  async function saveDebriefing(storagePath) {
+    const base = readDebriefingForm();
+    if (!base) return;
+    let url = storagePath ? null : ($("db-url").value || "").trim();
+    if (!storagePath && !url) { showBanner("Add a link, or upload a file.", "error"); return; }
+    if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+
+    const { error } = await sb.from("client_debriefings").insert({
+      client_id: currentClient.id,
+      label: base.label,
+      call_date: base.call_date,
+      storage_path: storagePath || null,
+      url: url || null,
+      uploaded_by: currentUser && currentUser.id,
+    });
+    if (error) { showBanner("Couldn't save it: " + error.message, "error"); return; }
+    // loadWorkflowLinks reloads the list and re-renders the row, and picks
+    // up the research_review_* columns the trigger just repointed.
+    await loadWorkflowLinks(currentClient.id);
+    showBanner("Debriefing added.", "success");
+  }
+
+  async function removeDebriefing(id) {
+    const d = debriefings.find((x) => x.id === id);
+    if (!d) return;
+    if (!confirm(`Remove "${d.label}"?`)) return;
+    const { error } = await sb.from("client_debriefings").delete().eq("id", id);
+    if (error) { showBanner("Couldn't remove it: " + error.message, "error"); return; }
+    if (d.storage_path) await sb.storage.from("client-documents").remove([d.storage_path]);
+    await loadWorkflowLinks(currentClient.id);
+    showBanner("Debriefing removed.", "success");
   }
 
   function renderWorkflowLinkForm(f, currentUrl) {

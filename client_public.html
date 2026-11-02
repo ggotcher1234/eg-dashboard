@@ -216,6 +216,15 @@
      the rating, so the question and the answer still read first. */
   .eval-modal .em-researcher { font-size: 12px; color: var(--muted); margin-top: 1px; }
   .eval-modal ul { margin: 4px 0 0 18px; padding: 0; }
+  /* The debriefing list, in the same overlay. One line per call. */
+  .db-pub-list { display: flex; flex-direction: column; }
+  .db-pub-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--border); }
+  .db-pub-row:first-child { border-top: none; }
+  .db-pub-main { flex: 1; min-width: 0; }
+  .db-pub-label { font-size: 14px; font-weight: 600; color: var(--text); }
+  .db-pub-date { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .db-pub-open { font-size: 13px; font-weight: 700; color: var(--navy); text-decoration: none; white-space: nowrap; }
+  .db-pub-open:hover { text-decoration: underline; }
 
   .workflow-tracker { display: flex; margin: 4px 0; }
   #workflow-pdf-link:empty { display: none; }
@@ -1201,7 +1210,13 @@
     // Greg (10/13/26): "change it on the client dashboard as well" -- the
     // chevron names the call, matching the nav row the team sees and the
     // Close-Out chevron beside it.
-    { urlKey: "research_review_url", pathKey: "research_review_storage_path", label: "Debriefing Call" },
+    // Greg (11/1/26): a debriefing is not one artefact -- the team walks
+    // the client through the research over as many calls as it takes. The
+    // single pair of columns is still here and still points at the newest
+    // one, so a client with a single debriefing sees exactly what they saw
+    // before: one chevron opening one recording. With more than one, the
+    // chevron opens the list instead.
+    { urlKey: "research_review_url", pathKey: "research_review_storage_path", label: "Debriefing Call", listKey: "debriefings" },
     {
       label: "Close-Out",
       rows: [
@@ -1307,6 +1322,14 @@
     if (clientLink) {
       return `<a class="${cls} filled" href="${escapeHtml(clientLink)}" target="_blank" rel="noopener">${wrap(check + labelHtml)}</a>`;
     }
+    // Several debriefings: the chevron cannot be a link to one of them, so
+    // it opens the list. One debriefing falls through to the ordinary
+    // path/url branches below and behaves exactly as it always has -- there
+    // is nothing to choose between.
+    const list = step.listKey ? (w[step.listKey] || []) : [];
+    if (list.length > 1) {
+      return `<a class="${cls} filled wf-debrief-link" href="#">${wrap(check + labelHtml)}</a>`;
+    }
     if (path) {
       return `<a class="${cls} filled wf-doc-link" data-path="${escapeHtml(path)}" href="#">${wrap(check + labelHtml)}</a>`;
     }
@@ -1354,6 +1377,9 @@
         : "";
     }
 
+    $("workflow-tracker").querySelectorAll(".wf-debrief-link").forEach((el) => {
+      el.addEventListener("click", (e) => { e.preventDefault(); openDebriefingsModal(w.debriefings || []); });
+    });
     $("workflow-tracker").querySelectorAll(".wf-doc-link").forEach((el) => {
       el.addEventListener("click", (e) => { e.preventDefault(); openSignedDoc(el.dataset.path)(); });
     });
@@ -1385,6 +1411,38 @@
       <div class="em-block"><span class="em-label">Referrals:</span> ${referrals.length ? `<ul>${referrals.map((rr) => `<li>${escapeHtml(rr.name || "")}${rr.company ? " — " + escapeHtml(rr.company) : ""}${rr.contact ? " (" + escapeHtml(rr.contact) + ")" : ""}</li>`).join("")}</ul>` : `<em>None provided.</em>`}</div>
       <div class="em-block"><span class="em-label">Testimonial:</span> ${r.testimonial ? escapeHtml(r.testimonial) : "<em>None provided.</em>"}</div>
     `;
+    $("eval-modal-overlay").classList.add("open");
+  }
+
+  // The debriefing list, in the same overlay the evaluation summary uses.
+  // Newest first, each line saying what was reviewed and when -- which is
+  // the only way a CEO looking back at four recordings can tell which one
+  // covered the thing they are trying to remember.
+  function openDebriefingsModal(list) {
+    const pretty = (d) => d
+      ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+      : "";
+    $("eval-modal-body").innerHTML = `
+      <h2>Your Debriefing Calls</h2>
+      <div class="em-meta">${list.length} recording${list.length === 1 ? "" : "s"}, most recent first.</div>
+      <div class="db-pub-list">
+        ${list.map((d, i) => `
+          <div class="db-pub-row">
+            <div class="db-pub-main">
+              <div class="db-pub-label">${escapeHtml(d.label || "Debriefing Call")}</div>
+              ${d.call_date ? `<div class="db-pub-date">${escapeHtml(pretty(d.call_date))}</div>` : ""}
+            </div>
+            ${d.url
+              ? `<a class="db-pub-open" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">Watch &#8599;</a>`
+              : d.storage_path
+                ? `<a class="db-pub-open db-pub-doc" href="#" data-db-path="${escapeHtml(d.storage_path)}">Open &#8599;</a>`
+                : ""}
+          </div>`).join("")}
+      </div>
+    `;
+    $("eval-modal-body").querySelectorAll(".db-pub-doc").forEach((el) => {
+      el.addEventListener("click", (e) => { e.preventDefault(); openSignedDoc(el.dataset.dbPath)(); });
+    });
     $("eval-modal-overlay").classList.add("open");
   }
 
