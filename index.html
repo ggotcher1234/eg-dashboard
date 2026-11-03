@@ -1709,12 +1709,14 @@
     }
   }
 
+  // Greg (11/3/26): "add the year to all time stamps." This one used to
+  // drop the year for anything dated this year. It is on a comment about
+  // why an engagement is late, which is exactly the kind of note somebody
+  // reads back a year later.
   function delayNoteDate(iso) {
     const d = new Date(iso);
     if (isNaN(d)) return "";
-    const sameYear = d.getFullYear() === new Date().getFullYear();
-    return d.toLocaleDateString(undefined,
-      sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   }
 
   // A speech bubble, drawn rather than an emoji so it matches the weight of
@@ -1826,7 +1828,7 @@
 
   function formatLastActivity(iso) {
     if (!iso) return "—";
-    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   }
 
   // ---------- My assignments / next steps / hours (personalization) ----------
@@ -3288,7 +3290,7 @@
           .order("submitted_at", { ascending: false })
           .limit(8);
 
-        const fmt = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+        const fmt = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
         const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
         const rowsHtml = (apps || []).map((a) => {
           const program = a.econ_dev_companies ? (a.econ_dev_companies.name || a.econ_dev_companies.code) : "";

@@ -653,6 +653,8 @@
   .welcome-note { font-size: 13px; color: var(--danger); margin-bottom: 12px;
                   line-height: 1.5; white-space: pre-line; }
   .welcome-note:empty { display: none; }
+  .welcome-stamp { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+  .welcome-stamp:empty { display: none; }
   .welcome-field { margin-bottom: 12px; }
   .welcome-field label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
   .welcome-field input, .welcome-field textarea {
@@ -1263,6 +1265,12 @@
               <button type="button" class="btn-primary btn-sm" id="welcome-open">Outlook Email</button>
               <button type="button" class="btn-secondary btn-sm" id="welcome-copy">Your Email</button>
             </div>
+            <!-- Greg (11/3/26): "can we time stamp the scheduling letter."
+                 The letter leaves from the Team Lead's own mail, so the app
+                 cannot know it was sent -- what it can know is when
+                 somebody took it, which is the moment either button put it
+                 on the clipboard. Worded as what it is. -->
+            <div class="welcome-stamp" id="welcome-stamp"></div>
           </div>
 
           <div id="cc-pane-iframe" class="cc-pane-inner hidden">
@@ -2548,12 +2556,14 @@
     }));
   }
 
+  // Greg (11/3/26): "add the year to all time stamps." This one used to
+  // drop the year for anything dated this year. It is on a comment about
+  // why an engagement is late, which is exactly the kind of note somebody
+  // reads back a year later.
   function delayNoteDate(iso) {
     const d = new Date(iso);
     if (isNaN(d)) return "";
-    const sameYear = d.getFullYear() === new Date().getFullYear();
-    return d.toLocaleDateString(undefined,
-      sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   }
 
   function delayBadgeHtml() {
@@ -3668,6 +3678,10 @@
     return L.join("\n");
   }
 
+  // When the Scheduling Letter was last taken, and by whom. Read with the
+  // addresses so the stamp is on screen the moment the pane opens.
+  let welcomeContent = null;
+
   async function buildWelcomeEmail() {
     const c = activeClient;
     if (!c) return;
@@ -3675,11 +3689,13 @@
 
     // To: the company's own contacts. CC: this engagement's CC list, the
     // Program contacts ticked for this engagement, and Chris.
-    const [contactsRes, ccListRes, ccPicksRes] = await Promise.all([
+    const [contactsRes, ccListRes, ccPicksRes, stampRes] = await Promise.all([
       sb.from("client_contacts").select("name,email").eq("client_id", c.id).order("sort_order").order("created_at"),
       sb.from("client_cc_list").select("name,email").eq("client_id", c.id).order("sort_order").order("created_at"),
       sb.from("client_partner_contacts").select("partner_contact_id").eq("client_id", c.id).eq("on_cc_list", true),
+      sb.from("client_content").select("scheduling_letter_taken_at, scheduling_letter_taken_by").eq("client_id", c.id).maybeSingle(),
     ]);
+    welcomeContent = stampRes.data || null;
     const contacts = contactsRes.data || [];
     const ccRows = ccListRes.data || [];
 
@@ -3786,6 +3802,7 @@
       await rosterSignature(teamLeadContact && teamLeadContact.id)
     );
     $("welcome-note").textContent = notes.join("\n");
+    renderWelcomeStamp();
   }
 
   // Built once per visit to the engagement, not on every pane switch, so an
@@ -3819,6 +3836,37 @@
   const WELCOME_PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "")
     ? "Cmd+V" : "Ctrl+V";
 
+  // The stamp is "last taken", not "sent", and it is deliberately not a
+  // gate on anything: taking the letter twice is normal (a resend, a
+  // second CEO), so the line simply moves to the newer time.
+  function renderWelcomeStamp() {
+    const el = $("welcome-stamp");
+    if (!el) return;
+    const at = welcomeContent && welcomeContent.scheduling_letter_taken_at;
+    if (!at) { el.textContent = ""; return; }
+    const who = (usersById()[welcomeContent.scheduling_letter_taken_by] || {}).full_name;
+    const when = new Date(at).toLocaleString(undefined, {
+      month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+    });
+    el.textContent = `Last taken ${when}${who ? " by " + who : ""}.`;
+  }
+
+  async function recordWelcomeTaken() {
+    if (!activeClient) return;
+    const at = new Date().toISOString();
+    const by = currentUser && currentUser.id;
+    const { error } = await sb.from("client_content")
+      .update({ scheduling_letter_taken_at: at, scheduling_letter_taken_by: by })
+      .eq("client_id", activeClient.id);
+    // The letter is already on the clipboard by this point. A stamp that
+    // did not save is not worth interrupting that with a second banner.
+    if (error) { console.error("Couldn't stamp the scheduling letter:", error.message); return; }
+    welcomeContent = welcomeContent || {};
+    welcomeContent.scheduling_letter_taken_at = at;
+    welcomeContent.scheduling_letter_taken_by = by;
+    renderWelcomeStamp();
+  }
+
   $("welcome-open").addEventListener("click", async () => {
     const copied = await openAddressedDraft({
       to: $("welcome-to").value, cc: $("welcome-cc").value,
@@ -3827,6 +3875,7 @@
     showBanner(copied
       ? "Draft opening, letter copied \u2014 right-click in the message and choose Paste."
       : "Draft opening, but the letter could not be copied \u2014 use Your Email.", copied ? "success" : "error");
+    recordWelcomeTaken();
   });
 
   $("welcome-copy").addEventListener("click", async () => {
@@ -3851,6 +3900,7 @@
       return;
     }
     showBanner("Letter copied. Paste it into a new message with " + WELCOME_PASTE_KEY + " \u2014 you will need to add the addresses and subject yourself, or use Open draft & copy letter instead.", "success");
+    recordWelcomeTaken();
   });
 
   function recalcTeamStats() {
@@ -3979,7 +4029,7 @@
     const corrector = wasCorrected ? usersById()[e.corrected_by] : null;
     const wasLine = wasCorrected
       ? `<span class="history-was">Corrected${corrector ? ` by ${escapeHtml(userLabel(corrector))}` : ""} on `
-        + `${escapeHtml(new Date(e.corrected_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }))} `
+        + `${escapeHtml(new Date(e.corrected_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }))} `
         + `&mdash; was ${escapeHtml(String(e.original_entry_date ?? e.entry_date))}, ${e.original_hours ?? e.hours} hrs</span>`
       : "";
     return `
@@ -4222,7 +4272,7 @@
           .order("submitted_at", { ascending: false })
           .limit(8);
 
-        const fmt = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+        const fmt = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
         const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
         const rowsHtml = (apps || []).map((a) => {
           const program = a.econ_dev_companies ? (a.econ_dev_companies.name || a.econ_dev_companies.code) : "";
