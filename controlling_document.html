@@ -90,6 +90,10 @@
   .save-row button:hover { background: var(--accent-dark); }
   .save-row button:disabled { opacity: 0.55; cursor: default; }
   .save-hint { font-size: 12px; color: var(--muted); }
+  .stage-row { display: flex; gap: 18px; align-items: center; margin-top: 16px; }
+  .stage-box { display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+               font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .stage-box input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 
   /* Attach a File or Link -- same upload-or-link + Change menu pattern as
      the Workflow Files page and Discovery Call Notes. */
@@ -253,7 +257,12 @@
           <div class="logo-fallback">NCEG</div>
         </div>
         <div class="letterhead-title">
-          <h1>Controlling Document</h1>
+          <!-- Greg (11/3/26): "Change the title of the document to match the
+               box that is checked." Draft and Final are the two states a
+               Controlling Document is ever in, and which one you are looking
+               at is the first thing anybody needs to know -- on screen and,
+               more to the point, on a printout that has left the building. -->
+          <h1 id="lh-title">Controlling Document</h1>
           <!-- Greg (10/3/26): the organisation's name was here and is
                redundant -- the logo beside it already says NCEG. The line now
                carries the sponsoring Program instead, in the same
@@ -330,6 +339,20 @@
           <div class="field-hint">Optional -- attach an actual Controlling Document file or link instead of (or alongside) this form. If nothing's attached, submitting this form is what makes the Controlling Document show up in Project Files.</div>
         </div>
         <div id="doc-attachment"></div>
+        <!-- Checkboxes rather than a dropdown because Greg asked for two
+             boxes, and they behave as a pair: ticking one clears the other,
+             and both can be clear, which is how every document submitted
+             before today reads. -->
+        <div class="stage-row no-print">
+          <label class="stage-box">
+            <input type="checkbox" id="f-stage-draft" />
+            <span>Draft</span>
+          </label>
+          <label class="stage-box">
+            <input type="checkbox" id="f-stage-final" />
+            <span>Final</span>
+          </label>
+        </div>
         <div class="save-row" style="margin-top:18px;">
           <button type="button" id="save-btn">Submit Controlling Document</button>
           <span class="save-hint" id="save-hint"></span>
@@ -341,6 +364,11 @@
 </div>
 
 <script>
+  // Everything after the title in the browser tab: "(GRE) Chestnut Ridge
+  // Workshop". Held separately so the Draft/Final switch can rebuild the
+  // tab title without re-deriving the Program and company each time.
+  let docTitleSuffix = "";
+
   const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1132,13 +1160,17 @@
     $("lh-program").textContent = programLabel;
     $("lh-program").hidden = !programLabel;
     $("lh-company-name").textContent = client.name || "";
-    document.title = [`Controlling Document`, [programCode ? `(${programCode})` : "", client.name || ""].filter(Boolean).join(" ")].filter(Boolean).join(" — ");
+    docTitleSuffix = [programCode ? `(${programCode})` : "", client.name || ""].filter(Boolean).join(" ");
     $("ov-company-name").textContent = client.name || "";
     $("ov-team-lead").textContent = teamLead || "—";
 
     $("f-doc-date").value = contentRow.controlling_doc_date || new Date().toISOString().slice(0, 10);
+    setStageBoxes(contentRow.controlling_doc_stage || null);
     if (contentRow.controlling_doc_date) {
-      $("save-hint").textContent = "Previously submitted document loaded below.";
+      // Greg (11/3/26): "Change text to the right of button to say Publish
+      // if you made changes." The old line described what the page had
+      // visibly just done; this one answers what the reader is deciding.
+      $("save-hint").textContent = "Publish if you made changes.";
     }
 
     await loadResearchQuestionsForPrefill();
@@ -1146,6 +1178,41 @@
 
     $("form-view").classList.remove("hidden");
   }
+
+  // ---------- Draft / Final ----------
+  // One value, two boxes. Neither ticked is a real state -- every document
+  // submitted before 11/3/26 is in it -- and reads as the plain title, so
+  // nothing already on file is retroactively labelled a draft.
+  function currentStage() {
+    if ($("f-stage-final").checked) return "final";
+    if ($("f-stage-draft").checked) return "draft";
+    return null;
+  }
+
+  function applyStageToTitle() {
+    const stage = currentStage();
+    const label = stage === "final" ? "Final Controlling Document"
+                : stage === "draft" ? "Draft Controlling Document"
+                : "Controlling Document";
+    $("lh-title").textContent = label;
+    document.title = [label, docTitleSuffix].filter(Boolean).join(" \u2014 ");
+  }
+
+  function setStageBoxes(stage) {
+    $("f-stage-draft").checked = stage === "draft";
+    $("f-stage-final").checked = stage === "final";
+    applyStageToTitle();
+  }
+
+  // Ticking one clears the other; ticking the ticked one clears both.
+  $("f-stage-draft").addEventListener("change", () => {
+    if ($("f-stage-draft").checked) $("f-stage-final").checked = false;
+    applyStageToTitle();
+  });
+  $("f-stage-final").addEventListener("change", () => {
+    if ($("f-stage-final").checked) $("f-stage-draft").checked = false;
+    applyStageToTitle();
+  });
 
   $("print-btn").addEventListener("click", () => {
     syncQuestionModelFromDom();
@@ -1161,6 +1228,7 @@
 
       const payload = {
         controlling_doc_date: $("f-doc-date").value || null,
+        controlling_doc_stage: currentStage(),
         // Greg (9/1/26): the client dashboard showcases the polished
         // client-facing review page, so keep its deterministic link on
         // file on every submit -- no need for anyone to click "Create
@@ -1186,7 +1254,8 @@
 
       await loadResearchQuestionsForPrefill();
       renderDocAttachment();
-      showBanner("Controlling Document submitted -- the questions now show on the Research page, and this shows up in Project Files.", "success");
+      const stage = currentStage();
+      showBanner(`${stage === "final" ? "Final" : stage === "draft" ? "Draft" : ""} Controlling Document submitted -- the questions now show on the Research page, and this shows up in Project Files.`.trim(), "success");
       $("save-hint").textContent = "Submitted.";
     } catch (err) {
       showBanner("Couldn't submit: " + (err.message || err), "error");
