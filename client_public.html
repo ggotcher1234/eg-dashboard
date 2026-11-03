@@ -1198,7 +1198,17 @@
   };
   const WORKFLOW_STEPS = [
     { urlKey: "discovery_doc_url", pathKey: "discovery_doc_storage_path", label: "Discovery Call Notes" },
-    { urlKey: "controlling_doc_url", pathKey: "controlling_doc_storage_path", label: "Controlling Document", clientLinkKey: "controlling_doc_link_url" },
+    // Greg (11/3/26): "Let's carry the Draft title through to the dashboard.
+    // I'll ask the client to go to the dashboard, review and edit the draft
+    // and when they hit submit the status and title should automatically
+    // change to Final." So the chevron says which pass the CEO is being
+    // asked to look at, and stops saying Draft the moment they send it back.
+    // A label is a function here only for this one step; the others stay
+    // plain strings.
+    { urlKey: "controlling_doc_url", pathKey: "controlling_doc_storage_path", clientLinkKey: "controlling_doc_link_url",
+      label: (w) => w.controlling_doc_stage === "draft" ? "Draft Controlling Document"
+                  : w.controlling_doc_stage === "final" ? "Final Controlling Document"
+                  : "Controlling Document" },
     // Punch list #6 (10/5/26). Greg: "Change client dashboard to
     // 'Debriefing' and 'Evaluation Sheet'." These were the last two places
     // still showing the old names to a client -- the rest of the app was
@@ -1253,7 +1263,7 @@
     const url = step.urlKey ? w[step.urlKey] : null;
     const clientLink = step.clientLinkKey ? w[step.clientLinkKey] : null;
     const extraFilled = step.extraFilledKey ? w[step.extraFilledKey] : null;
-    const label = escapeHtml(step.label);
+    const label = escapeHtml(typeof step.label === "function" ? step.label(w) : step.label);
     const check = `<span class="wf-check" aria-hidden="true">&#10003;</span>`;
     // Greg (10/10/26) asked whether the two checks should line up or the
     // Evaluation Sheet should indent like a submenu. Lined up: on the client

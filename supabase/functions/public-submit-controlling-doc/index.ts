@@ -18,6 +18,10 @@
 //   2. writes each entry's ranking / notes back onto the matching
 //      client_research_questions row (ranking / customer_notes columns), so
 //      the internal Controlling Document form reflects the client's input.
+//   3. marks the document Final (client_content.controlling_doc_stage).
+//      The CEO sending it back is what makes it final, so the title stops
+//      saying Draft on its own -- on their dashboard, on the review page,
+//      and on the internal form.
 //
 // Auth model: the page sends the project's anon key as the
 // Authorization/apikey headers (enough for Supabase's platform-level "is
@@ -140,6 +144,22 @@ Deno.serve(async (req: Request) => {
         .eq("id", r.question_id)
         .eq("client_id", clientId);
     }
+
+    // Greg (11/3/26): "I'll ask the client to go to the dashboard, review
+    // and edit the draft and when they hit submit the status and title
+    // should automatically change to Final." The CEO sending it back IS
+    // the thing that makes it final -- there is nothing further to wait
+    // for -- so nobody has to remember to go and tick a box afterwards.
+    //
+    // Last, and best effort. The response is already recorded by this
+    // point and a failed stamp must not turn a submission the client
+    // completed into an error on their screen; the worst case is a
+    // document still labelled Draft, which a Team Lead can fix by hand.
+    const { error: stageErr } = await adminClient
+      .from("client_content")
+      .update({ controlling_doc_stage: "final" })
+      .eq("client_id", clientId);
+    if (stageErr) console.error("Couldn't mark the Controlling Document final:", stageErr.message);
 
     return jsonResponse({ ok: true });
   } catch (e) {

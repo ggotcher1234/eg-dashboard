@@ -108,7 +108,10 @@
         <div class="logo-fallback">NCEG</div>
       </div>
       <div class="header-title-block">
-        <h1>Economic Gardening<br>Controlling Document Review</h1>
+        <!-- Greg (11/3/26): the CEO is being asked to review a DRAFT, and
+             the page should say so. Filled in once the form data arrives,
+             so a slow connection never flashes the wrong word. -->
+        <h1 id="hdr-title">Economic Gardening<br>Controlling Document Review</h1>
         <div class="subtitle" id="hdr-company">NCEG Engagement</div>
       </div>
     </div>
@@ -389,6 +392,13 @@
 
     STORE_KEY = "nceg_cd_" + CLIENT_ID;
     $("hdr-company").textContent = formData.client_name;
+    // "Draft" only while it is one. Submitting makes it Final, and a CEO
+    // who reopens the link afterwards should not still be told it is a
+    // draft awaiting their review.
+    if (formData.doc_stage === "draft") {
+      $("hdr-title").innerHTML = "Economic Gardening<br>Draft Controlling Document Review";
+      document.title = "Draft Controlling Document Review \u2014 NCEG";
+    }
 
     const draft = loadDraft();
     renderSections(draft);
