@@ -1380,7 +1380,31 @@
   let userSpecialties = {}; // user_id -> array of specialty keys
   let nameCounts = {};      // full_name -> how many accounts carry it, hidden included
   let currentAssignments = [];
-  let activePane = "team"; // the one native pane that swaps in place (the rest are iframed)
+  // Greg (11/4/26): "after i update the controlling document i will
+  // typically want to go back to this screen to send an email. so the Back
+  // button on the CD form should just go back one step to here and from here
+  // the back button goes back to Team Hours."
+  //
+  // The fillable forms open in their own tab-less page and their Back link
+  // used to land on this workspace's default pane, which meant a round trip
+  // through Team & Hours and two clicks to get back to the row with Create
+  // Email on it. ?pane= (and ?doc= for a document row) lets a page say which
+  // one it came from. Anything unrecognised falls through to Team & Hours,
+  // which is also what a bare ?client= link still does.
+  //
+  // The second half of what Greg asked for already worked: the client's name
+  // in the breadcrumb returns to Team & Hours (see its click handler).
+  const PANE_FROM_URL = (() => {
+    const q = new URLSearchParams(location.search);
+    const pane = (q.get("pane") || "").trim();
+    const doc = (q.get("doc") || "").trim();
+    const KNOWN = ["team", "welcome", "workflow", "research", "application", "setup", "cumulative"];
+    if (!KNOWN.includes(pane)) return { pane: "team", doc: null };
+    if (pane !== "workflow") return { pane, doc: null };
+    return { pane, doc: doc || null };
+  })();
+
+  let activePane = PANE_FROM_URL.pane; // the one native pane that swaps in place (the rest are iframed)
   // Greg (8/30/26): the overdue delay-reason box is Team & Hours-specific
   // context (it's about the assignments/hours work being late), not
   // something that belongs floating above every other pane -- Add
@@ -1990,7 +2014,7 @@
   // Which of the 4 Documents sub-items is currently loaded in the shared
   // iframe (Greg, 8/31/26). The group itself is always expanded now
   // (Greg, 9/4/26: "just show the documents", no collapse step first).
-  let activeDocKey = null;
+  let activeDocKey = PANE_FROM_URL.doc;
   const DOC_GROUP_ITEMS = [
     { key: "discovery", label: "Discovery Document" },
     { key: "controlling", label: "Controlling Document" },
@@ -2255,7 +2279,13 @@
   function setActivePane(key, docKey, fromClick) {
     const paneChanged = activePane !== key;
     activePane = key;
-    activeDocKey = key === "workflow" ? (docKey || activeDocKey || "discovery") : activeDocKey;
+    // Clamped here rather than where ?doc= is read: DOC_GROUP_ITEMS is
+    // declared further down and is in the temporal dead zone up there, and
+    // one list of document keys beats two that can drift apart.
+    if (key === "workflow") {
+      const wanted = docKey || activeDocKey || "discovery";
+      activeDocKey = DOC_GROUP_ITEMS.some((d) => d.key === wanted) ? wanted : "discovery";
+    }
     $("cc-nav").querySelectorAll(".cc-nav-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.pane === key);
     });
