@@ -34,6 +34,9 @@
   .util-bar a.back-link:hover { text-decoration: underline; }
   .util-bar button { font-family: inherit; cursor: pointer; border: 1.5px solid var(--border); background: #fff; color: var(--text); border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 600; }
   .util-bar button:hover { background: #eef1f4; }
+  /* The footer copy sits under the last card rather than above the first,
+     so it needs its own top padding and no bottom crowding. */
+  .util-bar-foot { padding: 4px 20px 32px; }
 
   .page-shell { max-width: 820px; margin: 16px auto 80px; padding: 0 20px; }
 
@@ -357,6 +360,16 @@
           <button type="button" id="save-btn">Submit Controlling Document</button>
           <span class="save-hint" id="save-hint"></span>
         </div>
+      </div>
+
+      <!-- Greg (11/4/26): "duplicate the back to Chestnut Ridge (engagement)
+           link at the bottom of the form as that is where you typically wind
+           up and don't want to scroll all the way back up." The one in the
+           util bar is a long way from Submit on a document with nine
+           questions on it. Same href and same text, set together in
+           loadClient. -->
+      <div class="util-bar util-bar-foot no-print">
+        <a class="back-link" id="back-link-foot" href="#">&larr; Back to the engagement</a>
       </div>
     </div>
 
@@ -1155,8 +1168,12 @@
     // went to the standalone Documents page -- back to a document you had
     // just come out of, on a page that is not where you were. The engagement
     // is where you were, so it goes there and says whose it is.
-    $("back-link").href = `client_control_center.html?client=${client.id}`;
-    $("back-link").textContent = `\u2190 Back to ${client.name || "the engagement"}`;
+    const backHref = `client_control_center.html?client=${client.id}`;
+    const backText = `\u2190 Back to ${client.name || "the engagement"}`;
+    for (const id of ["back-link", "back-link-foot"]) {
+      $(id).href = backHref;
+      $(id).textContent = backText;
+    }
     $("lh-program").textContent = programLabel;
     $("lh-program").hidden = !programLabel;
     $("lh-company-name").textContent = client.name || "";
