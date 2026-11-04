@@ -1776,9 +1776,44 @@
     return found ? found[1] : area;
   }
 
-  function specialistOptionsHtml(selectedId) {
+  // Greg (11/4/26): "i am the TL for this engagement and also the DM2
+  // researcher. The research question (2) should list me as DM2 not TL for
+  // this research."
+  //
+  // engagementSpecialists is one row per ASSIGNMENT, and a question stores
+  // only assigned_user_id -- a person, not which of their hats. Greg holds
+  // two on this engagement, so everything that wanted "the assignment" was
+  // picking one by accident, and picking differently: the chip took
+  // .find()'s first match, which the specialty_type enum orders Team Lead
+  // first, while the dropdown emitted two <option>s with the same value and
+  // the browser displayed the last one. TL in one place, DM2 in the other,
+  // from the same row.
+  //
+  // The rule: research is done under a research hat. Prefer the assignment
+  // matching the question's own work area, then any non-Team-Lead
+  // assignment, and only fall back to Team Lead for somebody who holds
+  // nothing else. Used by the chip, the dropdown and the email alike, so
+  // they cannot disagree again.
+  function assignmentFor(userId, area) {
+    if (!userId) return null;
+    const mine = engagementSpecialists.filter((x) => x.userId === userId);
+    if (!mine.length) return null;
+    const want = AREA_DEFAULT_SPECIALTY[area];
+    return mine.find((x) => want && x.specialty === want)
+        || mine.find((x) => x.specialty !== "team_lead")
+        || mine[0];
+  }
+
+  // One row per PERSON, not per assignment -- two options sharing a value is
+  // what made the select disagree with the chip beside it. Each person is
+  // labelled with the hat this question would be done under.
+  function specialistOptionsHtml(selectedId, area) {
+    const seen = new Set();
     const opts = engagementSpecialists.map((x) => {
-      const label = `${x.name} \u2014 ${specialtyCode(x)}`;
+      if (seen.has(x.userId)) return "";
+      seen.add(x.userId);
+      const hat = assignmentFor(x.userId, area) || x;
+      const label = `${x.name} \u2014 ${specialtyCode(hat)}`;
       return `<option value="${escapeHtml(x.userId)}"${x.userId === selectedId ? " selected" : ""}>${escapeHtml(label)}</option>`;
     }).join("");
     return `<option value=""${!selectedId ? " selected" : ""}>Unassigned</option>${opts}`;
@@ -2202,7 +2237,7 @@
       const done = !!q.completed_at;
       const open = openTaskIds.has(q.id);
       const mine = !!(currentUser && q.assigned_user_id === currentUser.id);
-      const who = engagementSpecialists.find((x) => x.userId === q.assigned_user_id) || null;
+      const who = assignmentFor(q.assigned_user_id, q.research_area);
       const nDocs = allDocuments.filter((d) => d.question_id === q.id).length;
       const text = (q.question || "").trim() || "New question \u2014 type it below";
       const bgHtml = taskBgToHtml(q.background || "");
@@ -2262,7 +2297,7 @@
           })()}
           <label class="tl-field tl-field-assignee">
             <span>Assigned to</span>
-            <select data-task-assignee="${q.id}">${specialistOptionsHtml(q.assigned_user_id)}</select>
+            <select data-task-assignee="${q.id}">${specialistOptionsHtml(q.assigned_user_id, q.research_area)}</select>
           </label>
 
           <!-- Three pills over one display box: the box shows whichever
@@ -2618,7 +2653,7 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
     const form = $(`tl-mailform-${questionId}`);
     if (!form) return;
 
-    const who = engagementSpecialists.find((x) => x.userId === q.assigned_user_id) || null;
+    const who = assignmentFor(q.assigned_user_id, q.research_area);
     const lead = engagementSpecialists.find((x) => x.isLead) || null;
     const companyName = currentClient.name || "your company";
 
