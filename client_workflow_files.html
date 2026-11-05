@@ -2979,8 +2979,43 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
   function renderDiscoveryClientField() {
     const container = $("wf-discovery-client");
     if (!container) return;
-    container.innerHTML = `<button type="button" class="wf-btn wf-btn-icon-email" id="dd-email-create-btn">Create Email</button>`;
+    // Greg (11/5/26): a researcher being sounded out is not on the
+    // engagement yet, so every internal link refuses them. This is the
+    // read-only page to send instead -- the Discovery Document's
+    // equivalent of the Controlling Document's client link, which is the
+    // one that already worked for a candidate.
+    container.innerHTML = `
+      <button type="button" class="wf-btn wf-btn-icon-email" id="dd-email-create-btn">Create Email</button>
+      <button type="button" class="wf-btn wf-btn-icon-link" id="dd-share-btn">Copy share link</button>`;
     container.querySelector("#dd-email-create-btn").addEventListener("click", openDiscoveryEmailModal);
+    container.querySelector("#dd-share-btn").addEventListener("click", copyDiscoveryShareLink);
+  }
+
+  // Deterministic, like the Controlling Document's: the same engagement
+  // always gets the same link, so one sent last week still opens and a
+  // second candidate can be sent the same thing.
+  function discoveryShareUrl() {
+    return `https://egdb.netlify.app/discovery_document_public.html?client=${currentClient.id}`;
+  }
+
+  async function copyDiscoveryShareLink() {
+    const btn = $("dd-share-btn");
+    const url = discoveryShareUrl();
+    btn.disabled = true;
+    let ok = true;
+    try { await navigator.clipboard.writeText(url); } catch (e) { ok = false; }
+    btn.disabled = false;
+
+    // Saved on the row too, so the link exists on the engagement whether it
+    // was first reached from here or from the form's Submit.
+    if (workflowData && workflowData.discovery_doc_link_url !== url) {
+      await sb.from("client_content").update({ discovery_doc_link_url: url }).eq("client_id", currentClient.id);
+      workflowData.discovery_doc_link_url = url;
+    }
+
+    showBanner(ok
+      ? "Share link copied. Anyone you send it to can read the Discovery Document without an account \u2014 no need to assign them first."
+      : "Couldn't copy for you. The link is: " + url, ok ? "success" : "error");
   }
 
   async function openDiscoveryEmailModal() {

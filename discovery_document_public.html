@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Discovery Document — NCEG</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  /* Built on the NCEG palette from the start (navy / olive / sage), not the
+     emerald-and-gold one the other outward pages carried until 11/5/26. */
+  :root {
+    --navy:        #14304d;
+    --accent:      #5c7248;
+    --accent-dark: #46592f;
+    --pale:        #eef3e9;
+    --bg:          #a3b9aa;
+    --white:       #FFFFFF;
+    --gray-200:    #dde3e9;
+    --gray-700:    #4A4A45;
+    --text:        #1f2937;
+    --shadow-md:   0 4px 24px rgba(20,48,77,0.14);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 16px 60px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6;
+  }
+  .hidden { display: none !important; }
+
+  .sheet { max-width: 820px; margin: 0 auto; background: var(--white);
+           border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-md); }
+
+  .header-top { display: flex; align-items: center; gap: 20px; padding: 20px 28px;
+                background: var(--white); border-bottom: 4px solid var(--accent); }
+  .logo-wrap img { height: 66px; display: block; }
+  .logo-fallback { height: 66px; width: 66px; background: var(--accent); border-radius: 6px;
+                   display: none; align-items: center; justify-content: center;
+                   color: #fff; font-weight: 800; letter-spacing: 0.04em; }
+  .header-title-block h1 { font-family: 'Merriweather', serif; font-size: 1.3rem; line-height: 1.3;
+                           color: var(--navy); font-weight: 700; margin: 0; }
+  .header-title-block .subtitle { font-size: 0.9rem; color: var(--accent); font-weight: 600;
+                                  letter-spacing: 0.04em; margin-top: 3px; text-transform: uppercase; }
+
+  .header-body { background: var(--navy); color: #fff; padding: 18px 28px 20px; }
+  .header-body p { margin: 0 0 8px; color: rgba(255,255,255,0.9); font-size: 0.95rem; }
+  .header-body p:last-child { margin-bottom: 0; }
+
+  .facts { background: var(--pale); border-bottom: 1px solid #d7e0cf; padding: 18px 28px;
+           display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px 24px; }
+  .fact-label { font-size: 0.72rem; font-weight: 700; color: var(--navy);
+                letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 2px; }
+  .fact-value { font-size: 0.95rem; color: var(--text); word-break: break-word; }
+
+  .section { padding: 22px 28px 0; }
+  .section:last-of-type { padding-bottom: 28px; }
+  .section-title { font-family: 'Merriweather', serif; font-size: 1.02rem; font-weight: 700;
+                   color: var(--navy); text-transform: uppercase; letter-spacing: 0.03em;
+                   margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--gray-200); }
+  .prose { font-size: 0.95rem; color: var(--text); }
+  .prose p { margin: 0 0 10px; }
+  .prose ul, .prose ol { margin: 0 0 10px 20px; padding: 0; }
+  .prose li { margin-bottom: 4px; }
+  .prose strong { color: var(--navy); }
+
+  .rec-link { display: inline-flex; align-items: center; gap: 7px; margin-top: 2px;
+              background: var(--accent); color: #fff; text-decoration: none;
+              border-radius: 8px; padding: 10px 18px; font-size: 0.92rem; font-weight: 700; }
+  .rec-link:hover { background: var(--accent-dark); }
+
+  .foot { padding: 20px 28px 26px; margin-top: 18px; border-top: 2px solid var(--accent);
+          font-size: 0.86rem; color: var(--gray-700); }
+
+  .state-view { max-width: 820px; margin: 0 auto; background: var(--white); border-radius: 12px;
+                padding: 44px 28px; text-align: center; box-shadow: var(--shadow-md); }
+  .state-view .big { font-family: 'Merriweather', serif; font-size: 1.2rem; font-weight: 700;
+                     color: var(--navy); margin-bottom: 8px; }
+  .state-view p { color: var(--gray-700); font-size: 0.95rem; margin: 0; }
+
+  @media print {
+    body { background: #fff; padding: 0; }
+    .sheet { box-shadow: none; border-radius: 0; max-width: none; }
+    .rec-link { color: var(--accent) !important; background: none !important; padding: 0 !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading-view" class="state-view">
+  <div class="big">Loading…</div>
+</div>
+
+<div id="error-view" class="state-view hidden">
+  <div class="big">We couldn't open this Discovery Document</div>
+  <p id="error-text"></p>
+</div>
+
+<div id="doc-view" class="sheet hidden">
+  <div class="header-top">
+    <div class="logo-wrap">
+      <img src="/NCEG_Logo_transparent.png" alt="National Center for Economic Gardening"
+        onerror="this.style.display='none';document.querySelector('.logo-fallback').style.display='flex';">
+      <div class="logo-fallback">NCEG</div>
+    </div>
+    <div class="header-title-block">
+      <h1>Economic Gardening<br>Discovery Document</h1>
+      <div class="subtitle" id="hdr-company">NCEG Engagement</div>
+    </div>
+  </div>
+
+  <div class="header-body">
+    <p>This is what we learned on the Discovery Call with this company. It is shared with you so
+       you can judge the work before taking it on &mdash; what the company does, what it is up
+       against, and what it wants to know.</p>
+    <p>The research questions themselves live on the Controlling Document, which your Team Lead
+       will have sent alongside this.</p>
+  </div>
+
+  <div class="facts" id="facts"></div>
+
+  <div class="section" id="sec-description">
+    <div class="section-title">The Company</div>
+    <div class="prose" id="company-description"></div>
+  </div>
+
+  <div class="section" id="sec-issues">
+    <div class="section-title">Business Issues</div>
+    <div class="prose" id="business-issues"></div>
+  </div>
+
+  <div class="section" id="sec-notes">
+    <div class="section-title">Discovery Call Notes</div>
+    <div class="prose" id="call-notes"></div>
+  </div>
+
+  <div class="section" id="sec-recording">
+    <div class="section-title">Call Recording</div>
+    <a class="rec-link" id="rec-link" href="#" target="_blank" rel="noopener">&#9654;&nbsp; Watch the Discovery Call</a>
+  </div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const RPC_URL = `${SUPABASE_URL}/rest/v1/rpc/get_discovery_doc_public`;
+
+  const $ = (id) => document.getElementById(id);
+  const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function showError(msg) {
+    $("loading-view").classList.add("hidden");
+    $("error-text").textContent = msg;
+    $("error-view").classList.remove("hidden");
+  }
+
+  // The same markdown-lite the Discovery form stores: **bold**, *italic*,
+  // "- " bullets and "1. " numbers. Kept in step with notesTextToHtml() in
+  // discovery_call_notes.html -- the notes are written there and read here,
+  // so the two have to agree on what a line means.
+  function notesTextToHtml(text) {
+    if (!text) return "";
+    const inline = (x) => escapeHtml(x)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>");
+    const lines = String(text).split(/\r?\n/);
+    let html = "", listType = null;
+    const closeList = () => { if (listType) { html += `</${listType}>`; listType = null; } };
+    for (const raw of lines) {
+      const line = raw.trim();
+      const ul = /^[-*•]\s+(.*)$/.exec(line);
+      const ol = /^\d+[.)]\s+(.*)$/.exec(line);
+      if (ul) {
+        if (listType !== "ul") { closeList(); html += "<ul>"; listType = "ul"; }
+        html += `<li>${inline(ul[1])}</li>`;
+      } else if (ol) {
+        if (listType !== "ol") { closeList(); html += "<ol>"; listType = "ol"; }
+        html += `<li>${inline(ol[1])}</li>`;
+      } else {
+        closeList();
+        if (line) html += `<p>${inline(line)}</p>`;
+      }
+    }
+    closeList();
+    return html;
+  }
+
+  const prettyDate = (d) => d
+    ? new Date(d + "T12:00:00").toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+    : "";
+
+  // A section with nothing in it is removed outright rather than left as an
+  // empty heading -- a candidate reading this should not have to work out
+  // whether a blank means "nothing yet" or "nothing to say".
+  function fill(sectionId, targetId, html) {
+    if (!html) { $(sectionId).remove(); return; }
+    $(targetId).innerHTML = html;
+  }
+
+  async function init() {
+    const clientId = (new URLSearchParams(location.search).get("client") || "").trim();
+    if (!clientId) {
+      showError("This link is missing its engagement information. Please check the URL you were given, or contact your NCEG Team Lead.");
+      return;
+    }
+
+    let row;
+    try {
+      const res = await fetch(RPC_URL, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ p_client_id: clientId }),
+      });
+      const rows = await res.json().catch(() => []);
+      row = Array.isArray(rows) ? rows[0] : rows;
+    } catch (e) {
+      showError("We couldn't load this Discovery Document. Please check your connection and try again, or contact your NCEG Team Lead.");
+      return;
+    }
+
+    if (!row || !row.client_name) {
+      showError("We couldn't find this Discovery Document. Please check the link you were given, or contact your NCEG Team Lead.");
+      return;
+    }
+
+    document.title = `Discovery Document — ${row.client_name}`;
+    $("hdr-company").textContent = row.client_name;
+
+    const facts = [
+      ["Company", row.client_name],
+      ["Program", row.program_name],
+      ["Team Lead", row.team_lead],
+      ["Discovery Call", prettyDate(row.call_date)],
+      ["On the call", row.participants],
+      ["Website", row.website_url],
+    ].filter(([, v]) => v);
+    $("facts").innerHTML = facts.map(([label, value]) => `
+      <div>
+        <div class="fact-label">${escapeHtml(label)}</div>
+        <div class="fact-value">${
+          label === "Website"
+            ? `<a href="${escapeHtml(value)}" target="_blank" rel="noopener">${escapeHtml(value)}</a>`
+            : escapeHtml(value)
+        }</div>
+      </div>`).join("");
+
+    fill("sec-description", "company-description", notesTextToHtml(row.company_description));
+    fill("sec-issues", "business-issues", notesTextToHtml(row.business_issues));
+    fill("sec-notes", "call-notes", notesTextToHtml(row.notes));
+
+    if (row.attachment_url) {
+      $("rec-link").href = row.attachment_url;
+    } else {
+      $("sec-recording").remove();
+    }
+
+    $("foot").textContent = row.team_lead
+      ? `Questions about this engagement? Reply to ${row.team_lead}.`
+      : "Questions about this engagement? Reply to your NCEG Team Lead.";
+
+    $("loading-view").classList.add("hidden");
+    $("doc-view").classList.remove("hidden");
+  }
+
+  init();
+</script>
+</body>
+</html>
