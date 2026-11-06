@@ -1827,15 +1827,14 @@
     // recording on its own. addLabel is per-field, so the other three rows
     // are untouched.
     { key: "closeout", label: "Close-Out Recording", addLabel: "Attach Close-Out Call Recording", pathColumn: "closeout_recording_storage_path", urlColumn: "closeout_recording_url" },
-    // The Evaluation Sheet's own attachment slot, back after being dropped
-    // on 8/25/26 when the direct-submit flow made it look redundant. Greg
-    // (10/10/26) asked for both halves of Close-Out to take "a file or link
-    // ... that will also show up on the client dashboard", and there is a
-    // real case for it: a CEO who fills the sheet in on paper or returns a
-    // signed PDF. Same two columns the dashboard's Evaluation Sheet step has
-    // always read, so an attachment here simply becomes what that step
-    // opens, ahead of the live form.
-    { key: "eval", label: "Evaluation Sheet", addLabel: "Add Close-out Video", pathColumn: "closeout_survey_storage_path", urlColumn: "closeout_survey_url" },
+    // The Evaluation Sheet's own attachment slot (closeout_survey_*, for a
+    // CEO who returns the sheet on paper or as a signed PDF) was the fifth
+    // entry here. It rendered into the Evaluation Sheet row, which went on
+    // 11/6/26, and an entry pointing at containers that no longer exist is
+    // what broke this whole page -- see the guard in renderWorkflowFileField.
+    // The columns are untouched and the client dashboard still opens
+    // whatever is already in them; there is just no control for adding one
+    // any more. It belongs on the Close-Out Call row if it comes back.
   ];
   let workflowData = null;
 
@@ -1899,6 +1898,12 @@
 
     const container = $(`wf-${f.key}-file`);
     const actions = $(`wf-${f.key}-actions`);
+    // A field whose row has been removed must not take the page with it.
+    // On 11/6/26 the Evaluation Sheet row went while its WORKFLOW_FIELDS
+    // entry stayed, so this threw on the null container -- inside a
+    // forEach, which killed every render after it: the Create Email buttons
+    // on Close-Out and Debriefing, and the Debriefing pane's inline email.
+    if (!container || !actions) return;
     const path = workflowData && workflowData[f.pathColumn];
     const url = workflowData && workflowData[f.urlColumn];
     const createBtnHtml = f.key === "discovery" ? `<button type="button" data-wf-create>Discovery Call Notes (form)</button>`
