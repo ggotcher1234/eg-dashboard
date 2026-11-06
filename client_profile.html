@@ -384,15 +384,31 @@
   .listslot-stack { display: flex; flex-direction: column; gap: 14px; }
   .listslot { border: 1px solid var(--border); border-radius: 8px; padding: 16px; background: #fff; }
   .listslot-title { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 12px; }
-  .listslot-filled {
-    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    background: #f4f7f4; border: 1px solid var(--border); border-radius: 6px;
-    padding: 10px 12px; margin-bottom: 12px; font-size: 13px;
+  /* What is attached is one line, not a full-width panel (Greg, 11/6/26) --
+     the file name or URL is itself the thing you click, with Remove beside
+     it. */
+  .listslot-attached { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 13px; margin-bottom: 10px; }
+  .listslot-attached a { color: var(--accent-dark); font-weight: 600; word-break: break-all; }
+  .listslot-x {
+    background: none; border: 0; padding: 0; font: inherit; font-size: 12px;
+    color: var(--danger); cursor: pointer; text-decoration: underline;
   }
-  .listslot-filled a { color: var(--accent-dark); font-weight: 600; word-break: break-all; }
-  .listslot-kind { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
-  .listslot-empty { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .listslot-x:hover { color: var(--danger-dark); }
   .listslot-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  /* One Attach control for both ways of pointing at the same document. The
+     URL box is created with the slot but stays hidden until it is asked
+     for -- no permanently open line showing where a link could go. */
+  .listslot-menu-wrap { position: relative; display: inline-block; }
+  .listslot-menu {
+    position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; min-width: 168px;
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(20,48,77,0.14); overflow: hidden;
+  }
+  .listslot-menu button {
+    display: block; width: 100%; text-align: left; background: none; border: 0;
+    padding: 9px 13px; font: inherit; font-size: 13px; color: var(--text); cursor: pointer;
+  }
+  .listslot-menu button:hover { background: #f2f5f2; }
   .listslot-linkrow { display: flex; gap: 8px; margin-top: 10px; }
   .listslot-linkrow input { flex: 1; min-width: 0; }
   /* Greg (11/6/26): "allow for 1 file upload/link and one freeform text box
@@ -408,6 +424,14 @@
   }
   .listslot-textrow textarea:focus { outline: none; border-color: var(--accent); }
   .listslot-textactions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  /* A saved list reads as the list, with every URL in it live (Greg,
+     11/6/26). The textarea is what you get while editing it. */
+  .listslot-list {
+    white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.6;
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: #fff;
+  }
+  .listslot-list a { color: var(--accent-dark); text-decoration: underline; }
+  .listslot-list a:hover { color: var(--accent); }
   /* "Other" needs to say what it is before the list under it means
      anything, so its name sits above the slot's own controls. */
   .listslot-naming { margin-bottom: 12px; }
@@ -2448,6 +2472,37 @@
     return base.replace(/^\d{10,}-/, "") || "Attached file";
   }
 
+  // Greg (11/6/26, annotated screenshot): "Make a single button/dropdown for
+  // upload file or paste link. no need for a giant line to show where a link
+  // could go." A file and a link are two ways of pointing at the same
+  // document, so they are now one Attach control with two choices, and the
+  // URL box only exists once "Paste a link" has been chosen. The full-width
+  // grey band that announced what was attached is gone with it -- what's
+  // attached is one line, the name itself being the thing you click.
+  //
+  // Everything a slot can show is rendered once and toggled with .hidden
+  // rather than re-rendered: the hidden <input type="file"> has to survive a
+  // menu click, or the file dialog opens against an element that no longer
+  // exists.
+  function linkifyList(text) {
+    // Greg: "Links should be live." Escaping happens per fragment rather than
+    // over the whole string first, so a quote or ampersand next to a URL
+    // can't be mistaken for part of it, and nothing in the pasted text can
+    // inject markup. Only http/https match -- never javascript:.
+    let out = "", last = 0, m;
+    const re = /https?:\/\/[^\s<>"']+/g;
+    while ((m = re.exec(text))) {
+      let url = m[0];
+      const tail = (/[.,;:!?)\]}]+$/.exec(url) || [""])[0];
+      if (tail) url = url.slice(0, -tail.length);
+      out += escapeHtml(text.slice(last, m.index));
+      out += `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>`;
+      out += escapeHtml(tail);
+      last = m.index + m[0].length;
+    }
+    return out + escapeHtml(text.slice(last));
+  }
+
   function renderListSlot(slot) {
     const mount = $(slot.mount);
     if (!mount) return;
@@ -2455,19 +2510,20 @@
     const url = listSlotData[slot.urlColumn];
     const canPaste = slot.textColumn && listSlotTextReady;
     const pasted = canPaste ? (listSlotData[slot.textColumn] || "") : "";
-    const filled = path
-      ? `<div class="listslot-filled">
-           <span class="listslot-kind">File</span>
-           <a href="#" data-slot-open="${slot.key}">${escapeHtml(listSlotFileName(path))}</a>
-         </div>`
-      : url
-      ? `<div class="listslot-filled">
-           <span class="listslot-kind">Link</span>
-           <a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>
-         </div>`
-      : pasted ? "" : `<div class="listslot-empty">Nothing attached yet.</div>`;
-
     const customName = slot.labelColumn ? (listSlotData[slot.labelColumn] || "").trim() : "";
+
+    const attachedInner = path
+      ? `<a href="#" data-slot-open="${slot.key}">${escapeHtml(listSlotFileName(path))}</a>`
+      : url
+      ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>`
+      : "";
+    const attached = attachedInner
+      ? `<div class="listslot-attached">
+           ${attachedInner}
+           <button type="button" class="listslot-x" data-slot-remove="${slot.key}">Remove</button>
+         </div>`
+      : "";
+
     const naming = slot.labelColumn ? `
       <div class="listslot-naming">
         <label for="${slot.mount}-name">${escapeHtml(slot.labelPrompt)}</label>
@@ -2477,49 +2533,92 @@
         </div>
       </div>` : "";
 
-    // The paste box stands on its own below the file/link pair: a list that
-    // came in as the body of an email has no file and no URL, and one that
-    // came as both keeps both.
-    const pasteBox = canPaste ? `
+    const editing = !pasted;
+    const pasteBox = !canPaste ? "" : `
       <div class="listslot-textrow">
-        <textarea id="${slot.mount}-text" placeholder="…or paste a list">${escapeHtml(pasted)}</textarea>
-        <div class="listslot-textactions">
-          <button type="button" class="btn-secondary btn-sm" data-slot-text="${slot.key}">Save list</button>
-          ${pasted ? `<button type="button" class="btn-danger btn-sm" data-slot-textclear="${slot.key}">Clear list</button>` : ""}
+        <div class="listslot-view ${editing ? "hidden" : ""}">
+          <div class="listslot-list">${linkifyList(pasted)}</div>
+          <div class="listslot-textactions">
+            <button type="button" class="btn-secondary btn-sm" data-slot-textedit="${slot.key}">Edit list</button>
+            <button type="button" class="btn-danger btn-sm" data-slot-textclear="${slot.key}">Clear list</button>
+          </div>
         </div>
-      </div>` : "";
+        <div class="listslot-edit ${editing ? "" : "hidden"}">
+          <textarea id="${slot.mount}-text" placeholder="…or paste a list">${escapeHtml(pasted)}</textarea>
+          <div class="listslot-textactions">
+            <button type="button" class="btn-secondary btn-sm" data-slot-text="${slot.key}">Save list</button>
+            <button type="button" class="btn-secondary btn-sm ${pasted ? "" : "hidden"}" data-slot-textcancel="${slot.key}">Cancel</button>
+          </div>
+        </div>
+      </div>`;
 
     mount.innerHTML = `
       <div class="listslot-title">${escapeHtml(customName || slot.label)}</div>
       ${naming}
-      ${filled}
+      ${attached}
       <div class="listslot-actions">
-        <button type="button" class="btn-secondary btn-sm" data-slot-upload="${slot.key}">&#8593; ${path || url ? "Replace with a file" : "Upload a file"}</button>
-        ${path || url ? `<button type="button" class="btn-danger btn-sm" data-slot-remove="${slot.key}">Remove</button>` : ""}
-        <input type="file" id="${slot.mount}-file" style="display:none;" />
+        <div class="listslot-menu-wrap">
+          <button type="button" class="btn-secondary btn-sm" data-slot-menu="${slot.key}">${path || url ? "Replace" : "Attach"} &#9662;</button>
+          <div class="listslot-menu hidden">
+            <button type="button" data-slot-upload="${slot.key}">Upload a file</button>
+            <button type="button" data-slot-linkmode="${slot.key}">Paste a link</button>
+          </div>
+        </div>
       </div>
-      <div class="listslot-linkrow">
-        <input type="url" id="${slot.mount}-url" placeholder="…or paste a link" value="${escapeHtml(url || "")}" />
+      <div class="listslot-linkrow hidden">
+        <input type="url" id="${slot.mount}-url" placeholder="https://…" value="${escapeHtml(url || "")}" />
         <button type="button" class="btn-secondary btn-sm" data-slot-link="${slot.key}">Save link</button>
+        <button type="button" class="btn-secondary btn-sm" data-slot-linkcancel="${slot.key}">Cancel</button>
       </div>
       ${pasteBox}
+      <input type="file" id="${slot.mount}-file" style="display:none;" />
     `;
 
+    const on = (sel, fn) => { const el = mount.querySelector(sel); if (el) el.addEventListener("click", fn); };
     const picker = $(`${slot.mount}-file`);
+    const menu = mount.querySelector(".listslot-menu");
+    const linkRow = mount.querySelector(".listslot-linkrow");
+
     picker.addEventListener("change", () => { if (picker.files.length) uploadListSlotFile(slot, picker.files[0]); });
-    mount.querySelector(`[data-slot-upload]`).addEventListener("click", () => picker.click());
-    mount.querySelector(`[data-slot-link]`).addEventListener("click", () => saveListSlotLink(slot));
-    const openLink = mount.querySelector(`[data-slot-open]`);
-    if (openLink) openLink.addEventListener("click", (e) => { e.preventDefault(); openListSlotFile(path); });
-    const removeBtn = mount.querySelector(`[data-slot-remove]`);
-    if (removeBtn) removeBtn.addEventListener("click", () => clearListSlot(slot));
-    const nameBtn = mount.querySelector(`[data-slot-name]`);
-    if (nameBtn) nameBtn.addEventListener("click", () => saveListSlotName(slot));
-    const textBtn = mount.querySelector(`[data-slot-text]`);
-    if (textBtn) textBtn.addEventListener("click", () => saveListSlotText(slot));
-    const textClearBtn = mount.querySelector(`[data-slot-textclear]`);
-    if (textClearBtn) textClearBtn.addEventListener("click", () => clearListSlotText(slot));
+
+    on("[data-slot-menu]", (e) => {
+      e.stopPropagation();
+      const wasOpen = !menu.classList.contains("hidden");
+      closeAllListSlotMenus();
+      menu.classList.toggle("hidden", wasOpen);
+    });
+    on("[data-slot-upload]", () => { menu.classList.add("hidden"); picker.click(); });
+    on("[data-slot-linkmode]", () => {
+      menu.classList.add("hidden");
+      linkRow.classList.remove("hidden");
+      $(`${slot.mount}-url`).focus();
+    });
+    on("[data-slot-linkcancel]", () => {
+      $(`${slot.mount}-url`).value = url || "";
+      linkRow.classList.add("hidden");
+    });
+    on("[data-slot-link]", () => saveListSlotLink(slot));
+    on("[data-slot-open]", (e) => { e.preventDefault(); openListSlotFile(path); });
+    on("[data-slot-remove]", () => clearListSlot(slot));
+    on("[data-slot-name]", () => saveListSlotName(slot));
+    on("[data-slot-textedit]", () => {
+      mount.querySelector(".listslot-view").classList.add("hidden");
+      mount.querySelector(".listslot-edit").classList.remove("hidden");
+      $(`${slot.mount}-text`).focus();
+    });
+    on("[data-slot-textcancel]", () => {
+      $(`${slot.mount}-text`).value = pasted;
+      mount.querySelector(".listslot-edit").classList.add("hidden");
+      mount.querySelector(".listslot-view").classList.remove("hidden");
+    });
+    on("[data-slot-text]", () => saveListSlotText(slot));
+    on("[data-slot-textclear]", () => clearListSlotText(slot));
   }
+
+  function closeAllListSlotMenus() {
+    document.querySelectorAll(".listslot-menu").forEach((m) => m.classList.add("hidden"));
+  }
+  document.addEventListener("click", closeAllListSlotMenus);
 
   async function saveListSlot(slot, patch) {
     const { error } = await sb.from("client_content")
@@ -3834,6 +3933,14 @@
     $("wiz-preview-btn").classList.toggle("hidden", wizStep !== WIZARD_STEPS.length);
     const nextStep = WIZARD_STEPS[wizStep]; // wizStep is 1-indexed, so this is the *next* step's entry
     $("wiz-continue").textContent = nextStep ? `Continue to ${nextStep.label} →` : "Continue →";
+
+    // Greg (11/6/26): the workspace header's "Most of this fills in
+    // automatically..." note belongs on the first step only. That note lives
+    // in the parent page, which has no other way to know which step of this
+    // wizard is showing, so every step change tells it. Same-origin iframe;
+    // optional-chained so this page still works opened on its own.
+    try { window.parent && window.parent !== window && window.parent.ccSetProfileWizardStep
+      && window.parent.ccSetProfileWizardStep(wizStep); } catch (e) {}
   }
 
   function wizGoToStep(n) {

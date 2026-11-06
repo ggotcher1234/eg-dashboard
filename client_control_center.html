@@ -1421,6 +1421,20 @@
   // client name, so it has to collapse entirely when no note is showing --
   // otherwise a pane with no note leaves a divider hanging in empty space
   // (Greg, 9/6/26).
+  // Which step of the embedded Company Information wizard is showing.
+  // client_profile.html calls ccSetProfileWizardStep() on every step change.
+  let ccProfileWizardStep = 1;
+  function refreshWizardHintVisibility() {
+    const el = $("cm-wizard-hint");
+    if (!el) return;
+    el.classList.toggle("hidden", !(activePane === "setup" && ccProfileWizardStep === 1));
+    syncNotesColumn();
+  }
+  window.ccSetProfileWizardStep = function (n) {
+    ccProfileWizardStep = Number(n) || 1;
+    refreshWizardHintVisibility();
+  };
+
   function syncNotesColumn() {
     const col = $("cm-notes-col");
     if (!col) return;
@@ -2305,8 +2319,13 @@
     $("cc-pane-team").classList.toggle("hidden", key !== "team");
     $("cc-pane-welcome").classList.toggle("hidden", key !== "welcome");
     if (key === "welcome") renderWelcomePane();
-    $("cm-wizard-hint").classList.toggle("hidden", key !== "setup");
-    syncNotesColumn();
+    // Greg (11/6/26): "Remove this box from all but the initial description
+    // page." The note is about what the application fills in and where the
+    // Competitors/Customers lists go -- an opening orientation, not a
+    // caption for whichever step happens to be showing. Switching panes
+    // reloads the embedded wizard, which starts at step 1 and says so.
+    ccProfileWizardStep = 1;
+    refreshWizardHintVisibility();
     refreshDelayNoteVisibility();
 
     // The "open in its own browser tab" button lived here because the company
