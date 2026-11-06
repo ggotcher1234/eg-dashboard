@@ -1981,10 +1981,16 @@
         { sel: "[data-wf-edit-link]", fn: () => renderWorkflowLinkForm(f, url) },
         { sel: "[data-wf-remove]", fn: () => removeWorkflowItem(f) },
       ]);
+      // Greg (11/6/26): "get rid of the link as it junks up the look of the
+      // page. we can always open and copy the link url." A wrapped 90-
+      // character URL was the loudest thing on the row and said nothing the
+      // button above it doesn't -- and the button is still a real anchor, so
+      // a right-click still copies the address. An uploaded file keeps its
+      // name beside the button: that is a name, not a URL, and it is the
+      // only thing saying which file is attached.
       container.innerHTML = `
         <div class="wf-file-cell">
           <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="btn-primary wf-open-btn">&#128279; Open Document &#8599;</a>
-          <span class="wf-file-name">${escapeHtml(url)}</span>
         </div>
       `;
       return;
@@ -2302,8 +2308,10 @@
     // something the one button already does. One click, no menu.
     actions.innerHTML = `
       <button type="button" class="wf-btn wf-btn-icon-email" id="eval-email-create-btn">${EVAL_TRIGGER_LABEL}</button>
+      <div class="wf-emailed-stamp" id="ev-emailed-stamp"></div>
     `;
     actions.querySelector("#eval-email-create-btn").addEventListener("click", openEvalEmailModal);
+    renderEmailedStamp("eval");
 
     // Greg (9/4/26): "we have the link in the email. can't we just have an
     // open Close-Out Document button that goes to this link" -- same
@@ -2790,6 +2798,7 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
     try {
       await navigator.clipboard.writeText(text);
       showBanner("Email text copied — paste it into your email client.", "success");
+      recordEmailed("eval");
     } catch (e) {
       // Nothing is on screen to select any more, so put it back first.
       $("eem-fields").classList.remove("hidden");
@@ -2847,7 +2856,7 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
       + responseHtml;
 
     container.querySelector("#cd-email-create-btn").addEventListener("click", openControllingEmailModal);
-    renderControllingEmailedStamp();
+    renderEmailedStamp("controlling");
 
     if (controllingResponse) {
       const toggleBtn = container.querySelector("#cd-response-toggle-btn");
@@ -2869,36 +2878,54 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
   }
 
   // Greg (11/6/26): "let's capture the date the email of the CD draft was
-  // created with Emailed Draft Email: Date". Until the client submits their
-  // rankings there is nothing on this row to say the document ever went out,
-  // so the line answers "did I send this, and when?" without a trip to Sent
-  // Mail. Stamped when the draft is taken, not when the composer opens --
-  // opening one to re-read the wording is not sending it.
-  function renderControllingEmailedStamp() {
-    const el = $("cd-emailed-stamp");
+  // created with Emailed Draft Email: Date" -- then "do the same for
+  // Discovery and Evaluation sheets." Each of the three rows ends in a
+  // customer email and then a wait, and until the client answers there is
+  // nothing on the row to say it ever went out: a week later the only way to
+  // know is to go digging in Sent Mail.
+  //
+  // Stamped when the draft is taken -- Outlook Email, or Your Email copying
+  // it to the clipboard -- not when the composer opens, because opening one
+  // to re-read the wording is not sending it. Re-sending moves the date
+  // forward rather than being blocked; a second CEO, a resend after a bounce
+  // and a corrected link are all ordinary.
+  //
+  // Only the Controlling Document's says "Draft": its email asks the client
+  // to review a draft, which is the thing Greg wanted dated. The other two
+  // send a finished document, so theirs just says when it went.
+  const EMAIL_STAMPS = {
+    discovery:   { mount: "dd-emailed-stamp", atColumn: "discovery_emailed_at",         byColumn: "discovery_emailed_by",         label: "Emailed" },
+    controlling: { mount: "cd-emailed-stamp", atColumn: "controlling_draft_emailed_at", byColumn: "controlling_draft_emailed_by", label: "Emailed Draft Email" },
+    eval:        { mount: "ev-emailed-stamp", atColumn: "evaluation_emailed_at",        byColumn: "evaluation_emailed_by",        label: "Emailed" },
+  };
+
+  function renderEmailedStamp(key) {
+    const spec = EMAIL_STAMPS[key];
+    const el = spec && $(spec.mount);
     if (!el) return;
-    const at = workflowData && workflowData.controlling_draft_emailed_at;
+    const at = workflowData && workflowData[spec.atColumn];
     if (!at) { el.textContent = ""; return; }
     const when = new Date(at).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
-    const by = workflowData.controlling_draft_emailed_by;
+    const by = workflowData[spec.byColumn];
     const row = (listData.team || []).find((r) => r.user_id === by && r.users && r.users.full_name);
-    el.textContent = `Emailed Draft Email: ${when}${row ? " by " + row.users.full_name : ""}`;
+    el.textContent = `${spec.label}: ${when}${row ? " by " + row.users.full_name : ""}`;
   }
 
-  async function recordControllingDraftEmailed() {
-    if (!currentClient) return;
+  async function recordEmailed(key) {
+    const spec = EMAIL_STAMPS[key];
+    if (!spec || !currentClient) return;
     const at = new Date().toISOString();
     const by = currentUser && currentUser.id;
     const { error } = await sb.from("client_content")
-      .update({ controlling_draft_emailed_at: at, controlling_draft_emailed_by: by })
+      .update({ [spec.atColumn]: at, [spec.byColumn]: by })
       .eq("client_id", currentClient.id);
     // The draft is already on its way to the mail client by now. A stamp that
-    // did not save is not worth a second banner on top of that one.
-    if (error) { console.error("Couldn't stamp the Controlling Document email:", error.message); return; }
+    // did not save is not worth a second banner contradicting the first.
+    if (error) { console.error("Couldn't stamp the " + key + " email:", error.message); return; }
     workflowData = workflowData || {};
-    workflowData.controlling_draft_emailed_at = at;
-    workflowData.controlling_draft_emailed_by = by;
-    renderControllingEmailedStamp();
+    workflowData[spec.atColumn] = at;
+    workflowData[spec.byColumn] = by;
+    renderEmailedStamp(key);
   }
 
   async function deleteControllingResponse() {
@@ -3027,9 +3054,11 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
     // one that already worked for a candidate.
     container.innerHTML = `
       <button type="button" class="wf-btn wf-btn-icon-email" id="dd-email-create-btn">Create Email</button>
-      <button type="button" class="wf-btn wf-btn-icon-link" id="dd-share-btn">Copy share link</button>`;
+      <button type="button" class="wf-btn wf-btn-icon-link" id="dd-share-btn">Copy share link</button>
+      <div class="wf-emailed-stamp" id="dd-emailed-stamp"></div>`;
     container.querySelector("#dd-email-create-btn").addEventListener("click", openDiscoveryEmailModal);
     container.querySelector("#dd-share-btn").addEventListener("click", copyDiscoveryShareLink);
+    renderEmailedStamp("discovery");
   }
 
   // Deterministic, like the Controlling Document's: the same engagement
@@ -3126,6 +3155,7 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
     try {
       await navigator.clipboard.writeText(text);
       showBanner("Email text copied -- paste it into your email client.", "success");
+      recordEmailed("discovery");
     } catch (e) {
       // Nothing is on screen to select any more, so put it back first.
       $("ddem-fields").classList.remove("hidden");
@@ -3275,10 +3305,12 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
   $("eem-mailto-btn").addEventListener("click", () => {
     try { navigator.clipboard.writeText($("eem-body-text").value); } catch (e) { /* Copy Email is the fallback */ }
     showBanner("Draft opening, letter copied \u2014 right-click in the message and choose Paste.", "success");
+    recordEmailed("eval");
   });
   $("ddem-mailto-btn").addEventListener("click", () => {
     try { navigator.clipboard.writeText($("ddem-body-text").value); } catch (e) { /* Copy Email is the fallback */ }
     showBanner("Draft opening, letter copied \u2014 right-click in the message and choose Paste.", "success");
+    recordEmailed("discovery");
   });
   $("rrem-mailto-btn").addEventListener("click", () => {
     try { navigator.clipboard.writeText($("rrem-body-text").value); } catch (e) { /* Copy Email is the fallback */ }
@@ -3287,7 +3319,7 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
   $("cdem-mailto-btn").addEventListener("click", () => {
     try { navigator.clipboard.writeText($("cdem-body-text").value); } catch (e) { /* Copy Email is the fallback */ }
     showBanner("Draft opening, letter copied \u2014 right-click in the message and choose Paste.", "success");
-    recordControllingDraftEmailed();
+    recordEmailed("controlling");
   });
 
   $("cdem-close").addEventListener("click", () => closeEmailOverlay("cd-email-overlay"));
@@ -3304,7 +3336,7 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
     try {
       await navigator.clipboard.writeText(text);
       showBanner("Email text copied — paste it into your email client.", "success");
-      recordControllingDraftEmailed();
+      recordEmailed("controlling");
     } catch (e) {
       // Nothing is on screen to select any more, so put it back first.
       $("cdem-fields").classList.remove("hidden");
