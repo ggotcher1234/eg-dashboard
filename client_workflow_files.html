@@ -278,9 +278,10 @@
   .wf-btn-icon-link::before { content: "\1F517\00A0"; }
   .wf-btn-icon-email::before { content: "\2709\00A0"; }
   .wf-btn-icon-email:disabled::before { content: ""; }
-  /* "Emailed Draft Email: <date>" under the Controlling Document's Create
-     Email button (Greg, 11/6/26). Empty until the draft has been taken, so
-     it collapses instead of reserving a blank line. */
+  /* "Emailed: <date>" under the Create Email button on the Discovery,
+     Controlling Document and Evaluation rows (Greg, 11/6/26). Empty until
+     that draft has been taken, so it collapses instead of reserving a blank
+     line. */
   .wf-emailed-stamp { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
   .wf-emailed-stamp:empty { display: none; }
   /* ---------- Debriefing list (Greg, 11/1/26) ----------
@@ -2890,13 +2891,16 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
   // forward rather than being blocked; a second CEO, a resend after a bounce
   // and a corrected link are all ordinary.
   //
-  // Only the Controlling Document's says "Draft": its email asks the client
-  // to review a draft, which is the thing Greg wanted dated. The other two
-  // send a finished document, so theirs just says when it went.
+  // One label on all three (Greg, 11/6/26: "make them all say Emailed:
+  // Dated"). The Controlling Document's first read "Emailed Draft Email";
+  // which document it is, is already the heading above the button, so the
+  // line only has to carry the date. The column keeps its original name --
+  // renaming it would buy nothing but a migration.
+  const STAMP_LABEL = "Emailed";
   const EMAIL_STAMPS = {
-    discovery:   { mount: "dd-emailed-stamp", atColumn: "discovery_emailed_at",         byColumn: "discovery_emailed_by",         label: "Emailed" },
-    controlling: { mount: "cd-emailed-stamp", atColumn: "controlling_draft_emailed_at", byColumn: "controlling_draft_emailed_by", label: "Emailed Draft Email" },
-    eval:        { mount: "ev-emailed-stamp", atColumn: "evaluation_emailed_at",        byColumn: "evaluation_emailed_by",        label: "Emailed" },
+    discovery:   { mount: "dd-emailed-stamp", atColumn: "discovery_emailed_at",         byColumn: "discovery_emailed_by" },
+    controlling: { mount: "cd-emailed-stamp", atColumn: "controlling_draft_emailed_at", byColumn: "controlling_draft_emailed_by" },
+    eval:        { mount: "ev-emailed-stamp", atColumn: "evaluation_emailed_at",        byColumn: "evaluation_emailed_by" },
   };
 
   function renderEmailedStamp(key) {
@@ -2908,7 +2912,7 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
     const when = new Date(at).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
     const by = workflowData[spec.byColumn];
     const row = (listData.team || []).find((r) => r.user_id === by && r.users && r.users.full_name);
-    el.textContent = `${spec.label}: ${when}${row ? " by " + row.users.full_name : ""}`;
+    el.textContent = `${STAMP_LABEL}: ${when}${row ? " by " + row.users.full_name : ""}`;
   }
 
   async function recordEmailed(key) {
