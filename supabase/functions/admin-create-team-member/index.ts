@@ -369,6 +369,17 @@ Deno.serve(async (req: Request) => {
                 <li>Sign in with this email address: <strong>${escapeHtml(String(target.email))}</strong></li>
                 <li>Click the <a href="${escapeHtml(siteUrl)}/team_directory.html"><strong>ROSTER</strong></a> tab and fill in your profile.</li>
                 <li>Also check your specialization(s). Team leaders use this when picking their teams.</li>
+                <!-- Greg (11/6/26): "for now let's add them both as links in
+                     their welcome email when they sign up for the Dashboard
+                     roster." Both, not the one matching their role: the
+                     roster holds people who do both jobs, and a specialist
+                     reading how a Team Lead works the engagement does no
+                     harm. Step 6 rather than a line under the list, so it
+                     keeps the shape Chris asked for. -->
+                <li>Two short FAQs, worth a skim before your first engagement:
+                    <a href="${escapeHtml(siteUrl)}/faq_specialists.html"><strong>Specialists</strong></a>
+                    &nbsp;&middot;&nbsp;
+                    <a href="${escapeHtml(siteUrl)}/faq_team_leads.html"><strong>Team Leads</strong></a></li>
               </ol>
               <!-- Chris: "We can delete the time limit for changing
                    passwords." The limit is not ours to delete -- it is the
