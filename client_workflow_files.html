@@ -222,31 +222,25 @@
      to do with the document itself on the left, the one thing you send to
      the client on the right -- so the email button takes the slack between
      them rather than sitting shoulder to shoulder with the file controls. */
-  .wf-action-row > [id$="-client"]:not(#wf-review-client) > :first-child,
-  .wf-action-row > #wf-closeout-email > :first-child { margin-left: auto; }
-  /* The Debriefing Call still reverses that pair: its email is the first
-     thing used, so it holds the left edge and the file controls take the
-     slack on the right (Greg, 10/13/26). Either the file cell or, before
-     anything is attached, the "+ Add file" trigger is the one pushed.
-     Close-Out used to be in here too and moved to the rule above on
-     11/6/26. */
-  .wf-action-row > #wf-review-file > :first-child,
-  .wf-action-row > #wf-review-file:empty + #wf-review-actions > :first-child { margin-left: auto; }
+  /* Greg (11/6/26) settled it for every row: Open & Paste on the left,
+     everything to do with the document itself on the right. The gap goes
+     between them -- on the document cell when something is attached, on the
+     "Add Document" trigger when nothing is yet. */
+  .wf-action-row > [id$="-file"] > :first-child,
+  .wf-action-row > [id$="-file"]:empty + [id$="-actions"] > :first-child { margin-left: auto; }
   /* At phone width the row wraps and the email button lands on its own
      line; pushed right there it would float away from everything, so it
      goes back to the left edge. */
   @media (max-width: 520px) {
-    .wf-action-row > [id$="-client"] > :first-child,
-    .wf-action-row > #wf-closeout-email > :first-child,
-    .wf-action-row > #wf-review-file > :first-child,
-    .wf-action-row > #wf-review-file:empty + #wf-review-actions > :first-child { margin-left: 0; }
+    .wf-action-row > [id$="-file"] > :first-child,
+    .wf-action-row > [id$="-file"]:empty + [id$="-actions"] > :first-child { margin-left: 0; }
   }
   .wf-btn {
     display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--navy-light);
     border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 7px 16px;
     font-size: 12.5px; font-weight: 700; font-family: inherit; cursor: pointer;
   }
-  /* The Create Email button used to inherit flex-shrink:0 from the
+  /* The old Create Email button used to inherit flex-shrink:0 from the
      .wf-change-wrap it sat in; that wrapper went with its dropdown
      (10/13/26), so the button holds its own width now. Every other .wf-btn
      is still inside a wrap, so this is belt and braces for them. */
@@ -254,12 +248,20 @@
   .wf-btn:hover { background: #eef4fb; }
   .wf-btn-danger { border-color: var(--danger); color: var(--danger); }
   .wf-btn-danger:hover { background: #fdecea; }
+  /* Open & Paste is the one thing on these rows that leaves the building,
+     so it is the filled button -- the same weight Open Document carries on
+     the other side of the row. */
+  .wf-btn-paste {
+    background: var(--navy-light); border-color: var(--navy-light); color: #fff;
+  }
+  .wf-btn-paste:hover { background: var(--navy); border-color: var(--navy); }
+  .wf-btn-upload-spacer { display: none; }
   .wf-btn-icon-upload::before { content: "\2B06\00A0"; }
   .wf-btn-icon-upload:disabled::before { content: ""; }
   .wf-btn-icon-link::before { content: "\1F517\00A0"; }
   .wf-btn-icon-email::before { content: "\2709\00A0"; }
   .wf-btn-icon-email:disabled::before { content: ""; }
-  /* "Emailed: <date>" under the Create Email button on the Discovery,
+  /* "Emailed: <date>" under the Open & Paste button on the Discovery,
      Controlling Document and Evaluation rows (Greg, 11/6/26). Empty until
      that draft has been taken, so it collapses instead of reserving a blank
      line. */
@@ -786,13 +788,20 @@
                    became one prompt next to the button, which is where the
                    choice is actually made. The form is still in the Add file
                    menu as well; this is the signpost to it. -->
+              <!-- Greg (11/6/26): "Remove Create Email and add the Open &
+                   Paste button on the left side... on the right side have
+                   the Add Document and Copy Document Link buttons." The row
+                   now splits by who the action is for: the one thing you
+                   send the client on the left, everything to do with the
+                   document itself on the right. -->
               <div class="wf-action-row">
+                <div id="wf-discovery-client"></div>
                 <div id="wf-discovery-file"></div>
                 <div id="wf-discovery-actions"></div>
+                <div id="wf-discovery-share"></div>
                 <div id="wf-discovery-form-hint">
                   <button type="button" class="wf-form-link" id="wf-discovery-form-link">Try the fillable form</button>
                 </div>
-                <div id="wf-discovery-client"></div>
               </div>
             </div>
           </div>
@@ -814,13 +823,20 @@
                    the title comes from the header-to-action-row rule, which
                    is why that one was keyed on the adjacency rather than on
                    the Discovery row. -->
+              <!-- Greg (11/6/26): "Remove Create Email and add the Open &
+                   Paste button on the left side... on the right side have
+                   the Add Document and Copy Document Link buttons." The row
+                   now splits by who the action is for: the one thing you
+                   send the client on the left, everything to do with the
+                   document itself on the right. -->
               <div class="wf-action-row">
+                <div id="wf-controlling-client"></div>
                 <div id="wf-controlling-file"></div>
                 <div id="wf-controlling-actions"></div>
+                <div id="wf-controlling-share"></div>
                 <div id="wf-controlling-form-hint">
                   <button type="button" class="wf-form-link" id="wf-controlling-form-link">Try the fillable form</button>
                 </div>
-                <div id="wf-controlling-client"></div>
               </div>
             </div>
           </div>
@@ -833,14 +849,14 @@
                      book the call, then post what came out of it. -->
                 <div class="wf-item-title">Schedule Debriefing Call and Post the Call Recording</div>
               </div>
-              <!-- The email itself lands here, moved out of its overlay, when
-                   this row is the whole page (Greg, 10/28/26). See
-                   mountReviewEmailAsPage(). -->
-              <div id="wf-review-email"></div>
+              <!-- The whole composer used to be lifted in here when this row
+                   was its own page (10/28/26). Greg (11/6/26) put every row
+                   on the Scheduling Letter's model instead: one Open & Paste
+                   button, the letter straight to the clipboard, the editing
+                   done in the mail client. The composer is still what builds
+                   the letter -- it is just not on screen unless the
+                   clipboard refuses. -->
               <div class="wf-action-row">
-                <!-- Greg (10/13/26): "reverse the buttons as shown" -- the
-                     email that books the call comes first, the recording is
-                     filed after it, same order as Close-Out below. -->
                 <div id="wf-review-client"></div>
                 <div id="wf-review-file"></div>
                 <div id="wf-review-actions"></div>
@@ -873,10 +889,17 @@
                    one thing you send to the client on the right. The row no
                    longer tells you the order of use; the numbered step above
                    it and the heading do. -->
+              <!-- Greg (11/6/26): "Remove Create Email and add the Open &
+                   Paste button on the left side... on the right side have
+                   the Add Document and Copy Document Link buttons." The row
+                   now splits by who the action is for: the one thing you
+                   send the client on the left, everything to do with the
+                   document itself on the right. -->
               <div class="wf-action-row">
+                <div id="wf-closeout-email"></div>
                 <div id="wf-closeout-file"></div>
                 <div id="wf-closeout-actions"></div>
-                <div id="wf-closeout-email"></div>
+                <div id="wf-closeout-share"></div>
               </div>
               <!-- What the client sent back, below the row that asked for
                    it (Greg, 11/6/26). A block of its own rather than part
@@ -1782,7 +1805,6 @@
     // debrief call." It runs here, after loadEvalEmailContext -- the letter
     // needs the contacts and the team row that call loads. The recording
     // slot stays below it; that half of the step is unchanged.
-    if (REVIEW_EMAIL_IS_PAGE) await mountReviewEmailAsPage();
   }
 
   // Greg (8/31/26): "customize the page for each one to only show that
@@ -1814,8 +1836,11 @@
     // already key off of for the "Discovery Call" step, so keeping them
     // (rather than introducing new ones) means that tracker keeps working
     // with no changes needed there.
-    { key: "discovery", label: "Discovery Document", pathColumn: "discovery_doc_storage_path", urlColumn: "discovery_doc_url" },
-    { key: "controlling", label: "Controlling Document", pathColumn: "controlling_doc_storage_path", urlColumn: "controlling_doc_url" },
+    // Greg (11/6/26): "on the right side have the Add Document and Copy
+    // Document Link buttons." Close-Out keeps its own label -- what it takes
+    // is a call recording, which he named himself on 10/13.
+    { key: "discovery", label: "Discovery Document", addLabel: "Add Document", pathColumn: "discovery_doc_storage_path", urlColumn: "discovery_doc_url" },
+    { key: "controlling", label: "Controlling Document", addLabel: "Add Document", pathColumn: "controlling_doc_storage_path", urlColumn: "controlling_doc_url" },
     { key: "review", label: "Debriefing Recording", pathColumn: "research_review_storage_path", urlColumn: "research_review_url" },
     // 10/10/26. NOT closeout_survey_* -- those two are the Evaluation
     // Sheet's own attachment slot (a signed sheet an admin uploads on the
@@ -2253,9 +2278,9 @@
   // always available), and once a response has come back, "View Full
   // Response" becomes the prominent primary action in the body -- same
   // wf-open-btn treatment as "Open Document" on the other three rows.
-  // The button doubles as the busy indicator while ensureEvalLinkUrl()
-  // runs, so its label lives in one place.
-  const EVAL_TRIGGER_LABEL = "Create Email";
+  // The Close-Out row's button doubled as the busy indicator while
+  // ensureEvalLinkUrl() runs. It still does -- it is just Open & Paste now,
+  // and PASTE_LABEL is the one place that label lives.
 
   // copyEvalLink() lived here: "Get Link" put the Evaluation Sheet URL on
   // the clipboard so a Team Lead could write their own email. It went with
@@ -2297,15 +2322,21 @@
     // own note instead of using the drafted one no longer has to open the
     // composer just to lift the URL out of it.
     actions.innerHTML = `
-      <button type="button" class="wf-btn wf-btn-icon-email" id="eval-email-create-btn">${EVAL_TRIGGER_LABEL}</button>
-      <button type="button" class="wf-btn" id="eval-open-btn">Preview Evaluation Sheet &#8599;</button>
-      <button type="button" class="wf-btn wf-btn-icon-link" id="eval-link-copy-btn">Copy Evaluation Link</button>
+      <button type="button" class="wf-btn wf-btn-paste" id="ev-paste-btn">${PASTE_LABEL}</button>
       <div class="wf-emailed-stamp" id="ev-emailed-stamp"></div>
     `;
-    actions.querySelector("#eval-email-create-btn").addEventListener("click", openEvalEmailModal);
-    actions.querySelector("#eval-open-btn").addEventListener("click", openEvalPreview);
-    actions.querySelector("#eval-link-copy-btn").addEventListener("click", copyEvaluationLink);
+    actions.querySelector("#ev-paste-btn").addEventListener("click", () => openEvalEmailModal("paste"));
     renderEmailedStamp("eval");
+
+    // The sheet's own two controls join the recording's on the right.
+    const share = $("wf-closeout-share");
+    if (share) {
+      share.innerHTML = `
+        <button type="button" class="wf-btn" id="eval-open-btn">Preview Evaluation Sheet &#8599;</button>
+        <button type="button" class="wf-btn wf-btn-icon-link" id="eval-link-copy-btn">Copy Evaluation Link</button>`;
+      share.querySelector("#eval-open-btn").addEventListener("click", openEvalPreview);
+      share.querySelector("#eval-link-copy-btn").addEventListener("click", copyEvaluationLink);
+    }
 
     // Greg (9/4/26): "we have the link in the email. can't we just have an
     // open Close-Out Document button that goes to this link" -- same
@@ -2626,11 +2657,11 @@
     return copied;
   }
 
-  async function openEvalEmailModal() {
-    const createBtn = document.querySelector("#eval-email-create-btn");
+  async function openEvalEmailModal(mode) {
+    const createBtn = document.querySelector("#ev-paste-btn");
     if (createBtn) { createBtn.disabled = true; createBtn.innerHTML = "Preparing&hellip;"; }
     const url = await ensureEvalLinkUrl();
-    if (createBtn) { createBtn.disabled = false; createBtn.innerHTML = EVAL_TRIGGER_LABEL; }
+    if (createBtn) { createBtn.disabled = false; createBtn.innerHTML = PASTE_LABEL; }
     if (!url) return;
 
     const contacts = listData.contacts || [];
@@ -2685,6 +2716,7 @@ Best regards,
 ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
 
     updateEvalEmailMailto();
+    if (mode === "paste") return openAndPaste("eem");
     $("eem-fields").classList.add("hidden");
     $("eval-email-overlay").classList.add("open");
     autosizeEmailBody($("eem-body-text"));
@@ -2757,6 +2789,77 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
     el.style.height = (el.scrollHeight + borders) + "px";
     const overlay = el.closest(".eem-overlay");
     if (overlay) syncEmbedHeight(overlay);
+  }
+
+  // ---------- Open & Paste (Greg, 11/6/26) ----------
+  // "we are going to model these like the Scheduling letter but with more
+  // options. Remove Create Email and add the Open & Paste button on the left
+  // side. this will function as the create email."
+  //
+  // Same bargain the Scheduling Letter struck: the app opens an addressed
+  // draft and puts the letter on the clipboard, and the Team Lead pastes and
+  // edits it in their own mail client, where the edits are the ones that get
+  // sent. The composer each of these rows used to open is still here and
+  // still builds the letter -- it just isn't shown unless the clipboard
+  // refuses, which is the one moment there is nothing to paste and nowhere
+  // to find it.
+  const WF_PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "")
+    ? "Cmd+V" : "Ctrl+V";
+  // One label, one meaning, on all four rows.
+  const PASTE_LABEL = "&#9993;&nbsp; Open &amp; Paste";
+
+  const PASTE_TARGETS = {
+    ddem: { overlay: "dd-email-overlay", fields: "ddem-fields", stamp: "discovery" },
+    cdem: { overlay: "cd-email-overlay", fields: "cdem-fields", stamp: "controlling" },
+    eem:  { overlay: "eval-email-overlay", fields: "eem-fields", stamp: "eval" },
+    rrem: { overlay: "rr-email-overlay", fields: "rrem-fields", stamp: null },
+  };
+
+  // An anchor click rather than location.href: this page runs inside the
+  // workspace iframe, and a click on a real mailto anchor is the form every
+  // browser handles without touching the frame it came from -- which is
+  // exactly what the Outlook Email buttons in these composers already do.
+  function openMailtoDraft({ to, cc, subject }) {
+    const ccClean = addressParam(cc);
+    const params = [];
+    if (ccClean) params.push(`cc=${ccClean}`);
+    if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
+    const a = document.createElement("a");
+    a.href = `mailto:${addressParam(to)}${params.length ? "?" + params.join("&") : ""}`;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  async function openAndPaste(prefix) {
+    const spec = PASTE_TARGETS[prefix];
+    if (!spec) return;
+    const body = $(`${prefix}-body-text`).value;
+    let copied = true;
+    try { await navigator.clipboard.writeText(body || ""); } catch (e) { copied = false; }
+
+    openMailtoDraft({
+      to: $(`${prefix}-to`).value,
+      cc: $(`${prefix}-cc`).value,
+      subject: $(`${prefix}-subject`).value,
+    });
+
+    if (!copied) {
+      // Nothing on the clipboard and nothing on screen. Show the composer
+      // that built the letter, fields and all, so it can be copied by hand.
+      const overlay = $(spec.overlay);
+      if (overlay) {
+        $(spec.fields).classList.remove("hidden");
+        overlay.classList.add("open");
+        revealEmailModal(overlay);
+      }
+      showBanner("Draft opening, but your browser wouldn't let the page copy the email \u2014 it is on screen now, select it and copy it yourself.", "error");
+      return;
+    }
+
+    showBanner(`Draft opening, email copied \u2014 paste it into the message with ${WF_PASTE_KEY}.`, "success");
+    if (spec.stamp) recordEmailed(spec.stamp);
   }
 
   function addressParam(value) {
@@ -2844,14 +2947,18 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
     // same kind of public link all along (it is the one that worked for a
     // candidate researcher when the Discovery Document did not), it just had
     // no way to hand it over except by drafting the whole email.
-    container.innerHTML = `<button type="button" class="wf-btn wf-btn-icon-email" id="cd-email-create-btn">Create Email</button>`
-      + `<button type="button" class="wf-btn wf-btn-icon-link" id="cd-share-btn">Copy share link</button>`
+    container.innerHTML = `<button type="button" class="wf-btn wf-btn-paste" id="cd-paste-btn">${PASTE_LABEL}</button>`
       + `<div class="wf-emailed-stamp" id="cd-emailed-stamp"></div>`
       + responseHtml;
 
-    container.querySelector("#cd-email-create-btn").addEventListener("click", openControllingEmailModal);
-    container.querySelector("#cd-share-btn").addEventListener("click", copyControllingShareLink);
+    container.querySelector("#cd-paste-btn").addEventListener("click", () => openControllingEmailModal("paste"));
     renderEmailedStamp("controlling");
+
+    const share = $("wf-controlling-share");
+    if (share) {
+      share.innerHTML = `<button type="button" class="wf-btn wf-btn-icon-link" id="cd-share-btn">Copy Document Link</button>`;
+      share.querySelector("#cd-share-btn").addEventListener("click", copyControllingShareLink);
+    }
 
     if (controllingResponse) {
       const toggleBtn = container.querySelector("#cd-response-toggle-btn");
@@ -3004,11 +3111,11 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
     return url;
   }
 
-  async function openControllingEmailModal() {
-    const createBtn = document.querySelector("#cd-email-create-btn");
-    if (createBtn) { createBtn.disabled = true; createBtn.textContent = "Preparing…"; }
+  async function openControllingEmailModal(mode) {
+    const createBtn = document.querySelector("#cd-paste-btn");
+    if (createBtn) { createBtn.disabled = true; createBtn.innerHTML = "Preparing&hellip;"; }
     const url = await ensureControllingDocLinkUrl();
-    if (createBtn) { createBtn.disabled = false; createBtn.textContent = "Create Email"; }
+    if (createBtn) { createBtn.disabled = false; createBtn.innerHTML = PASTE_LABEL; }
     if (!url) return;
 
     const contacts = listData.contacts || [];
@@ -3040,6 +3147,7 @@ Thanks,
 ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
 
     updateControllingEmailMailto();
+    if (mode === "paste") return openAndPaste("cdem");
     $("cdem-fields").classList.add("hidden");
     $("cd-email-overlay").classList.add("open");
     autosizeEmailBody($("cdem-body-text"));
@@ -3069,12 +3177,17 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
     // equivalent of the Controlling Document's client link, which is the
     // one that already worked for a candidate.
     container.innerHTML = `
-      <button type="button" class="wf-btn wf-btn-icon-email" id="dd-email-create-btn">Create Email</button>
-      <button type="button" class="wf-btn wf-btn-icon-link" id="dd-share-btn">Copy share link</button>
+      <button type="button" class="wf-btn wf-btn-paste" id="dd-paste-btn">${PASTE_LABEL}</button>
       <div class="wf-emailed-stamp" id="dd-emailed-stamp"></div>`;
-    container.querySelector("#dd-email-create-btn").addEventListener("click", openDiscoveryEmailModal);
-    container.querySelector("#dd-share-btn").addEventListener("click", copyDiscoveryShareLink);
+    container.querySelector("#dd-paste-btn").addEventListener("click", () => openDiscoveryEmailModal("paste"));
     renderEmailedStamp("discovery");
+
+    // The document's own link sits with the document controls on the right.
+    const share = $("wf-discovery-share");
+    if (share) {
+      share.innerHTML = `<button type="button" class="wf-btn wf-btn-icon-link" id="dd-share-btn">Copy Document Link</button>`;
+      share.querySelector("#dd-share-btn").addEventListener("click", copyDiscoveryShareLink);
+    }
   }
 
   // Deterministic, like the Controlling Document's: the same engagement
@@ -3104,7 +3217,7 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
       : "Couldn't copy for you. The link is: " + url, ok ? "success" : "error");
   }
 
-  async function openDiscoveryEmailModal() {
+  async function openDiscoveryEmailModal(mode) {
     const recipients = clientContacts();
     const teamRows = listData.team || [];
     const leadRow = teamRows.find((r) => r.is_team_lead && r.users && r.users.full_name);
@@ -3145,6 +3258,7 @@ Thanks,
 ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
 
     updateDiscoveryEmailMailto();
+    if (mode === "paste") return openAndPaste("ddem");
     $("ddem-fields").classList.add("hidden");
     $("dd-email-overlay").classList.add("open");
     autosizeEmailBody($("ddem-body-text"));
@@ -3193,11 +3307,10 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
   function renderReviewClientField() {
     const container = $("wf-review-client");
     if (!container) return;
-    // On its own pane the email is already on screen, so a button to
-    // summon it would be a step in front of the thing it summons.
-    if (REVIEW_EMAIL_IS_PAGE) { container.innerHTML = ""; return; }
-    container.innerHTML = `<button type="button" class="wf-btn wf-btn-icon-email" id="rr-email-create-btn">Create Email</button>`;
-    container.querySelector("#rr-email-create-btn").addEventListener("click", openReviewEmailModal);
+    // One button on every row now (Greg, 11/6/26), including this one --
+    // the composer that used to be the whole pane is back behind it.
+    container.innerHTML = `<button type="button" class="wf-btn wf-btn-paste" id="rr-paste-btn">${PASTE_LABEL}</button>`;
+    container.querySelector("#rr-paste-btn").addEventListener("click", () => openReviewEmailModal("paste"));
   }
 
   // The client's own dashboard -- the same short /c/<slug> link Client Info
@@ -3211,8 +3324,6 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
   // Greg (10/28/26) wanted the Debriefing row to BE this email rather than
   // a window over it, so filling the letter in is now separate from showing
   // it: inline, the same box is simply moved into the row.
-  const REVIEW_EMAIL_IS_PAGE = new URLSearchParams(location.search).get("doc") === "review";
-
   async function buildReviewEmail() {
     const recipients = clientContacts();
     const teamRows = listData.team || [];
@@ -3262,25 +3373,12 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
     $("rrem-fields").classList.add("hidden");
   }
 
-  async function openReviewEmailModal() {
+  async function openReviewEmailModal(mode) {
     await buildReviewEmail();
+    if (mode === "paste") return openAndPaste("rrem");
     $("rr-email-overlay").classList.add("open");
     autosizeEmailBody($("rrem-body-text"));
     revealEmailModal($("rr-email-overlay"));
-  }
-
-  // The Debriefing pane: no dialog at all. The letter is built, the modal
-  // box is lifted out of its overlay into the row, and that is the page.
-  // Moving the node rather than rebuilding the markup keeps every handler
-  // and the clipboard fallback (which reveals #rrem-fields) working as-is.
-  async function mountReviewEmailAsPage() {
-    const host = $("wf-review-email");
-    const modal = document.querySelector("#rr-email-overlay .eem-modal");
-    if (!host || !modal) return;
-    await buildReviewEmail();
-    modal.classList.add("eem-inline");
-    host.appendChild(modal);
-    autosizeEmailBody($("rrem-body-text"));
   }
 
   function updateReviewEmailMailto() {
