@@ -2057,7 +2057,15 @@
     // look subordinate to Close-Out Call; it is its own row in the workflow
     // like every other one, so it sits flush with them. (nested is still
     // honoured by renderNav -- nothing sets it now.)
-    { key: "eval", label: "Evaluation Sheet" },
+    // Greg (11/6/26): "change this left column button to Close Engagement
+    // then the right column page will just have the checklist. remove
+    // everything else as it is all covered in the Close-Out call page." So
+    // the last row is no longer a document at all -- it is the checklist,
+    // and it loads its own page rather than a row of client_workflow_files.
+    // The key stays "eval" so ?doc=eval links and the Close Engagement
+    // button's own back link still land here.
+    { key: "eval", label: "Close Engagement",
+      srcFor: (c) => `close_engagement.html?client=${c.id}&embed=1` },
   ];
 
   // Breadcrumb label per nav row. Deliberately its own map rather than a
@@ -2153,7 +2161,10 @@
       { key: "welcome", label: "Scheduling Letter", hidden: true },
       {
         key: "workflow", label: "Documents", group: true,
-        docs: DOC_GROUP_ITEMS.map((d) => ({ ...d, src: `client_workflow_files.html?client=${client.id}&embed=1&doc=${d.key}` })),
+        docs: DOC_GROUP_ITEMS.map((d) => ({
+          ...d,
+          src: d.srcFor ? d.srcFor(client) : `client_workflow_files.html?client=${client.id}&embed=1&doc=${d.key}`,
+        })),
       },
       // Greg (9/18/26): "remove setup and sharing heading." The caption goes,
       // but the rule it carried stays -- without it Company Info ran straight

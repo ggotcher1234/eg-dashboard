@@ -85,9 +85,26 @@
     .page-shell, .util-bar { padding-left: 14px; padding-right: 14px; }
     .card { padding: 18px 16px; }
   }
+
+  /* Greg (11/6/26): this checklist is now what the workspace's Close
+     Engagement row shows, so it loads in the iframe there with ?embed=1.
+     The workspace already carries the back link and the engagement's name
+     and program directly above the frame -- repeating them inside it gives
+     the pane two headers. */
+  body.embed-mode { background: transparent; }
+  body.embed-mode .util-bar,
+  body.embed-mode #eng-card { display: none; }
+  body.embed-mode .page-shell { padding-top: 0; }
 </style>
 </head>
 <body>
+<script>
+  // Set before anything paints, so the embedded copy never flashes its own
+  // header and back link inside the workspace frame.
+  if (new URLSearchParams(location.search).get("embed") === "1") {
+    document.body.classList.add("embed-mode");
+  }
+</script>
 
 <div id="loading-view">Loading&hellip;</div>
 
@@ -104,7 +121,7 @@
     </div>
 
     <div id="close-view" class="hidden">
-      <div class="card">
+      <div class="card" id="eng-card">
         <h1 class="eng-name" id="eng-name"></h1>
         <div class="eng-meta" id="eng-meta"></div>
       </div>
@@ -353,7 +370,11 @@
       return;
     }
     currentClient = client;
-    $("back-link").href = `client_workflow_files.html?client=${client.id}&doc=eval`;
+    // Back to the workspace, not to client_workflow_files -- the row this
+    // page used to hang off is gone (Greg, 11/6/26), and the Close
+    // Engagement nav row is where this page now lives. Only ever seen when
+    // the page is opened on its own; the embedded copy hides the bar.
+    $("back-link").href = `client_control_center.html?client=${client.id}&pane=workflow&doc=eval`;
 
     const [
       { data: content },
