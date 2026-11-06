@@ -1,4 +1,8 @@
-/* role_view.js -- "View as" for the EG Dashboard.  Greg (10/6/26):
+/* role_view.js -- the app's shared header script. Mostly "View as"; also the
+ * two FAQ links in the account menu (Greg, 11/6/26), which are here for the
+ * same reason everything else is: fourteen pages, one copy.
+ *
+ * "View as" -- Greg (10/6/26):
  *   "i don't want to have 3 logins but since i have to test for Admin, TL and
  *    Specialist i've created 3 logins. That needs to change. i need to have
  *    one login - Admin, but i need to change my view to TL or Specialist to
@@ -43,6 +47,12 @@
     var css = document.createElement("style");
     css.id = "rv-styles";
     css.textContent = [
+      // Greg (11/6/26): "move the Viewing as pill down a row and to the
+      // right so it's not overlapping the menu." In #userbox it shared a
+      // line with the nav, and on a wide nav the two met in the middle. Its
+      // own row under the header cannot collide with anything.
+      ".rv-chip-row{display:flex;justify-content:flex-end;padding:10px 28px 0;}",
+      "@media(max-width:900px){.rv-chip-row{padding:8px 14px 0;}}",
       ".rv-chip{display:inline-flex;align-items:center;gap:7px;background:#a9740f;color:#fff;",
       "border-radius:999px;padding:3px 5px 3px 11px;font-size:11.5px;font-weight:700;",
       "letter-spacing:.2px;white-space:nowrap;flex-shrink:0;}",
@@ -56,7 +66,15 @@
       "border:none;background:none;font:inherit;font-size:12.5px;color:var(--text,#0f172a);cursor:pointer;}",
       ".pd-viewas button:hover{background:#eef1f4;}",
       ".pd-viewas button[aria-current=\"true\"]{font-weight:700;background:#eef1f4;}",
-      "@media print{.rv-chip{display:none;}}"
+      // Greg (11/6/26): "what if we add the Specialist FAQ's and Team Lead
+      // FAQ's on the dropdown menu with change password and Sign Out. That
+      // way they are out of the way and not part of the primary systems but
+      // easily accessable long after you've lost the email links to them."
+      ".pd-help{border-top:1px solid var(--border,#e2e8f0);margin-top:4px;padding-top:4px;}",
+      ".pd-help a{display:block;padding:6px 10px;border-radius:6px;text-decoration:none;",
+      "font-size:12.5px;color:var(--text,#0f172a);}",
+      ".pd-help a:hover{background:#eef1f4;}",
+      "@media print{.rv-chip-row{display:none;}}"
     ].join("");
     document.head.appendChild(css);
   }
@@ -80,10 +98,49 @@
     x.innerHTML = "&times;";
     x.addEventListener("click", onExit);
     el.appendChild(x);
-    // #userbox is the header's right-hand cluster and exists on every page.
-    var box = document.getElementById("userbox") || document.getElementById("userbox2");
-    if (box) box.insertBefore(el, box.firstChild);
-    else document.body.insertBefore(el, document.body.firstChild);
+    // Its own row, right-aligned, directly under the header (Greg,
+    // 11/6/26). It used to sit inside #userbox, which put it on the same
+    // line as the nav -- fine on a narrow nav, overlapping Roster on a wide
+    // one. No header on the page is fixed or sticky, so a row after it
+    // simply pushes the page down by its own height.
+    var row = document.createElement("div");
+    row.className = "rv-chip-row no-print";
+    row.appendChild(el);
+    var header = document.querySelector("header");
+    if (header && header.parentNode) header.insertAdjacentElement("afterend", row);
+    else document.body.insertBefore(row, document.body.firstChild);
+  }
+
+  // Everyone gets these, whatever their role and whether or not they have
+  // anything to switch views to -- which is why this runs on its own at DOM
+  // ready rather than from mount(), where it would reach Admins only.
+  //
+  // This file is the app's one shared script, so a second one-purpose file
+  // loaded into the same fourteen pages would be the drift it exists to
+  // avoid. It is no longer only about "View as"; the comment at the top
+  // says so.
+  var HELP_LINKS = [
+    { href: "faq_specialists.html", label: "Specialist FAQ" },
+    { href: "faq_team_leads.html", label: "Team Lead FAQ" }
+  ];
+
+  function helpLinks() {
+    var dd = document.getElementById("profile-dropdown");
+    if (!dd || dd.querySelector(".pd-help")) return;
+    styles();
+    var box = document.createElement("div");
+    box.className = "pd-help";
+    HELP_LINKS.forEach(function (l) {
+      var a = document.createElement("a");
+      a.href = l.href;
+      a.textContent = l.label;
+      box.appendChild(a);
+    });
+    // Above Change Password: the two sign-in actions stay together at the
+    // bottom, where muscle memory expects Sign out to be last.
+    var pw = document.getElementById("change-password-btn");
+    if (pw) pw.insertAdjacentElement("beforebegin", box);
+    else dd.appendChild(box);
   }
 
   function menu(current, realRole, onPick) {
@@ -149,5 +206,11 @@
     return profile;
   }
 
-  window.EGRoleView = { mount: mount, LABEL: LABEL };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", helpLinks);
+  } else {
+    helpLinks();
+  }
+
+  window.EGRoleView = { mount: mount, LABEL: LABEL, helpLinks: helpLinks };
 })();
