@@ -48,11 +48,20 @@
     css.id = "rv-styles";
     css.textContent = [
       // Greg (11/6/26): "move the Viewing as pill down a row and to the
-      // right so it's not overlapping the menu." In #userbox it shared a
-      // line with the nav, and on a wide nav the two met in the middle. Its
-      // own row under the header cannot collide with anything.
-      ".rv-chip-row{display:flex;justify-content:flex-end;padding:10px 28px 0;}",
-      "@media(max-width:900px){.rv-chip-row{padding:8px 14px 0;}}",
+      // right so it's not overlapping the menu", then "is it possible to
+      // put the Viewing as pill in the blue header under my email address".
+      // Yes -- as a full-width item inside #userbox, which wraps it onto a
+      // second line of that cluster, right-aligned under the avatar. The
+      // header grows by the chip's height; nothing else moves.
+      //
+      // #userbox is declared on all fourteen pages with slightly different
+      // gaps and font sizes but always as a flex row, so wrap is the only
+      // thing that has to be added here.
+      "#userbox{flex-wrap:wrap;row-gap:6px;}",
+      ".rv-chip-row{flex:0 0 100%;display:flex;justify-content:flex-end;}",
+      // Loose in the page (no #userbox) it needs its own gutter instead.
+      ".rv-chip-row-loose{padding:10px 28px 0;}",
+      "@media(max-width:900px){.rv-chip-row-loose{padding:8px 14px 0;}}",
       ".rv-chip{display:inline-flex;align-items:center;gap:7px;background:#a9740f;color:#fff;",
       "border-radius:999px;padding:3px 5px 3px 11px;font-size:11.5px;font-weight:700;",
       "letter-spacing:.2px;white-space:nowrap;flex-shrink:0;}",
@@ -98,17 +107,26 @@
     x.innerHTML = "&times;";
     x.addEventListener("click", onExit);
     el.appendChild(x);
-    // Its own row, right-aligned, directly under the header (Greg,
-    // 11/6/26). It used to sit inside #userbox, which put it on the same
-    // line as the nav -- fine on a narrow nav, overlapping Roster on a wide
-    // one. No header on the page is fixed or sticky, so a row after it
-    // simply pushes the page down by its own height.
+    // A second line of #userbox, under the email and the account button
+    // (Greg, 11/6/26). It began as the first child of that cluster, which
+    // put it on the SAME line as the nav and, once the nav was wide enough,
+    // on top of Roster. Wrapping it instead keeps it where it belongs --
+    // with the account it describes -- and it cannot collide with anything,
+    // because the line is its own.
     var row = document.createElement("div");
     row.className = "rv-chip-row no-print";
     row.appendChild(el);
-    var header = document.querySelector("header");
-    if (header && header.parentNode) header.insertAdjacentElement("afterend", row);
-    else document.body.insertBefore(row, document.body.firstChild);
+    var box = document.getElementById("userbox") || document.getElementById("userbox2");
+    if (box) {
+      box.appendChild(row);
+    } else {
+      // No account cluster on this page: fall back to a row under the
+      // header, which is where it sat before it moved into the header.
+      row.className += " rv-chip-row-loose";
+      var header = document.querySelector("header");
+      if (header && header.parentNode) header.insertAdjacentElement("afterend", row);
+      else document.body.insertBefore(row, document.body.firstChild);
+    }
   }
 
   // Everyone gets these, whatever their role and whether or not they have
