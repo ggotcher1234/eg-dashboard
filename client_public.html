@@ -223,6 +223,8 @@
   .db-pub-main { flex: 1; min-width: 0; }
   .db-pub-label { font-size: 14px; font-weight: 600; color: var(--text); }
   .db-pub-date { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .db-pub-pass { font-size: 12.5px; color: var(--text); margin-top: 4px; }
+  .db-pub-pass strong { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.04em; }
   .db-pub-open { font-size: 13px; font-weight: 700; color: var(--navy); text-decoration: none; white-space: nowrap; }
   .db-pub-open:hover { text-decoration: underline; }
 
@@ -1230,7 +1232,8 @@
     {
       label: "Close-Out",
       rows: [
-        { urlKey: "closeout_recording_url", pathKey: "closeout_recording_storage_path", label: "Close-Out Video" },
+        { urlKey: "closeout_recording_url", pathKey: "closeout_recording_storage_path",
+          passcodeKey: "closeout_recording_passcode", label: "Close-Out Video" },
         EVALUATION_SHEET_STEP,
       ],
     },
@@ -1337,8 +1340,17 @@
     // path/url branches below and behaves exactly as it always has -- there
     // is nothing to choose between.
     const list = step.listKey ? (w[step.listKey] || []) : [];
-    if (list.length > 1) {
+    // Greg (11/6/26): a recording can carry a passcode now, and a chevron
+    // that goes straight to the recording has nowhere to show it -- the
+    // client would land on a box asking for a code they were never given.
+    // So anything with a passcode opens the panel instead, where the code
+    // sits beside the link.
+    if (list.length > 1 || list.some((d) => d.passcode)) {
       return `<a class="${cls} filled wf-debrief-link" href="#">${wrap(check + labelHtml)}</a>`;
+    }
+    const passcode = step.passcodeKey ? w[step.passcodeKey] : null;
+    if (passcode && (path || url)) {
+      return `<a class="${cls} filled wf-rec-link" href="#">${wrap(check + labelHtml)}</a>`;
     }
     if (path) {
       return `<a class="${cls} filled wf-doc-link" data-path="${escapeHtml(path)}" href="#">${wrap(check + labelHtml)}</a>`;
@@ -1388,7 +1400,20 @@
     }
 
     $("workflow-tracker").querySelectorAll(".wf-debrief-link").forEach((el) => {
-      el.addEventListener("click", (e) => { e.preventDefault(); openDebriefingsModal(w.debriefings || []); });
+      el.addEventListener("click", (e) => { e.preventDefault(); openRecordingsModal("Your Debriefing Calls", w.debriefings || []); });
+    });
+    // The Close-Out recording, when it has a passcode -- one row in the
+    // same panel the debriefings use.
+    $("workflow-tracker").querySelectorAll(".wf-rec-link").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        openRecordingsModal("Your Close-Out Call", [{
+          label: "Close-Out Video",
+          url: w.closeout_recording_url,
+          storage_path: w.closeout_recording_storage_path,
+          passcode: w.closeout_recording_passcode,
+        }]);
+      });
     });
     $("workflow-tracker").querySelectorAll(".wf-doc-link").forEach((el) => {
       el.addEventListener("click", (e) => { e.preventDefault(); openSignedDoc(el.dataset.path)(); });
@@ -1428,19 +1453,23 @@
   // Newest first, each line saying what was reviewed and when -- which is
   // the only way a CEO looking back at four recordings can tell which one
   // covered the thing they are trying to remember.
-  function openDebriefingsModal(list) {
+  function openRecordingsModal(title, list) {
     const pretty = (d) => d
       ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
       : "";
     $("eval-modal-body").innerHTML = `
-      <h2>Your Debriefing Calls</h2>
-      <div class="em-meta">${list.length} recording${list.length === 1 ? "" : "s"}, most recent first.</div>
+      <h2>${escapeHtml(title)}</h2>
+      <div class="em-meta">${list.length} recording${list.length === 1 ? "" : "s"}${list.length > 1 ? ", most recent first" : ""}.</div>
       <div class="db-pub-list">
         ${list.map((d, i) => `
           <div class="db-pub-row">
             <div class="db-pub-main">
               <div class="db-pub-label">${escapeHtml(d.label || "Debriefing Call")}</div>
               ${d.call_date ? `<div class="db-pub-date">${escapeHtml(pretty(d.call_date))}</div>` : ""}
+              <!-- Greg (11/6/26): the passcode belongs with the link. A
+                   recording the client cannot unlock is one they cannot
+                   watch, and the Team Lead is not always there to ask. -->
+              ${d.passcode ? `<div class="db-pub-pass">Passcode: <strong>${escapeHtml(d.passcode)}</strong></div>` : ""}
             </div>
             ${d.url
               ? `<a class="db-pub-open" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">Watch &#8599;</a>`
@@ -1600,6 +1629,8 @@
           ...workflow,
           closeout_recording_url: coRow.recording_url || null,
           closeout_recording_storage_path: coRow.recording_storage_path || null,
+          // Migration 192 widened this RPC's return by one column.
+          closeout_recording_passcode: coRow.recording_passcode || null,
         };
       }
     } catch (e) { /* leave the Close-Out row empty */ }

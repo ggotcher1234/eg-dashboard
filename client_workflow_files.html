@@ -277,6 +277,11 @@
   .db-main { flex: 1; min-width: 0; }
   .db-label { font-size: 13.5px; font-weight: 600; color: var(--text); }
   .db-date { font-size: 12px; color: var(--muted); margin-top: 1px; font-variant-numeric: tabular-nums; }
+  .db-pass {
+    font-family: inherit; font-size: 12.5px; padding: 5px 8px; width: 150px; flex: 0 0 auto;
+    border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--text);
+  }
+  .db-pass:focus { border-color: var(--accent); outline: none; }
   .db-open { font-family: inherit; font-size: 12.5px; font-weight: 700; color: var(--navy-light);
              background: none; border: none; padding: 4px 2px; cursor: pointer; text-decoration: none; white-space: nowrap; }
   .db-open:hover { text-decoration: underline; }
@@ -898,6 +903,10 @@
               <div class="wf-action-row">
                 <div id="wf-closeout-email"></div>
                 <div id="wf-closeout-file"></div>
+                <!-- The recording's passcode, beside the recording (Greg,
+                     11/6/26). Only appears once something is attached --
+                     there is nothing to unlock before that. -->
+                <div id="wf-closeout-pass"></div>
                 <div id="wf-closeout-actions"></div>
                 <div id="wf-closeout-share"></div>
               </div>
@@ -1900,6 +1909,7 @@
     // rather than from workflowData.
     await loadDebriefings();
     WORKFLOW_FIELDS.forEach(renderWorkflowFileField);
+    renderCloseoutPasscode();
     renderEvalLinkField();
     renderDiscoveryClientField();
     renderControllingClientField();
@@ -2081,6 +2091,13 @@
               <div class="db-label">${escapeHtml(d.label)}</div>
               <div class="db-date">${escapeHtml(prettyDate(d.call_date))}</div>
             </div>
+            <!-- Greg (11/6/26): "we need to offer a box next to the file/link
+                 for an optional password to be added." A Zoom or Fathom
+                 recording often needs a passcode, and the client cannot
+                 watch it without one. Saved on blur, so there is no button
+                 to forget to press; blank clears it. -->
+            <input type="text" class="db-pass" data-db-pass="${d.id}" placeholder="Passcode (optional)"
+                   value="${escapeHtml(d.passcode || "")}" aria-label="Recording passcode" />
             ${d.url
               ? `<a class="db-open" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">Open &#8599;</a>`
               : `<button type="button" class="db-open" data-db-open="${d.id}">Open &#8599;</button>`}
@@ -2088,6 +2105,10 @@
           </div>`).join("")}
       </div>` : "";
 
+    container.querySelectorAll("[data-db-pass]").forEach((input) => {
+      input.addEventListener("blur", () => saveDebriefingPasscode(input.dataset.dbPass, input.value));
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
+    });
     container.querySelectorAll("[data-db-open]").forEach((b) => {
       const d = debriefings.find((x) => x.id === b.dataset.dbOpen);
       b.addEventListener("click", () => openStoredDocument(d.storage_path));
@@ -2121,6 +2142,10 @@
           <span>Recording link</span>
           <input type="url" id="db-url" placeholder="https://\u2026 (or upload a file instead)" />
         </label>
+        <label class="db-field">
+          <span>Passcode (optional)</span>
+          <input type="text" id="db-pass" placeholder="If the recording needs one" />
+        </label>
         <div class="db-form-actions">
           <button type="button" class="btn-primary btn-sm" id="db-save">Save</button>
           <button type="button" class="btn-secondary btn-sm" id="db-upload">Upload a file</button>
@@ -2136,7 +2161,12 @@
   function readDebriefingForm() {
     const label = ($("db-label").value || "").trim();
     if (!label) { showBanner("Give it a name, so the list says what was reviewed.", "error"); $("db-label").focus(); return null; }
-    return { label, call_date: $("db-date").value || null };
+    const passEl = $("db-pass");
+    return {
+      label,
+      call_date: $("db-date").value || null,
+      passcode: passEl ? (passEl.value || "").trim() || null : null,
+    };
   }
 
   function pickDebriefingFile() {
@@ -2154,6 +2184,16 @@
     picker.click();
   }
 
+  async function saveDebriefingPasscode(id, value) {
+    const row = debriefings.find((d) => d.id === id);
+    const passcode = (value || "").trim() || null;
+    if (!row || (row.passcode || null) === passcode) return;
+    const { error } = await sb.from("client_debriefings").update({ passcode }).eq("id", id);
+    if (error) { showBanner("Couldn't save the passcode: " + error.message, "error"); return; }
+    row.passcode = passcode;
+    showBanner(passcode ? "Passcode saved." : "Passcode cleared.", "success");
+  }
+
   async function saveDebriefing(storagePath) {
     const base = readDebriefingForm();
     if (!base) return;
@@ -2167,6 +2207,7 @@
       call_date: base.call_date,
       storage_path: storagePath || null,
       url: url || null,
+      passcode: base.passcode,
       uploaded_by: currentUser && currentUser.id,
     });
     if (error) { showBanner("Couldn't save it: " + error.message, "error"); return; }
@@ -2286,6 +2327,33 @@
   // the clipboard so a Team Lead could write their own email. It went with
   // the dropdown on 10/13/26 -- the one email now carries that link itself.
   // If it is ever wanted back, it is in the history at cce6c30.
+
+  // The Close-Out call recording's passcode. Same bargain as the
+  // debriefings': saved on blur, blank clears it, and it rides to the
+  // client's dashboard beside the recording -- a passcode the client cannot
+  // see is a passcode that does not work.
+  function renderCloseoutPasscode() {
+    const box = $("wf-closeout-pass");
+    if (!box) return;
+    const attached = workflowData
+      && (workflowData.closeout_recording_url || workflowData.closeout_recording_storage_path);
+    if (!attached) { box.innerHTML = ""; return; }
+
+    box.innerHTML = `<input type="text" class="db-pass" id="closeout-pass" placeholder="Passcode (optional)"
+      value="${escapeHtml(workflowData.closeout_recording_passcode || "")}" aria-label="Recording passcode" />`;
+    const input = $("closeout-pass");
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
+    input.addEventListener("blur", async () => {
+      const passcode = (input.value || "").trim() || null;
+      if ((workflowData.closeout_recording_passcode || null) === passcode) return;
+      const { error } = await sb.from("client_content")
+        .update({ closeout_recording_passcode: passcode })
+        .eq("client_id", currentClient.id);
+      if (error) { showBanner("Couldn't save the passcode: " + error.message, "error"); return; }
+      workflowData.closeout_recording_passcode = passcode;
+      showBanner(passcode ? "Passcode saved." : "Passcode cleared.", "success");
+    });
+  }
 
   function renderEvalLinkField() {
     // Greg (10/10/26): "now let's move the create email button from the
