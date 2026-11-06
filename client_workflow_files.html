@@ -278,6 +278,11 @@
   .wf-btn-icon-link::before { content: "\1F517\00A0"; }
   .wf-btn-icon-email::before { content: "\2709\00A0"; }
   .wf-btn-icon-email:disabled::before { content: ""; }
+  /* "Emailed Draft Email: <date>" under the Controlling Document's Create
+     Email button (Greg, 11/6/26). Empty until the draft has been taken, so
+     it collapses instead of reserving a blank line. */
+  .wf-emailed-stamp { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+  .wf-emailed-stamp:empty { display: none; }
   /* ---------- Debriefing list (Greg, 11/1/26) ----------
      One line per call: what was reviewed, when, and a way in. It is a list
      rather than the single file cell the other rows use, so it gets its own
@@ -2837,9 +2842,12 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
       `;
     }
 
-    container.innerHTML = `<button type="button" class="wf-btn wf-btn-icon-email" id="cd-email-create-btn">Create Email</button>` + responseHtml;
+    container.innerHTML = `<button type="button" class="wf-btn wf-btn-icon-email" id="cd-email-create-btn">Create Email</button>`
+      + `<div class="wf-emailed-stamp" id="cd-emailed-stamp"></div>`
+      + responseHtml;
 
     container.querySelector("#cd-email-create-btn").addEventListener("click", openControllingEmailModal);
+    renderControllingEmailedStamp();
 
     if (controllingResponse) {
       const toggleBtn = container.querySelector("#cd-response-toggle-btn");
@@ -2858,6 +2866,39 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
       const deleteBtn = container.querySelector("#cd-response-delete-btn");
       if (deleteBtn) deleteBtn.addEventListener("click", deleteControllingResponse);
     }
+  }
+
+  // Greg (11/6/26): "let's capture the date the email of the CD draft was
+  // created with Emailed Draft Email: Date". Until the client submits their
+  // rankings there is nothing on this row to say the document ever went out,
+  // so the line answers "did I send this, and when?" without a trip to Sent
+  // Mail. Stamped when the draft is taken, not when the composer opens --
+  // opening one to re-read the wording is not sending it.
+  function renderControllingEmailedStamp() {
+    const el = $("cd-emailed-stamp");
+    if (!el) return;
+    const at = workflowData && workflowData.controlling_draft_emailed_at;
+    if (!at) { el.textContent = ""; return; }
+    const when = new Date(at).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+    const by = workflowData.controlling_draft_emailed_by;
+    const row = (listData.team || []).find((r) => r.user_id === by && r.users && r.users.full_name);
+    el.textContent = `Emailed Draft Email: ${when}${row ? " by " + row.users.full_name : ""}`;
+  }
+
+  async function recordControllingDraftEmailed() {
+    if (!currentClient) return;
+    const at = new Date().toISOString();
+    const by = currentUser && currentUser.id;
+    const { error } = await sb.from("client_content")
+      .update({ controlling_draft_emailed_at: at, controlling_draft_emailed_by: by })
+      .eq("client_id", currentClient.id);
+    // The draft is already on its way to the mail client by now. A stamp that
+    // did not save is not worth a second banner on top of that one.
+    if (error) { console.error("Couldn't stamp the Controlling Document email:", error.message); return; }
+    workflowData = workflowData || {};
+    workflowData.controlling_draft_emailed_at = at;
+    workflowData.controlling_draft_emailed_by = by;
+    renderControllingEmailedStamp();
   }
 
   async function deleteControllingResponse() {
@@ -3246,6 +3287,7 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
   $("cdem-mailto-btn").addEventListener("click", () => {
     try { navigator.clipboard.writeText($("cdem-body-text").value); } catch (e) { /* Copy Email is the fallback */ }
     showBanner("Draft opening, letter copied \u2014 right-click in the message and choose Paste.", "success");
+    recordControllingDraftEmailed();
   });
 
   $("cdem-close").addEventListener("click", () => closeEmailOverlay("cd-email-overlay"));
@@ -3262,6 +3304,7 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
     try {
       await navigator.clipboard.writeText(text);
       showBanner("Email text copied — paste it into your email client.", "success");
+      recordControllingDraftEmailed();
     } catch (e) {
       // Nothing is on screen to select any more, so put it back first.
       $("cdem-fields").classList.remove("hidden");
