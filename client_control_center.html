@@ -666,8 +666,6 @@
      character what the client receives. */
   .welcome-field textarea { line-height: 1.6; resize: vertical; min-height: 460px; }
   .welcome-field textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  .welcome-paste-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase;
-                         letter-spacing: 0.4px; color: var(--muted); margin-bottom: 7px; }
   .welcome-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   /* Two buttons in the order they are pressed, and the order said out loud:
      the clipboard has to be loaded before the message is open, or the Team
@@ -1260,8 +1258,16 @@
                  message as well -- that half was what produced an empty
                  compose window and a full clipboard, which is the thing he
                  did not want a Team Lead left holding. -->
-            <div class="welcome-paste-label">Paste to:</div>
-            <!-- Greg (11/3/26): "can we time stamp the scheduling letter."
+            <!-- Greg (11/6/26): "Use one button labeled Open & Paste. remove
+                 the Paste to label." Two buttons and a heading to do one
+                 thing was three decisions for a Specialist who only wants
+                 the letter in a message. "Outlook Email" opened an addressed
+                 draft and copied the letter; "Your Email" only copied it.
+                 The first does everything the second did, so it is the one
+                 that stays, renamed for what it actually does. If the mail
+                 client does not open, the letter is already on the
+                 clipboard, so nothing is lost.
+                 Greg (11/3/26): "can we time stamp the scheduling letter."
                  The letter leaves from the Team Lead's own mail, so the app
                  cannot know it was sent -- what it can know is when
                  somebody took it, which is the moment either button put it
@@ -1271,8 +1277,7 @@
                  in the button row, the way the Project Files rows carry
                  theirs. -->
             <div class="welcome-actions">
-              <button type="button" class="btn-primary btn-sm" id="welcome-open">Outlook Email</button>
-              <button type="button" class="btn-secondary btn-sm" id="welcome-copy">Your Email</button>
+              <button type="button" class="btn-primary btn-sm" id="welcome-open">Open &amp; Paste</button>
               <div class="welcome-stamp" id="welcome-stamp"></div>
             </div>
           </div>
@@ -3944,34 +3949,22 @@
       to: $("welcome-to").value, cc: $("welcome-cc").value,
       subject: $("welcome-subject").value, body: $("welcome-body").value,
     });
-    showBanner(copied
-      ? "Draft opening, letter copied \u2014 right-click in the message and choose Paste."
-      : "Draft opening, but the letter could not be copied \u2014 use Your Email.", copied ? "success" : "error");
-    recordWelcomeTaken();
-  });
 
-  $("welcome-copy").addEventListener("click", async () => {
-    const btn = $("welcome-copy");
-    btn.disabled = true;
-    let ok = true;
-    try {
-      await navigator.clipboard.writeText($("welcome-body").value);
-    } catch (e) {
-      ok = false;
-    }
-    btn.disabled = false;
-
-    if (!ok) {
-      // The letter is hidden now, so a refused clipboard call has to put it
-      // back on screen before telling anyone to copy it by hand.
+    // The manual-copy rescue the second button used to carry. A browser that
+    // refuses the clipboard call is the one moment the letter has to come
+    // back on screen -- the draft is opening either way, and without this
+    // there is nothing left to paste and nowhere to find it.
+    if (!copied) {
       $("welcome-fields").classList.remove("hidden");
       $("welcome-body-field").classList.remove("hidden");
       const ta = $("welcome-body");
       ta.focus(); ta.select();
-      showBanner("Your browser wouldn't let the page copy for you \u2014 the letter and addresses are below, and the letter is selected, so press " + (WELCOME_PASTE_KEY === "Cmd+V" ? "Cmd+C" : "Ctrl+C") + " to copy it.", "error");
+      showBanner("Draft opening, but your browser wouldn't let the page copy the letter \u2014 it is below and selected, so press " + (WELCOME_PASTE_KEY === "Cmd+V" ? "Cmd+C" : "Ctrl+C") + " to copy it yourself.", "error");
+      recordWelcomeTaken();
       return;
     }
-    showBanner("Letter copied. Paste it into a new message with " + WELCOME_PASTE_KEY + " \u2014 you will need to add the addresses and subject yourself, or use Open draft & copy letter instead.", "success");
+
+    showBanner("Draft opening, letter copied \u2014 paste it into the message with " + WELCOME_PASTE_KEY + ".", "success");
     recordWelcomeTaken();
   });
 
