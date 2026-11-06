@@ -383,8 +383,7 @@
      stack of peers rather than a grid that implies pairing. */
   .listslot-stack { display: flex; flex-direction: column; gap: 14px; }
   .listslot { border: 1px solid var(--border); border-radius: 8px; padding: 16px; background: #fff; }
-  .listslot-title { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 2px; }
-  .listslot-hint { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .listslot-title { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 12px; }
   .listslot-filled {
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
     background: #f4f7f4; border: 1px solid var(--border); border-radius: 6px;
@@ -396,6 +395,19 @@
   .listslot-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .listslot-linkrow { display: flex; gap: 8px; margin-top: 10px; }
   .listslot-linkrow input { flex: 1; min-width: 0; }
+  /* Greg (11/6/26): "allow for 1 file upload/link and one freeform text box
+     where we can paste a list that was in an unformatted email to us." The
+     text box is NOT a third kind of the same thing -- it sits alongside the
+     file/link, because the list often arrives half in an attachment and half
+     pasted into the body of the mail. Saving one never clears the other. */
+  .listslot-textrow { margin-top: 10px; }
+  .listslot-textrow textarea {
+    width: 100%; min-height: 96px; resize: vertical; font: inherit; font-size: 13px;
+    line-height: 1.5; padding: 9px 11px; border: 1px solid var(--border);
+    border-radius: 6px; background: #fff; color: var(--text); box-sizing: border-box;
+  }
+  .listslot-textrow textarea:focus { outline: none; border-color: var(--accent); }
+  .listslot-textactions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
   /* "Other" needs to say what it is before the list under it means
      anything, so its name sits above the slot's own controls. */
   .listslot-naming { margin-bottom: 12px; }
@@ -1080,7 +1092,6 @@
                  Center header. Removed. Step 1 is now just the company's
                  online links, with the dashboard logo at the top. -->
             <h3>Website &amp; Social Media Links</h3>
-            <div class="wizard-panel-hint">Where clients and partners can find this company online. The logo appears in the client dashboard header.</div>
 
             <div class="wizard-subcard">
               <form id="company-form-2">
@@ -1096,7 +1107,6 @@
                     <div id="co-logo-file"></div>
                     <button type="button" class="btn-secondary btn-sm autofill-web-btn" data-autofill-scope="links">&#10024; Auto-fill from website</button>
                   </div>
-                  <div class="field-hint">Displayed in the client dashboard header. Auto-fill reads the Website below for a logo and social links &mdash; it only fills what's still empty, and tells you what it couldn't find.</div>
                   <div id="autofill-logo-suggest" class="hidden"></div>
                 </div>
                 <div class="field">
@@ -1161,13 +1171,11 @@
                Description & Business Issues -->
           <div class="wizard-panel-card wizard-panel" data-step="1">
             <h3>Company Description &amp; Business Issues</h3>
-            <div class="wizard-panel-hint">Appears on the client dashboard.</div>
 
             <div class="wizard-subcard" style="margin-top:0; padding-top:0; border-top:none;">
               <div class="subcard-title">Engagement Description</div>
               <div class="autofill-row" style="margin-bottom:8px;">
                 <button type="button" class="btn-secondary btn-sm autofill-web-btn" data-autofill-scope="description">&#10024; Auto-fill from website</button>
-                <span class="field-hint" style="margin:0;">Drafts this from the company's website. Fills the logo and social links on the next step too, if they're still empty.</span>
               </div>
               <div class="rt-toolbar" data-rt-target="co-description">
                 <button type="button" data-rt="bold" title="Bold"><strong>B</strong></button>
@@ -1179,7 +1187,6 @@
 
             <div class="wizard-subcard">
               <div class="subcard-title">Top Business Issues</div>
-              <div class="card-hint" style="margin-top:-6px;">Pulled from the intake application — editable here.</div>
               <div class="rt-toolbar" data-rt-target="co-top-issues">
                 <button type="button" data-rt="bold" title="Bold"><strong>B</strong></button>
                 <button type="button" data-rt="italic" title="Italic"><em>I</em></button>
@@ -1192,7 +1199,6 @@
           <!-- Step 3 (was 4): Company Contacts (+ Team Members read-only) -->
           <div class="wizard-panel-card wizard-panel hidden" data-step="3">
             <h3>Company Contacts</h3>
-            <div class="wizard-panel-hint">Who NCEG staff should coordinate with at this company.</div>
             <span class="accordion-count" id="contacts-count" style="display:inline-block; margin-bottom:10px;"></span>
             <div class="contact-scroll-wrap">
               <div id="contacts-list"></div>
@@ -1201,7 +1207,6 @@
 
             <div class="wizard-subcard">
               <div class="subcard-title">CC List</div>
-              <div class="card-hint" style="margin-top:-6px;">People to keep in the loop on engagement emails who aren't already a Company Contact above.</div>
               <span class="accordion-count" id="cc_list-count" style="display:inline-block; margin-bottom:10px;"></span>
               <div class="contact-scroll-wrap">
                 <div id="cc_list-list"></div>
@@ -1211,18 +1216,15 @@
 
             <div class="wizard-subcard">
               <div class="subcard-title">Copied on Correspondence</div>
-              <div class="card-hint" style="margin-top:-6px;">Contacts at this engagement's Program who get copied on its emails. Chosen when the application was accepted &mdash; change it here if this engagement's circle is different.</div>
               <div id="engagement-cc-section"><div class="field-hint">Loading&hellip;</div></div>
             </div>
 
             <div class="wizard-subcard">
               <div class="subcard-title">Team Members</div>
-              <div class="card-hint" style="margin-top:-6px;">Managed from Team &amp; Hours on the engagement.</div>
               <span class="accordion-count" id="team-count" style="display:inline-block; margin-bottom:10px;"></span>
               <div id="team-list"></div>
               <div style="margin-top:18px; padding-top:14px; border-top:1px solid #f0f2f4;">
                 <div style="font-size:13.5px; font-weight:600; margin-bottom:4px;">Economic Development Partner Contacts</div>
-                <div class="field-hint" style="margin-bottom:10px;">Select which of this client's partner-org contacts also show on the public Economic Gardening Team list. Manage the partner's contact list itself from the Econ Dev Partners page.</div>
                 <div id="partner-contacts-section"><div class="field-hint">Loading…</div></div>
               </div>
             </div>
@@ -1238,7 +1240,6 @@
                four read as one stack rather than a 2x2 grid. -->
           <div class="wizard-panel-card wizard-panel hidden" data-step="4">
             <h3>Lists</h3>
-            <div class="wizard-panel-hint">Attach the client's lists however you already have them &mdash; upload a file (CSV, Excel, PDF, whatever it is) or paste a link to one. Each slot holds one or the other.</div>
             <div class="listslot-stack">
               <div class="listslot" id="slot-competitors"></div>
               <div class="listslot" id="slot-customers"></div>
@@ -1251,7 +1252,6 @@
                own Resource Vault (TL) page, renamed "Resources"). -->
           <div class="wizard-panel-card wizard-panel hidden" data-step="5">
             <h3>Resources</h3>
-            <div class="wizard-panel-hint">Each resource can be a Link URL (opens in a new tab -- a video, quiz, external doc, etc.) or an uploaded file (downloads), whichever fits. Add anything client-specific below; resources set up for every client also show here.</div>
             <span class="accordion-count" id="resource_vault-count" style="display:inline-block; margin-bottom:10px;"></span>
             <div class="rv-table-wrap">
               <div id="resource_vault-list"></div>
@@ -1273,7 +1273,6 @@
                 <label for="rv-new-file">File (optional)</label>
                 <input type="file" id="rv-new-file" />
               </div>
-              <div class="field-hint" style="flex:1 1 220px; margin-bottom:10px;">Use one or the other &mdash; a link URL opens in a new tab, a file downloads. If both are set, the link wins.</div>
               <button type="submit" class="btn-secondary btn-sm" id="rv-add-btn">+ Add Resource (this client only)</button>
               <!-- Greg (9/24/26): "logged in as admin and need to be able to add
                    resource to ALL clients." That was always possible, but only
@@ -2394,35 +2393,46 @@
   const LIST_SLOTS = [
     {
       key: "competitors", mount: "slot-competitors", label: "Competitors",
-      hint: "Who this client competes against.",
       pathColumn: "competitor_list_storage_path", urlColumn: "competitor_list_url",
+      textColumn: "competitor_list_text",
     },
     {
       key: "customers", mount: "slot-customers", label: "Top Customers",
-      hint: "The accounts that matter most to them.",
       pathColumn: "customer_list_storage_path", urlColumn: "customer_list_url",
+      textColumn: "customer_list_text",
     },
     {
       key: "keywords", mount: "slot-keywords", label: "Keywords",
-      hint: "The search terms their buyers actually use.",
       pathColumn: "keyword_list_storage_path", urlColumn: "keyword_list_url",
+      textColumn: "keyword_list_text",
     },
     {
       // The only slot that has to say what it is before its contents mean
       // anything -- the name the TL types becomes the slot's heading.
+      // No textColumn: Greg named Competitors, Top Customers and Keywords.
       key: "other", mount: "slot-other", label: "Other",
-      hint: "Anything else worth keeping with the engagement.",
       pathColumn: "other_list_storage_path", urlColumn: "other_list_url",
       labelColumn: "other_list_label", labelPrompt: "What is this list?",
       labelPlaceholder: "e.g. Trade shows, Distributors, Patent filings",
     },
   ];
   let listSlotData = {};
+  // The pasted-list columns arrive with 189_list_slot_pasted_text.sql. If this
+  // page is live before that migration is, asking for them fails the whole
+  // select and every slot would render as though the client had never attached
+  // anything. So the text columns are asked for separately: no columns, no
+  // paste box, and the file/link half of each slot carries on untouched.
+  let listSlotTextReady = true;
 
   async function loadListSlots(clientId) {
-    const columns = LIST_SLOTS.flatMap((s) => [s.pathColumn, s.urlColumn, s.labelColumn].filter(Boolean)).join(", ");
-    const { data } = await sb.from("client_content").select(columns).eq("client_id", clientId).maybeSingle();
-    listSlotData = data || {};
+    const base = LIST_SLOTS.flatMap((s) => [s.pathColumn, s.urlColumn, s.labelColumn].filter(Boolean));
+    const textCols = LIST_SLOTS.map((s) => s.textColumn).filter(Boolean);
+    let res = await sb.from("client_content").select(base.concat(textCols).join(", ")).eq("client_id", clientId).maybeSingle();
+    if (res.error) {
+      listSlotTextReady = false;
+      res = await sb.from("client_content").select(base.join(", ")).eq("client_id", clientId).maybeSingle();
+    }
+    listSlotData = res.data || {};
     LIST_SLOTS.forEach(renderListSlot);
   }
 
@@ -2443,6 +2453,8 @@
     if (!mount) return;
     const path = listSlotData[slot.pathColumn];
     const url = listSlotData[slot.urlColumn];
+    const canPaste = slot.textColumn && listSlotTextReady;
+    const pasted = canPaste ? (listSlotData[slot.textColumn] || "") : "";
     const filled = path
       ? `<div class="listslot-filled">
            <span class="listslot-kind">File</span>
@@ -2453,7 +2465,7 @@
            <span class="listslot-kind">Link</span>
            <a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>
          </div>`
-      : `<div class="listslot-empty">Nothing attached yet.</div>`;
+      : pasted ? "" : `<div class="listslot-empty">Nothing attached yet.</div>`;
 
     const customName = slot.labelColumn ? (listSlotData[slot.labelColumn] || "").trim() : "";
     const naming = slot.labelColumn ? `
@@ -2465,9 +2477,20 @@
         </div>
       </div>` : "";
 
+    // The paste box stands on its own below the file/link pair: a list that
+    // came in as the body of an email has no file and no URL, and one that
+    // came as both keeps both.
+    const pasteBox = canPaste ? `
+      <div class="listslot-textrow">
+        <textarea id="${slot.mount}-text" placeholder="…or paste a list">${escapeHtml(pasted)}</textarea>
+        <div class="listslot-textactions">
+          <button type="button" class="btn-secondary btn-sm" data-slot-text="${slot.key}">Save list</button>
+          ${pasted ? `<button type="button" class="btn-danger btn-sm" data-slot-textclear="${slot.key}">Clear list</button>` : ""}
+        </div>
+      </div>` : "";
+
     mount.innerHTML = `
       <div class="listslot-title">${escapeHtml(customName || slot.label)}</div>
-      <div class="listslot-hint">${escapeHtml(slot.hint)}</div>
       ${naming}
       ${filled}
       <div class="listslot-actions">
@@ -2479,6 +2502,7 @@
         <input type="url" id="${slot.mount}-url" placeholder="…or paste a link" value="${escapeHtml(url || "")}" />
         <button type="button" class="btn-secondary btn-sm" data-slot-link="${slot.key}">Save link</button>
       </div>
+      ${pasteBox}
     `;
 
     const picker = $(`${slot.mount}-file`);
@@ -2491,6 +2515,10 @@
     if (removeBtn) removeBtn.addEventListener("click", () => clearListSlot(slot));
     const nameBtn = mount.querySelector(`[data-slot-name]`);
     if (nameBtn) nameBtn.addEventListener("click", () => saveListSlotName(slot));
+    const textBtn = mount.querySelector(`[data-slot-text]`);
+    if (textBtn) textBtn.addEventListener("click", () => saveListSlotText(slot));
+    const textClearBtn = mount.querySelector(`[data-slot-textclear]`);
+    if (textClearBtn) textClearBtn.addEventListener("click", () => clearListSlotText(slot));
   }
 
   async function saveListSlot(slot, patch) {
@@ -2522,6 +2550,22 @@
     if (!(await saveListSlot(slot, { [slot.urlColumn]: url, [slot.pathColumn]: null }))) return;
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
     showBanner(`${listSlotName(slot)} link saved.`, "success");
+  }
+
+  // Saving the pasted list touches only its own column -- an uploaded file
+  // or a saved link on the same slot is left exactly as it was.
+  async function saveListSlotText(slot) {
+    const box = $(`${slot.mount}-text`);
+    if (!box) return;
+    const text = (box.value || "").trim();
+    if (!text) { showBanner("Paste a list first, or upload a file instead.", "error"); return; }
+    if (!(await saveListSlot(slot, { [slot.textColumn]: text }))) return;
+    showBanner(`${listSlotName(slot)} list saved.`, "success");
+  }
+
+  async function clearListSlotText(slot) {
+    if (!(await saveListSlot(slot, { [slot.textColumn]: null }))) return;
+    showBanner(`${listSlotName(slot)} pasted list cleared.`, "success");
   }
 
   async function saveListSlotName(slot) {
