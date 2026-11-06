@@ -188,6 +188,11 @@
   .save-row button:disabled { opacity: 0.55; cursor: default; }
   .save-hint { font-size: 12px; color: var(--muted); }
 
+  .notes-pass {
+    font-family: inherit; font-size: 13px; padding: 6px 9px; width: 190px; margin-top: 8px;
+    border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--text);
+  }
+  .notes-pass:focus { border-color: var(--accent); outline: none; }
   /* Attach a File or Link for Call Notes -- same upload-or-link + Change
      menu pattern as the Workflow Files page. */
   .wf-btn {
@@ -434,8 +439,17 @@
                aria-label="Discovery call notes" data-placeholder="Discovery call notes&hellip;"></div>
         </div>
         <div class="field">
-          <label>Attach a File or Link</label>
+          <!-- Greg (11/6/26): "Change Attach a File or Link text to Attach
+               Discovery Call Recording File or Link." What lands here is the
+               recording of the call, and it is what the Discovery Document
+               share page offers a candidate researcher as "Watch the
+               Discovery Call" -- the old label could have meant anything. -->
+          <label>Attach Discovery Call Recording File or Link</label>
           <div id="notes-attachment"></div>
+          <!-- The passcode, beside the recording, same as the Debriefing and
+               Close-Out rows got in 192. Only shown once something is
+               attached; it rides to the share page with the link. -->
+          <div id="notes-passcode"></div>
         </div>
         <div class="save-row">
           <button type="button" id="save-btn">Submit Discovery Call Notes</button>
@@ -2098,7 +2112,34 @@
   // by nothing, and is what the project kit exports as "Discovery Call
   // Notes" -- which is exactly what an attachment at the bottom of this
   // form is.
+  // Saved on blur, blank clears it. A Zoom or Fathom recording often needs
+  // a passcode, and a researcher sizing up the work cannot watch the call
+  // without one.
+  function renderNotesPasscode() {
+    const box = $("notes-passcode");
+    if (!box) return;
+    const attached = contentRow
+      && (contentRow.discovery_notes_url || contentRow.discovery_notes_storage_path);
+    if (!attached) { box.innerHTML = ""; return; }
+
+    box.innerHTML = `<input type="text" id="notes-pass" class="notes-pass" placeholder="Passcode (optional)"
+      value="${escapeHtml(contentRow.discovery_notes_passcode || "")}" aria-label="Recording passcode" />`;
+    const input = $("notes-pass");
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
+    input.addEventListener("blur", async () => {
+      const passcode = (input.value || "").trim() || null;
+      if ((contentRow.discovery_notes_passcode || null) === passcode) return;
+      const { error } = await sb.from("client_content")
+        .update({ discovery_notes_passcode: passcode })
+        .eq("client_id", currentClient.id);
+      if (error) { showBanner("Couldn't save the passcode: " + error.message, "error"); return; }
+      contentRow.discovery_notes_passcode = passcode;
+      showBanner(passcode ? "Passcode saved." : "Passcode cleared.", "success");
+    });
+  }
+
   function renderNotesAttachment() {
+    renderNotesPasscode();
     const container = $("notes-attachment");
     const path = contentRow && contentRow.discovery_notes_storage_path;
     const url = contentRow && contentRow.discovery_notes_url;
