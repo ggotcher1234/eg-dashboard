@@ -653,7 +653,7 @@
   .welcome-note { font-size: 13px; color: var(--danger); margin-bottom: 12px;
                   line-height: 1.5; white-space: pre-line; }
   .welcome-note:empty { display: none; }
-  .welcome-stamp { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+  .welcome-stamp { font-size: 12.5px; color: var(--muted); }
   .welcome-stamp:empty { display: none; }
   .welcome-field { margin-bottom: 12px; }
   .welcome-field label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
@@ -1261,16 +1261,20 @@
                  compose window and a full clipboard, which is the thing he
                  did not want a Team Lead left holding. -->
             <div class="welcome-paste-label">Paste to:</div>
-            <div class="welcome-actions">
-              <button type="button" class="btn-primary btn-sm" id="welcome-open">Outlook Email</button>
-              <button type="button" class="btn-secondary btn-sm" id="welcome-copy">Your Email</button>
-            </div>
             <!-- Greg (11/3/26): "can we time stamp the scheduling letter."
                  The letter leaves from the Team Lead's own mail, so the app
                  cannot know it was sent -- what it can know is when
                  somebody took it, which is the moment either button put it
-                 on the clipboard. Worded as what it is. -->
-            <div class="welcome-stamp" id="welcome-stamp"></div>
+                 on the clipboard.
+                 Greg (11/6/26): "use this format for scheduling, discovery
+                 and controlling" -- so it reads "Emailed: <date>" and rides
+                 in the button row, the way the Project Files rows carry
+                 theirs. -->
+            <div class="welcome-actions">
+              <button type="button" class="btn-primary btn-sm" id="welcome-open">Outlook Email</button>
+              <button type="button" class="btn-secondary btn-sm" id="welcome-copy">Your Email</button>
+              <div class="welcome-stamp" id="welcome-stamp"></div>
+            </div>
           </div>
 
           <div id="cc-pane-iframe" class="cc-pane-inner hidden">
@@ -3885,19 +3889,27 @@
   const WELCOME_PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "")
     ? "Cmd+V" : "Ctrl+V";
 
-  // The stamp is "last taken", not "sent", and it is deliberately not a
-  // gate on anything: taking the letter twice is normal (a resend, a
-  // second CEO), so the line simply moves to the newer time.
+  // Greg (11/6/26): "use this format for scheduling, discovery and
+  // controlling" -- the "Emailed: November 6, 2026" line the three Project
+  // Files rows carry. Same line here, so the four customer emails of an
+  // engagement all answer "did I send this, and when?" the same way. It
+  // used to read "Last taken Nov 6, 2026 at 2:31 PM"; the time of day was
+  // never the question being asked.
+  //
+  // Still "taken" underneath, not "sent" -- the letter goes from the Team
+  // Lead's own mail client, which this page never sees -- and still not a
+  // gate on anything: taking it twice is normal (a resend, a second CEO),
+  // so the line simply moves to the newer date.
   function renderWelcomeStamp() {
     const el = $("welcome-stamp");
     if (!el) return;
     const at = welcomeContent && welcomeContent.scheduling_letter_taken_at;
     if (!at) { el.textContent = ""; return; }
     const who = (usersById()[welcomeContent.scheduling_letter_taken_by] || {}).full_name;
-    const when = new Date(at).toLocaleString(undefined, {
-      month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+    const when = new Date(at).toLocaleDateString(undefined, {
+      month: "long", day: "numeric", year: "numeric",
     });
-    el.textContent = `Last taken ${when}${who ? " by " + who : ""}.`;
+    el.textContent = `Emailed: ${when}${who ? " by " + who : ""}`;
   }
 
   async function recordWelcomeTaken() {

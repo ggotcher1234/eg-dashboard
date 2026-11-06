@@ -2852,11 +2852,19 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
       `;
     }
 
+    // Greg (11/6/26): "use this format for scheduling, discovery and
+    // controlling", pointing at the Discovery row -- which carries Copy
+    // share link beside Create Email. The Controlling Document has had the
+    // same kind of public link all along (it is the one that worked for a
+    // candidate researcher when the Discovery Document did not), it just had
+    // no way to hand it over except by drafting the whole email.
     container.innerHTML = `<button type="button" class="wf-btn wf-btn-icon-email" id="cd-email-create-btn">Create Email</button>`
+      + `<button type="button" class="wf-btn wf-btn-icon-link" id="cd-share-btn">Copy share link</button>`
       + `<div class="wf-emailed-stamp" id="cd-emailed-stamp"></div>`
       + responseHtml;
 
     container.querySelector("#cd-email-create-btn").addEventListener("click", openControllingEmailModal);
+    container.querySelector("#cd-share-btn").addEventListener("click", copyControllingShareLink);
     renderEmailedStamp("controlling");
 
     if (controllingResponse) {
@@ -2930,6 +2938,24 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
     workflowData[spec.atColumn] = at;
     workflowData[spec.byColumn] = by;
     renderEmailedStamp(key);
+  }
+
+  // The twin of copyDiscoveryShareLink(). It goes through
+  // ensureControllingDocLinkUrl() rather than building the URL inline, so
+  // the same refusal applies as when emailing it: a Controlling Document
+  // with no questions on it yet is not something to hand anybody a link to.
+  async function copyControllingShareLink() {
+    const btn = $("cd-share-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Preparing\u2026"; }
+    const url = await ensureControllingDocLinkUrl();
+    if (btn) { btn.disabled = false; btn.textContent = "Copy share link"; }
+    if (!url) return;
+
+    let ok = true;
+    try { await navigator.clipboard.writeText(url); } catch (e) { ok = false; }
+    showBanner(ok
+      ? "Share link copied. Anyone you send it to can read and rank the Controlling Document without an account."
+      : "Couldn't copy for you. The link is: " + url, ok ? "success" : "error");
   }
 
   async function deleteControllingResponse() {
