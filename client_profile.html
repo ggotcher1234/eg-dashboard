@@ -432,6 +432,13 @@
   }
   .listslot-list a { color: var(--accent-dark); text-decoration: underline; }
   .listslot-list a:hover { color: var(--accent); }
+  /* A pasted list only exists once it has been saved, and this step sits far
+     enough down the page that the banner at the top is out of sight (Greg,
+     11/6/26, screenshot of a list typed but not yet saved). The outcome --
+     and the warning that there isn't one yet -- belongs beside the button. */
+  .listslot-status { font-size: 12px; margin-top: 6px; min-height: 15px; color: var(--muted); }
+  .listslot-status.is-dirty { color: #a4660b; font-weight: 600; }
+  .listslot-status.is-ok { color: var(--accent-dark); font-weight: 600; }
   /* "Other" needs to say what it is before the list under it means
      anything, so its name sits above the slot's own controls. */
   .listslot-naming { margin-bottom: 12px; }
@@ -2550,6 +2557,7 @@
             <button type="button" class="btn-secondary btn-sm ${pasted ? "" : "hidden"}" data-slot-textcancel="${slot.key}">Cancel</button>
           </div>
         </div>
+        <div class="listslot-status" id="${slot.mount}-status"></div>
       </div>`;
 
     mount.innerHTML = `
@@ -2613,6 +2621,18 @@
     });
     on("[data-slot-text]", () => saveListSlotText(slot));
     on("[data-slot-textclear]", () => clearListSlotText(slot));
+
+    const box = $(`${slot.mount}-text`);
+    if (box) box.addEventListener("input", () => {
+      setListSlotStatus(slot, box.value.trim() === pasted.trim() ? "" : "Not saved yet \u2014 click Save list.", "is-dirty");
+    });
+  }
+
+  function setListSlotStatus(slot, msg, cls) {
+    const el = $(`${slot.mount}-status`);
+    if (!el) return;
+    el.className = "listslot-status" + (msg && cls ? ` ${cls}` : "");
+    el.textContent = msg || "";
   }
 
   function closeAllListSlotMenus() {
@@ -2658,12 +2678,17 @@
     if (!box) return;
     const text = (box.value || "").trim();
     if (!text) { showBanner("Paste a list first, or upload a file instead.", "error"); return; }
-    if (!(await saveListSlot(slot, { [slot.textColumn]: text }))) return;
+    if (!(await saveListSlot(slot, { [slot.textColumn]: text }))) {
+      setListSlotStatus(slot, "Couldn't save \u2014 see the message at the top of this page.", "is-dirty");
+      return;
+    }
+    setListSlotStatus(slot, "Saved.", "is-ok");
     showBanner(`${listSlotName(slot)} list saved.`, "success");
   }
 
   async function clearListSlotText(slot) {
     if (!(await saveListSlot(slot, { [slot.textColumn]: null }))) return;
+    setListSlotStatus(slot, "List cleared.", "is-ok");
     showBanner(`${listSlotName(slot)} pasted list cleared.`, "success");
   }
 
