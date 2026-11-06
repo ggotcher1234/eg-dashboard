@@ -2293,10 +2293,12 @@
     // composer just to lift the URL out of it.
     actions.innerHTML = `
       <button type="button" class="wf-btn wf-btn-icon-email" id="eval-email-create-btn">${EVAL_TRIGGER_LABEL}</button>
+      <button type="button" class="wf-btn" id="eval-open-btn">Preview Evaluation Sheet &#8599;</button>
       <button type="button" class="wf-btn wf-btn-icon-link" id="eval-link-copy-btn">Copy Evaluation Link</button>
       <div class="wf-emailed-stamp" id="ev-emailed-stamp"></div>
     `;
     actions.querySelector("#eval-email-create-btn").addEventListener("click", openEvalEmailModal);
+    actions.querySelector("#eval-open-btn").addEventListener("click", openEvalPreview);
     actions.querySelector("#eval-link-copy-btn").addEventListener("click", copyEvaluationLink);
     renderEmailedStamp("eval");
 
@@ -2443,6 +2445,40 @@
   // client_content.evaluation_link_url (evaluation_public.html / 079 fetches
   // the client's name/sponsor/research questions live from Supabase every
   // time the link is opened, so the URL itself never needs to change).
+  // The Team Lead's own read-only look at the close-out form. No research
+  // gate and nothing saved -- it doesn't touch
+  // client_content.evaluation_link_url, which is only written when the link
+  // is actually about to be sent (Greg, 9/6/26).
+  //
+  // &preview=1 is the whole point: evaluation_public.html then renders with
+  // no questions instead of "isn't ready yet", and refuses to submit.
+  // Submitting closes the engagement (091), and a Team Lead reading the form
+  // must not be one stray click from closing it on the client's behalf.
+  //
+  // Greg (11/6/26): "add the preview back", after it went with the
+  // Evaluation Sheet row. It reads "Preview" rather than "Open" now --
+  // this row already has an Open Document for the close-out recording, and
+  // what this opens is deliberately not the sheet the client gets.
+  function evalPreviewUrl() {
+    return `${PUBLIC_SITE_BASE}evaluation_public.html?client=${currentClient.id}&preview=1`;
+  }
+
+  function openEvalPreview(e) {
+    const btn = e.currentTarget;
+    // Greg (9/4/26): "open close out document goes to a blank webpage" --
+    // window.open(..., "noopener") returns null (the browser severing the
+    // reference, per spec), so `win.location = url` never ran and the tab
+    // sat on about:blank forever. Open without noopener to keep the handle,
+    // then null out .opener by hand -- same tabnabbing protection, while
+    // the new window is still same-origin about:blank and scriptable.
+    const win = window.open("about:blank", "_blank");
+    if (win) win.opener = null;
+    const url = evalPreviewUrl();
+    if (!url) { if (win) win.close(); return; }
+    if (win) win.location = url;
+    else window.open(url, "_blank", "noopener");
+  }
+
   // Through ensureEvalLinkUrl(), like Create Email, so the same refusal
   // applies: an Evaluation Sheet with no research behind it yet is not
   // something to hand the client a link to. Opening the sheet to look at it
