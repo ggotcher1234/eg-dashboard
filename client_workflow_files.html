@@ -222,14 +222,14 @@
      to do with the document itself on the left, the one thing you send to
      the client on the right -- so the email button takes the slack between
      them rather than sitting shoulder to shoulder with the file controls. */
-  .wf-action-row > [id$="-client"]:not(#wf-review-client) > :first-child { margin-left: auto; }
-  /* Close-Out and the Debriefing Call reverse that pair: the email is the
-     first thing used, so it holds the left edge and the file controls take
-     the slack on the right (Greg, 10/10/26, then 10/13/26 for Debriefing).
-     Either the file cell or, before anything is attached, the "+ Add file"
-     trigger is the one that gets pushed. */
-  .wf-action-row > #wf-closeout-file > :first-child,
-  .wf-action-row > #wf-closeout-file:empty + #wf-closeout-actions > :first-child,
+  .wf-action-row > [id$="-client"]:not(#wf-review-client) > :first-child,
+  .wf-action-row > #wf-closeout-email > :first-child { margin-left: auto; }
+  /* The Debriefing Call still reverses that pair: its email is the first
+     thing used, so it holds the left edge and the file controls take the
+     slack on the right (Greg, 10/13/26). Either the file cell or, before
+     anything is attached, the "+ Add file" trigger is the one pushed.
+     Close-Out used to be in here too and moved to the rule above on
+     11/6/26. */
   .wf-action-row > #wf-review-file > :first-child,
   .wf-action-row > #wf-review-file:empty + #wf-review-actions > :first-child { margin-left: auto; }
   /* At phone width the row wraps and the email button lands on its own
@@ -237,8 +237,7 @@
      goes back to the left edge. */
   @media (max-width: 520px) {
     .wf-action-row > [id$="-client"] > :first-child,
-    .wf-action-row > #wf-closeout-file > :first-child,
-    .wf-action-row > #wf-closeout-file:empty + #wf-closeout-actions > :first-child,
+    .wf-action-row > #wf-closeout-email > :first-child,
     .wf-action-row > #wf-review-file > :first-child,
     .wf-action-row > #wf-review-file:empty + #wf-review-actions > :first-child { margin-left: 0; }
   }
@@ -884,14 +883,18 @@
                      separate Evaluation Sheet send. -->
                 <div class="wf-item-title">Schedule Close Out Call Email &mdash; includes a Link to Evaluation Sheet</div>
               </div>
-              <!-- Greg (10/10/26): "make the email button on the left and the
-                   close out recording on the right as that is the order that
-                   they will be used." The row reads as the sequence: ask for
-                   the call, hold it, then file what came out of it. -->
+              <!-- Greg (10/10/26) had the email on the left and the close-out
+                   recording on the right, "the order that they will be used".
+                   On 11/6/26, pointing at the Controlling Document row: "use
+                   this format for the Close-Out Call" -- so it joins the
+                   other rows instead: the document controls on the left, the
+                   one thing you send to the client on the right. The row no
+                   longer tells you the order of use; the numbered step above
+                   it and the heading do. -->
               <div class="wf-action-row">
-                <div id="wf-closeout-email"></div>
                 <div id="wf-closeout-file"></div>
                 <div id="wf-closeout-actions"></div>
+                <div id="wf-closeout-email"></div>
               </div>
             </div>
           </div>
@@ -2307,11 +2310,19 @@
     // it stopped earning its place is the heading above it: this email now
     // carries the sheet's link itself, so "Get Link" was a second route to
     // something the one button already does. One click, no menu.
+    // Greg (11/6/26): "instead of Copy share link, change to Copy Evaluation
+    // Link." The same second button the Discovery and Controlling rows
+    // carry, named for what this row's link actually is -- the sheet the
+    // client fills in, not a document they read. A Team Lead writing their
+    // own note instead of using the drafted one no longer has to open the
+    // composer just to lift the URL out of it.
     actions.innerHTML = `
       <button type="button" class="wf-btn wf-btn-icon-email" id="eval-email-create-btn">${EVAL_TRIGGER_LABEL}</button>
+      <button type="button" class="wf-btn wf-btn-icon-link" id="eval-link-copy-btn">Copy Evaluation Link</button>
       <div class="wf-emailed-stamp" id="ev-emailed-stamp"></div>
     `;
     actions.querySelector("#eval-email-create-btn").addEventListener("click", openEvalEmailModal);
+    actions.querySelector("#eval-link-copy-btn").addEventListener("click", copyEvaluationLink);
     renderEmailedStamp("eval");
 
     // Greg (9/4/26): "we have the link in the email. can't we just have an
@@ -2514,6 +2525,24 @@
   // sent (Greg, 9/6/26).
   function evalPreviewUrl() {
     return `${PUBLIC_SITE_BASE}evaluation_public.html?client=${currentClient.id}&preview=1`;
+  }
+
+  // Through ensureEvalLinkUrl(), like Create Email, so the same refusal
+  // applies: an Evaluation Sheet with no research behind it yet is not
+  // something to hand the client a link to. Opening the sheet to look at it
+  // still skips that gate -- reading a blank form is not sending one.
+  async function copyEvaluationLink() {
+    const btn = $("eval-link-copy-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Preparing\u2026"; }
+    const url = await ensureEvalLinkUrl();
+    if (btn) { btn.disabled = false; btn.textContent = "Copy Evaluation Link"; }
+    if (!url) return;
+
+    let ok = true;
+    try { await navigator.clipboard.writeText(url); } catch (e) { ok = false; }
+    showBanner(ok
+      ? "Evaluation link copied. The client can open and submit it without an account."
+      : "Couldn't copy for you. The link is: " + url, ok ? "success" : "error");
   }
 
   async function ensureEvalLinkUrl() {
