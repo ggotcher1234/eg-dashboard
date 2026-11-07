@@ -1438,7 +1438,7 @@
         if (!p) return;
         const newVal = !p.archived;
         btn.disabled = true;
-        const { error } = await sb.from("econ_dev_companies").update({ archived: newVal }).eq("id", id);
+        const { error } = await egWrite(sb.from("econ_dev_companies").update({ archived: newVal }).eq("id", id));
         btn.disabled = false;
         if (error) { showBanner("Couldn't update: " + error.message, "error"); return; }
         p.archived = newVal;
@@ -1467,7 +1467,7 @@
           inp.value = original;
           return;
         }
-        const { error } = await sb.from("econ_dev_companies").update({ [field]: value || null }).eq("id", id);
+        const { error } = await egWrite(sb.from("econ_dev_companies").update({ [field]: value || null }).eq("id", id));
         if (error) {
           showBanner(
             error.code === "23505" ? "A program with this code already exists." : "Couldn't save: " + error.message,
@@ -1628,7 +1628,7 @@
     const { error: uploadErr } = await sb.storage.from("program-logos").upload(path, file);
     if (uploadErr) { showBanner("Couldn't upload logo: " + uploadErr.message, "error"); return; }
     const { data } = sb.storage.from("program-logos").getPublicUrl(path);
-    const { error } = await sb.from("econ_dev_companies").update({ logo_url: data.publicUrl }).eq("id", p.id);
+    const { error } = await egWrite(sb.from("econ_dev_companies").update({ logo_url: data.publicUrl }).eq("id", p.id));
     if (error) { showBanner("Couldn't save logo: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("program-logos").remove([oldPath]);
     p.logo_url = data.publicUrl;
@@ -1638,7 +1638,7 @@
 
   async function removeProgramLogoFile(p) {
     const oldPath = programLogoPathFromUrl(p.logo_url);
-    const { error } = await sb.from("econ_dev_companies").update({ logo_url: null }).eq("id", p.id);
+    const { error } = await egWrite(sb.from("econ_dev_companies").update({ logo_url: null }).eq("id", p.id));
     if (error) { showBanner("Couldn't remove logo: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("program-logos").remove([oldPath]);
     p.logo_url = null;
@@ -1662,7 +1662,7 @@
       const id = box.dataset.programId;
       const value = box.checked;
       box.disabled = true;
-      const { error } = await sb.from("econ_dev_companies").update({ bill_admin_qc_upfront: value }).eq("id", id);
+      const { error } = await egWrite(sb.from("econ_dev_companies").update({ bill_admin_qc_upfront: value }).eq("id", id));
       box.disabled = false;
       if (error) {
         showBanner("Couldn't save: " + error.message, "error");
@@ -1746,7 +1746,7 @@
           inp.value = original;
           return;
         }
-        const { error } = await sb.from("econ_dev_partner_contacts").update({ [fieldName]: value || null }).eq("id", contactId);
+        const { error } = await egWrite(sb.from("econ_dev_partner_contacts").update({ [fieldName]: value || null }).eq("id", contactId));
         if (error) {
           showBanner("Couldn't save contact: " + error.message, "error");
           inp.value = original;
@@ -1799,7 +1799,7 @@
           }
         }
 
-        const { error } = await sb.from("econ_dev_partner_contacts").update({ [field]: value }).eq("id", contactId);
+        const { error } = await egWrite(sb.from("econ_dev_partner_contacts").update({ [field]: value }).eq("id", contactId));
         if (error) {
           showBanner("Couldn't update that role: " + error.message, "error");
           box.checked = !value;
@@ -1817,7 +1817,7 @@
         const id = btn.dataset.deleteContactId;
         const c = allContacts.find((x) => x.id === id);
         const pid = c ? c.partner_id : partnerId;
-        const { error } = await sb.from("econ_dev_partner_contacts").delete().eq("id", id);
+        const { error } = await egWrite(sb.from("econ_dev_partner_contacts").delete().eq("id", id));
         if (error) {
           showBanner("Couldn't delete contact: " + error.message, "error");
           return;
@@ -2579,7 +2579,7 @@
         el.addEventListener("click", async (e) => {
           e.preventDefault();
           const id = el.dataset.id;
-          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id);
+          await egWrite(sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id));
           unread = unread.filter((n) => n.recipientId !== id);
           renderBell();
         });
@@ -2616,7 +2616,7 @@
         document.getElementById("notif-mark-all").addEventListener("click", async () => {
           if (!unread.length) return;
           const ids = unread.map((n) => n.recipientId);
-          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids);
+          await egWrite(sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids));
           unread = [];
           renderBell();
         });

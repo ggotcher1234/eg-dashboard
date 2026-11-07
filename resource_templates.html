@@ -771,7 +771,7 @@
       const existing = byTitle.get(title.toLowerCase());
       if (existing) {
         if ((existing.description || "") !== description) {
-          const { error } = await sb.from("resource_vault_templates").update({ description: description || null }).eq("id", existing.id);
+          const { error } = await egWrite(sb.from("resource_vault_templates").update({ description: description || null }).eq("id", existing.id));
           if (error) { showBanner("Couldn't update \"" + title + "\": " + error.message, "error"); return; }
           updated++;
         }
@@ -840,7 +840,7 @@
         const fieldName = inp.dataset.field;
         if (value === original) return;
         if (fieldName === "title" && !value) { showBanner("Title can't be empty.", "error"); inp.value = original; return; }
-        const { error } = await sb.from("resource_vault_templates").update({ [fieldName]: value || null }).eq("id", id);
+        const { error } = await egWrite(sb.from("resource_vault_templates").update({ [fieldName]: value || null }).eq("id", id));
         if (error) { showBanner("Couldn't save: " + error.message, "error"); inp.value = original; return; }
         showBanner("Saved — updated for every client.", "success");
       });
@@ -859,7 +859,7 @@
         const t = templates.find((x) => x.id === btn.dataset.delete);
         if (!confirm(`Delete "${t.title}"? This removes it from every client's Resource Vault.`)) return;
         if (t.storage_path) await sb.storage.from("client-documents").remove([t.storage_path]);
-        const { error } = await sb.from("resource_vault_templates").delete().eq("id", t.id);
+        const { error } = await egWrite(sb.from("resource_vault_templates").delete().eq("id", t.id));
         if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
         showBanner("Resource deleted.", "success");
         await loadTemplates();
@@ -887,7 +887,7 @@
     const path = `resource-templates/${currentUser.organization_id}/${Date.now()}-${sanitizeFilename(file.name)}`;
     const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
     if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
-    const { error } = await sb.from("resource_vault_templates").update({ storage_path: path }).eq("id", templateId);
+    const { error } = await egWrite(sb.from("resource_vault_templates").update({ storage_path: path }).eq("id", templateId));
     if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
     showBanner("File uploaded — updated for every client.", "success");
@@ -1130,7 +1130,7 @@
         el.addEventListener("click", async (e) => {
           e.preventDefault();
           const id = el.dataset.id;
-          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id);
+          await egWrite(sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id));
           unread = unread.filter((n) => n.recipientId !== id);
           renderBell();
         });
@@ -1167,7 +1167,7 @@
         document.getElementById("notif-mark-all").addEventListener("click", async () => {
           if (!unread.length) return;
           const ids = unread.map((n) => n.recipientId);
-          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids);
+          await egWrite(sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids));
           unread = [];
           renderBell();
         });

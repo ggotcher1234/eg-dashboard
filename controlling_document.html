@@ -915,7 +915,7 @@
     }
 
     for (const id of pendingQuestionDeletes) {
-      const { error } = await sb.from("client_research_questions").delete().eq("id", id);
+      const { error } = await egWrite(sb.from("client_research_questions").delete().eq("id", id));
       if (error) throw new Error(error.message);
     }
     pendingQuestionDeletes = [];
@@ -944,9 +944,9 @@
             || qnum !== (original.question_number == null ? null : Number(original.question_number))
             || who !== (original.assigned_user_id || null);
           if (changed) {
-            const { error } = await sb.from("client_research_questions")
+            const { error } = await egWrite(sb.from("client_research_questions")
               .update({ question: value || null, background: bg || null, ranking: rank || null, customer_notes: notes || null, question_number: qnum, assigned_user_id: who })
-              .eq("id", row.id);
+              .eq("id", row.id));
             if (error) throw new Error(error.message);
           }
         } else if (value) {
@@ -1086,7 +1086,7 @@
 
   async function saveDocLink(url) {
     if (!url) { renderDocAttachment(); return; }
-    const { error } = await sb.from("client_content").update({ controlling_notes_url: url, controlling_notes_storage_path: null }).eq("client_id", currentClient.id);
+    const { error } = await egWrite(sb.from("client_content").update({ controlling_notes_url: url, controlling_notes_storage_path: null }).eq("client_id", currentClient.id));
     if (error) { showBanner("Couldn't save link: " + error.message, "error"); return; }
     contentRow.controlling_notes_url = url;
     contentRow.controlling_notes_storage_path = null;
@@ -1111,7 +1111,7 @@
     const path = `${currentClient.id}/${Date.now()}-${sanitizeFilename(file.name)}`;
     const { error: upErr } = await sb.storage.from("client-documents").upload(path, file);
     if (upErr) { showBanner("Couldn't upload file: " + upErr.message, "error"); return; }
-    const { error } = await sb.from("client_content").update({ controlling_notes_storage_path: path, controlling_notes_url: null }).eq("client_id", currentClient.id);
+    const { error } = await egWrite(sb.from("client_content").update({ controlling_notes_storage_path: path, controlling_notes_url: null }).eq("client_id", currentClient.id));
     if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
     contentRow.controlling_notes_storage_path = path;
     contentRow.controlling_notes_url = null;
@@ -1122,7 +1122,7 @@
 
   async function removeDocAttachment() {
     const oldPath = contentRow && contentRow.controlling_notes_storage_path;
-    const { error } = await sb.from("client_content").update({ controlling_notes_storage_path: null, controlling_notes_url: null }).eq("client_id", currentClient.id);
+    const { error } = await egWrite(sb.from("client_content").update({ controlling_notes_storage_path: null, controlling_notes_url: null }).eq("client_id", currentClient.id));
     if (error) { showBanner("Couldn't remove: " + error.message, "error"); return; }
     contentRow.controlling_notes_storage_path = null;
     contentRow.controlling_notes_url = null;
@@ -1280,7 +1280,7 @@
         payload.controlling_doc_url = selfLink.toString();
       }
 
-      const { error } = await sb.from("client_content").update(payload).eq("client_id", currentClient.id);
+      const { error } = await egWrite(sb.from("client_content").update(payload).eq("client_id", currentClient.id));
       if (error) throw new Error(error.message);
       Object.assign(contentRow, payload);
 

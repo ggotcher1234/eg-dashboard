@@ -1670,7 +1670,7 @@
     if (error) throw new Error(error.message);
   }
   async function replaceUserSpecialties(userId, specialties) {
-    const { error: delErr } = await sb.from("user_specialties").delete().eq("user_id", userId);
+    const { error: delErr } = await egWrite(sb.from("user_specialties").delete().eq("user_id", userId));
     if (delErr) throw new Error(delErr.message);
     await addUserSpecialties(userId, specialties);
   }
@@ -2357,7 +2357,7 @@
     const { error: uploadErr } = await sb.storage.from("user-avatars").upload(path, file);
     if (uploadErr) { showBanner("Couldn't upload photo: " + uploadErr.message, "error"); return; }
     const { data } = sb.storage.from("user-avatars").getPublicUrl(path);
-    const { error } = await sb.from("users").update({ avatar_url: data.publicUrl }).eq("id", u.id);
+    const { error } = await egWrite(sb.from("users").update({ avatar_url: data.publicUrl }).eq("id", u.id));
     if (error) { showBanner("Couldn't save photo: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("user-avatars").remove([oldPath]);
     u.avatar_url = data.publicUrl;
@@ -2368,7 +2368,7 @@
 
   async function removeAvatarFile(u) {
     const oldPath = avatarPathFromUrl(u.avatar_url);
-    const { error } = await sb.from("users").update({ avatar_url: null }).eq("id", u.id);
+    const { error } = await egWrite(sb.from("users").update({ avatar_url: null }).eq("id", u.id));
     if (error) { showBanner("Couldn't remove photo: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("user-avatars").remove([oldPath]);
     u.avatar_url = null;
@@ -2746,7 +2746,7 @@
     saveBtn.disabled = true;
     saveBtn.textContent = "Saving…";
 
-    const { error } = await sb.from("users").update(payload).eq("id", openProfileId);
+    const { error } = await egWrite(sb.from("users").update(payload).eq("id", openProfileId));
 
     if (error) {
       saveBtn.disabled = false;
@@ -2940,7 +2940,7 @@
         el.addEventListener("click", async (e) => {
           e.preventDefault();
           const id = el.dataset.id;
-          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id);
+          await egWrite(sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id));
           unread = unread.filter((n) => n.recipientId !== id);
           renderBell();
         });
@@ -2977,7 +2977,7 @@
         document.getElementById("notif-mark-all").addEventListener("click", async () => {
           if (!unread.length) return;
           const ids = unread.map((n) => n.recipientId);
-          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids);
+          await egWrite(sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids));
           unread = [];
           renderBell();
         });

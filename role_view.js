@@ -230,5 +230,41 @@
     helpLinks();
   }
 
+  // ---------- egWrite: a write that changed nothing is not a success ----------
+  // Greg (11/7/26), on six hours of allotment that appeared and vanished:
+  // "this is a catastrophe at this point in the rollout and cannot happen
+  // again. we need safeguards."
+  //
+  // PostgREST answers an UPDATE or DELETE that row-level security refused
+  // with 200 and an empty body. No error is raised and nothing changed, so
+  // code that checks only `error` says "Saved" and the next reload quietly
+  // restores the old value. egWrite() asks for the rows the write actually
+  // touched and turns "none" into an ordinary error, which means every
+  // existing `if (error)` branch in the app catches a refusal with no other
+  // change to it.
+  //
+  // It lives here because this file is the one script all fourteen pages
+  // load, and it loads before any of their own code runs. INSERTs are not
+  // wrapped anywhere: RLS refuses those with a real 403 that already shows.
+  //
+  // One caveat worth knowing: .select() re-reads the row under the SELECT
+  // policy. Everywhere in this app that policy is broader than the write
+  // policy, so a permitted write can always read itself back -- if that ever
+  // stops being true somewhere, this would report a false refusal, which is
+  // still the safer way to be wrong.
+  window.egWrite = async function (query) {
+    const { data, error } = await query.select();
+    if (error) return { data: null, error: error };
+    if (!data || !data.length) {
+      var viewingAsOther = !!document.querySelector(".rv-chip");
+      return { data: null, error: { message:
+        "the database refused it, so nothing was saved. "
+        + (viewingAsOther
+            ? "You are viewing as another role \u2014 exit that view with the \u00d7 on the amber pill, then try again."
+            : "You may not have permission to change this.") } };
+    }
+    return { data: data, error: null };
+  };
+
   window.EGRoleView = { mount: mount, LABEL: LABEL, helpLinks: helpLinks };
 })();

@@ -1600,7 +1600,7 @@
   }
 
   async function markNotificationRead(id) {
-    await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id);
+    await egWrite(sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id));
     unreadNotifications = unreadNotifications.filter((n) => n.recipientId !== id);
     renderNotifications();
   }
@@ -1614,7 +1614,7 @@
   $("notif-mark-all").addEventListener("click", async () => {
     if (!unreadNotifications.length) return;
     const ids = unreadNotifications.map((n) => n.recipientId);
-    await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids);
+    await egWrite(sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids));
     unreadNotifications = [];
     renderNotifications();
   });
@@ -2362,7 +2362,7 @@
     }
     // Keep clients.delay_reason on the newest comment for anything still
     // reading the column. Its failure is not the comment failing.
-    await sb.from("clients").update({ delay_reason: body }).eq("id", id);
+    await egWrite(sb.from("clients").update({ delay_reason: body }).eq("id", id));
     const row = allClients.find((x) => x.id === id);
     if (row) row.delay_reason = body;
     (delayNotesByClient[id] = delayNotesByClient[id] || []).unshift({
@@ -2433,7 +2433,7 @@
       // engagement row shows -- so it only changes when the newest one did.
       const newest = (delayNotesByClient[clientId] || [])[0];
       if (newest && newest.id === noteId) {
-        await sb.from("clients").update({ delay_reason: body }).eq("id", clientId);
+        await egWrite(sb.from("clients").update({ delay_reason: body }).eq("id", clientId));
         const row = allClients.find((x) => x.id === clientId);
         if (row) row.delay_reason = body;
       }
@@ -2455,7 +2455,7 @@
       return;
     }
     del.disabled = true;
-    const { error } = await sb.from("client_delay_notes").delete().eq("id", noteId);
+    const { error } = await egWrite(sb.from("client_delay_notes").delete().eq("id", noteId));
     if (error) {
       del.disabled = false;
       $("delay-status").classList.add("error");
@@ -2464,7 +2464,7 @@
     }
     delayNotesByClient[id] = (delayNotesByClient[id] || []).filter((n) => n.id !== noteId);
     const newest = (delayNotesByClient[id] || [])[0];
-    await sb.from("clients").update({ delay_reason: newest ? newest.body : null }).eq("id", id);
+    await egWrite(sb.from("clients").update({ delay_reason: newest ? newest.body : null }).eq("id", id));
     const row = allClients.find((x) => x.id === id);
     if (row) row.delay_reason = newest ? newest.body : null;
     renderDelayModal();

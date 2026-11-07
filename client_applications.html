@@ -2518,7 +2518,7 @@
           const newStatus = btn.dataset.pstatus;
           if (newStatus === client.project_status) return;
           toggle.querySelectorAll("button").forEach((b) => (b.disabled = true));
-          const { error } = await sb.from("clients").update({ project_status: newStatus }).eq("id", client.id);
+          const { error } = await egWrite(sb.from("clients").update({ project_status: newStatus }).eq("id", client.id));
           toggle.querySelectorAll("button").forEach((b) => (b.disabled = false));
           if (error) {
             // Month-end close rule (170) arrives as a finished sentence that
@@ -2713,7 +2713,7 @@
     const btn = $("edit-app-save");
     btn.disabled = true;
     btn.textContent = "Saving…";
-    const { error } = await sb.from("client_applications").update(payload).eq("id", a.id);
+    const { error } = await egWrite(sb.from("client_applications").update(payload).eq("id", a.id));
     btn.disabled = false;
     btn.textContent = "Save changes";
 
@@ -3239,11 +3239,11 @@
     // parameter, so we set it here right after, same as everything else the
     // Super Admin just specified.
     if (teamLeadHours > 0) {
-      const { error: hoursErr } = await sb
+      const { error: hoursErr } = await egWrite(sb
         .from("client_assignments")
         .update({ hours_allotted: teamLeadHours })
         .eq("client_id", clientId)
-        .eq("is_team_lead", true);
+        .eq("is_team_lead", true));
       if (hoursErr) {
         showBanner(`Client created, but couldn't set Team Lead hours: ${hoursErr.message}. Set it from the engagement instead.`, "error");
         btn.disabled = false;
@@ -3544,9 +3544,9 @@ Have a great day!!${signature ? "\n\n" + signature : ""}`;
 
   $("reject-confirm").addEventListener("click", async () => {
     if (!pendingRejectId) return;
-    const { error } = await sb.from("client_applications")
+    const { error } = await egWrite(sb.from("client_applications")
       .update({ status: "archived", reviewed_by: currentUser.id, reviewed_at: new Date().toISOString() })
-      .eq("id", pendingRejectId);
+      .eq("id", pendingRejectId));
     $("reject-overlay").classList.remove("open");
     pendingRejectId = null;
     if (error) {
@@ -3585,7 +3585,7 @@ Have a great day!!${signature ? "\n\n" + signature : ""}`;
     // null by the FK (not cascaded) rather than deleted, so we clean up the
     // now-orphaned application row ourselves right after.
     if (a.client_id) {
-      const { error: clientErr } = await sb.from("clients").delete().eq("id", a.client_id);
+      const { error: clientErr } = await egWrite(sb.from("clients").delete().eq("id", a.client_id));
       if (clientErr) {
         btn.disabled = false;
         btn.textContent = "Delete permanently";
@@ -3594,7 +3594,7 @@ Have a great day!!${signature ? "\n\n" + signature : ""}`;
       }
     }
 
-    const { error: appErr } = await sb.from("client_applications").delete().eq("id", pendingDeleteAppId);
+    const { error: appErr } = await egWrite(sb.from("client_applications").delete().eq("id", pendingDeleteAppId));
 
     btn.disabled = false;
     btn.textContent = "Delete permanently";
@@ -3820,7 +3820,7 @@ Have a great day!!${signature ? "\n\n" + signature : ""}`;
         el.addEventListener("click", async (e) => {
           e.preventDefault();
           const id = el.dataset.id;
-          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id);
+          await egWrite(sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id));
           unread = unread.filter((n) => n.recipientId !== id);
           renderBell();
         });
@@ -3857,7 +3857,7 @@ Have a great day!!${signature ? "\n\n" + signature : ""}`;
         document.getElementById("notif-mark-all").addEventListener("click", async () => {
           if (!unread.length) return;
           const ids = unread.map((n) => n.recipientId);
-          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids);
+          await egWrite(sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids));
           unread = [];
           renderBell();
         });

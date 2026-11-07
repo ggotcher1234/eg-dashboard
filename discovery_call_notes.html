@@ -1528,7 +1528,7 @@
 
   async function saveGuidePref(patch) {
     if (!guideUserId) return true;
-    const { error } = await sb.from("users").update(patch).eq("id", guideUserId);
+    const { error } = await egWrite(sb.from("users").update(patch).eq("id", guideUserId));
     if (error) { showBanner("Couldn't save that: " + error.message, "error"); return false; }
     return true;
   }
@@ -2129,9 +2129,9 @@
     input.addEventListener("blur", async () => {
       const passcode = (input.value || "").trim() || null;
       if ((contentRow.discovery_notes_passcode || null) === passcode) return;
-      const { error } = await sb.from("client_content")
+      const { error } = await egWrite(sb.from("client_content")
         .update({ discovery_notes_passcode: passcode })
-        .eq("client_id", currentClient.id);
+        .eq("client_id", currentClient.id));
       if (error) { showBanner("Couldn't save the passcode: " + error.message, "error"); return; }
       contentRow.discovery_notes_passcode = passcode;
       showBanner(passcode ? "Passcode saved." : "Passcode cleared.", "success");
@@ -2226,7 +2226,7 @@
   async function saveNotesLink(url) {
     if (!url) { showBanner("Enter a URL first.", "error"); return; }
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-    const { error } = await sb.from("client_content").update({ discovery_notes_url: url, discovery_notes_storage_path: null }).eq("client_id", currentClient.id);
+    const { error } = await egWrite(sb.from("client_content").update({ discovery_notes_url: url, discovery_notes_storage_path: null }).eq("client_id", currentClient.id));
     if (error) { showBanner("Couldn't save the link: " + error.message, "error"); return; }
     contentRow.discovery_notes_url = url;
     contentRow.discovery_notes_storage_path = null;
@@ -2246,7 +2246,7 @@
     const path = `clients/${currentClient.id}/workflow/discovery-notes/${Date.now()}-${sanitizeFilename(file.name)}`;
     const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
     if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
-    const { error } = await sb.from("client_content").update({ discovery_notes_storage_path: path, discovery_notes_url: null }).eq("client_id", currentClient.id);
+    const { error } = await egWrite(sb.from("client_content").update({ discovery_notes_storage_path: path, discovery_notes_url: null }).eq("client_id", currentClient.id));
     if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
     contentRow.discovery_notes_storage_path = path;
@@ -2257,7 +2257,7 @@
 
   async function removeNotesAttachment() {
     const oldPath = contentRow && contentRow.discovery_notes_storage_path;
-    const { error } = await sb.from("client_content").update({ discovery_notes_storage_path: null, discovery_notes_url: null }).eq("client_id", currentClient.id);
+    const { error } = await egWrite(sb.from("client_content").update({ discovery_notes_storage_path: null, discovery_notes_url: null }).eq("client_id", currentClient.id));
     if (error) { showBanner("Couldn't remove it: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
     contentRow.discovery_notes_storage_path = null;
@@ -2448,7 +2448,7 @@
       const cc = ccListRows
         .map((r) => ({ name: clean(r.name), title: clean(r.title), email: cleanEmail(r.email) }))
         .filter((r) => r.name || r.email);
-      const { error: wipeErr } = await sb.from("client_cc_list").delete().eq("client_id", currentClient.id);
+      const { error: wipeErr } = await egWrite(sb.from("client_cc_list").delete().eq("client_id", currentClient.id));
       if (wipeErr) throw new Error(wipeErr.message);
       if (cc.length) {
         const { error: ccErr } = await sb.from("client_cc_list")
@@ -2474,7 +2474,7 @@
           if (c.name && c.name !== match.name) patch.name = c.name;
           if (c.title && c.title !== match.title) patch.title = c.title;
           if (c.phone && c.phone !== match.phone) patch.phone = c.phone;
-          if (Object.keys(patch).length) await sb.from("client_contacts").update(patch).eq("id", match.id);
+          if (Object.keys(patch).length) await egWrite(sb.from("client_contacts").update(patch).eq("id", match.id));
         } else {
           nextOrder += 1;
           const { error: insErr } = await sb.from("client_contacts")
@@ -2553,7 +2553,7 @@
         payload.discovery_doc_url = selfLink.toString();
       }
 
-      const { error } = await sb.from("client_content").update(payload).eq("client_id", currentClient.id);
+      const { error } = await egWrite(sb.from("client_content").update(payload).eq("client_id", currentClient.id));
       if (error) { showBanner("Couldn't submit: " + error.message, "error"); return; }
       Object.assign(contentRow, payload);
       const spread = await pushContactsToEngagement();

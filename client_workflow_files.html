@@ -2219,7 +2219,7 @@
     const row = debriefings.find((d) => d.id === id);
     const passcode = (value || "").trim() || null;
     if (!row || (row.passcode || null) === passcode) return;
-    const { error } = await sb.from("client_debriefings").update({ passcode }).eq("id", id);
+    const { error } = await egWrite(sb.from("client_debriefings").update({ passcode }).eq("id", id));
     if (error) { showBanner("Couldn't save the passcode: " + error.message, "error"); return; }
     row.passcode = passcode;
     showBanner(passcode ? "Passcode saved." : "Passcode cleared.", "success");
@@ -2252,7 +2252,7 @@
     const d = debriefings.find((x) => x.id === id);
     if (!d) return;
     if (!confirm(`Remove "${d.label}"?`)) return;
-    const { error } = await sb.from("client_debriefings").delete().eq("id", id);
+    const { error } = await egWrite(sb.from("client_debriefings").delete().eq("id", id));
     if (error) { showBanner("Couldn't remove it: " + error.message, "error"); return; }
     if (d.storage_path) await sb.storage.from("client-documents").remove([d.storage_path]);
     await loadWorkflowLinks(currentClient.id);
@@ -2277,7 +2277,7 @@
   async function saveWorkflowLink(f, url) {
     if (!url) { showBanner("Enter a URL first.", "error"); return; }
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-    const { error } = await sb.from("client_content").update({ [f.urlColumn]: url }).eq("client_id", currentClient.id);
+    const { error } = await egWrite(sb.from("client_content").update({ [f.urlColumn]: url }).eq("client_id", currentClient.id));
     if (error) { showBanner("Couldn't save the link: " + error.message, "error"); return; }
     workflowData[f.urlColumn] = url;
     renderWorkflowFileField(f);
@@ -2298,7 +2298,7 @@
     if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
     // A field is one or the other -- uploading a file clears any link
     // previously saved in this same slot, same rule Resource Vault uses.
-    const { error } = await sb.from("client_content").update({ [f.pathColumn]: path, [f.urlColumn]: null }).eq("client_id", currentClient.id);
+    const { error } = await egWrite(sb.from("client_content").update({ [f.pathColumn]: path, [f.urlColumn]: null }).eq("client_id", currentClient.id));
     if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
     workflowData[f.pathColumn] = path;
@@ -2309,7 +2309,7 @@
 
   async function removeWorkflowItem(f) {
     const oldPath = workflowData && workflowData[f.pathColumn];
-    const { error } = await sb.from("client_content").update({ [f.pathColumn]: null, [f.urlColumn]: null }).eq("client_id", currentClient.id);
+    const { error } = await egWrite(sb.from("client_content").update({ [f.pathColumn]: null, [f.urlColumn]: null }).eq("client_id", currentClient.id));
     if (error) { showBanner("Couldn't remove it: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
     workflowData[f.pathColumn] = null;
@@ -2377,9 +2377,9 @@
     input.addEventListener("blur", async () => {
       const passcode = (input.value || "").trim() || null;
       if ((workflowData.closeout_recording_passcode || null) === passcode) return;
-      const { error } = await sb.from("client_content")
+      const { error } = await egWrite(sb.from("client_content")
         .update({ closeout_recording_passcode: passcode })
-        .eq("client_id", currentClient.id);
+        .eq("client_id", currentClient.id));
       if (error) { showBanner("Couldn't save the passcode: " + error.message, "error"); return; }
       workflowData.closeout_recording_passcode = passcode;
       showBanner(passcode ? "Passcode saved." : "Passcode cleared.", "success");
@@ -2650,7 +2650,7 @@
 
     const url = `${PUBLIC_SITE_BASE}evaluation_public.html?client=${currentClient.id}`;
     if (workflowData.evaluation_link_url !== url) {
-      const { error: saveErr } = await sb.from("client_content").update({ evaluation_link_url: url }).eq("client_id", currentClient.id);
+      const { error: saveErr } = await egWrite(sb.from("client_content").update({ evaluation_link_url: url }).eq("client_id", currentClient.id));
       if (saveErr) { showBanner("Couldn't save the evaluation link: " + saveErr.message, "error"); return null; }
       workflowData.evaluation_link_url = url;
     }
@@ -3120,9 +3120,9 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
     if (!spec || !currentClient) return;
     const at = new Date().toISOString();
     const by = currentUser && currentUser.id;
-    const { error } = await sb.from("client_content")
+    const { error } = await egWrite(sb.from("client_content")
       .update({ [spec.atColumn]: at, [spec.byColumn]: by })
-      .eq("client_id", currentClient.id);
+      .eq("client_id", currentClient.id));
     // The draft is already on its way to the mail client by now. A stamp that
     // did not save is not worth a second banner contradicting the first.
     if (error) { console.error("Couldn't stamp the " + key + " email:", error.message); return; }
@@ -3203,7 +3203,7 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
 
     const url = `${PUBLIC_SITE_BASE}controlling_document_public.html?client=${currentClient.id}`;
     if (workflowData && workflowData.controlling_doc_link_url !== url) {
-      const { error: saveErr } = await sb.from("client_content").update({ controlling_doc_link_url: url }).eq("client_id", currentClient.id);
+      const { error: saveErr } = await egWrite(sb.from("client_content").update({ controlling_doc_link_url: url }).eq("client_id", currentClient.id));
       if (saveErr) { showBanner("Couldn't save the Controlling Document link: " + saveErr.message, "error"); return null; }
       if (workflowData) workflowData.controlling_doc_link_url = url;
     }
@@ -3307,7 +3307,7 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
     // Saved on the row too, so the link exists on the engagement whether it
     // was first reached from here or from the form's Submit.
     if (workflowData && workflowData.discovery_doc_link_url !== url) {
-      await sb.from("client_content").update({ discovery_doc_link_url: url }).eq("client_id", currentClient.id);
+      await egWrite(sb.from("client_content").update({ discovery_doc_link_url: url }).eq("client_id", currentClient.id));
       workflowData.discovery_doc_link_url = url;
     }
 
@@ -3709,7 +3709,7 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
         el.addEventListener("click", async (e) => {
           e.preventDefault();
           const id = el.dataset.id;
-          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id);
+          await egWrite(sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).eq("id", id));
           unread = unread.filter((n) => n.recipientId !== id);
           renderBell();
         });
@@ -3746,7 +3746,7 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
         document.getElementById("notif-mark-all").addEventListener("click", async () => {
           if (!unread.length) return;
           const ids = unread.map((n) => n.recipientId);
-          await sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids);
+          await egWrite(sb.from("notification_recipients").update({ read_at: new Date().toISOString() }).in("id", ids));
           unread = [];
           renderBell();
         });
