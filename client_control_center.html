@@ -1992,7 +1992,16 @@
       }
     }
     $("cm-team-lead").textContent = `Team Lead: ${teamLead || "—"}`;
-    isTeamLeadHere = (assignRows || []).some((r) => r.is_team_lead && r.user_id === currentUser.id);
+    // Must agree with is_team_lead_of_client() in the database, which is
+    // what actually decides whether a write lands:
+    //   override <> 'consultant' AND an is_team_lead row on this client.
+    // Greg (11/7/26) typed hours while viewing as a Specialist. Holding the
+    // row was enough for this flag, so the inputs stayed live, but the
+    // database refused every write -- the numbers appeared and vanished.
+    // currentUser.role is already the EFFECTIVE role (role_view.js sets it
+    // before anything reads it), so this is the same test.
+    isTeamLeadHere = currentUser.role !== "consultant"
+      && (assignRows || []).some((r) => r.is_team_lead && r.user_id === currentUser.id);
     // The Overdue pill carries a comment count, so it is drawn once more
     // when the comments arrive. Not awaited: the header is already on
     // screen by now and should not wait on a count to finish rendering.
@@ -3038,7 +3047,8 @@
       hoursSpent: isSunkCostSpecialty(r.specialty_type, activeClient) ? Number(r.hours_allotted) : (hoursByAssignment[r.id] || 0),
       loggedBy: [...(loggersByAssignment[r.id] || [])],
     }));
-    isTeamLeadHere = isTeamLeadHere || currentAssignments.some((r) => r.user_id === currentUser.id && r.is_team_lead);
+    isTeamLeadHere = isTeamLeadHere || (currentUser.role !== "consultant"
+      && currentAssignments.some((r) => r.user_id === currentUser.id && r.is_team_lead));
   }
 
   // teamLeadContact is filled by loadClient -- who to name when the edit
@@ -3243,6 +3253,38 @@
     // whether that use is picking a person or typing hours. Returns the new
     // row's id, or null if the insert failed (the caller has already told
     // the user).
+    // PostgREST answers an UPDATE that row-level security refused with 200
+    // and an empty body -- there is no error to check. Every save in this
+    // pane used `if (error)` alone, so a refused write said "Saved" and the
+    // next reload quietly put the old number back. That is what happened to
+    // Greg's 6 hours on 11/7/26.
+    //
+    // .select() makes PostgREST return the rows it changed, so zero rows is
+    // the signal. Zero means the write was refused, or the row is gone --
+    // either way the screen is now lying and has to be put right.
+    async function saveAssignment(assignmentId, payload, whatFailed) {
+      const { data, error } = await sb.from("client_assignments")
+        .update(payload).eq("id", assignmentId).select("id");
+      if (error) {
+        showBanner(error.message.includes("exceed Budget")
+          ? "That would exceed the engagement's total hours."
+          : whatFailed + ": " + error.message, "error");
+        return false;
+      }
+      if (!data || !data.length) {
+        // The commonest cause, and the one that is one click from fixed: an
+        // Admin with a "Viewing as" override on. The chip is in the header
+        // whenever one is active, so its presence is the test.
+        const viewingAsOther = !!document.querySelector(".rv-chip");
+        showBanner(whatFailed + " \u2014 the database refused it, so nothing was saved. "
+          + (viewingAsOther
+              ? "You are viewing as another role: exit that view with the \u00d7 on the amber pill, then try again."
+              : "You may not have permission to edit this engagement."), "error");
+        return false;
+      }
+      return true;
+    }
+
     async function materializeSlot(tr, extra) {
       // Guard against a second event arriving while the insert is in flight
       // -- a change and a blur can both land on the same edit, and two
@@ -3291,14 +3333,14 @@
         select.disabled = true;
         const payload = { user_id: select.value || null };
         if (row && row.specialty_type === "team_lead") payload.is_team_lead = true;
-        const { error } = await sb.from("client_assignments").update(payload).eq("id", assignmentId);
+        const ok = await saveAssignment(assignmentId, payload, "Couldn't update person");
         select.disabled = false;
-        if (error) {
-          showBanner("Couldn't update person: " + error.message, "error");
-          return;
-        }
-        showBanner(select.value ? "Person assigned." : "Work area unassigned.", "success");
+        // Put the row back to what is actually stored either way: on failure
+        // so the screen stops showing a name nobody saved, on success so it
+        // picks up anything the save changed.
         await reloadTeam();
+        if (!ok) return;
+        showBanner(select.value ? "Person assigned." : "Work area unassigned.", "success");
       });
     });
 
@@ -3318,14 +3360,12 @@
           return;
         }
         const assignmentId = tr.dataset.assignmentId;
-        const { error } = await sb.from("client_assignments").update({ hours_allotted: Number(input.value) }).eq("id", assignmentId);
-        if (error) {
-          showBanner(error.message.includes("exceed Budget") ? "That would exceed the engagement's total hours." : "Couldn't save: " + error.message, "error");
-          await reloadTeam();
-          return;
-        }
-        showBanner("Hours updated.", "success");
+        input.disabled = true;
+        const ok = await saveAssignment(assignmentId, { hours_allotted: Number(input.value) }, "Couldn't save those hours");
+        input.disabled = false;
         await reloadTeam();
+        if (!ok) return;
+        showBanner("Hours updated.", "success");
       });
     });
     document.querySelectorAll("[data-log]").forEach((btn) => {
