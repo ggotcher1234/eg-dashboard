@@ -1400,7 +1400,22 @@
     $("login-error").style.display = "none";
     const { error } = await sb.auth.signInWithPassword({ email, password });
     if (error) {
-      $("login-error").textContent = error.message;
+      // Supabase's own wording goes straight to the person typing, and two
+      // of its messages are no help at all. "User is banned" is what a
+      // deactivated account says -- there is nothing for them to fix and
+      // nothing for them to be accused of. "Invalid login credentials" is
+      // accurate but sends people hunting for the wrong thing, since the
+      // commonest cause here is an older address the browser remembers
+      // rather than a wrong password (Greg, 11/8/26).
+      var raw = (error.message || "").toLowerCase();
+      var shown = error.message;
+      if (raw.indexOf("banned") !== -1) {
+        shown = "This account has been deactivated. Ask an Admin to turn it back on.";
+      } else if (raw.indexOf("invalid login credentials") !== -1) {
+        shown = "That email and password don't match an account. Check the email address first \u2014 "
+              + "your browser may be filling in an older one.";
+      }
+      $("login-error").textContent = shown;
       $("login-error").style.display = "block";
       return;
     }
