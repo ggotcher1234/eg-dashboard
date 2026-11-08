@@ -8,6 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="role_view.js"></script>
 <style>
   :root {
     --navy: #14304d;
@@ -421,7 +422,13 @@
     const { data: profile, error: profileErr } = await sb.from("users")
       .select("id, full_name, role").eq("id", user.id).single();
     if (profileErr || !profile) {
-      await sb.auth.signOut();
+      // A failed read is not proof the account has no staff profile.
+      // Greg (11/8/26) was signed out mid-morning with nothing in the
+      // auth log: a dropped request here used to sign you out -- on every
+      // device -- and clear the browser's session even when the sign-out
+      // never reached the server. See egShouldSignOut in role_view.js.
+      if (!egShouldSignOut(profileErr)) { egAuthTrouble(profileErr); return; }
+      await egSignOut(sb);
       return redirectToLogin();
     }
     currentUser = profile;

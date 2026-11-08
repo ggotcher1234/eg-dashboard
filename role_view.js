@@ -266,5 +266,88 @@
     return { data: data, error: null };
   };
 
+
+  // ---------- Staying signed in ----------
+  // Greg (11/8/26): "i was logged in this morning, now i come back and i
+  // have to login. what causes this. why don't i stay logged in."
+  //
+  // The auth log had no answer -- no expiry, no failed refresh, no logout
+  // on the server at all -- because the sign-out never got that far. Every
+  // page loads by reading its own row out of public.users, and the guard
+  // around that read was `if (error || !profile) signOut()`. That treats
+  // "we could not ask the database" exactly like "this account has no staff
+  // profile", so one dropped request -- a laptop waking before the wi-fi, a
+  // slow response, a 5xx -- signed you out. Worse, supabase-js signOut()
+  // clears the browser's stored session whether or not the call reaches the
+  // server, so you were logged out locally with nothing recorded anywhere.
+  //
+  // Two fixes, both here so all seventeen pages get the same one:
+  //   egShouldSignOut() -- only a positive "no such row" (PGRST116), or a
+  //     genuinely dead token, signs anyone out. Anything else keeps the
+  //     session and shows the banner below instead.
+  //   egSignOut() -- scope "local". supabase-js defaults to "global", which
+  //     revokes the session on EVERY device, so signing out on the laptop
+  //     silently ended the phone and the desktop too.
+
+  // Sign out of this browser only. Never the other devices.
+  window.egSignOut = function (sb) {
+    try { return sb.auth.signOut({ scope: "local" }); }
+    catch (e) { return sb.auth.signOut(); }   // older supabase-js
+  };
+
+  // Is this error the database positively telling us the row is not there,
+  // or the session telling us it is over? Those two are worth a sign-out.
+  // Everything else -- network, timeout, 5xx, an empty error object -- is
+  // "ask again later", and must leave the session alone.
+  window.egShouldSignOut = function (err) {
+    if (!err) return true;                       // no row, no error: nothing to read
+    var code = err.code || "";
+    var msg  = (err.message || "") + "";
+    if (code === "PGRST116") return true;        // .single() found no row
+    if (code === "PGRST301") return true;        // JWT expired / not acceptable
+    if (/\bJWT\b|not authenticated|invalid claim/i.test(msg)) return true;
+    return false;                                // could not ask -- stay signed in
+  };
+
+  // Shown instead of signing someone out when the profile read failed for a
+  // reason that is not their account. Deliberately plain and non-dismissable:
+  // the page behind it did not finish loading, so there is nothing to go back
+  // to except a reload.
+  window.egAuthTrouble = function (err) {
+    if (document.getElementById("eg-auth-trouble")) return;
+    var detail = err && err.message ? String(err.message) : "";
+    var bar = document.createElement("div");
+    bar.id = "eg-auth-trouble";
+    bar.setAttribute("style",
+      "position:fixed;inset:0;z-index:99999;display:flex;align-items:center;"
+      + "justify-content:center;background:rgba(20,48,77,0.92);padding:24px;"
+      + "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;");
+    var card = document.createElement("div");
+    card.setAttribute("style",
+      "background:#fff;border-radius:12px;max-width:440px;padding:24px 26px;"
+      + "box-shadow:0 10px 40px rgba(0,0,0,0.3);color:#1f2937;line-height:1.55;");
+    var h = document.createElement("div");
+    h.setAttribute("style", "font-weight:700;color:#14304d;font-size:1.05rem;margin-bottom:8px;");
+    h.textContent = "Couldn't reach the dashboard";
+    var p = document.createElement("p");
+    p.setAttribute("style", "margin:0 0 6px;font-size:0.94rem;");
+    p.textContent = "You are still signed in — this page just couldn't load your account. "
+      + "It is usually the connection. Try again in a moment.";
+    var small = document.createElement("p");
+    small.setAttribute("style", "margin:0 0 16px;font-size:0.82rem;color:#6b7280;");
+    small.textContent = detail;
+    var btn = document.createElement("button");
+    btn.setAttribute("style",
+      "background:#5c7248;color:#fff;border:0;border-radius:6px;padding:9px 18px;"
+      + "font-size:0.92rem;font-weight:600;cursor:pointer;");
+    btn.textContent = "Try again";
+    btn.onclick = function () { location.reload(); };
+    card.appendChild(h); card.appendChild(p);
+    if (detail) card.appendChild(small);
+    card.appendChild(btn);
+    bar.appendChild(card);
+    (document.body || document.documentElement).appendChild(bar);
+  };
+
   window.EGRoleView = { mount: mount, LABEL: LABEL, helpLinks: helpLinks };
 })();

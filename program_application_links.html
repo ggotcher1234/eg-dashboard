@@ -462,7 +462,7 @@
   let allPartners = [];
 
   $("change-password-btn").addEventListener("click", () => { location.href = "reset_password.html"; });
-  $("signout-btn").addEventListener("click", async () => { await sb.auth.signOut(); redirectToLogin(); });
+  $("signout-btn").addEventListener("click", async () => { await egSignOut(sb); redirectToLogin(); });
   $("profile-btn").addEventListener("click", (e) => { e.stopPropagation(); $("profile-dropdown").classList.toggle("hidden"); });
   document.addEventListener("click", (e) => { if (!$("profile-wrap").contains(e.target)) $("profile-dropdown").classList.add("hidden"); });
 
@@ -477,7 +477,12 @@
     // override. The database enforces the same override independently (145b),
     // so the interface and the policies cannot disagree. See role_view.js.
     if (profile) await EGRoleView.mount(sb, profile);
-    if (error || !profile) { await sb.auth.signOut(); redirectToLogin(); return; }
+    // A failed read is not proof the account has no staff profile; only a
+    // real "no such row" signs anyone out. See egShouldSignOut in role_view.js.
+    if (error || !profile) {
+      if (!egShouldSignOut(error)) { egAuthTrouble(error); return; }
+      await egSignOut(sb); redirectToLogin(); return;
+    }
 
     $("loading-view").classList.add("hidden");
     $("app-view").classList.remove("hidden");

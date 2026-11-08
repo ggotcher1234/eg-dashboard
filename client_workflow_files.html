@@ -1492,7 +1492,7 @@
   });
 
   $("signout-btn").addEventListener("click", async () => {
-    await sb.auth.signOut();
+    await egSignOut(sb);
     currentUser = null;
     $("app-view").classList.add("hidden");
     redirectToLogin();
@@ -1524,7 +1524,13 @@
     if (profile) await EGRoleView.mount(sb, profile);
 
     if (profileErr || !profile) {
-      await sb.auth.signOut();
+      // A failed read is not proof the account has no staff profile.
+      // Greg (11/8/26) was signed out mid-morning with nothing in the
+      // auth log: a dropped request here used to sign you out -- on every
+      // device -- and clear the browser's session even when the sign-out
+      // never reached the server. See egShouldSignOut in role_view.js.
+      if (!egShouldSignOut(profileErr)) { egAuthTrouble(profileErr); return; }
+      await egSignOut(sb);
       redirectToLogin();
       return;
     }
