@@ -313,7 +313,14 @@ Deno.serve(async (req: Request) => {
           return jsonResponse({ error: "That person is archived. Restore them before inviting." }, 400);
         }
 
-        const siteUrl = (Deno.env.get("PUBLIC_SITE_URL") || "https://egdb.netlify.app").replace(/\/+$/, "");
+        // Greg (11/9/26), once dashboard.economicgardening.org went live:
+        // "revise the roster invitation email to reflect this URL as the
+        // primary location." The branded host is the fallback now, so an
+        // unset PUBLIC_SITE_URL can no longer send a new teammate to the
+        // netlify.app address on their very first contact with the system.
+        // egdb.netlify.app still serves and redirects here, so nothing
+        // already sent is broken.
+        const siteUrl = (Deno.env.get("PUBLIC_SITE_URL") || "https://dashboard.economicgardening.org").replace(/\/+$/, "");
         const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
           type: "recovery",
           email: target.email,
@@ -365,7 +372,8 @@ Deno.serve(async (req: Request) => {
                 <li><a href="${escapeHtml(actionLink)}" style="font-weight:700;">Set your password</a>
                     &nbsp;&mdash; do this one first, today: the link is single-use and stops working after a while.</li>
                 <li>Bookmark this: <a href="${escapeHtml(siteUrl)}" style="font-weight:700;">${escapeHtml(siteUrl)}</a><br />
-                    It is where you sign in from now on.</li>
+                    It is where you sign in from now on. Our older address, egdb.netlify.app, still
+                    works and brings you to the same place.</li>
                 <li>Sign in with this email address: <strong>${escapeHtml(String(target.email))}</strong></li>
                 <li>Click the <a href="${escapeHtml(siteUrl)}/team_directory.html"><strong>ROSTER</strong></a> tab and fill in your profile.</li>
                 <li>Also check your specialization(s). Team leaders use this when picking their teams.</li>

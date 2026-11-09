@@ -266,7 +266,7 @@ async function buildEvaluationFormPdf(r: any, logoBytes: Uint8Array | null): Pro
 
 async function fetchLogo(): Promise<Uint8Array | null> {
   try {
-    const base = (Deno.env.get("PUBLIC_SITE_URL") || "https://egdb.netlify.app").replace(/\/+$/, "");
+    const base = (Deno.env.get("PUBLIC_SITE_URL") || "https://dashboard.economicgardening.org").replace(/\/+$/, "");
     const res = await fetch(`${base}/NCEG_Logo_transparent.png`, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return null;
     return new Uint8Array(await res.arrayBuffer());
