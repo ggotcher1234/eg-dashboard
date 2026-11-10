@@ -268,6 +268,11 @@
   }
   .app-meta-item .meta-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
   .app-meta-item .meta-value { font-weight: 600; margin-top: 1px; }
+  .meta-date-input {
+    font: inherit; font-weight: 600; color: var(--text); margin-top: 1px; padding: 2px 6px;
+    border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer;
+  }
+  .meta-date-input:hover, .meta-date-input:focus { border-color: var(--navy-light); outline: none; }
   .section-card-icon {
     width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
   }
@@ -1424,6 +1429,11 @@
     if (!d) return "—";
     return new Date(d).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
   }
+  // yyyy-mm-dd in the viewer's own time zone, for <input type="date">.
+  function toDateInputValue(d) {
+    const dt = d ? new Date(d) : new Date();
+    return dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0") + "-" + String(dt.getDate()).padStart(2, "0");
+  }
   function fmtMoney(n) {
     if (n == null || n === "") return "—";
     return "$" + Number(n).toLocaleString();
@@ -1985,7 +1995,15 @@
         <div class="app-meta-row">
           <div class="app-meta-item">
             <div class="meta-icon">${REVIEW_ICONS.calendar}</div>
-            <div><div class="meta-label">Submitted</div><div class="meta-value">${fmtDate(a.submitted_at)}</div></div>
+            <div><div class="meta-label">Submitted</div>${
+              // Rita (11/9/26): back-entering applications for engagements that
+              // started before EGDB, every one defaulted to today. The calendar
+              // icon looked clickable but wasn't, so super admins get a real
+              // date picker here; everyone else still sees plain text.
+              isSuperAdmin
+                ? `<input type="date" id="submitted-date-input" class="meta-date-input" value="${toDateInputValue(a.submitted_at)}" title="Change the date this application was submitted">`
+                : `<div class="meta-value">${fmtDate(a.submitted_at)}</div>`
+            }</div>
           </div>
           <div class="app-meta-item">
             <div class="meta-icon">${REVIEW_ICONS.users}</div>
@@ -2514,6 +2532,31 @@
       $("reject-btn").addEventListener("click", () => {
         pendingRejectId = a.id;
         $("reject-overlay").classList.add("open");
+      });
+    }
+
+    const submittedInput = document.getElementById("submitted-date-input");
+    if (submittedInput) {
+      submittedInput.addEventListener("change", async () => {
+        const v = submittedInput.value;
+        if (!v) { submittedInput.value = toDateInputValue(a.submitted_at); return; }
+        // Saved at local noon so the date can't slip a day either side when
+        // shown in another time zone.
+        const [y, m, d] = v.split("-").map(Number);
+        const iso = new Date(y, m - 1, d, 12, 0, 0).toISOString();
+        submittedInput.disabled = true;
+        const { error } = await egWrite(sb.from("client_applications").update({ submitted_at: iso }).eq("id", a.id));
+        submittedInput.disabled = false;
+        if (error) {
+          showBanner("Couldn't change the submitted date: " + error.message, "error");
+          submittedInput.value = toDateInputValue(a.submitted_at);
+          return;
+        }
+        a.submitted_at = iso;
+        // Keep the cached list (newest-submitted first) in step with the edit.
+        allApplications.sort((x, y2) => new Date(y2.submitted_at) - new Date(x.submitted_at));
+        showBanner("Submitted date changed to " + fmtDate(iso) + ".", "success");
+        renderReview();
       });
     }
 
