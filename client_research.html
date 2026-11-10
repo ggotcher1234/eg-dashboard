@@ -296,6 +296,33 @@
   .tl-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   .tl-doneline { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
   .task-empty { font-size: 13px; color: var(--muted); padding: 10px 0; }
+
+  /* Extract Questions (Greg, 10 Nov 26): "i'd like it on the Add Research
+     page and only if there is not a form and there is a word document.
+     if not true then no button. but if there is a Word CD then the button
+     magically appears and i can extract the questions right there where i
+     need them." Both conditions, or nothing is rendered at all. */
+  .cdx-empty-wrap { padding: 4px 0 6px; }
+  .cdx-btn { font-family: inherit; cursor: pointer; border: 1px solid var(--accent); border-radius: 7px;
+             font-size: 13px; padding: 9px 16px; font-weight: 700; background: var(--accent); color: #fff; }
+  .cdx-btn:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+  .cdx-btn[disabled] { opacity: 0.6; cursor: default; }
+  .cdx-file { font-size: 12.5px; color: var(--muted); margin-top: 7px; }
+  .cdx-overlay { display: none; position: fixed; inset: 0; background: rgba(20,48,77,0.35); z-index: 200;
+                 align-items: center; justify-content: center; }
+  .cdx-overlay.open { display: flex; }
+  .cdx-modal { background: #fff; border-radius: 10px; width: min(720px, calc(100vw - 32px));
+               max-height: calc(100vh - 48px); overflow-y: auto; padding: 22px 24px;
+               box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+  .cdx-modal h3 { margin: 0 0 4px; color: var(--navy); }
+  .cdx-area { margin-bottom: 14px; }
+  .cdx-area-head { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+                   color: var(--accent-dark); margin-bottom: 6px; }
+  .cdx-q { border: 1px solid #dde3e9; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .cdx-q-text { font-weight: 600; color: var(--navy); font-size: 13.5px; line-height: 1.45; }
+  .cdx-q-bg { font-size: 12.5px; color: var(--muted); line-height: 1.45; margin-top: 5px; white-space: pre-wrap; }
+  .cdx-q-none { font-size: 12.5px; color: var(--muted); font-style: italic; margin-top: 5px; }
+  .cdx-num { color: var(--accent-dark); font-weight: 700; }
   .tl-qtext { width: 100%; font-family: inherit; font-size: 13.5px; line-height: 1.5; color: var(--text);
               border: 1px solid transparent; border-radius: 6px; padding: 5px 7px; margin: 0 0 10px -7px;
               background: transparent; resize: none; overflow: hidden; display: block; }
@@ -1405,6 +1432,7 @@
       loadDocuments(),
       loadResearchQuestions(),
       loadEngagementSpecialists(),
+      loadControllingDocPath(),
     ]);
     renderResearchDue();
     await applyEngagementDueDate();
@@ -1990,6 +2018,157 @@
   // typing into right now is left alone, and it only becomes a candidate
   // once you close it still empty.
   const sweptTaskIds = new Set();
+  // ---------- Extract Questions from a Word Controlling Document ----------
+  // Greg (10 Nov 26): "if there is a Word CD then the button magically
+  // appears and i can extract the questions right there where i need them."
+  //
+  // Here, and only here. Earlier passes put this on the Controlling
+  // Document form and then on the workflow row -- the first is reachable
+  // only from inside a Change menu, the second renders inside an iframe --
+  // so neither was where anybody stood when they wanted it. This page is
+  // the one that is empty and the one the specialists read.
+  //
+  // Two conditions, both required: no questions yet (so a Controlling
+  // Document written in EGDB is never second-guessed, and running this
+  // twice cannot double anything), and a .docx actually attached.
+  const CDX_AREA_LABEL = {
+    market_dynamics: "Market Dynamics Research", outbound: "Outbound Marketing",
+    inbound: "Inbound Marketing", watering_holes: "Watering Holes",
+  };
+  const CDX_AREA_ORDER = ["market_dynamics", "outbound", "inbound", "watering_holes"];
+  let cdDocPath = null;
+  let cdxFound = [];
+
+  async function loadControllingDocPath() {
+    cdDocPath = null;
+    if (!currentClient) return;
+    const { data } = await sb.from("client_content")
+      .select("controlling_doc_storage_path").eq("client_id", currentClient.id).maybeSingle();
+    const path = (data && data.controlling_doc_storage_path) || "";
+    // Only a .docx: an older binary .doc cannot be unzipped, and a PDF
+    // never could. Offering a button that can only apologise is worse
+    // than not offering one.
+    if (/\.docx$/i.test(path)) cdDocPath = path;
+  }
+
+  // Stored names carry an upload timestamp in front; show the one a person
+  // would recognise, not "1794327319584-Sonic_CD.docx".
+  function cdDocNiceName() {
+    const base = (cdDocPath || "").split("/").pop() || "";
+    return base.replace(/^\d{10,}-/, "").replace(/_/g, " ");
+  }
+
+  function closeExtractModal() {
+    const ov = $("cdx-overlay");
+    if (ov) ov.classList.remove("open");
+  }
+
+  async function openExtractModal() {
+    if (!cdDocPath || !currentClient) return;
+    const btn = $("cdx-extract");
+    if (btn) { btn.disabled = true; btn.textContent = "Reading the document…"; }
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error("Your session has expired — sign in again.");
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/extract-controlling-questions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ storagePath: cdDocPath }),
+      });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok || out.error) throw new Error(out.error || `The extractor returned ${res.status}.`);
+      cdxFound = out.questions || [];
+      if (!cdxFound.length) {
+        showBanner("No research questions were found in that Word document.", "error");
+        return;
+      }
+
+      const n = cdxFound.length;
+      $("cdx-sub").textContent =
+        `${n} question${n === 1 ? "" : "s"} read from ${cdDocNiceName()}. Nothing is saved until you press the button.`;
+
+      let html = "";
+      CDX_AREA_ORDER.forEach((area) => {
+        const rows = cdxFound.filter((q) => (q.research_area || "market_dynamics") === area);
+        if (!rows.length) return;
+        html += `<div class="cdx-area"><div class="cdx-area-head">${escapeHtml(CDX_AREA_LABEL[area])}</div>`;
+        rows.forEach((q) => {
+          const num = q.question_number == null ? "" : `<span class="cdx-num">${q.question_number}.</span> `;
+          html += `<div class="cdx-q"><div class="cdx-q-text">${num}${escapeHtml(q.question)}</div>`;
+          // A missing background is a fact about the document, not a
+          // failure here -- say which it is.
+          html += q.background
+            ? `<div class="cdx-q-bg">${escapeHtml(q.background)}</div>`
+            : `<div class="cdx-q-none">No background in the document for this one.</div>`;
+          html += `</div>`;
+        });
+        html += `</div>`;
+      });
+      $("cdx-body").innerHTML = html;
+      $("cdx-overlay").classList.add("open");
+    } catch (e) {
+      showBanner(e.message || "Could not read that Word document.", "error");
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = "&#10022;&nbsp; Extract Questions from the Word document"; }
+    }
+  }
+
+  async function confirmExtractedQuestions() {
+    if (!cdxFound.length || !currentClient) return;
+    const btn = $("cdx-confirm");
+    btn.disabled = true;
+    btn.textContent = "Adding…";
+    try {
+      const nextSort = { market_dynamics: 1, outbound: 1, inbound: 1, watering_holes: 1 };
+      const rows = cdxFound.map((q) => {
+        const area = CDX_AREA_ORDER.includes(q.research_area) ? q.research_area : "market_dynamics";
+        return {
+          client_id: currentClient.id,
+          research_area: area,
+          question: q.question,
+          background: q.background || null,
+          question_number: q.question_number,
+          sort_order: nextSort[area]++,
+        };
+      });
+      // INSERT, not UPDATE: row-level security refuses these with a real
+      // 403, so there is no silent-success trap here to guard against.
+      const { error } = await sb.from("client_research_questions").insert(rows);
+      if (error) throw new Error(error.message);
+      cdxFound = [];
+      closeExtractModal();
+      await loadResearchQuestions();
+      renderTaskList();
+      showBanner(`${rows.length} question${rows.length === 1 ? "" : "s"} added. Assign each one to a specialist and they can start.`, "success");
+    } catch (e) {
+      showBanner("Could not add the questions: " + (e.message || "unknown error"), "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Add these questions";
+    }
+  }
+
+  // The panel's markup sits after this script in the page, so wiring it at
+  // parse time would find nothing and silently do nothing -- the panel would
+  // open and its buttons would be dead. Wait for the DOM.
+  function wireExtractModal() {
+    const ov = $("cdx-overlay");
+    if (!ov) return;
+    $("cdx-close").addEventListener("click", closeExtractModal);
+    $("cdx-cancel").addEventListener("click", closeExtractModal);
+    $("cdx-confirm").addEventListener("click", confirmExtractedQuestions);
+    ov.addEventListener("click", (e) => { if (e.target === ov) closeExtractModal(); });
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", wireExtractModal);
+  } else {
+    wireExtractModal();
+  }
+
   function isContentlessTask(q) {
     return !(q.question || "").trim()
       && !(q.background || "").trim()
@@ -2219,7 +2398,18 @@
     // Document has no questions yet would have had no way to make the first
     // one. Caught by the suite, not by looking at it.
     if (!total) {
-      list.innerHTML = `<div class="task-empty">No questions yet. They arrive from the Controlling Document.</div>`;
+      // Greg (10 Nov 26): "only if there is not a form and there is a word
+      // document. if not true then no button." No questions is the "no
+      // form" half -- a Controlling Document written in EGDB would have
+      // put some here. The .docx is the other half. Both, or just the line.
+      list.innerHTML = `<div class="task-empty">No questions yet. They arrive from the Controlling Document.</div>`
+        + (cdDocPath ? `
+          <div class="cdx-empty-wrap">
+            <button type="button" class="cdx-btn" id="cdx-extract">&#10022;&nbsp; Extract Questions from the Word document</button>
+            <div class="cdx-file">${escapeHtml(cdDocNiceName())}</div>
+          </div>` : "");
+      const exBtn = $("cdx-extract");
+      if (exBtn) exBtn.addEventListener("click", openExtractModal);
       applyTailSpace(card);
       wireTaskHandlers(list);
       return;
@@ -3660,5 +3850,24 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
     })();
   })();
 </script>
+<div class="cdx-overlay" id="cdx-overlay">
+  <div class="cdx-modal">
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px;">
+      <div>
+        <h3>Questions found in the Word document</h3>
+        <div class="field-hint" id="cdx-sub" style="margin:0;"></div>
+      </div>
+      <button type="button" id="cdx-close" aria-label="Close"
+              style="background:none; border:none; font-size:20px; line-height:1; cursor:pointer; color:var(--muted); padding:2px 6px;">&times;</button>
+    </div>
+    <div id="cdx-body"></div>
+    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px; flex-wrap:wrap;">
+      <button type="button" class="cdx-btn" id="cdx-cancel"
+              style="background:#fff; color:var(--navy); border-color:#dde3e9;">Cancel</button>
+      <button type="button" class="cdx-btn" id="cdx-confirm">Add these questions</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
