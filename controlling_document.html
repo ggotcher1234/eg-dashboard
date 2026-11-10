@@ -220,6 +220,22 @@
   .cd-add-q { display: inline-flex; align-items: center; gap: 6px; background: #fff; color: var(--navy-light); border: 1.5px solid var(--navy-light); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 700; font-family: inherit; cursor: pointer; }
   .cd-add-q:hover { background: #eef4fb; }
 
+  /* Paste from Word (Greg, 10 Nov 26). Styled from this page's own parts --
+     .cd-add-q for the opener, the workflow Save button for the action --
+     rather than a new button language nobody else on the page speaks. */
+  .cd-paste-ta { width: 100%; font-family: inherit; font-size: 13.5px; line-height: 1.5;
+                 padding: 10px 12px; border: 1px solid #dde3e9; border-radius: 8px;
+                 resize: vertical; min-height: 150px; }
+  .cd-paste-btn { font-family: inherit; cursor: pointer; border: none; border-radius: 6px;
+                  font-size: 13px; padding: 8px 16px; font-weight: 600;
+                  background: var(--accent); color: #fff; }
+  .cd-paste-btn[disabled] { opacity: 0.6; cursor: default; }
+  .cd-paste-btn.secondary { background: #fff; color: var(--navy-light); border: 1.5px solid #dde3e9; }
+  .cd-paste-flag { margin-top: 12px; padding: 10px 13px; border-radius: 8px; background: #fdf6e3;
+                   border-left: 4px solid #d9a441; font-size: 13px; line-height: 1.5; }
+  .cd-paste-flag ul { margin: 6px 0 0; padding-left: 20px; }
+  .cd-paste-flag li { margin-bottom: 3px; }
+
   @media print {
     .no-print { display: none !important; }
     body { background: #fff; }
@@ -306,6 +322,32 @@
              than teaching the form. -->
         <div class="field-hint no-print" id="cd-dupe-note" hidden style="margin:6px 0 0; color:#b42318; font-weight:600;">Two questions share the same number. Give each one its own before saving.</div>
       </div>
+      <!-- Greg (10 Nov 26): "the word version of controlling documents has
+           headings that say Market Research, Inbound, Outbound and Watering
+           Holes... extract the questions and background information
+           separately under each of those headings so that the specialists
+           can see their questions in the Add Research page."
+
+           Above the four areas rather than inside one, because a paste
+           fills all of them at once. no-print: it is a way IN to the
+           document, not part of it. -->
+      <div class="card no-print" id="cd-paste-card">
+        <div class="card-head">
+          <h2>Start from a Word document</h2>
+          <div class="field-hint">Open the Word Controlling Document, select all, copy, and paste it below. The questions and their background arrive as rows under the matching heading &mdash; check them over, add the assigned specialist, then Save as usual.</div>
+        </div>
+        <button type="button" class="cd-add-q" id="cd-paste-toggle">&#9998;&nbsp; Paste from Word</button>
+        <span class="field-hint" id="cd-paste-status" style="margin:0 0 0 10px;"></span>
+        <div id="cd-paste-body" hidden style="margin-top:12px;">
+          <textarea id="cd-paste-text" class="cd-paste-ta" rows="8" placeholder="Paste the text of the Word Controlling Document here&hellip;"></textarea>
+          <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap;">
+            <button type="button" class="cd-paste-btn" id="cd-paste-run">Extract questions</button>
+            <button type="button" class="cd-paste-btn secondary" id="cd-paste-cancel">Cancel</button>
+          </div>
+        </div>
+        <div id="cd-paste-flags" class="cd-paste-flag" hidden></div>
+      </div>
+
       <div class="card">
         <div class="card-head">
           <h2>Market Dynamics Research</h2>
@@ -767,6 +809,135 @@
     const last = container && container.querySelector(".cd-q-row:last-child .cd-q-question");
     if (last) last.focus();
   }
+
+  // ---------- Paste from Word (Greg, 10 Nov 26) ----------
+  // A Word Controlling Document uploaded to the workflow row is readable --
+  // the client dashboard opens it through the Office viewer -- but it puts
+  // nothing in client_research_questions, so Upload Research stays empty and
+  // the specialists have no row to hand work in on. This is how the
+  // questions get across without retyping them.
+  //
+  // Extraction runs in the extract-controlling-questions edge function
+  // (Claude, same ANTHROPIC_API_KEY the Ask AI feature already uses). It is
+  // a model and not a parser because, in Greg's words, "there are many
+  // versions of the CD template, some use question numbers and some do not."
+  //
+  // Nothing here writes to the database. Extracted questions land as
+  // ordinary unsaved rows in the form, and the page's own Save -- with its
+  // duplicate-number check and its RLS -- is still what stores them. The
+  // Team Lead sees everything before it counts.
+  const CD_AREA_LABEL = {
+    market_dynamics: "Market Dynamics Research", outbound: "Outbound Marketing",
+    inbound: "Inbound Marketing", watering_holes: "Watering Holes",
+  };
+
+  function cdPasteStatus(msg) {
+    const el = $("cd-paste-status");
+    if (el) el.textContent = msg || "";
+  }
+
+  // A row the form put there and nobody typed into. Filling these first
+  // stops a paste leaving an empty row above every question it adds.
+  function isBlankQuestionRow(row) {
+    return !row.id
+      && !(row.question || "").trim() && !(row.background || "").trim()
+      && !(row.ranking || "").trim() && !(row.customer_notes || "").trim();
+  }
+
+  function applyExtractedQuestions(questions) {
+    syncQuestionModelFromDom();
+    let placed = 0;
+    questions.forEach((q) => {
+      // An area the function could not map falls back to Market Dynamics
+      // rather than being dropped -- it is flagged below, and a question in
+      // the wrong place can be moved, while one that never arrived is gone.
+      const area = RESEARCH_AREAS.includes(q.research_area) ? q.research_area : "market_dynamics";
+      const rows = (questionsByArea[area] = questionsByArea[area] || []);
+      let row = rows.find(isBlankQuestionRow);
+      if (!row) { row = blankQuestion(area); rows.push(row); }
+      row.question = q.question || "";
+      row.background = q.background || "";
+      row.question_number = q.question_number == null ? "" : String(q.question_number);
+      row.collapsed = false;
+      placed += 1;
+    });
+    renderQuestions();
+    flagDuplicateNumbers();
+    return placed;
+  }
+
+  (function wirePasteFromWord() {
+    const toggle = $("cd-paste-toggle");
+    if (!toggle) return;
+    const body = $("cd-paste-body");
+    const ta = $("cd-paste-text");
+    const flags = $("cd-paste-flags");
+
+    toggle.addEventListener("click", () => {
+      body.hidden = !body.hidden;
+      if (!body.hidden) ta.focus();
+    });
+    $("cd-paste-cancel").addEventListener("click", () => {
+      body.hidden = true; ta.value = ""; flags.hidden = true; cdPasteStatus("");
+    });
+
+    $("cd-paste-run").addEventListener("click", async () => {
+      const text = (ta.value || "").trim();
+      flags.hidden = true;
+      if (!text) { cdPasteStatus("Paste the document text first."); return; }
+      const btn = $("cd-paste-run");
+      btn.disabled = true;
+      cdPasteStatus("Reading the document…");
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) throw new Error("Your session has expired — sign in again.");
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/extract-controlling-questions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ text }),
+        });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok || out.error) throw new Error(out.error || `The extractor returned ${res.status}.`);
+
+        const questions = out.questions || [];
+        if (!questions.length) {
+          cdPasteStatus("No research questions were found in that text.");
+          return;
+        }
+        const placed = applyExtractedQuestions(questions);
+        cdPasteStatus(`${placed} question${placed === 1 ? "" : "s"} added below. Nothing is saved yet.`);
+
+        // Anything the model was unsure of is named rather than silently
+        // filed: a question under the wrong heading reaches the wrong
+        // specialist, and that is worse than one typed by hand.
+        const unsure = questions.filter((q) => q.confidence === "low" || !q.research_area);
+        if (unsure.length || out.note) {
+          const items = unsure.map((q) => {
+            const txt = (q.question || "").trim();
+            const short = txt.length > 80 ? txt.slice(0, 80) + "…" : txt;
+            const where = CD_AREA_LABEL[q.research_area] || CD_AREA_LABEL.market_dynamics;
+            const seen = q.heading_seen ? ` from the heading “${escapeHtml(q.heading_seen)}”` : "";
+            return `<li>${escapeHtml(short)} &mdash; put under <strong>${escapeHtml(where)}</strong>${seen}</li>`;
+          }).join("");
+          flags.innerHTML = "<strong>Worth checking before you save</strong>"
+            + (items ? `<ul>${items}</ul>` : "")
+            + (out.note ? `<div style="margin-top:6px;">${escapeHtml(out.note)}</div>` : "");
+          flags.hidden = false;
+        }
+        body.hidden = true;
+        ta.value = "";
+      } catch (e) {
+        cdPasteStatus("");
+        showBanner(e.message || "Could not extract the questions.", "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  })();
 
   function deleteQuestionRow(area, idx) {
     syncQuestionModelFromDom();
