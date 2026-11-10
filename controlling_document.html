@@ -334,10 +334,13 @@
       <div class="card no-print" id="cd-paste-card">
         <div class="card-head">
           <h2>Start from a Word document</h2>
-          <div class="field-hint">Open the Word Controlling Document, select all, copy, and paste it below. The questions and their background arrive as rows under the matching heading &mdash; check them over, add the assigned specialist, then Save as usual.</div>
+          <div class="field-hint" id="cd-paste-hint">Open the Word Controlling Document, select all, copy, and paste it below. The questions and their background arrive as rows under the matching heading &mdash; check them over, add the assigned specialist, then Save as usual.</div>
         </div>
-        <button type="button" class="cd-add-q" id="cd-paste-toggle">&#9998;&nbsp; Paste from Word</button>
-        <span class="field-hint" id="cd-paste-status" style="margin:0 0 0 10px;"></span>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <button type="button" class="cd-paste-btn" id="cd-extract-file" hidden></button>
+          <button type="button" class="cd-add-q" id="cd-paste-toggle">&#9998;&nbsp; Paste the text instead</button>
+          <span class="field-hint" id="cd-paste-status" style="margin:0;"></span>
+        </div>
         <div id="cd-paste-body" hidden style="margin-top:12px;">
           <textarea id="cd-paste-text" class="cd-paste-ta" rows="8" placeholder="Paste the text of the Word Controlling Document here&hellip;"></textarea>
           <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap;">
@@ -881,13 +884,16 @@
       body.hidden = true; ta.value = ""; flags.hidden = true; cdPasteStatus("");
     });
 
-    $("cd-paste-run").addEventListener("click", async () => {
-      const text = (ta.value || "").trim();
+    // One runner for both ways in. The file button sends a storagePath and
+    // the edge function reads the .docx itself; the paste box sends text.
+    // Everything after the call is identical, so it lives here once.
+    async function runExtraction(payload, busyLabel) {
+      const runBtn = $("cd-paste-run");
+      const fileBtn = $("cd-extract-file");
       flags.hidden = true;
-      if (!text) { cdPasteStatus("Paste the document text first."); return; }
-      const btn = $("cd-paste-run");
-      btn.disabled = true;
-      cdPasteStatus("Reading the document…");
+      runBtn.disabled = true;
+      fileBtn.disabled = true;
+      cdPasteStatus(busyLabel);
       try {
         const { data: { session } } = await sb.auth.getSession();
         if (!session) throw new Error("Your session has expired — sign in again.");
@@ -898,14 +904,14 @@
             apikey: SUPABASE_ANON_KEY,
             Authorization: `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify(payload),
         });
         const out = await res.json().catch(() => ({}));
         if (!res.ok || out.error) throw new Error(out.error || `The extractor returned ${res.status}.`);
 
         const questions = out.questions || [];
         if (!questions.length) {
-          cdPasteStatus("No research questions were found in that text.");
+          cdPasteStatus("No research questions were found in that document.");
           return;
         }
         const placed = applyExtractedQuestions(questions);
@@ -934,9 +940,52 @@
         cdPasteStatus("");
         showBanner(e.message || "Could not extract the questions.", "error");
       } finally {
-        btn.disabled = false;
+        runBtn.disabled = false;
+        fileBtn.disabled = false;
       }
+    }
+
+    $("cd-paste-run").addEventListener("click", () => {
+      const text = (ta.value || "").trim();
+      if (!text) { cdPasteStatus("Paste the document text first."); return; }
+      runExtraction({ text }, "Reading the text…");
     });
+
+    $("cd-extract-file").addEventListener("click", () => {
+      const path = (contentRow && contentRow.controlling_doc_storage_path) || "";
+      if (!path) return;
+      runExtraction({ storagePath: path }, "Reading the Word document…");
+    });
+
+    // Called once the engagement has loaded, because until then there is no
+    // contentRow to know whether a Word file is attached. Greg (10 Nov 26),
+    // having uploaded one and gone looking for the control: "i was trying to
+    // do that programatically. it's a dead simple process." So when the file
+    // is already here the page says so and offers one button; pasting drops
+    // to the fallback it should always have been.
+    window.cdRefreshExtractFromFile = function () {
+      const fileBtn = $("cd-extract-file");
+      const hint = $("cd-paste-hint");
+      if (!fileBtn) return;
+      const path = (contentRow && contentRow.controlling_doc_storage_path) || "";
+      const isDocx = /\.docx$/i.test(path);
+      if (isDocx) {
+        // Stored names carry an upload timestamp in front; show the name a
+        // person would recognise, not "1794327319584-Sonic_CD.docx".
+        const base = path.split("/").pop() || "the attached document";
+        const nice = base.replace(/^\d{10,}-/, "").replace(/_/g, " ");
+        fileBtn.textContent = `Extract questions from ${nice}`;
+        fileBtn.hidden = false;
+        if (hint) {
+          hint.textContent = "A Word Controlling Document is attached to this engagement. Pull its questions and background straight in — they arrive as rows under the matching heading for you to check, assign and save.";
+        }
+      } else {
+        fileBtn.hidden = true;
+        if (hint && /\.docx?$/i.test(path)) {
+          hint.textContent = "The attached file is an older .doc, which cannot be read directly. Open it in Word, Save As .docx and attach that — or paste the text below.";
+        }
+      }
+    };
   })();
 
   function deleteQuestionRow(area, idx) {
@@ -1327,6 +1376,8 @@
     const programName = program && (program.name || "").trim();
     const programLabel = [programCode ? `(${programCode})` : "", programName].filter(Boolean).join(" ");
     contentRow = content || {};
+    // The Word-document button cannot know what is attached until now.
+    if (window.cdRefreshExtractFromFile) window.cdRefreshExtractFromFile();
 
     // Sorted the way the picker should read: Team Lead first, then by
     // specialty and slot, which is the order Team & Hours lists them in.

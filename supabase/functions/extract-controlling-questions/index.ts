@@ -1,7 +1,19 @@
 // extract-controlling-questions
 //
-// Pulls the research questions out of a Controlling Document that was
-// written in Word, so they land in the EGDB form instead of being retyped.
+// Pulls the research questions out of a Controlling Document written in
+// Word, so they land in the EGDB form instead of being retyped.
+//
+// TWO WAYS IN, AND THE FIRST IS THE ONE THAT MATTERS
+//   { storagePath } -- the .docx already attached to the engagement's
+//     Controlling Document row. The function downloads it, unzips it and
+//     reads the text itself. One click, no copying.
+//   { text } -- pasted text, kept for a document that was never uploaded.
+//
+//   v1 offered only paste. Greg (10 Nov 26), after uploading a real Word
+//   CD and hunting for the control: "so right now i have to open the word
+//   document, open the new form and paste from one to the other. i was
+//   trying to do that programatically. it's a dead simple process." He was
+//   right -- the file is already here, so the software should read it.
 //
 // Greg (10 Nov 26): "the word version of controlling documents has headings
 // that say Market Research, Inbound, Outbound and Watering Holes. the goal
@@ -28,6 +40,7 @@
 //   Save on the Controlling Document page is what stores them.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import JSZip from "https://esm.sh/jszip@3.10.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,12 +51,36 @@ const corsHeaders = {
 // Matches eg-dashboard-ai. Update both if Anthropic renames the slug.
 const CLAUDE_MODEL = "claude-sonnet-5";
 const MAX_INPUT_CHARS = 60000;
+const DOC_BUCKET = "client-documents";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+// A .docx is a zip; word/document.xml holds the body. Paragraph ends become
+// newlines because the headings and the question/background split are the
+// only structure the extractor needs -- styling is irrelevant to it.
+async function docxToText(buf: ArrayBuffer): Promise<string> {
+  const zip = await JSZip.loadAsync(buf);
+  const entry = zip.file("word/document.xml");
+  if (!entry) throw new Error("no-document-xml");
+  const xml: string = await entry.async("string");
+  const text = xml
+    .replace(/<w:tab\b[^>]*\/?>/g, "\t")
+    .replace(/<w:br\b[^>]*\/?>/g, "\n")
+    .replace(/<\/w:p>/g, "\n")
+    .replace(/<[^>]+>/g, "");
+  // &amp; last, or "&amp;lt;" would decode twice into a stray "<".
+  return text
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_m, d) => String.fromCharCode(Number(d)))
+    .replace(/&amp;/g, "&")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 // The four areas on the form, with the headings Word documents actually use.
@@ -118,14 +155,45 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const text = String(body.text || "").trim();
+    const storagePath = String(body.storagePath || "").trim();
+    let text = String(body.text || "").trim();
+    let source = "paste";
+
+    if (storagePath) {
+      source = "file";
+      if (storagePath.includes("..") || storagePath.startsWith("/")) {
+        return jsonResponse({ error: "That file path is not one this can read." }, 400);
+      }
+      const lower = storagePath.toLowerCase();
+      if (lower.endsWith(".doc")) {
+        return jsonResponse({
+          error: "That is an older .doc file, which cannot be read directly. Open it in Word and use Save As to make a .docx, or paste the text instead.",
+        }, 400);
+      }
+      if (!lower.endsWith(".docx")) {
+        return jsonResponse({ error: "Only a Word .docx file can be read this way. Paste the text instead." }, 400);
+      }
+      const { data: blob, error: dlErr } = await userClient.storage.from(DOC_BUCKET).download(storagePath);
+      if (dlErr || !blob) {
+        return jsonResponse({ error: `Could not open the attached document: ${dlErr?.message || "not found"}` }, 400);
+      }
+      try {
+        text = await docxToText(await blob.arrayBuffer());
+      } catch {
+        return jsonResponse({
+          error: "That file could not be read as a Word document. If it was renamed from another format, paste the text instead.",
+        }, 400);
+      }
+      if (!text) {
+        return jsonResponse({ error: "That Word document appears to have no text in it." }, 400);
+      }
+    }
+
     if (!text) {
-      return jsonResponse({ error: "Paste the text of the Controlling Document first." }, 400);
+      return jsonResponse({ error: "There is nothing to read -- attach a Word document or paste its text." }, 400);
     }
     if (text.length > MAX_INPUT_CHARS) {
-      return jsonResponse({
-        error: `That is ${text.length.toLocaleString()} characters, and the limit is ${MAX_INPUT_CHARS.toLocaleString()}. Paste just the question sections rather than the whole document.`,
-      }, 400);
+      text = text.slice(0, MAX_INPUT_CHARS);
     }
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -185,6 +253,8 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({
       questions,
       note: String(parsed.note || "").trim(),
+      source,
+      chars: text.length,
       model: CLAUDE_MODEL,
     });
   } catch (e) {
