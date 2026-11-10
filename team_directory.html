@@ -1977,11 +1977,20 @@
   }
 
   // ---------- Team Lead Workload (admin-only) ----------
-  // "Active" = any engagement not Closed -- Accepted, In Progress, and On
-  // Hold all still count against the cap, since the team lead is still on
-  // the hook for it. Counts by who's actually flagged is_team_lead on the
-  // assignment (not by account role), so it stays correct even for the
-  // rare case of someone leading an engagement outside their usual role.
+  // Greg (11/10/26): "team workload should only track engagements in
+  // progress not those closed or on hold."
+  //
+  // It used to count everything except Closed, on the reasoning that a lead
+  // is still on the hook for an engagement that is paused. In practice the
+  // cap is about how much work somebody is carrying THIS week, and a held
+  // engagement is not work -- it also made the panel disagree with its own
+  // heading, which has always said "Active (In Progress)". So the test is
+  // now in_progress and nothing else: Closed, On Hold and anything added
+  // later are all out until they are moved back to In Progress.
+  //
+  // Counts by who's actually flagged is_team_lead on the assignment (not by
+  // account role), so it stays correct even for the rare case of someone
+  // leading an engagement outside their usual role.
   const TEAM_LEAD_CAP = 4;
 
   async function loadTeamLeadWorkload() {
@@ -1999,7 +2008,7 @@
     (data || []).forEach((r) => {
       if (!r.user_id || !r.users || r.users.hidden_from_roster || r.users.archived_at) return;
       namesByUser[r.user_id] = r.users.full_name;
-      if (r.clients && r.clients.project_status === "closed") return;
+      if (!r.clients || r.clients.project_status !== "in_progress") return;
       countsByUser[r.user_id] = (countsByUser[r.user_id] || 0) + 1;
     });
     renderTeamLeadWorkload(countsByUser, namesByUser);
