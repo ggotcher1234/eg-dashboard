@@ -262,6 +262,23 @@
      (10/13/26), so the button holds its own width now. Every other .wf-btn
      is still inside a wrap, so this is belt and braces for them. */
   .wf-btn { flex-shrink: 0; }
+
+  /* Extract Questions (Greg, 10 Nov 26). On the row, beside the file it
+     reads -- not on another page. "i'm still lost... nor do i see any kind
+     of an action button anywhere that would kick off some process to add
+     the Research Questions so the specialists can start work." */
+  .wf-btn-accent { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
+  .wf-btn-accent:hover { background: var(--accent-dark); }
+  .cdx-area { margin-bottom: 14px; }
+  .cdx-area-head { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+                   color: var(--accent-dark); margin-bottom: 6px; }
+  .cdx-q { border: 1px solid #dde3e9; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .cdx-q-text { font-weight: 600; color: var(--navy); font-size: 13.5px; line-height: 1.45; }
+  .cdx-q-bg { font-size: 12.5px; color: var(--muted); line-height: 1.45; margin-top: 5px; white-space: pre-wrap; }
+  .cdx-q-none { font-size: 12.5px; color: var(--muted); font-style: italic; margin-top: 5px; }
+  .cdx-num { display: inline-block; min-width: 20px; color: var(--accent-dark); font-weight: 700; }
+  .cdx-warn { background: #fdf6e3; border-left: 4px solid #d9a441; border-radius: 8px;
+              padding: 10px 12px; font-size: 13px; line-height: 1.5; margin-bottom: 14px; }
   .wf-btn:hover { background: #eef4fb; }
   .wf-btn-danger { border-color: var(--danger); color: var(--danger); }
   .wf-btn-danger:hover { background: #fdecea; }
@@ -1197,6 +1214,26 @@
   </div>
 </div>
 
+<!-- What the Word document gave up, before any of it is saved. The
+     Team Lead sees every question and its background and presses the
+     button, or does not. -->
+<div class="eem-overlay" id="cdx-overlay">
+  <div class="eem-modal">
+    <div class="eem-modal-header">
+      <div>
+        <h3>Questions found in the Word document</h3>
+        <div class="field-hint" id="cdx-sub" style="margin:0;"></div>
+      </div>
+      <button class="eem-modal-close" id="cdx-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="cdx-body"></div>
+    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px; flex-wrap:wrap;">
+      <button type="button" class="wf-btn" id="cdx-cancel">Cancel</button>
+      <button type="button" class="wf-btn wf-btn-accent" id="cdx-confirm">Add these questions</button>
+    </div>
+  </div>
+</div>
+
 <div class="eem-overlay" id="cd-email-overlay">
   <div class="eem-modal">
     <div class="eem-modal-header">
@@ -1959,6 +1996,152 @@
   // opens a small menu (Replace file / Remove file, Remove in red)." Same
   // rule for the empty state too: one "+ Add file" trigger opening
   // {Upload file, Add a link} instead of two buttons sitting side by side.
+  // ---------- Extract Questions from the Word Controlling Document ----------
+  // Greg (10 Nov 26): "i'm still lost. the Controlling Document has been
+  // uploaded and all i can do is open the Word document as i always could.
+  // Nothing has been extracted into the Upload Research questions nor do i
+  // see any kind of an action button anywhere that would kick off some
+  // process to add the Research Questions so the specialists can start
+  // work."
+  //
+  // The button belongs on THIS row, beside the file, because this is the
+  // screen somebody is on when they have just attached one. Two earlier
+  // passes put it on controlling_document.html, which is not reachable from
+  // here except from inside the Change menu -- so it may as well not have
+  // existed.
+  //
+  // What it does: sends the storage path to extract-controlling-questions,
+  // which downloads the .docx, unzips it and reads the questions out.
+  // Nothing is written until the Team Lead has seen all of them and pressed
+  // the button; then they are inserted and the specialists have work.
+  const CDX_AREA_LABEL = {
+    market_dynamics: "Market Dynamics Research", outbound: "Outbound Marketing",
+    inbound: "Inbound Marketing", watering_holes: "Watering Holes",
+  };
+  const CDX_AREA_ORDER = ["market_dynamics", "outbound", "inbound", "watering_holes"];
+  let cdxFound = [];
+  let cdxExisting = [];
+
+  function closeExtractModal() {
+    const ov = $("cdx-overlay");
+    if (ov) ov.classList.remove("open");
+  }
+
+  async function openExtractModal(path) {
+    if (!currentClient || !path) return;
+    const btn = document.querySelector("[data-wf-extract]");
+    if (btn) { btn.disabled = true; btn.textContent = "Reading the document…"; }
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) throw new Error("Your session has expired — sign in again.");
+
+      const [res, existingRes] = await Promise.all([
+        fetch(`${SUPABASE_URL}/functions/v1/extract-controlling-questions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ storagePath: path }),
+        }),
+        sb.from("client_research_questions")
+          .select("id, research_area, sort_order").eq("client_id", currentClient.id),
+      ]);
+
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok || out.error) throw new Error(out.error || `The extractor returned ${res.status}.`);
+      cdxFound = out.questions || [];
+      cdxExisting = existingRes.data || [];
+
+      if (!cdxFound.length) {
+        showBanner("No research questions were found in that Word document.", "error");
+        return;
+      }
+
+      const n = cdxFound.length;
+      $("cdx-sub").textContent =
+        `${n} question${n === 1 ? "" : "s"} read from the attached document. Nothing is saved until you press the button.`;
+
+      // Already-there questions are the one thing that can make this a mess:
+      // run it twice and you get everything twice. Say so plainly rather
+      // than merging or de-duplicating behind the Team Lead's back.
+      let html = cdxExisting.length
+        ? `<div class="cdx-warn"><strong>This engagement already has ${cdxExisting.length} question${cdxExisting.length === 1 ? "" : "s"}.</strong> Adding these will put them alongside, not replace them. If you have run this before, cancel and check Upload Research first.</div>`
+        : "";
+
+      CDX_AREA_ORDER.forEach((area) => {
+        const rows = cdxFound.filter((q) => (q.research_area || "market_dynamics") === area);
+        if (!rows.length) return;
+        html += `<div class="cdx-area"><div class="cdx-area-head">${escapeHtml(CDX_AREA_LABEL[area])}</div>`;
+        rows.forEach((q) => {
+          const num = q.question_number == null ? "" : `<span class="cdx-num">${q.question_number}.</span> `;
+          html += `<div class="cdx-q"><div class="cdx-q-text">${num}${escapeHtml(q.question)}</div>`;
+          html += q.background
+            ? `<div class="cdx-q-bg">${escapeHtml(q.background)}</div>`
+            : `<div class="cdx-q-none">No background in the document for this one.</div>`;
+          html += `</div>`;
+        });
+        html += `</div>`;
+      });
+      $("cdx-body").innerHTML = html;
+      $("cdx-overlay").classList.add("open");
+    } catch (e) {
+      showBanner(e.message || "Could not read that Word document.", "error");
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = "&#10022;&nbsp; Extract Questions"; }
+    }
+  }
+
+  async function confirmExtractedQuestions() {
+    if (!cdxFound.length || !currentClient) return;
+    const btn = $("cdx-confirm");
+    btn.disabled = true;
+    btn.textContent = "Adding…";
+    try {
+      // sort_order continues each area's own run rather than restarting,
+      // so questions added to an engagement that already has some land
+      // under the ones already there.
+      const nextSort = {};
+      CDX_AREA_ORDER.forEach((area) => {
+        const mine = cdxExisting.filter((q) => q.research_area === area).map((q) => q.sort_order || 0);
+        nextSort[area] = mine.length ? Math.max(...mine) + 1 : 1;
+      });
+      const rows = cdxFound.map((q) => {
+        const area = CDX_AREA_ORDER.includes(q.research_area) ? q.research_area : "market_dynamics";
+        return {
+          client_id: currentClient.id,
+          research_area: area,
+          question: q.question,
+          background: q.background || null,
+          question_number: q.question_number,
+          sort_order: nextSort[area]++,
+        };
+      });
+      // INSERT, not UPDATE: row-level security refuses these with a real
+      // 403, so there is no silent-success trap here to guard against.
+      const { error } = await sb.from("client_research_questions").insert(rows);
+      if (error) throw new Error(error.message);
+      closeExtractModal();
+      showBanner(`${rows.length} question${rows.length === 1 ? "" : "s"} added. They are on Upload Research now, ready to assign.`, "success");
+      cdxFound = [];
+    } catch (e) {
+      showBanner("Could not add the questions: " + (e.message || "unknown error"), "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Add these questions";
+    }
+  }
+
+  (function wireExtractModal() {
+    const ov = $("cdx-overlay");
+    if (!ov) return;
+    $("cdx-close").addEventListener("click", closeExtractModal);
+    $("cdx-cancel").addEventListener("click", closeExtractModal);
+    $("cdx-confirm").addEventListener("click", confirmExtractedQuestions);
+    ov.addEventListener("click", (e) => { if (e.target === ov) closeExtractModal(); });
+  })();
+
   function renderWorkflowFileField(f) {
     // Greg (11/1/26): "we need to make sure we can accommodate multiple
     // research review call recordings/files... maybe a file and a name to
@@ -1981,6 +2164,13 @@
     const url = workflowData && workflowData[f.urlColumn];
     const createBtnHtml = f.key === "discovery" ? `<button type="button" data-wf-create>Discovery Call Notes (form)</button>`
       : f.key === "controlling" ? `<button type="button" data-wf-create>Create Controlling Document</button>` : "";
+    // Only on the Controlling Document row, and only when what is attached
+    // is a .docx this can actually read. An older binary .doc is refused by
+    // the function with the fix in the message, but there is no point
+    // offering the button for a PDF.
+    const extractBtnHtml = (f.key === "controlling" && /\.docx$/i.test(path || ""))
+      ? `<button type="button" class="wf-btn wf-btn-accent" data-wf-extract>&#10022;&nbsp; Extract Questions</button>`
+      : "";
     const createAction = f.key === "discovery" ? [{ sel: "[data-wf-create]", fn: () => openDiscoveryCallNotesForm() }]
       : f.key === "controlling" ? [{ sel: "[data-wf-create]", fn: () => openControllingDocumentForm() }] : [];
 
@@ -2002,7 +2192,10 @@
             <button type="button" class="wf-menu-danger" data-wf-remove>Remove file</button>
           </div>
         </div>
+        ${extractBtnHtml}
       `;
+      const exBtn = actions.querySelector("[data-wf-extract]");
+      if (exBtn) exBtn.addEventListener("click", () => openExtractModal(path));
       wireWfChangeMenu(actions, [
         ...createAction,
         { sel: "[data-wf-replace]", fn: () => pickWorkflowFile(f) },
