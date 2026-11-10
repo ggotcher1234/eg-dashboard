@@ -410,6 +410,9 @@
      engagement name (Greg, 9/11/26, from the review). Under the name it
      pushed every other row's height around and buried the reason in the
      one place the eye had already left. */
+  .cr-hold-mode { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .cr-hold-mode.due { color: var(--danger-dark); font-weight: 700; }
+  .cr-hold-reason { font-size: 12px; color: var(--text); line-height: 1.35; }
   .cr-overdue-reason { font-size: 11.5px; color: var(--danger-dark); line-height: 1.35; min-width: 0; }
   /* The badge and the Comments link stack rather than sitting side by side:
      the column is narrow and "Comments (3)" beside the badge pushed the row
@@ -706,8 +709,6 @@
   .eng-ready-chip:hover { background: #e2eedd; }
   .eng-ready-chip.active { background: #37562c; border-color: #37562c; color: #fff; }
   .eng-ready-chip .erc-when { font-weight: 500; opacity: 0.85; }
-  .eng-hold-chip { border-color: #ecd3a3; background: #fdf1dc; color: var(--amber); }
-  .eng-hold-chip:hover { background: #f9e6c4; }
 
   .engagements-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
   .eng-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px 18px 12px; }
@@ -844,6 +845,7 @@
              others. -->
         <button type="button" class="nav-link-dropdown-btn nav-caret-only" aria-label="Engagements menu"><span class="nav-caret">&#9662;</span></button>
         <div class="nav-submenu">
+          <a href="index.html?status=on_hold">On Hold Engagements</a>
           <a href="index.html?status=closed">Closed Engagements</a>
         </div>
       </div>
@@ -988,7 +990,6 @@
                the panel replaces them. -->
           <div class="eng-panel-desc" id="eng-panel-desc">Engagements currently In Progress, grouped by Program. Click one to open its Engagement Workspace.</div>
           <button type="button" class="eng-ready-chip hidden" id="eng-ready-chip"></button>
-          <button type="button" class="eng-ready-chip eng-hold-chip hidden" id="eng-hold-chip"></button>
           <!-- Rita (10/2/26): "when I search for a specific TL or Program, it
                takes me back to the roster and the program information. There
                are a lot of times I just want to see the engagements for a
@@ -1010,7 +1011,7 @@
         <div class="eng-list-header">
           <div></div>
           <div></div>
-          <div class="eng-col-title">Start Date</div>
+          <div class="eng-col-title" id="eng-col-start">Start Date</div>
           <div class="eng-col-title" id="eng-col-days">Days in Progress</div>
           <div class="eng-col-title" id="eng-col-why">Why Overdue</div>
         </div>
@@ -1537,9 +1538,10 @@
       applyArchiveViewChrome();
     }
     // On Hold (Chris/Greg, 11/9/26): engagements parked until a return date
-    // -- clients who want in the queue but start after the new year. Same
-    // list, its own view; migration 194 puts each back In Progress on its
-    // hold_until date.
+    // -- clients who want in the queue but start after the new year. Reached
+    // from Engagements > On Hold Engagements in the nav, like Closed; never
+    // mixed into the main In Progress list. Migration 194 puts each back In
+    // Progress on its hold_until date.
     if (requestedStatus === "on_hold") {
       archiveStatus = "on_hold";
       engagementStatusFilter = "on_hold";
@@ -1576,10 +1578,12 @@
         'Engagements On Hold, grouped by Program. Each returns to In Progress on its own on the date shown. ' +
         '<a href="index.html" class="eng-back-link">&larr; Back to In Progress</a>';
     }
+    const startCol = $("eng-col-start");
+    if (startCol) startCol.textContent = "On Hold Since";
     const daysCol = $("eng-col-days");
-    if (daysCol) daysCol.textContent = "Returns";
+    if (daysCol) daysCol.textContent = "Returns / Check In";
     const whyCol = $("eng-col-why");
-    if (whyCol) whyCol.textContent = "";
+    if (whyCol) whyCol.textContent = "Why On Hold";
   }
 
   // hold_until is a plain date ("2027-01-01"); new Date() would read it as
@@ -2308,7 +2312,9 @@
     // now the same first_in_progress_at the day count and the overdue clock
     // already run on, so the column and the number next to it agree.
     const startAnchor = c.first_in_progress_at || c.status_since;
-    const startDateText = startAnchor ? formatLastActivity(startAnchor) : "—";
+    const startDateText = archiveStatus === "on_hold"
+      ? (c.status_since ? formatLastActivity(c.status_since) : "—")
+      : startAnchor ? formatLastActivity(startAnchor) : "—";
     const daysInProgress = daysSince(c.first_in_progress_at || c.status_since);
     const daysInProgressText = Number.isFinite(daysInProgress) ? `${daysInProgress} day${daysInProgress === 1 ? "" : "s"}` : "—";
     // In the closed view the same cell carries the closing date. status_since
@@ -2316,8 +2322,15 @@
     // when it was closed. No aging dot -- statusAgeDotHtml already returns
     // nothing for anything but In Progress, but the count beside it would
     // otherwise read as "closed 400 days ago" dressed up as progress.
+    // On Hold view (195): when it's on hold since, what happens on its date
+    // (comes back by itself, or just a check-in reminder), and why. A
+    // reminder-type hold whose date has passed is flagged Check-in due --
+    // it sits there until someone brings it back or sets a new date.
+    const holdDue = c.project_status === "on_hold" && c.hold_auto_return === false
+      && c.hold_until && c.hold_until <= new Date().toLocaleDateString("en-CA");
     const lastCellHtml = archiveStatus === "on_hold"
-      ? `<span class="cr-closed-on">${formatPlainDate(c.hold_until)}</span>`
+      ? `<span class="cr-closed-on">${formatPlainDate(c.hold_until)}</span><div class="cr-hold-mode${holdDue ? " due" : ""}">${
+          c.hold_auto_return === false ? (holdDue ? "Check-in due" : "Check-in reminder") : "Returns automatically"}</div>`
       : archiveStatus
       ? `<span class="cr-closed-on">${c.status_since ? formatLastActivity(c.status_since) : "—"}</span>`
       : `<span class="status-pill">${statusAgeDotHtml(c)}${daysInProgressText}</span>`;
@@ -2337,7 +2350,7 @@
             <span class="ob-word">Overdue</span>
             <span class="ob-comments">${COMMENT_ICON}${(delayNotesByClient[c.id] || []).length || ""}</span>
           </button>
-        ` : ""}</div>
+        ` : c.project_status === "on_hold" && c.hold_reason ? `<span class="cr-hold-reason">${escapeHtml(c.hold_reason)}</span>` : ""}</div>
       </div>
     `;
   }
@@ -2627,7 +2640,6 @@
     // The chip counts against the scope in effect (mine / all) but before the
     // search box, so the number on it does not move while someone is typing.
     renderReadyChip(pool);
-    renderOnHoldChip(scopedPool);
     if (showOnlyReadyToClose) pool = pool.filter(isReadyToClose);
 
     // Name, Program and Team Lead -- the three things visible on the row, so
@@ -2708,20 +2720,6 @@
       ? "Showing only engagements waiting to be closed. Click to show all again."
       : "These clients have returned their Evaluation Sheet. Click to see just those.";
   }
-
-  // "N on hold" beside the ready-to-close chip, In Progress view only. The
-  // way into the On Hold view without adding a nav item to every page.
-  function renderOnHoldChip(scopedPool) {
-    const chip = $("eng-hold-chip");
-    if (!chip) return;
-    const held = scopedPool.filter((c) => c.project_status === "on_hold");
-    if (!held.length || archiveStatus) { chip.classList.add("hidden"); return; }
-    const next = held.map((c) => c.hold_until).filter(Boolean).sort()[0];
-    chip.classList.remove("hidden");
-    chip.innerHTML = `${held.length} on hold` + (next ? `<span class="erc-when">&middot; next back ${escapeHtml(formatPlainDate(next))}</span>` : "");
-    chip.title = "Engagements parked until a start date. Click to see them.";
-  }
-  $("eng-hold-chip").addEventListener("click", () => { location.href = "index.html?status=on_hold"; });
 
   $("eng-ready-chip").addEventListener("click", () => {
     showOnlyReadyToClose = !showOnlyReadyToClose;

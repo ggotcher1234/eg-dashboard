@@ -451,8 +451,13 @@
   .ai-answer-actions button:hover { color: var(--text); background: #f4f6f8; }
   .ai-drawer-footer { padding: 12px 22px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); text-align: center; }
   /* On Hold return date (194) */
-  .hold-until-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -10px 0 18px; font-size: 12.5px; color: var(--amber); font-weight: 600; }
-  .hold-until-row input[type="date"] { font: inherit; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
+  .hold-until-row { display: flex; flex-direction: column; gap: 8px; margin: -10px 0 18px; padding: 12px 14px; background: #fdf8ee; border: 1px solid #f0dca6; border-radius: 8px; font-size: 12.5px; color: #7a5c17; font-weight: 600; }
+  .hold-until-row.hidden { display: none; }
+  .hold-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .hold-line label { display: inline-flex; align-items: center; gap: 5px; }
+  .hold-until-row input[type="date"], .hold-until-row input[type="text"] { font: inherit; font-weight: 500; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: #fff; }
+  .hold-until-row input[type="text"] { flex: 1; min-width: 220px; }
+  .hold-note { font-weight: 500; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -474,6 +479,7 @@
         <a class="nav-link active" href="index.html">Engagements</a>
         <button type="button" class="nav-link-dropdown-btn nav-caret-only" aria-label="Engagements menu"><span class="nav-caret">&#9662;</span></button>
         <div class="nav-submenu">
+          <a href="index.html?status=on_hold">On Hold Engagements</a>
           <a href="index.html?status=closed">Closed Engagements</a>
         </div>
       </div>
@@ -661,11 +667,25 @@
         </div>
 
         <div class="status-pill-bar" id="project-status-toggle"></div>
+        <!-- On Hold details (194/195). Two kinds of hold: a known start date
+             (comes back by itself) or an open-ended one -- illness, the
+             client went quiet -- where the date is a check-in reminder and
+             the engagement stays parked until someone brings it back. -->
         <div id="hold-until-row" class="hold-until-row hidden">
-          <label for="hold-until-input" id="hold-until-label">Returns to In Progress on</label>
-          <input type="date" id="hold-until-input">
-          <button type="button" class="btn-primary btn-sm" id="hold-until-save">Put on hold</button>
-          <button type="button" class="btn-ghost btn-sm" id="hold-until-cancel">Cancel</button>
+          <div class="hold-line">
+            <label for="hold-reason-input">Why</label>
+            <input type="text" id="hold-reason-input" maxlength="200" placeholder="e.g. Client starts after the new year; owner out sick">
+          </div>
+          <div class="hold-line">
+            <label><input type="radio" name="hold-mode" value="auto" id="hold-mode-auto"> Back to In Progress automatically on</label>
+            <label><input type="radio" name="hold-mode" value="remind" id="hold-mode-remind"> Stay On Hold, remind us to check in on</label>
+          </div>
+          <div class="hold-line">
+            <input type="date" id="hold-until-input">
+            <button type="button" class="btn-primary btn-sm" id="hold-until-save">Put on hold</button>
+            <button type="button" class="btn-ghost btn-sm" id="hold-until-cancel">Cancel</button>
+            <span class="hold-note" id="hold-note"></span>
+          </div>
         </div>
         <!-- The month-end caption came out here too (Greg, 10/23/26). The
              locked Closed pill still carries the rule as a tooltip and in
@@ -1412,19 +1432,34 @@
     holdInput.value = c.hold_until || "";
     holdInput.disabled = !canSetStatus;
     holdInput.min = new Date(Date.now() + 86400000).toLocaleDateString("en-CA");
-    $("hold-until-label").textContent = onHold ? "Returns to In Progress on" : "Return to In Progress on";
-    $("hold-until-save").textContent = onHold ? "Change date" : "Put on hold";
+    $("hold-reason-input").value = onHold ? (c.hold_reason || "") : "";
+    $("hold-reason-input").disabled = !canSetStatus;
+    const autoReturn = onHold ? c.hold_auto_return !== false : true;
+    $("hold-mode-auto").checked = autoReturn;
+    $("hold-mode-remind").checked = !autoReturn;
+    $("hold-mode-auto").disabled = $("hold-mode-remind").disabled = !canSetStatus;
+    $("hold-note").textContent = onHold
+      ? (c.hold_reminded_on ? "Check-in reminder sent — bring it back In Progress or set a new date." : "")
+      : "The Team Lead and Admins get a bell notification on this date.";
+    $("hold-until-save").textContent = onHold ? "Save changes" : "Put on hold";
     $("hold-until-save").classList.toggle("hidden", !canSetStatus);
     $("hold-until-cancel").classList.toggle("hidden", onHold);
     $("hold-until-cancel").onclick = () => holdRow.classList.add("hidden");
     $("hold-until-save").onclick = async () => {
-      if (!holdInput.value) { showBanner("Pick the date it should come back.", "error"); return; }
+      const auto = $("hold-mode-auto").checked;
+      if (!holdInput.value) { showBanner(auto ? "Pick the date it should come back." : "Pick a date to check in.", "error"); return; }
       $("hold-until-save").disabled = true;
-      const { error } = await egWrite(sb.from("clients").update({ project_status: "on_hold", hold_until: holdInput.value }).eq("id", c.id));
+      const { error } = await egWrite(sb.from("clients").update({
+        project_status: "on_hold",
+        hold_until: holdInput.value,
+        hold_auto_return: auto,
+        hold_reason: $("hold-reason-input").value.trim() || null,
+      }).eq("id", c.id));
       $("hold-until-save").disabled = false;
       if (error) { showBanner("Couldn't put this engagement on hold: " + error.message, "error"); return; }
       const [y, m, d] = holdInput.value.split("-").map(Number);
-      showBanner("On Hold — back In Progress on " + new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) + ".", "success");
+      const when = new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+      showBanner(auto ? "On Hold — back In Progress on " + when + "." : "On Hold — check-in reminder set for " + when + ".", "success");
       await openClient(c.id);
     };
 
