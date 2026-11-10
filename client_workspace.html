@@ -1419,12 +1419,12 @@
 
 
     $("project-status-toggle").innerHTML = PROJECT_STATUSES.map((s) => `
-      <button type="button" data-pstatus="${s}" class="badge badge-${s} status-pill ${s === c.project_status ? "active" : ""}" ${(isSuperAdmin || isTeamLeadHere) ? "" : "disabled"}>${PROJECT_STATUS_LABELS[s]}</button>
+      <button type="button" data-pstatus="${s}" class="badge badge-${s} status-pill ${s === c.project_status ? "active" : ""}" ${(isSuperAdmin || (isTeamLeadHere && s !== "on_hold" && c.project_status !== "on_hold")) ? "" : "disabled"}>${PROJECT_STATUS_LABELS[s]}</button>
     `).join("");
     // Hold row: while On Hold it shows (and can change) the return date;
     // otherwise it only opens when the On Hold pill is pressed, since a hold
     // without a return date is exactly what this is meant to prevent.
-    const canSetStatus = isSuperAdmin || isTeamLeadHere;
+    const canSetStatus = isSuperAdmin; // putting on / editing a hold is Admin-only (197)
     const holdRow = $("hold-until-row");
     const holdInput = $("hold-until-input");
     const onHold = c.project_status === "on_hold";
