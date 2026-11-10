@@ -298,6 +298,17 @@
   }
   .status-reopen:hover:not(:disabled) { color: var(--navy); border-color: var(--navy); }
   .status-reopen:disabled { cursor: default; opacity: 0.6; }
+  /* On Hold (11/9/26) */
+  .hold-info { font-size: 12.5px; color: #7a5c17; margin-top: 6px; }
+  .hold-info .hold-due { color: var(--danger-dark); font-weight: 700; }
+  .hold-form { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding: 12px 14px; background: #fdf8ee; border: 1px solid #f0dca6; border-radius: 8px; font-size: 12.5px; color: #7a5c17; font-weight: 600; max-width: 640px; }
+  .hold-form .hold-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .hold-form label { display: inline-flex; align-items: center; gap: 5px; }
+  .hold-form input[type="date"], .hold-form input[type="text"] { font: inherit; font-weight: 500; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: #fff; }
+  .hold-form input[type="text"] { flex: 1; min-width: 220px; }
+  .hold-save { font-family: inherit; font-size: 12px; font-weight: 700; padding: 6px 14px; border-radius: 8px; border: none; background: var(--accent); color: #fff; cursor: pointer; }
+  .hold-save:hover:not(:disabled) { background: var(--accent-dark); }
+  .hold-hint { font-weight: 500; color: var(--muted); font-size: 11.5px; }
 
   /* ---------- Header notes (Greg, 9/6/26, to his mockup) ----------
      One panel design for all three notes that can appear in the client
@@ -1077,6 +1088,28 @@
               <span class="badge hidden" id="cm-status-badge"></span>
               <div class="status-action-row hidden" id="cm-status-toggle"></div>
             </span>
+            <!-- On Hold (194-196, Greg 11/9/26). Put on hold / edit / take off
+                 hold lives here on the engagement's own page. Two kinds of
+                 hold: a known start date (comes back by itself) or open-ended
+                 -- illness, the client went quiet -- where the date is only a
+                 check-in reminder. -->
+            <div class="hold-info hidden" id="cm-hold-info"></div>
+            <div class="hold-form hidden" id="cm-hold-form">
+              <div class="hold-line">
+                <label for="cm-hold-reason">Why</label>
+                <input type="text" id="cm-hold-reason" maxlength="200" placeholder="e.g. Client starts after the new year; owner out sick">
+              </div>
+              <div class="hold-line">
+                <label><input type="radio" name="cm-hold-mode" id="cm-hold-auto"> Back to In Progress automatically on</label>
+                <label><input type="radio" name="cm-hold-mode" id="cm-hold-remind"> Stay On Hold, remind us to check in on</label>
+              </div>
+              <div class="hold-line">
+                <input type="date" id="cm-hold-date">
+                <button type="button" class="hold-save" id="cm-hold-save">Put on hold</button>
+                <button type="button" class="status-reopen" id="cm-hold-cancel">Cancel</button>
+              </div>
+              <div class="hold-hint">The Team Lead and Admins get a bell notification on this date.</div>
+            </div>
             </div>
 
             <!-- Greg (9/6/26): "make all note boxes in the header the same
@@ -2589,24 +2622,93 @@
   // are still in the data and that is the only way back for them. It is a
   // correction, not a step, and it disappears on its own once nothing can
   // reach the closed state from here.
+  //
+  // On Hold (11/9/26) is the other exception: Admins and the Team Lead get a
+  // quiet "Put on hold" button while it's In Progress, and while it's On Hold
+  // the badge, the return/check-in date and the reason show here with Edit
+  // and Take off hold.
   function renderStatusToggle(client) {
     const box = $("cm-status-toggle");
-    $("cm-status-badge").classList.add("hidden");
+    const badge = $("cm-status-badge");
     const closed = client.project_status === "closed";
+    const onHold = client.project_status === "on_hold";
+    const canHold = isSuperAdmin || isTeamLeadHere;
     const showReopen = closed && isSuperAdmin;
-    box.innerHTML = showReopen
-      ? `<button type="button" class="status-reopen" id="cm-reopen-btn">Reopen</button>`
-      : "";
-    box.classList.toggle("hidden", !showReopen);
-    if (showReopen) {
-      $("cm-reopen-btn").addEventListener("click", () => setProjectStatus("in_progress"));
+
+    badge.className = "badge" + (onHold ? " badge-on_hold" : " hidden");
+    badge.textContent = onHold ? "On Hold" : "";
+
+    let html = "";
+    if (showReopen) html = `<button type="button" class="status-reopen" id="cm-reopen-btn">Reopen</button>`;
+    else if (client.project_status === "in_progress" && canHold) html = `<button type="button" class="status-reopen" id="cm-hold-open">Put on hold</button>`;
+    else if (onHold && canHold) html = `<button type="button" class="status-reopen" id="cm-hold-edit">Edit hold</button><button type="button" class="status-reopen" id="cm-hold-off">Take off hold</button>`;
+    box.innerHTML = html;
+    box.classList.toggle("hidden", !html);
+    if (showReopen) $("cm-reopen-btn").addEventListener("click", () => setProjectStatus("in_progress"));
+    if ($("cm-hold-open")) $("cm-hold-open").addEventListener("click", () => openHoldForm(client));
+    if ($("cm-hold-edit")) $("cm-hold-edit").addEventListener("click", () => openHoldForm(client));
+    if ($("cm-hold-off")) $("cm-hold-off").addEventListener("click", () => setProjectStatus("in_progress"));
+
+    const info = $("cm-hold-info");
+    if (onHold) {
+      const when = client.hold_until ? fmtPlainDate(client.hold_until) : "no date set";
+      const due = client.hold_auto_return === false && client.hold_until && client.hold_until <= new Date().toLocaleDateString("en-CA");
+      info.innerHTML = (client.hold_auto_return === false
+          ? `<span class="${due ? "hold-due" : ""}">${due ? "Check-in due" : "Check in"} ${escapeHtml(when)}</span>`
+          : `Back In Progress automatically ${escapeHtml(when)}`)
+        + (client.hold_reason ? ` &middot; ${escapeHtml(client.hold_reason)}` : "");
+      info.classList.remove("hidden");
+    } else {
+      info.classList.add("hidden");
     }
+    $("cm-hold-form").classList.add("hidden");
   }
+
+  // hold_until is a plain date; new Date("2027-01-01") is UTC midnight and
+  // reads as Dec 31 anywhere in the US.
+  function fmtPlainDate(ymd) {
+    const [y, m, d] = String(ymd).slice(0, 10).split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  function openHoldForm(client) {
+    const onHold = client.project_status === "on_hold";
+    $("cm-hold-reason").value = onHold ? (client.hold_reason || "") : "";
+    const auto = onHold ? client.hold_auto_return !== false : true;
+    $("cm-hold-auto").checked = auto;
+    $("cm-hold-remind").checked = !auto;
+    $("cm-hold-date").value = onHold ? (client.hold_until || "") : "";
+    $("cm-hold-date").min = new Date(Date.now() + 86400000).toLocaleDateString("en-CA");
+    $("cm-hold-save").textContent = onHold ? "Save changes" : "Put on hold";
+    $("cm-hold-form").classList.remove("hidden");
+    $("cm-hold-reason").focus();
+  }
+
+  $("cm-hold-cancel").addEventListener("click", () => $("cm-hold-form").classList.add("hidden"));
+  $("cm-hold-save").addEventListener("click", async () => {
+    const auto = $("cm-hold-auto").checked;
+    const date = $("cm-hold-date").value;
+    if (!date) { showBanner(auto ? "Pick the date it should come back." : "Pick a date to check in.", "error"); return; }
+    $("cm-hold-save").disabled = true;
+    const { data, error } = await egWrite(sb.from("clients").update({
+      project_status: "on_hold",
+      hold_until: date,
+      hold_auto_return: auto,
+      hold_reason: $("cm-hold-reason").value.trim() || null,
+    }).eq("id", activeClient.id));
+    $("cm-hold-save").disabled = false;
+    if (error) { showBanner("Couldn't put this engagement on hold: " + error.message, "error"); return; }
+    Object.assign(activeClient, data[0]);
+    showBanner(auto ? "On Hold — back In Progress " + fmtPlainDate(date) + "." : "On Hold — check-in reminder set for " + fmtPlainDate(date) + ".", "success");
+    renderStatusToggle(activeClient);
+    renderStatusAge(activeClient);
+  });
 
   async function setProjectStatus(newStatus) {
     const box = $("cm-status-toggle");
     box.querySelectorAll("button").forEach((b) => (b.disabled = true));
-    const { error } = await egWrite(sb.from("clients").update({ project_status: newStatus }).eq("id", activeClient.id));
+    const wasOnHold = activeClient.project_status === "on_hold";
+    const { data, error } = await egWrite(sb.from("clients").update({ project_status: newStatus }).eq("id", activeClient.id));
     if (error) {
       // The month-end rule comes back from the database as a finished
       // sentence (170). Prefixing it with "Couldn't update status:" would
@@ -2615,8 +2717,10 @@
       box.querySelectorAll("button").forEach((b) => (b.disabled = false));
       return;
     }
-    activeClient.project_status = newStatus;
-    showBanner(newStatus === "closed" ? "Engagement closed." : "Engagement reopened.", "success");
+    // The row comes back whole: coming off hold restarts the 60-day clock
+    // and clears the hold fields in the database (194/195).
+    Object.assign(activeClient, (data && data[0]) || { project_status: newStatus });
+    showBanner(newStatus === "closed" ? "Engagement closed." : wasOnHold ? "Taken off hold — back In Progress." : "Engagement reopened.", "success");
     renderStatusToggle(activeClient);
     renderStatusAge(activeClient);
   }
