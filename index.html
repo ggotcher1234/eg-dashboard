@@ -706,6 +706,8 @@
   .eng-ready-chip:hover { background: #e2eedd; }
   .eng-ready-chip.active { background: #37562c; border-color: #37562c; color: #fff; }
   .eng-ready-chip .erc-when { font-weight: 500; opacity: 0.85; }
+  .eng-hold-chip { border-color: #ecd3a3; background: #fdf1dc; color: var(--amber); }
+  .eng-hold-chip:hover { background: #f9e6c4; }
 
   .engagements-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(20,48,77,0.05); }
   .eng-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px 18px 12px; }
@@ -986,6 +988,7 @@
                the panel replaces them. -->
           <div class="eng-panel-desc" id="eng-panel-desc">Engagements currently In Progress, grouped by Program. Click one to open its Engagement Workspace.</div>
           <button type="button" class="eng-ready-chip hidden" id="eng-ready-chip"></button>
+          <button type="button" class="eng-ready-chip eng-hold-chip hidden" id="eng-hold-chip"></button>
           <!-- Rita (10/2/26): "when I search for a specific TL or Program, it
                takes me back to the roster and the program information. There
                are a lot of times I just want to see the engagements for a
@@ -1200,8 +1203,8 @@
   let showOnlyReadyToClose = false; // the chip in the panel header
 
   const requestedStatus = new URLSearchParams(location.search).get("status");
-  let archiveStatus = null;         // null | "closed" -- non-null means the
-                                    // closed view is what's on screen.
+  let archiveStatus = null;         // null | "closed" | "on_hold" -- non-null
+                                    // means that view is what's on screen.
 
   const $ = (id) => document.getElementById(id);
   // Chris asked (8/11/26 call) that role names shown to users match current
@@ -1533,6 +1536,15 @@
       engagementStatusFilter = "closed";
       applyArchiveViewChrome();
     }
+    // On Hold (Chris/Greg, 11/9/26): engagements parked until a return date
+    // -- clients who want in the queue but start after the new year. Same
+    // list, its own view; migration 194 puts each back In Progress on its
+    // hold_until date.
+    if (requestedStatus === "on_hold") {
+      archiveStatus = "on_hold";
+      engagementStatusFilter = "on_hold";
+      applyOnHoldViewChrome();
+    }
 
     renderEngagementsList();
   }
@@ -1554,6 +1566,28 @@
     // A closed engagement is never overdue, so that column is dead weight here.
     const whyCol = $("eng-col-why");
     if (whyCol) whyCol.textContent = "";
+  }
+
+  function applyOnHoldViewChrome() {
+    document.title = "On Hold Engagements — NCEG Dashboard";
+    const heading = $("eng-panel-desc");
+    if (heading) {
+      heading.innerHTML =
+        'Engagements On Hold, grouped by Program. Each returns to In Progress on its own on the date shown. ' +
+        '<a href="index.html" class="eng-back-link">&larr; Back to In Progress</a>';
+    }
+    const daysCol = $("eng-col-days");
+    if (daysCol) daysCol.textContent = "Returns";
+    const whyCol = $("eng-col-why");
+    if (whyCol) whyCol.textContent = "";
+  }
+
+  // hold_until is a plain date ("2027-01-01"); new Date() would read it as
+  // UTC midnight and show Dec 31 anywhere west of London.
+  function formatPlainDate(ymd) {
+    if (!ymd) return "—";
+    const [y, m, d] = String(ymd).slice(0, 10).split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   }
 
   // ---------- Notifications (Super Admin only) ----------
@@ -2186,9 +2220,9 @@
     const pool = scopeIds ? allClients.filter((c) => scopeIds.has(c.id)) : allClients;
     const items = [];
     for (const c of pool) {
-      if (c.project_status === "on_hold") {
-        items.push({ client: c, reason: "On Hold", severity: "med" });
-      } else if (["accepted", "in_progress"].includes(c.project_status)) {
+      // On Hold used to be flagged here; it is now a deliberate, dated
+      // parking spot (194), so it is not something needing attention.
+      if (["accepted", "in_progress"].includes(c.project_status)) {
         const d = daysSince(c.last_activity_at || c.updated_at);
         if (d >= STALE_DAYS) items.push({ client: c, reason: `No activity in ${d} days`, severity: d >= 14 ? "high" : "med" });
       }
@@ -2252,7 +2286,8 @@
     // way until the engagement is actually closed" (Greg, 8/29/26). This is
     // the exact list Chris is working from, so it needs to be impossible to
     // miss (Greg, 8/27/26).
-    const overdue = c.project_status !== "closed" && daysSince(c.first_in_progress_at || c.status_since) >= OVERDUE_DAYS;
+    // On Hold is deliberately parked, never overdue (11/9/26).
+    const overdue = c.project_status === "in_progress" && daysSince(c.first_in_progress_at || c.status_since) >= OVERDUE_DAYS;
     // Overdue delay reason (Chris, 9/4/26) -- the Team Lead's answer to
     // "why is it taking longer than expected?" (clients.delay_reason,
     // entered in the Overdue box on client_control_center.html) shown
@@ -2281,7 +2316,9 @@
     // when it was closed. No aging dot -- statusAgeDotHtml already returns
     // nothing for anything but In Progress, but the count beside it would
     // otherwise read as "closed 400 days ago" dressed up as progress.
-    const lastCellHtml = archiveStatus
+    const lastCellHtml = archiveStatus === "on_hold"
+      ? `<span class="cr-closed-on">${formatPlainDate(c.hold_until)}</span>`
+      : archiveStatus
       ? `<span class="cr-closed-on">${c.status_since ? formatLastActivity(c.status_since) : "—"}</span>`
       : `<span class="status-pill">${statusAgeDotHtml(c)}${daysInProgressText}</span>`;
     return `
@@ -2560,6 +2597,10 @@
     specialist: "grouped by Specialist — an engagement appears under everyone assigned to it",
   };
 
+  function VIEW_LABEL() {
+    return archiveStatus === "closed" ? "Closed" : archiveStatus === "on_hold" ? "On Hold" : "In Progress";
+  }
+
   function renderEngagementsList() {
     const list = $("engagements-list");
     const desc = $("eng-panel-desc");
@@ -2569,7 +2610,8 @@
       // applyArchiveViewChrome sets it once at load, and the first group-by
       // render overwrote it, stranding anyone who had switched grouping.
       desc.innerHTML =
-        `Engagements currently ${archiveStatus ? "Closed" : "In Progress"}, ${GROUPBY_DESC[engagementGroupBy]}. Click one to open its Engagement Workspace.`
+        `Engagements currently ${VIEW_LABEL()}, ${GROUPBY_DESC[engagementGroupBy]}. Click one to open its Engagement Workspace.`
+        + (archiveStatus === "on_hold" ? " Each returns to In Progress on the date shown." : "")
         + (archiveStatus ? ' <a href="index.html" class="eng-back-link">&larr; Back to In Progress</a>' : "");
     }
     // Closed (and Accepted/On Hold) engagements are done or not-yet-started
@@ -2585,6 +2627,7 @@
     // The chip counts against the scope in effect (mine / all) but before the
     // search box, so the number on it does not move while someone is typing.
     renderReadyChip(pool);
+    renderOnHoldChip(scopedPool);
     if (showOnlyReadyToClose) pool = pool.filter(isReadyToClose);
 
     // Name, Program and Team Lead -- the three things visible on the row, so
@@ -2619,12 +2662,14 @@
       return;
     }
     if (q && pool.length === 0) {
-      $("engagements-empty").textContent = `No ${archiveStatus ? "closed" : "In Progress"} engagement matches “${engagementQuery.trim()}”.`;
+      $("engagements-empty").textContent = `No ${VIEW_LABEL()} engagement matches “${engagementQuery.trim()}”.`;
       $("engagements-empty").classList.remove("hidden");
       list.innerHTML = "";
       return;
     }
-    $("engagements-empty").textContent = archiveStatus
+    $("engagements-empty").textContent = archiveStatus === "on_hold"
+      ? "Nothing is On Hold."
+      : archiveStatus
       ? (engagementScope === "mine"
           ? `None of the engagements you're assigned to have been closed.`
           : `No engagements have been closed yet.`)
@@ -2663,6 +2708,20 @@
       ? "Showing only engagements waiting to be closed. Click to show all again."
       : "These clients have returned their Evaluation Sheet. Click to see just those.";
   }
+
+  // "N on hold" beside the ready-to-close chip, In Progress view only. The
+  // way into the On Hold view without adding a nav item to every page.
+  function renderOnHoldChip(scopedPool) {
+    const chip = $("eng-hold-chip");
+    if (!chip) return;
+    const held = scopedPool.filter((c) => c.project_status === "on_hold");
+    if (!held.length || archiveStatus) { chip.classList.add("hidden"); return; }
+    const next = held.map((c) => c.hold_until).filter(Boolean).sort()[0];
+    chip.classList.remove("hidden");
+    chip.innerHTML = `${held.length} on hold` + (next ? `<span class="erc-when">&middot; next back ${escapeHtml(formatPlainDate(next))}</span>` : "");
+    chip.title = "Engagements parked until a start date. Click to see them.";
+  }
+  $("eng-hold-chip").addEventListener("click", () => { location.href = "index.html?status=on_hold"; });
 
   $("eng-ready-chip").addEventListener("click", () => {
     showOnlyReadyToClose = !showOnlyReadyToClose;

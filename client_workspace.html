@@ -450,6 +450,9 @@
   .ai-answer-actions button { background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; color: var(--muted); font-size: 12px; }
   .ai-answer-actions button:hover { color: var(--text); background: #f4f6f8; }
   .ai-drawer-footer { padding: 12px 22px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); text-align: center; }
+  /* On Hold return date (194) */
+  .hold-until-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -10px 0 18px; font-size: 12.5px; color: var(--amber); font-weight: 600; }
+  .hold-until-row input[type="date"] { font: inherit; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
 </style>
 </head>
 <body>
@@ -654,10 +657,16 @@
         </div>
 
         <div id="ws-locked-note" class="locked-note hidden">
-          This client is On Hold / Closed — hours can't be changed by the Team Lead or specialists right now. An Admin can still make changes if needed.
+          This engagement is On Hold or Closed — hours can't be changed by the Team Lead or specialists right now. An Admin can still make changes if needed.
         </div>
 
         <div class="status-pill-bar" id="project-status-toggle"></div>
+        <div id="hold-until-row" class="hold-until-row hidden">
+          <label for="hold-until-input" id="hold-until-label">Returns to In Progress on</label>
+          <input type="date" id="hold-until-input">
+          <button type="button" class="btn-primary btn-sm" id="hold-until-save">Put on hold</button>
+          <button type="button" class="btn-ghost btn-sm" id="hold-until-cancel">Cancel</button>
+        </div>
         <!-- The month-end caption came out here too (Greg, 10/23/26). The
              locked Closed pill still carries the rule as a tooltip and in
              the banner it raises when pressed. -->
@@ -1018,7 +1027,11 @@
   }
   // Greg (9/4/26), per Chris: applications go straight to In Progress once
   // a Team Lead is assigned -- no more Accepted-waiting-stage or On Hold.
-  const PROJECT_STATUSES = ["in_progress", "closed"];
+  // On Hold is back (Chris/Greg, 11/9/26) -- now with a return date: a
+  // client who wants in the queue but starts after the new year is parked
+  // until hold_until and goes back In Progress on its own (migration 194),
+  // with a fresh 60-day clock.
+  const PROJECT_STATUSES = ["in_progress", "on_hold", "closed"];
   const PROJECT_STATUS_LABELS = { accepted: "Accepted", in_progress: "In Progress", on_hold: "On Hold", closed: "Closed" };
 
   function showBanner(message, type) {
@@ -1388,10 +1401,38 @@
     $("project-status-toggle").innerHTML = PROJECT_STATUSES.map((s) => `
       <button type="button" data-pstatus="${s}" class="badge badge-${s} status-pill ${s === c.project_status ? "active" : ""}" ${(isSuperAdmin || isTeamLeadHere) ? "" : "disabled"}>${PROJECT_STATUS_LABELS[s]}</button>
     `).join("");
+    // Hold row: while On Hold it shows (and can change) the return date;
+    // otherwise it only opens when the On Hold pill is pressed, since a hold
+    // without a return date is exactly what this is meant to prevent.
+    const canSetStatus = isSuperAdmin || isTeamLeadHere;
+    const holdRow = $("hold-until-row");
+    const holdInput = $("hold-until-input");
+    const onHold = c.project_status === "on_hold";
+    holdRow.classList.toggle("hidden", !onHold);
+    holdInput.value = c.hold_until || "";
+    holdInput.disabled = !canSetStatus;
+    holdInput.min = new Date(Date.now() + 86400000).toLocaleDateString("en-CA");
+    $("hold-until-label").textContent = onHold ? "Returns to In Progress on" : "Return to In Progress on";
+    $("hold-until-save").textContent = onHold ? "Change date" : "Put on hold";
+    $("hold-until-save").classList.toggle("hidden", !canSetStatus);
+    $("hold-until-cancel").classList.toggle("hidden", onHold);
+    $("hold-until-cancel").onclick = () => holdRow.classList.add("hidden");
+    $("hold-until-save").onclick = async () => {
+      if (!holdInput.value) { showBanner("Pick the date it should come back.", "error"); return; }
+      $("hold-until-save").disabled = true;
+      const { error } = await egWrite(sb.from("clients").update({ project_status: "on_hold", hold_until: holdInput.value }).eq("id", c.id));
+      $("hold-until-save").disabled = false;
+      if (error) { showBanner("Couldn't put this engagement on hold: " + error.message, "error"); return; }
+      const [y, m, d] = holdInput.value.split("-").map(Number);
+      showBanner("On Hold — back In Progress on " + new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) + ".", "success");
+      await openClient(c.id);
+    };
+
     document.querySelectorAll("#project-status-toggle button").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const newStatus = btn.dataset.pstatus;
         if (newStatus === c.project_status) return;
+        if (newStatus === "on_hold") { holdRow.classList.remove("hidden"); holdInput.focus(); return; }
         document.querySelectorAll("#project-status-toggle button").forEach((b) => (b.disabled = true));
         const { error } = await egWrite(sb.from("clients").update({ project_status: newStatus }).eq("id", c.id));
         if (error) {
