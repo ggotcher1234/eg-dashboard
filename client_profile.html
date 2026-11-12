@@ -3430,7 +3430,14 @@
   // client-style list -- bold title + muted description, one divider per
   // row, plus a red x to remove. No inline editing here. Shared rows
   // unlink from this client; a client-specific row deletes outright.
+  //
+  // Greg (12/11/26): "a specialist should not be able to delete resources."
+  // The x is now Team Lead and Admin only. Adding and editing stay open to
+  // anyone assigned -- a specialist dropping a report in here is the point
+  // of the section -- so only removal narrows. Matched by RLS in migration
+  // 195, because a hidden button is a suggestion, not a rule.
   function renderResourceVaultRows(rows) {
+    const canRemove = isSuperAdmin || isTeamLeadHere;
     const list = $("resource_vault-list");
     if (!rows.length) {
       list.innerHTML = `<div class="list-empty" style="padding:16px;">Nothing added yet.</div>`;
@@ -3446,6 +3453,9 @@
       const removeAttr = r.isTemplate
         ? `data-unlink-id="${r.id}" title="Remove from this client's Resources"`
         : `data-delete-id="${r.id}" title="Delete this resource"`;
+      const removeBtn = canRemove
+        ? `<button type="button" class="rv-x-btn" ${removeAttr}>&times;</button>`
+        : "";
       return `
         <div class="rv-simple-row" data-row-rv="${r.id}">
           <button type="button" class="rv-drag-handle" draggable="true" data-drag-rv="${r.id}"
@@ -3456,7 +3466,7 @@
             ${r.description ? `<div class="rv-simple-sub">${escapeHtml(r.description)}</div>` : ""}
           </div>
           <button type="button" class="rv-edit-btn" data-edit-id="${r.id}" title="Edit this resource" aria-label="Edit ${title}">&#9998;</button>
-          <button type="button" class="rv-x-btn" ${removeAttr}>&times;</button>
+          ${removeBtn}
         </div>
       `;
     }).join("");
@@ -3482,9 +3492,12 @@
     list.querySelectorAll("[data-delete-id]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const row = (listData.resource_vault || []).find((x) => x.id === btn.dataset.deleteId);
-        if (row && row.storagePath) await sb.storage.from("client-documents").remove([row.storagePath]);
+        // Row first, file second. The other way round, a delete the database
+        // refuses still takes the file with it, and the row is left pointing
+        // at nothing.
         const { error } = await egWrite(sb.from("client_resource_vault_items").delete().eq("id", btn.dataset.deleteId));
         if (error) { showBanner("Couldn't delete: " + error.message, "error"); return; }
+        if (row && row.storagePath) await sb.storage.from("client-documents").remove([row.storagePath]);
         await loadResourceVault(currentClient.id);
       });
     });
