@@ -1340,7 +1340,10 @@
      row is picking "Not assigned" in the name list, which needs no confirm
      because picking a name again undoes it. -->
 
-<!-- Log hours -->
+<!-- Spent Hours. Named for the column it writes to (Greg, 12 Nov 26:
+     'It should be a "Spent Hours" box'). It used to be the Log hours box,
+     which meant the screen said Spent Hours, the FAQ said logged hours and
+     the box said a third thing for one number. -->
 <!-- Why-overdue comments. The same dialog the Engagements list opens, on
      the same client_delay_notes rows, so a comment written on either page
      shows on both. Saved by the Save button only -- never on blur, which is
@@ -1368,7 +1371,7 @@
 
 <div class="overlay" id="tw-log-hours-overlay">
   <div class="modal" style="width:360px;">
-    <h3>Log hours</h3>
+    <h3>Spent Hours</h3>
     <p id="tw-log-hours-text"></p>
     <form id="tw-log-hours-form">
       <div class="field">
@@ -1384,14 +1387,14 @@
            logged, and the line below says what that means for payment so
            nobody has to be told twice. -->
       <div class="field">
-        <label>Date logged</label>
+        <label>Date recorded</label>
         <div class="tw-log-date" id="tw-log-hours-date"></div>
         <div class="tw-log-date-note" id="tw-log-hours-month"></div>
       </div>
       <div class="field-error" id="tw-log-hours-error"></div>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" id="tw-log-hours-cancel">Cancel</button>
-        <button type="submit" class="btn-primary" id="tw-log-hours-submit">Log hours</button>
+        <button type="submit" class="btn-primary" id="tw-log-hours-submit">Add Hours</button>
       </div>
     </form>
   </div>
@@ -3313,7 +3316,7 @@
         .map((id) => usersById()[id])
         .filter((u) => u && u.full_name !== holderName);
       const loggedNote = (!isSunkCostSpecialty(r.specialty_type, activeClient) && otherLoggers.length)
-        ? `<div class="logged-by-note">Hours logged by ${escapeHtml(
+        ? `<div class="logged-by-note">Hours recorded by ${escapeHtml(
             otherLoggers.length <= 2
               ? otherLoggers.map((u) => u.full_name).join(" and ")
               : `${otherLoggers.length} people`
@@ -3339,7 +3342,7 @@
       // work-area name -- the two jobs stay one click each, on the cell each
       // one belongs to.
       const usedDisplay = canLogHours
-        ? `<button type="button" class="spent-link" data-log="${r.id}" title="Log hours">${r.hoursSpent}</button>`
+        ? `<button type="button" class="spent-link" data-log="${r.id}" title="Add Spent Hours">${r.hoursSpent}</button>`
         : `<span>${r.hoursSpent}</span>`;
       const usedCell = `<div class="spent-cell">${usedDisplay}</div>`;
       // Allotted minus spent. A negative is over budget and says so in red
@@ -4187,7 +4190,7 @@
       new Date(yy, mm - 1, dd).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
     const months = paymentMonthFor(today);
     $("tw-log-hours-month").textContent =
-      `Logged against ${months.worked}. ${months.worked} hours are invoiced once the month closes and paid in ${months.invoiced}.`;
+      `Recorded against ${months.worked}. ${months.worked} hours are invoiced once the month closes and paid in ${months.invoiced}.`;
     $("tw-log-hours-overlay").classList.add("open");
   }
   $("tw-log-hours-cancel").addEventListener("click", () => { $("tw-log-hours-overlay").classList.remove("open"); pendingLogAssignmentId = null; });
@@ -4213,7 +4216,7 @@
       // for any more.
     });
     btn.disabled = false;
-    btn.textContent = "Log hours";
+    btn.textContent = "Add Hours";
     if (error) {
       $("tw-log-hours-error").textContent = error.message;
       $("tw-log-hours-error").style.display = "block";
@@ -4221,7 +4224,7 @@
     }
     $("tw-log-hours-overlay").classList.remove("open");
     pendingLogAssignmentId = null;
-    showBanner("Hours logged.", "success");
+    showBanner("Spent Hours updated.", "success");
     await reloadTeam();
   });
 
@@ -4347,7 +4350,7 @@
       <div><strong>${remaining}</strong><span>Remaining</span></div>
     `;
     if (!entries || !entries.length) {
-      $("tw-history-list").innerHTML = `<div class="history-empty">No hours logged yet.</div>`;
+      $("tw-history-list").innerHTML = `<div class="history-empty">No hours recorded yet.</div>`;
       return;
     }
     const months = groupEntriesByMonth(entries).reverse();
