@@ -2691,16 +2691,40 @@
   $("pf-linkedin-edit").addEventListener("click", () => {
     setLinkedInField($("pf-linkedin").value.trim(), true);
   });
-  // Done only folds the row back up -- Save on the form is what writes it,
-  // the same as every other field here. Normalising on the way out means
-  // what they see after Done is what will be stored.
-  $("pf-linkedin-done").addEventListener("click", () => {
-    setLinkedInField(normaliseLinkedIn($("pf-linkedin").value), false);
-  });
+  // Greg (12 Nov 26): "i have added my linkedin profile twice on my Roster
+  // card and yet somehow it has disappeared."
+  //
+  // Done used to fold the row back up and nothing else -- Save on the form
+  // was what wrote it. But the avatar directly above this row commits the
+  // moment it is chosen, so one half of the same block saves itself and the
+  // other half quietly waits, and a button that says Done is read as done.
+  // Closing the panel then threw the address away twice without a word.
+  //
+  // So Done writes it, like the avatar. It stays in the form payload too,
+  // which costs nothing: a later Save sends the same value back.
+  async function commitLinkedIn() {
+    const value = normaliseLinkedIn($("pf-linkedin").value);
+    setLinkedInField(value, false);
+    if (!openProfileId) return;
+    const u = allUsers.find((x) => x.id === openProfileId);
+    // Nothing to write if it has not actually changed -- reopening a profile
+    // and pressing Done should not be a save.
+    if (u && (u.linkedin_url || "") === (value || "")) return;
+    const { error } = await egWrite(
+      sb.from("users").update({ linkedin_url: value || null }).eq("id", openProfileId));
+    if (error) {
+      showBanner("Couldn't save the LinkedIn address: " + error.message, "error");
+      return;
+    }
+    if (u) u.linkedin_url = value || null;
+    showBanner(value ? "LinkedIn address saved." : "LinkedIn address removed.", "success");
+  }
+
+  $("pf-linkedin-done").addEventListener("click", commitLinkedIn);
   $("pf-linkedin").addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     e.preventDefault();   // otherwise Enter submits the whole profile form
-    setLinkedInField(normaliseLinkedIn($("pf-linkedin").value), false);
+    commitLinkedIn();
   });
 
   $("profile-form").addEventListener("submit", async (e) => {
