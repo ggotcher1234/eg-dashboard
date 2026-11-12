@@ -2447,9 +2447,15 @@
     {
       // The only slot that has to say what it is before its contents mean
       // anything -- the name the TL types becomes the slot's heading.
-      // No textColumn: Greg named Competitors, Top Customers and Keywords.
+      //
+      // Greg (12/11/26): "The optional catch all list should have the same
+      // layout as all the others." 189 left this one without a paste box
+      // because he had named three; the catch-all is if anything the
+      // likeliest place for a few names out of an email with no document
+      // behind them. textColumn arrives with 194.
       key: "other", mount: "slot-other", label: "Other",
       pathColumn: "other_list_storage_path", urlColumn: "other_list_url",
+      textColumn: "other_list_text",
       labelColumn: "other_list_label", labelPrompt: "What is this list?",
       labelPlaceholder: "e.g. Trade shows, Distributors, Patent filings",
     },
@@ -2544,6 +2550,7 @@
         <div class="listslot-naming-row">
           <input type="text" id="${slot.mount}-name" placeholder="${escapeHtml(slot.labelPlaceholder)}" value="${escapeHtml(customName)}" />
           <button type="button" class="btn-secondary btn-sm" data-slot-name="${slot.key}">Save name</button>
+          ${customName ? `<button type="button" class="btn-danger btn-sm" data-slot-nameclear="${slot.key}">Clear name</button>` : ""}
         </div>
       </div>` : "";
 
@@ -2616,6 +2623,7 @@
     on("[data-slot-open]", (e) => { e.preventDefault(); openListSlotFile(path); });
     on("[data-slot-remove]", () => clearListSlot(slot));
     on("[data-slot-name]", () => saveListSlotName(slot));
+    on("[data-slot-nameclear]", () => clearListSlotName(slot));
     on("[data-slot-textedit]", () => {
       mount.querySelector(".listslot-view").classList.add("hidden");
       mount.querySelector(".listslot-edit").classList.remove("hidden");
@@ -2703,6 +2711,18 @@
     const name = ($(`${slot.mount}-name`).value || "").trim();
     if (!(await saveListSlot(slot, { [slot.labelColumn]: name || null }))) return;
     showBanner(name ? `Renamed to "${name}".` : "Name cleared.", "success");
+  }
+
+  // Greg (12/11/26): "...and the ability to clear the list and the list
+  // name." Clearing the name was only possible by emptying the box and
+  // pressing Save name, which is not obvious and reads like a no-op. The
+  // button only renders once there is a name to clear, and it leaves the
+  // attachment and the pasted list alone -- the slot goes back to being
+  // called Other and keeps whatever is in it.
+  async function clearListSlotName(slot) {
+    if (!slot.labelColumn) return;
+    if (!(await saveListSlot(slot, { [slot.labelColumn]: null }))) return;
+    showBanner("Name cleared.", "success");
   }
 
   async function clearListSlot(slot) {
