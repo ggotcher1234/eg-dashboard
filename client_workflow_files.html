@@ -294,6 +294,21 @@
   .db-main { flex: 1; min-width: 0; }
   .db-label { font-size: 13.5px; font-weight: 600; color: var(--text); }
   .db-date { font-size: 12px; color: var(--muted); margin-top: 1px; font-variant-numeric: tabular-nums; }
+  /* ---------- Discovery Call Recording (Greg, 12/11/26) ----------
+     "some people may use their own Discovery Document not the form which
+     has the place to add the video file/link. We need to give them a place
+     to add the video file/link to go with their discovery document."
+     A line of its own under the document row rather than another control
+     in it: the row above is about the document, this is about the call it
+     came from, and the two are attached independently. Its own class, not
+     .wf-action-row -- that one's [id$="-file"]:empty rules push the trigger
+     to the right edge, which is right for a two-sided row and wrong here. */
+  .wf-rec { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .wf-rec-label {
+    font-size: 11.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 9px;
+  }
+  .wf-rec-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .db-pass {
     font-family: inherit; font-size: 12.5px; padding: 5px 8px; width: 150px; flex: 0 0 auto;
     border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--text);
@@ -832,6 +847,21 @@
                   </div>
                 </div>
                 <div id="wf-discovery-share"></div>
+              </div>
+              <!-- Greg (12/11/26): the fillable form has an attachment slot
+                   at the bottom for the call recording; a Team Lead who
+                   uploads their own Word Discovery Document never sees it.
+                   Same columns either way in (discovery_notes_*), so a
+                   recording filed here and one filed on the form are the
+                   same recording -- and the client's shared Discovery page
+                   already knows how to show it. -->
+              <div class="wf-rec">
+                <div class="wf-rec-label">Discovery Call Recording</div>
+                <div class="wf-rec-row">
+                  <div id="wf-discovery_recording-file"></div>
+                  <div id="wf-discovery_recording-actions"></div>
+                  <div id="wf-discovery_recording-pass"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -1887,6 +1917,17 @@
     // Document Link buttons." Close-Out keeps its own label -- what it takes
     // is a call recording, which he named himself on 10/13.
     { key: "discovery", label: "Discovery Document", addLabel: "Add Document", pathColumn: "discovery_doc_storage_path", urlColumn: "discovery_doc_url" },
+    // The recording of the call the document came from. discovery_notes_*
+    // is the pair the fillable form's own attachment writes (see the note
+    // at renderNotesPasscode in discovery_call_notes.html, which explains
+    // why the recording stopped sharing discovery_doc_*), so this control
+    // and that one are two doors into one slot -- not a second recording.
+    // Greg (12/11/26). Most Zoom recordings are far past what the storage
+    // bucket takes, so the link is the usual route and the upload is for
+    // the small ones; uploadWorkflowFile says so when a file is refused.
+    { key: "discovery_recording", label: "Discovery Call Recording", addLabel: "Add Recording",
+      pathColumn: "discovery_notes_storage_path", urlColumn: "discovery_notes_url",
+      passcodeColumn: "discovery_notes_passcode" },
     { key: "controlling", label: "Controlling Document", addLabel: "Add Document", pathColumn: "controlling_doc_storage_path", urlColumn: "controlling_doc_url" },
     { key: "review", label: "Debriefing Recording", pathColumn: "research_review_storage_path", urlColumn: "research_review_url" },
     // 10/10/26. NOT closeout_survey_* -- those two are the Evaluation
@@ -1898,7 +1939,8 @@
     // this row's heading is about the email, so the button has to carry the
     // recording on its own. addLabel is per-field, so the other three rows
     // are untouched.
-    { key: "closeout", label: "Close-Out Recording", addLabel: "Attach Close-Out Call Recording", pathColumn: "closeout_recording_storage_path", urlColumn: "closeout_recording_url" },
+    { key: "closeout", label: "Close-Out Recording", addLabel: "Attach Close-Out Call Recording", pathColumn: "closeout_recording_storage_path", urlColumn: "closeout_recording_url",
+      passcodeColumn: "closeout_recording_passcode" },
     // The Evaluation Sheet's own attachment slot (closeout_survey_*, for a
     // CEO who returns the sheet on paper or as a signed PDF) was the fifth
     // entry here. It rendered into the Evaluation Sheet row, which went on
@@ -1947,7 +1989,6 @@
     // rather than from workflowData.
     await loadDebriefings();
     WORKFLOW_FIELDS.forEach(renderWorkflowFileField);
-    renderCloseoutPasscode();
     renderEvalLinkField();
     renderDiscoveryClientField();
     renderControllingClientField();
@@ -1977,6 +2018,9 @@
     // forEach, which killed every render after it: the Create Email buttons
     // on Close-Out and Debriefing, and the Debriefing pane's inline email.
     if (!container || !actions) return;
+    // Before the branches below, because all three of them return, and
+    // every caller updates workflowData before re-rendering the field.
+    renderSlotPasscode(f);
     const path = workflowData && workflowData[f.pathColumn];
     const url = workflowData && workflowData[f.urlColumn];
     const createBtnHtml = f.key === "discovery" ? `<button type="button" data-wf-create>Discovery Call Notes (form)</button>`
@@ -2302,7 +2346,19 @@
     const oldPath = workflowData && workflowData[f.pathColumn];
     const path = `clients/${currentClient.id}/workflow/${f.key}/${Date.now()}-${sanitizeFilename(file.name)}`;
     const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
-    if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
+    if (uploadErr) {
+      // A call recording is an order of magnitude bigger than the documents
+      // these slots were built for, and storage refuses it with a message
+      // that does not say what to do instead. Greg (12/11/26) -- same hint
+      // the Resources uploader already gives.
+      const raw = uploadErr.message || String(uploadErr);
+      const mb = (file.size / 1048576).toFixed(1);
+      const hint = /exceeded the maximum allowed size|payload too large|413/i.test(raw)
+        ? ` This file is ${mb} MB, which is over the storage limit. Share it from Zoom, Fathom or Drive and use "Add a link" instead.`
+        : "";
+      showBanner("Couldn't upload file: " + raw + hint, "error");
+      return;
+    }
     // A field is one or the other -- uploading a file clears any link
     // previously saved in this same slot, same rule Resource Vault uses.
     const { error } = await egWrite(sb.from("client_content").update({ [f.pathColumn]: path, [f.urlColumn]: null }).eq("client_id", currentClient.id));
@@ -2366,29 +2422,35 @@
   // the dropdown on 10/13/26 -- the one email now carries that link itself.
   // If it is ever wanted back, it is in the history at cce6c30.
 
-  // The Close-Out call recording's passcode. Same bargain as the
-  // debriefings': saved on blur, blank clears it, and it rides to the
-  // client's dashboard beside the recording -- a passcode the client cannot
-  // see is a passcode that does not work.
-  function renderCloseoutPasscode() {
-    const box = $("wf-closeout-pass");
+  // A recording slot's passcode. Same bargain as the debriefings': saved
+  // on blur, blank clears it, and it rides to the client's dashboard beside
+  // the recording -- a passcode the client cannot see is a passcode that
+  // does not work.
+  //
+  // Written for Close-Out, made general on 12/11/26 when the Discovery Call
+  // Recording arrived needing the identical box. Any field carrying a
+  // passcodeColumn gets one; the rest render nothing. renderWorkflowFileField
+  // calls it, which also fixes a small Close-Out bug: removing the recording
+  // used to leave its passcode box sitting there until the page reloaded.
+  function renderSlotPasscode(f) {
+    if (!f.passcodeColumn) return;
+    const box = $(`wf-${f.key}-pass`);
     if (!box) return;
-    const attached = workflowData
-      && (workflowData.closeout_recording_url || workflowData.closeout_recording_storage_path);
+    const attached = workflowData && (workflowData[f.urlColumn] || workflowData[f.pathColumn]);
     if (!attached) { box.innerHTML = ""; return; }
 
-    box.innerHTML = `<input type="text" class="db-pass" id="closeout-pass" placeholder="Passcode (optional)"
-      value="${escapeHtml(workflowData.closeout_recording_passcode || "")}" aria-label="Recording passcode" />`;
-    const input = $("closeout-pass");
+    box.innerHTML = `<input type="text" class="db-pass" id="${f.key}-pass" placeholder="Passcode (optional)"
+      value="${escapeHtml(workflowData[f.passcodeColumn] || "")}" aria-label="Recording passcode" />`;
+    const input = $(`${f.key}-pass`);
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
     input.addEventListener("blur", async () => {
       const passcode = (input.value || "").trim() || null;
-      if ((workflowData.closeout_recording_passcode || null) === passcode) return;
+      if ((workflowData[f.passcodeColumn] || null) === passcode) return;
       const { error } = await egWrite(sb.from("client_content")
-        .update({ closeout_recording_passcode: passcode })
+        .update({ [f.passcodeColumn]: passcode })
         .eq("client_id", currentClient.id));
       if (error) { showBanner("Couldn't save the passcode: " + error.message, "error"); return; }
-      workflowData.closeout_recording_passcode = passcode;
+      workflowData[f.passcodeColumn] = passcode;
       showBanner(passcode ? "Passcode saved." : "Passcode cleared.", "success");
     });
   }
