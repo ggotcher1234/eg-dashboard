@@ -138,8 +138,8 @@
   // avoid. It is no longer only about "View as"; the comment at the top
   // says so.
   var HELP_LINKS = [
-    { href: "faq_specialists.html", label: "Specialist FAQ" },
-    { href: "faq_team_leads.html", label: "Team Lead FAQ" }
+    { href: "faq_specialists.html", label: "Specialist FAQs" },
+    { href: "faq_team_leads.html", label: "Team Lead FAQs" }
   ];
 
   function helpLinks() {
