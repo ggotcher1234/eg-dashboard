@@ -320,6 +320,24 @@
   .db-remove { font-family: inherit; font-size: 17px; line-height: 1; color: #b6bfc7; background: none;
                border: none; padding: 2px 6px; cursor: pointer; border-radius: 6px; }
   .db-remove:hover { color: var(--danger); background: #fbeceb; }
+  /* Greg (12/11/26): "Julie misspelled Market Dynamics as Markey Dynamics
+     and needs the ability to edit her misspell." Pencil then x, the same
+     pair and the same order as a Resources row, so the gesture is one the
+     team has already learned. */
+  .db-edit-btn { font-family: inherit; font-size: 15px; line-height: 1; color: #b6bfc7; background: none;
+                 border: none; padding: 2px 6px; cursor: pointer; border-radius: 6px; }
+  .db-edit-btn:hover { color: var(--navy-light); background: #eef4fb; }
+  /* The row in edit mode: the two things that were typed when it was added,
+     back as the fields they were typed in. Everything else on the row is
+     hidden while editing -- a passcode box and an Open link beside a half-
+     finished rename only invite a misclick. */
+  .db-edit-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
+  .db-edit-label, .db-edit-date {
+    font-family: inherit; font-size: 13px; padding: 6px 8px;
+    border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--text);
+  }
+  .db-edit-label { flex: 1 1 220px; min-width: 150px; font-weight: 600; }
+  .db-edit-label:focus, .db-edit-date:focus { border-color: var(--accent); outline: none; }
 
   .db-form { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; width: 100%; }
   .db-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -2145,6 +2163,10 @@
   // reviewed and a date saying WHEN. Newest first, because the question
   // being asked of this list is almost always "where did we get to".
   let debriefings = [];
+  // Which row is open for renaming, if any. Held outside renderDebriefingList
+  // because every save goes through loadWorkflowLinks, which re-renders the
+  // whole list from scratch.
+  let editingDebriefingId = null;
 
   async function loadDebriefings() {
     const { data, error } = await sb.from("client_debriefings")
@@ -2167,7 +2189,17 @@
 
     container.innerHTML = debriefings.length ? `
       <div class="db-list">
-        ${debriefings.map((d) => `
+        ${debriefings.map((d) => d.id === editingDebriefingId ? `
+          <div class="db-row" data-db-row="${d.id}">
+            <div class="db-edit-main">
+              <input type="text" class="db-edit-label" data-db-edit-label="${d.id}"
+                     value="${escapeHtml(d.label || "")}" aria-label="What was reviewed" />
+              <input type="date" class="db-edit-date" data-db-edit-date="${d.id}"
+                     value="${escapeHtml(d.call_date || "")}" aria-label="Date reviewed" />
+              <button type="button" class="btn-primary btn-sm" data-db-save-edit="${d.id}">Save</button>
+              <button type="button" class="btn-secondary btn-sm" data-db-cancel-edit>Cancel</button>
+            </div>
+          </div>` : `
           <div class="db-row" data-db-row="${d.id}">
             <div class="db-main">
               <div class="db-label">${escapeHtml(d.label)}</div>
@@ -2183,6 +2215,8 @@
             ${d.url
               ? `<a class="db-open" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">Open &#8599;</a>`
               : `<button type="button" class="db-open" data-db-open="${d.id}">Open &#8599;</button>`}
+            <button type="button" class="db-edit-btn" data-db-edit="${d.id}"
+                    title="Rename this debriefing" aria-label="Rename ${escapeHtml(d.label)}">&#9998;</button>
             <button type="button" class="db-remove" data-db-remove="${d.id}" aria-label="Remove this debriefing">&times;</button>
           </div>`).join("")}
       </div>` : "";
@@ -2197,6 +2231,29 @@
     });
     container.querySelectorAll("[data-db-remove]").forEach((b) => {
       b.addEventListener("click", () => removeDebriefing(b.dataset.dbRemove));
+    });
+    container.querySelectorAll("[data-db-edit]").forEach((b) => {
+      b.addEventListener("click", () => {
+        editingDebriefingId = b.dataset.dbEdit;
+        renderDebriefingList();
+        const input = container.querySelector("[data-db-edit-label]");
+        // Selected, not just focused: a rename is usually a retype, and the
+        // one time it is not, an arrow key still puts the caret where it
+        // was wanted.
+        if (input) { input.focus(); input.select(); }
+      });
+    });
+    container.querySelectorAll("[data-db-save-edit]").forEach((b) => {
+      b.addEventListener("click", () => saveDebriefingEdit(b.dataset.dbSaveEdit));
+    });
+    container.querySelectorAll("[data-db-cancel-edit]").forEach((b) => {
+      b.addEventListener("click", () => { editingDebriefingId = null; renderDebriefingList(); });
+    });
+    container.querySelectorAll("[data-db-edit-label], [data-db-edit-date]").forEach((input) => {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); saveDebriefingEdit(editingDebriefingId); }
+        if (e.key === "Escape") { editingDebriefingId = null; renderDebriefingList(); }
+      });
     });
 
     actions.innerHTML = `<button type="button" class="wf-btn" id="db-add-btn">+ Add Debriefing</button>`;
@@ -2264,6 +2321,44 @@
       saveDebriefing(path);
     });
     picker.click();
+  }
+
+  // Greg (12/11/26): "Julie misspelled Market Dynamics as Markey Dynamics
+  // and needs the ability to edit her misspell. this is probably true of
+  // all the places where the team lead enters the file name."
+  //
+  // The name and the date are the two things a person types when adding a
+  // debriefing, and until now they were typed once and fixed forever -- the
+  // only way out of a typo was to remove the entry, which also removes the
+  // recording, and re-upload it. (The other places a Team Lead names
+  // something already had a way back: Resources has its pencil, a research
+  // document has Rename. This was the one that did not.)
+  //
+  // The link or file is deliberately not editable here. Swapping what a row
+  // points at is a different act from fixing its spelling, and the list is
+  // what the client's dashboard reads.
+  async function saveDebriefingEdit(id) {
+    const labelEl = document.querySelector(`[data-db-edit-label="${id}"]`);
+    const dateEl = document.querySelector(`[data-db-edit-date="${id}"]`);
+    if (!labelEl || !dateEl) return;
+    const label = (labelEl.value || "").trim();
+    if (!label) { showBanner("Give it a name, so the list says what was reviewed.", "error"); labelEl.focus(); return; }
+    const call_date = dateEl.value || null;
+
+    const row = debriefings.find((d) => d.id === id);
+    if (row && row.label === label && (row.call_date || null) === call_date) {
+      editingDebriefingId = null;
+      renderDebriefingList();
+      return;
+    }
+    const { error } = await egWrite(sb.from("client_debriefings")
+      .update({ label, call_date }).eq("id", id));
+    if (error) { showBanner("Couldn't save it: " + error.message, "error"); return; }
+    editingDebriefingId = null;
+    // The full reload rather than patching the row in place: the list is
+    // ordered by call_date, so changing a date can move the entry.
+    await loadWorkflowLinks(currentClient.id);
+    showBanner("Debriefing updated.", "success");
   }
 
   async function saveDebriefingPasscode(id, value) {
