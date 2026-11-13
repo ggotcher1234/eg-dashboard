@@ -3847,7 +3847,24 @@
     if (cleanCc) params.push("cc=" + encodeURIComponent(cleanCc));
     if (subject) params.push("subject=" + encodeURIComponent(subject));
     // No body parameter. That omission is the whole point.
-    window.location.href = `mailto:${cleanTo}${params.length ? "?" + params.join("&") : ""}`;
+    //
+    // Greg (13/11/26), mid-training: "when i went to Chestnut Ridge -
+    // Scheduling Letter - Open and Paste my Outlook did not open an email
+    // at all."
+    //
+    // The await above is why. Setting location.href to an external-protocol
+    // URL needs a live user gesture, and awaiting the clipboard write spends
+    // the one the click arrived with -- so the copy succeeded, the banner
+    // said the draft was opening, and nothing opened. A real anchor click
+    // carries its own activation and is handled by every browser, which is
+    // what client_workflow_files.html switched to for exactly this reason;
+    // this page was missed.
+    const a = document.createElement("a");
+    a.href = `mailto:${cleanTo}${params.length ? "?" + params.join("&") : ""}`;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
     return copied;
   }
 

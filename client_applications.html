@@ -3377,7 +3377,15 @@
     if (cleanCc) params.push("cc=" + encodeURIComponent(cleanCc));
     if (subject) params.push("subject=" + encodeURIComponent(subject));
     // No body parameter. That omission is the whole point.
-    window.location.href = `mailto:${cleanTo}${params.length ? "?" + params.join("&") : ""}`;
+    // Greg (13/11/26): location.href on a mailto needs a live user gesture,
+    // and the awaited clipboard write above has already spent it -- the copy
+    // works, nothing opens. An anchor click carries its own activation.
+    const a = document.createElement("a");
+    a.href = `mailto:${cleanTo}${params.length ? "?" + params.join("&") : ""}`;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
     return copied;
   }
 
