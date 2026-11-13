@@ -365,6 +365,23 @@
      this header on 10/2 and lives on the Engagements list -- so it has no
      bubble, no pointer and no hover, and cannot be mistaken for the
      control. */
+  /* The start-date editor (Greg, 13/11/26). Greg took an Edit date button
+     out of this header on 10/2 to shorten it, so this one earns its space
+     differently: Admins only, one quiet line of text until it is clicked,
+     and nothing at all on a Team Lead's screen -- their header keeps the
+     height it has today. */
+  .cm-start-edit {
+    font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--navy-light);
+    background: none; border: none; padding: 2px 0; cursor: pointer; text-align: left;
+    text-decoration: underline; text-underline-offset: 2px;
+  }
+  .cm-start-edit:hover { color: var(--navy); }
+  .cm-start-form { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .cm-start-form input[type="date"] {
+    font-family: inherit; font-size: 12.5px; padding: 4px 7px;
+    border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--text);
+  }
+  .cm-start-form input[type="date"]:focus { border-color: var(--accent); outline: none; }
   .overdue-badge {
     display: inline-flex; align-items: center; gap: 7px; padding: 2px 9px; border-radius: 5px;
     background: var(--danger); color: #fff; font-size: 10.5px; font-weight: 800;
@@ -1156,6 +1173,19 @@
                      and it was asking Team Leads to open an engagement just to
                      answer one question. This box keeps the one thing it was
                      good at: saying how long, and whether that is a problem. -->
+              <!-- Greg (13/11/26), after Rita's Podio imports arrived stamped
+                   with their import date: "what is the best way to create a
+                   way for Rita to edit the start date." Here, because this is
+                   the one place in the app where the start date has a visible
+                   consequence -- the day count directly above it. Admin only,
+                   matched by migration 196 so a Team Lead cannot reach the
+                   column through the API either. -->
+              <button type="button" class="cm-start-edit hidden" id="cm-start-btn">Edit start date</button>
+              <div class="cm-start-form hidden" id="cm-start-form">
+                <input type="date" id="cm-start-input" aria-label="Engagement start date" />
+                <button type="button" class="btn-primary btn-sm" id="cm-start-save">Save</button>
+                <button type="button" class="btn-secondary btn-sm" id="cm-start-cancel">Cancel</button>
+              </div>
               </div>
             </div>
           </div>
@@ -2938,7 +2968,72 @@
       $("cm-delay-note-sub").classList.add("hidden");
       $("cm-delay-note-sub").textContent = "";
     }
+    // Admins only, and closed again on every re-render so a half-finished
+    // edit never survives a switch to another engagement.
+    $("cm-start-btn").classList.toggle("hidden", !isSuperAdmin);
+    $("cm-start-form").classList.add("hidden");
   }
+
+  // ---------- Engagement start date (Greg, 13/11/26) ----------
+  // first_in_progress_at is stamped the moment an engagement goes In
+  // Progress, which for Rita's Podio imports is the day she imported them
+  // rather than the day the work began. It drives the Start Date column,
+  // the day count above, and the 60-day overdue line, so a wrong one is
+  // wrong in three places at once.
+  //
+  // Admin only on both sides: this control is hidden from a Team Lead, and
+  // migration 196 refuses the column to anyone but a Super Admin -- without
+  // that, a Team Lead could still move their own overdue clock through the
+  // API, which is the thing worth preventing.
+  function startDateInputValue(client) {
+    const current = client.first_in_progress_at || client.status_since;
+    if (!current) return "";
+    // Built from the LOCAL parts, not toISOString(): the list renders this
+    // timestamp in the viewer's own zone, so the date they see is the date
+    // the box has to open on.
+    const d = new Date(current);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  $("cm-start-btn").addEventListener("click", () => {
+    if (!activeClient) return;
+    $("cm-start-input").value = startDateInputValue(activeClient);
+    $("cm-start-btn").classList.add("hidden");
+    $("cm-start-form").classList.remove("hidden");
+    $("cm-start-input").focus();
+  });
+
+  $("cm-start-cancel").addEventListener("click", () => {
+    $("cm-start-form").classList.add("hidden");
+    $("cm-start-btn").classList.remove("hidden");
+  });
+
+  $("cm-start-save").addEventListener("click", async () => {
+    if (!activeClient) return;
+    const val = $("cm-start-input").value;
+    if (!val) { showBanner("Pick a date first.", "error"); return; }
+
+    // Midday UTC, never midnight. A bare date is read as 00:00 UTC, and the
+    // list renders in the viewer's zone -- so every user in the Americas
+    // would see the day BEFORE the one Rita typed. 12:00 UTC reads as the
+    // intended date everywhere the team works.
+    const stamp = new Date(`${val}T12:00:00Z`).toISOString();
+
+    const btn = $("cm-start-save");
+    btn.disabled = true; btn.textContent = "Saving\u2026";
+    // egWrite, not a bare update: a policy refusal comes back as 204 with no
+    // error, and this would otherwise report success having saved nothing.
+    const { error } = await egWrite(sb.from("clients")
+      .update({ first_in_progress_at: stamp }).eq("id", activeClient.id));
+    btn.disabled = false; btn.textContent = "Save";
+    if (error) { showBanner("Couldn't save that date: " + error.message, "error"); return; }
+
+    activeClient.first_in_progress_at = stamp;
+    $("cm-start-form").classList.add("hidden");
+    $("cm-start-btn").classList.remove("hidden");
+    renderStatusAge(activeClient);
+    showBanner("Start date updated.", "success");
+  });
 
   // ---------- Standardized Print/Export toolbar ----------
   // Greg (8/30/26, round 5): the global search box that used to live here
