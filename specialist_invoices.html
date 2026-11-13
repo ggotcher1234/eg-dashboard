@@ -922,7 +922,7 @@
       // worked a work area that was later unassigned simply vanished from
       // payroll. This is a pay statement; that cannot happen quietly.
       sb.from("client_assignments")
-        .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name, bill_admin_qc_upfront))"),
+        .select("id, client_id, user_id, specialty_type, slot_number, hours_allotted, clients(name, econ_dev_companies(name, code, bill_admin_qc_upfront))"),
       // consultant_id -- who actually did the work. Pay follows this now,
       // not the assignment's current holder, so reassigning a work area no
       // longer moves someone else's earnings onto the new person.
@@ -974,6 +974,7 @@
           specialistEmail: person ? person.email : "",
           specialistRoleLabel: person ? roleLabel(person.role) : "",
           program: (a.clients && a.clients.econ_dev_companies && a.clients.econ_dev_companies.name) || "—",
+          programCode: programPrefix(a.clients && a.clients.econ_dev_companies),
           client: (a.clients && a.clients.name) || "—",
           role: (SPECIALTY_LABELS[a.specialty_type] || a.specialty_type) + (a.slot_number > 1 ? " " + a.slot_number : ""),
           entries,
@@ -1018,7 +1019,7 @@
       }
       const g = byUser.get(r.userId);
       const amount = round2(r.hoursThisMonth * hourlyRate);
-      g.lines.push({ program: r.program, client: r.client, role: r.role, hours: r.hoursThisMonth, rate: hourlyRate, amount });
+      g.lines.push({ program: r.program, programCode: r.programCode, client: r.client, role: r.role, hours: r.hoursThisMonth, rate: hourlyRate, amount });
       g.totalHours = round2(g.totalHours + r.hoursThisMonth);
       g.totalPay = round2(g.totalPay + amount);
     }
@@ -1151,6 +1152,35 @@
     return copied;
   }
 
+  // Rita (13/11/26): "Please add the program abbreviation to the engagement
+  // list of hours spent" -- "(GRE) Fuel Efficiency Inc." rather than a bare
+  // company name. A specialist works for several programs in a month and the
+  // statement is what they check their own invoice against, so the line has
+  // to say which program is paying for those hours.
+  //
+  // Same rule as every EG email subject (programInitials in
+  // client_control_center.html): the Program's own Code as Chris and Rita set
+  // it on the Programs page, its name's initials only if no Code is set, and
+  // nothing at all when there is no Program -- never an empty "()".
+  function programPrefix(partner) {
+    if (!partner) return "";
+    // Henrico County's Code is stored as "(HENRICO)", brackets and all, so a
+    // naive prefix reads "((HENRICO)) Acme Co." on a pay statement. The line
+    // supplies its own brackets; strip any the Code already carries.
+    const code = (partner.code || "").trim().replace(/^\(+|\)+$/g, "").trim();
+    if (code) return code;
+    return (partner.name || "")
+      .split(/\s+/)
+      .map((w) => w.replace(/[^A-Za-z]/g, "")[0] || "")
+      .join("")
+      .toUpperCase()
+      .slice(0, 4);
+  }
+  // The engagement as it reads on a statement line.
+  function statementEngagement(l) {
+    return `${l.programCode ? `(${l.programCode}) ` : ""}${l.client}`;
+  }
+
   async function openPreview(userId, monthLabel) {
     const g = specialistGroups.find((s) => s.userId === userId);
     if (!g) return;
@@ -1183,7 +1213,7 @@
         <tbody>
           ${g.lines.map((l) => `
             <tr>
-              <td>${escapeHtml(l.client)}</td>
+              <td>${escapeHtml(statementEngagement(l))}</td>
               <td>${escapeHtml(l.role)}</td>
               <td style="text-align:right;">${l.hours}</td>
               <td style="text-align:right;">${money(l.amount)}</td>
@@ -1200,7 +1230,7 @@
     // monospaced font -- in Outlook's default they come out ragged -- so
     // the same lines go out as a list, the way the approval letter does.
     const lines = g.lines
-      .map((l) => `${l.client} \u2014 ${l.role} \u2014 ${l.hours} ${l.hours === 1 ? "hour" : "hours"} \u2014 ${money(l.amount)}`)
+      .map((l) => `${statementEngagement(l)} \u2014 ${l.role} \u2014 ${l.hours} ${l.hours === 1 ? "hour" : "hours"} \u2014 ${money(l.amount)}`)
       .join("\n");
     previewDraft = {
       to: g.email || "",
