@@ -137,7 +137,16 @@
   // loaded into the same fourteen pages would be the drift it exists to
   // avoid. It is no longer only about "View as"; the comment at the top
   // says so.
+  // Greg (15/11/26): "add a profile button link to the login dropdown that
+  // takes the person to their roster card." Your own card was reachable
+  // only by opening the Roster and finding yourself in a list of thirty --
+  // which is a search, not a link, for the one row you are certain to want.
+  // ?profile=me is read by team_directory.html, which opens the card
+  // itself rather than just landing on the page.
+  //
+  // First in the list: it is about you, where the FAQs are about the work.
   var HELP_LINKS = [
+    { href: "team_directory.html?profile=me", label: "Profile" },
     { href: "faq_specialists.html", label: "Specialist FAQs" },
     { href: "faq_team_leads.html", label: "Team Lead FAQs" }
   ];

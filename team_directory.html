@@ -2165,8 +2165,19 @@
   $("add-member-btn").addEventListener("click", openAddMember);
 
   function applyActionDeepLink() {
-    const action = new URLSearchParams(location.search).get("action");
+    const params = new URLSearchParams(location.search);
+    const action = params.get("action");
     if (action === "add" && isSuperAdmin) openAddMember();
+
+    // Greg (15/11/26): the Profile link in the account menu. It lands here
+    // with ?profile=me and opens your own card, rather than leaving you to
+    // find your name in a list of thirty.
+    //
+    // Runs after loadUsers() -- see the call site -- so allUsers is filled.
+    // If the row is not there (archived, or hidden from the Roster) nothing
+    // opens and the page stands as a normal Roster, which is the honest
+    // outcome: there is no card to show.
+    if (params.get("profile") === "me" && currentUser) openProfile(currentUser.id);
   }
 
   document.querySelectorAll('a[href="team_directory.html?action=add"]').forEach((a) => {
