@@ -261,9 +261,23 @@
   // policy, so a permitted write can always read itself back -- if that ever
   // stops being true somewhere, this would report a false refusal, which is
   // still the safer way to be wrong.
-  window.egWrite = async function (query) {
+  //
+  // THE SECOND CAVEAT, found by Greg (16/11/26) submitting Discovery Call
+  // Notes for Universal Precision Corp: "i don't like getting error
+  // messages. makes me think something isn't working or i did something
+  // wrong. both are bad."
+  //
+  // Nothing was wrong. "No rows changed" means a refusal only when a row
+  // was certainly there to change -- an update or a delete keyed by id. A
+  // clear-then-insert wipe keyed by a PARENT id ("remove this engagement's
+  // CC list before writing the new one") legitimately matches nothing when
+  // the list was empty, and this called that a refusal. Those callers pass
+  // { allowEmpty: true }; everything else keeps the strict reading, which
+  // is the one that caught the vanishing allotment.
+  window.egWrite = async function (query, opts) {
     const { data, error } = await query.select();
     if (error) return { data: null, error: error };
+    if ((!data || !data.length) && opts && opts.allowEmpty) return { data: [], error: null };
     if (!data || !data.length) {
       var viewingAsOther = !!document.querySelector(".rv-chip");
       return { data: null, error: { message:

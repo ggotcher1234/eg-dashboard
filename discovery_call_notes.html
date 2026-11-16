@@ -2449,7 +2449,11 @@
       const cc = ccListRows
         .map((r) => ({ name: clean(r.name), title: clean(r.title), email: cleanEmail(r.email) }))
         .filter((r) => r.name || r.email);
-      const { error: wipeErr } = await egWrite(sb.from("client_cc_list").delete().eq("client_id", currentClient.id));
+      // allowEmpty: an engagement with no CC list yet has nothing to clear,
+      // and that is not a refusal. Without it, submitting these notes for a
+      // brand-new engagement reported a permission error having done
+      // nothing wrong (Greg, 16/11/26).
+      const { error: wipeErr } = await egWrite(sb.from("client_cc_list").delete().eq("client_id", currentClient.id), { allowEmpty: true });
       if (wipeErr) throw new Error(wipeErr.message);
       if (cc.length) {
         const { error: ccErr } = await sb.from("client_cc_list")
@@ -2488,10 +2492,13 @@
       if (added) notes.push(`${added} new contact${added === 1 ? "" : "s"}`);
     } catch (e) {
       // The notes themselves saved. Say what did not spread rather than
-      // reporting the whole submit as a failure.
-      return " The notes saved, but the contacts did not reach the engagement: " + (e.message || e);
+      // reporting the whole submit as a failure -- but say it in the red
+      // banner, not appended to the green one. Greg (16/11/26) was shown a
+      // success message carrying a permission error inside it, which reads
+      // as the app contradicting itself.
+      return { failed: true, text: " The notes saved, but the contacts did not reach the engagement: " + (e.message || e) };
     }
-    return notes.length ? ` ${notes.join(" and ")} now flow into the letters.` : "";
+    return { failed: false, text: notes.length ? ` ${notes.join(" and ")} now flow into the letters.` : "" };
   }
 
   $("save-btn").addEventListener("click", async () => {
@@ -2559,7 +2566,8 @@
       Object.assign(contentRow, payload);
       const spread = await pushContactsToEngagement();
       renderNotesAttachment();
-      showBanner("Discovery Call Notes submitted -- it now shows up in Project Files." + spread, "success");
+      showBanner("Discovery Call Notes submitted -- it now shows up in Project Files." + spread.text,
+                 spread.failed ? "error" : "success");
       $("save-hint").textContent = "Submitted.";
     } finally {
       btn.disabled = false;

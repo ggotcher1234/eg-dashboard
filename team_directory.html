@@ -1677,7 +1677,10 @@
     if (error) throw new Error(error.message);
   }
   async function replaceUserSpecialties(userId, specialties) {
-    const { error: delErr } = await egWrite(sb.from("user_specialties").delete().eq("user_id", userId));
+    // allowEmpty, same reason as the CC list wipe: somebody with no
+    // specialties on file yet has nothing to clear, and saving their
+    // profile used to fail with a permission error because of it.
+    const { error: delErr } = await egWrite(sb.from("user_specialties").delete().eq("user_id", userId), { allowEmpty: true });
     if (delErr) throw new Error(delErr.message);
     await addUserSpecialties(userId, specialties);
   }
