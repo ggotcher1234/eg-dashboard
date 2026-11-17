@@ -1494,6 +1494,45 @@
   buildSpecialtyCheckboxes("add-specialties", "add-spec");
   buildSpecialtyCheckboxes("pf-specialties", "pf-spec");
 
+  // ---------- Specialties save themselves (Greg, 17/11/26) ----------
+  // "i may not have saved my roster changes. those need to autosave."
+  //
+  // He ticked every box, left the card, and was still missing from every
+  // specialty pick list -- which reads as the app refusing him rather than
+  // as an unsaved form. The avatar and the LinkedIn URL on this same card
+  // already write the moment they change; the ticks were the odd ones out,
+  // sitting behind a Save button at the bottom of a scrolling panel.
+  //
+  // Debounced, because ticking four boxes is four changes a second apart
+  // and each save is a full delete-and-rewrite of the person's set. The
+  // Save button still writes them too -- harmless, and it keeps working for
+  // anyone who reaches for it out of habit.
+  //
+  // setCheckedSpecialties assigns .checked directly, which fires no change
+  // event, so filling the card in does not trigger a save. A disabled box
+  // fires nothing either, so viewing somebody else's card is safe.
+  let specialtySaveTimer = null;
+  $("pf-specialties").addEventListener("change", () => {
+    if (!openProfileId) return;
+    const userId = openProfileId;
+    clearTimeout(specialtySaveTimer);
+    specialtySaveTimer = setTimeout(async () => {
+      const specialties = getCheckedSpecialties("pf-specialties");
+      try {
+        await replaceUserSpecialties(userId, specialties);
+      } catch (err) {
+        showBanner("Couldn't save specialties: " + err.message, "error");
+        return;
+      }
+      // Keep the row behind the card honest without a full reload: the
+      // chips in the list are drawn from this.
+      const u = allUsers.find((x) => x.id === userId);
+      if (u) u.specialties = specialties;
+      renderList();
+      showBanner("Specialties saved.", "success");
+    }, 500);
+  });
+
   function getCheckedSpecialties(containerId) {
     return Array.from($(containerId).querySelectorAll("input[type=checkbox]:checked")).map((i) => i.value);
   }
