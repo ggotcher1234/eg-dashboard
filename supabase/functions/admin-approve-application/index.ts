@@ -6,32 +6,32 @@
 // (Name) has been approved on 'date'. Then Rita will go in and add the hours
 // and TL which will kick off the engagement for the NCEG Team."
 //
+// THIS FUNCTION NO LONGER SENDS EMAIL (17/11/26). It used to notify the
+// other Admins the moment an application was vetted; Rita asked for that to
+// stop -- see the note further down, at the point where it was sent. What
+// goes out now is the vetting letter she sends by hand from the Applications
+// tab. All this does is record the vetting.
+//
 // WHY A FUNCTION AND NOT A PLAIN UPDATE FROM THE PAGE
-// Two reasons, and either one on its own would be enough:
-//   * the notification. RESEND_API_KEY lives in Edge Function secrets and
-//     must never reach a browser, so anything that sends email has to run
-//     here. It also has to read the Program's contacts and the Admin list to
-//     know who to tell, which the service-role client does without depending
-//     on the caller's RLS view;
-//   * the permission. "Only he can check it" is a property of a person
-//     (users.can_approve_applications, 129) and it is proved HERE, server
-//     side, once. The page hides and disables the checkbox for everyone else,
-//     but that is courtesy -- this is the part that actually holds.
+// The permission. "Only he can check it" is a property of a person
+// (users.can_approve_applications, 129) and it is proved HERE, server side,
+// once. The page hides and disables the checkbox for everyone else, but that
+// is courtesy -- this is the part that actually holds. (The other reason was
+// the notification, which needed the Resend secret and the service-role
+// client; that reason left with the email.)
 //
 // Approving is idempotent: a second POST for an already-approved application
-// changes nothing and sends nothing, so a double-click or a stale tab cannot
-// email the Program twice.
+// changes nothing, so a double-click or a stale tab does no harm.
 //
-// Un-approving (approved: false) clears the stamp and sends NO email. If the
-// approver ticks the box by mistake the correction is silent -- a "never mind"
-// note to the Program Administrator would be worse than the mistake.
+// Un-approving (approved: false) clears the stamp.
 //
 // HOW TO DEPLOY (no CLI, no Terminal)
 //   1. Supabase Dashboard -> Edge Functions -> New Function, named exactly
 //      admin-approve-application
 //   2. Paste this whole file in, Deploy
-//   3. It uses the same RESEND_API_KEY secret public-submit-application
-//      already uses -- nothing new to add.
+//   3. No secrets needed any more. It used RESEND_API_KEY until the vetting
+//      notice was removed on 17/11/26; the secret is still there for the
+//      functions that do send mail.
 //   SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY are
 //   provided to every Edge Function automatically.
 //
@@ -51,28 +51,6 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-// The date in the email should be the date the approver saw on their own
-// screen when they ticked the box. An approval at 7pm Denver time is 2am UTC
-// the next day, and "approved on the 26th" for something Chris did on the
-// 25th is the kind of small wrongness that makes people distrust the whole
-// notice. So the page sends its own IANA zone and we format the stamp in it;
-// anything unusable falls back to UTC rather than throwing.
-function formatApprovalDate(iso: string, timeZone: unknown): string {
-  const opts: Intl.DateTimeFormatOptions = {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  };
-  const tz = typeof timeZone === "string" && timeZone.length > 0 && timeZone.length < 64
-    ? timeZone
-    : "UTC";
-  try {
-    return new Date(iso).toLocaleDateString("en-US", { ...opts, timeZone: tz });
-  } catch {
-    return new Date(iso).toLocaleDateString("en-US", { ...opts, timeZone: "UTC" });
-  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -158,8 +136,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // ---------- already approved ----------
-    // Not an error, and not a second email. Hand back what is already there so
-    // the page just shows the existing stamp.
+    // Not an error. Hand back what is already there so the page just shows
+    // the existing stamp.
     if (app.approved_at) {
       return jsonResponse({
         ok: true,
@@ -184,126 +162,32 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "The approval didn't save -- nothing was written." }, 500);
     }
 
-    // ---------- tell the other Admins ----------
-    // THIS EMAIL IS INTERNAL, to active Admins only. Until 9/27/26 it also
-    // went to the Program Administrator; that was moved out because the PA
-    // is written to directly, by the letter this same screen opens when
-    // Approved is ticked.
+    // ---------- The automatic "Vetted" notice, removed 17/11/26 ----------
+    // Rita, to Chris: "When I have selected that the application has been
+    // vetted, a generic email goes automatically to the PA, you and me that
+    // indicates the program has been vetted. Then I can also send the
+    // standard email showing that all categories have been met and the
+    // application has been vetted. We don't need that generic email to go
+    // out automatically. We just need to send the standard email."
     //
-    // A note that claimed otherwise lived here until 10/18. It said the
-    // application was "ready for budget hours and a Team Lead" and that
-    // "accepting it ... sends the approval letter to the Program
-    // Administrator". Both were wrong. Chris: "This is still out of order.
-    // After NCEG approves, then the program manager sends approval letter to
-    // CEO with cc to Rita and Chris." Two steps sit between approval and the
-    // hours -- the letter to the PA, and the PA's own letter to the CEO --
-    // and nothing is sent by the Accept form at all. There is no
-    // admin-notify-engagement-started function; it was named in this comment
-    // for over a year and never built, which is most likely where the belief
-    // came from.
+    // So ticking Vetted now only records the vetting. The notice Rita sends
+    // by hand from the Applications tab is the one that goes out, and it is
+    // the better letter: it says which categories were met, where this one
+    // only said that vetting happened.
     //
-    // Chris again (10/21/26): "We don't send the approval letter; the program
-    // administrator does (and they cc us to trigger team leader assignment).
-    // The only thing we send is 'vetted'." So the one letter NCEG sends is
-    // the vetting notice, and the approval letter named below is the Program
-    // Administrator's own.
+    // One thing goes with it. The old note told the OTHER Admins that an
+    // application had been vetted by somebody else -- see Chris's point on
+    // 11/12 that he could not see the PA on the sent line, which is because
+    // this only ever went to Admins, never to the PA. Rita sending the real
+    // letter covers the Program; what it does not cover is an Admin who is
+    // not on her Cc. If that turns out to matter, a bell notification is the
+    // right shape for it, not mail.
     //
-    // What the email is FOR is the handoff: whoever vets is not necessarily
-    // whoever sets the hours, and without this the other Admins would find
-    // out by checking the Applications tab, which is how a week goes by.
-    // Addressed by role, not by name, so it keeps working when the team
-    // changes.
-    //
-    // The approval is saved by this point. Nothing below is allowed to
-    // report it as a failure.
-    let warning: string | null = null;
-    try {
-      const resendKey = Deno.env.get("RESEND_API_KEY");
-      if (!resendKey) throw new Error("RESEND_API_KEY secret is not set.");
-
-      const [{ data: admins, error: adminsErr }, { data: program, error: programErr }] =
-        await Promise.all([
-          adminClient.from("users").select("email").eq("role", "super_admin").is("archived_at", null),
-          app.econ_dev_company_id
-            ? adminClient
-                .from("econ_dev_companies")
-                .select("name, code")
-                .eq("id", app.econ_dev_company_id)
-                .maybeSingle()
-            : Promise.resolve({ data: null, error: null }),
-        ]);
-
-      if (adminsErr) throw new Error(`Couldn't look up admins: ${adminsErr.message}`);
-      if (programErr) throw new Error(`Couldn't look up the Program: ${programErr.message}`);
-
-      const recipients = [...new Set(
-        (admins ?? [])
-          .map((u: { email: string | null }) => (u.email ?? "").trim().toLowerCase())
-          .filter((e: string) => e.length > 0),
-      )];
-      if (recipients.length === 0) throw new Error("No Admin accounts with an email address on file.");
-
-      const programName = program?.name ?? "";
-      const programCode = program?.code ?? "";
-      const companyName = app.company_name ?? "This application";
-      const officerName = (app.primary_officer_name ?? "").trim();
-      // Internal, so the approver IS named here -- the useful fact for an
-      // Admin reading it is who to go back to with a question. The outward
-      // letter says "Approved by: NCEG" instead.
-      const approverName = caller.full_name ?? "an Admin";
-      const dateLabel = formatApprovalDate(approvedAt, body.time_zone);
-
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${resendKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          // Same verified sending domain as every other system email --
-          // see the long note in public-submit-application.
-          from: "NCEG Dashboard <noreply@send.economicgardening.org>",
-          reply_to: "egdashboard@economicgardening.org",
-          to: recipients,
-          // The "(CODE) Subject" convention Greg set on 9/14/26, so everything
-          // this app sends sorts together in an inbox.
-          // A different subject from the letter the Program gets, on purpose
-          // -- two mails about the same company reading the same way would be
-          // indistinguishable in an Admin's inbox, and only one of them is
-          // asking for anything. It names what has happened and nothing
-          // further along: this application has been vetted.
-          subject: programCode
-            ? `(${programCode}) Vetted - ${companyName}`
-            : `Vetted - ${companyName}`,
-          html: `
-            <p><strong>${escapeHtml(companyName)}</strong> passed NCEG Vetting on ${escapeHtml(dateLabel)}.</p>
-            <p>
-              <strong>Company:</strong> ${escapeHtml(companyName)}<br/>
-              ${officerName ? `<strong>Primary Contact:</strong> ${escapeHtml(officerName)}<br/>` : ""}
-              ${programName ? `<strong>Program:</strong> ${escapeHtml(programName)}${programCode ? ` (${escapeHtml(programCode)})` : ""}<br/>` : ""}
-              <strong>Vetted by:</strong> ${escapeHtml(approverName)}
-            </p>
-            <!-- Chris (10/29/26): "I'm thinking we all know this process and
-                 no one else needs to know. Strip the editorial out?"
-                 Two paragraphs walking through the vetting notice, the
-                 Program Administrator's approval letter and the Team Lead
-                 assignment used to sit here. They were written for a team
-                 learning the process; this notice goes only to people who
-                 run it. What is left is the four facts an Admin reads it
-                 for -- who, which Program, when, and who vetted. -->
-            <p style="color:#6b7280; font-size:13px;">This note is internal to the NCEG team.</p>
-          `,
-        }),
-      });
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "");
-        throw new Error(`Resend returned ${res.status}: ${errText}`);
-      }
-    } catch (emailErr) {
-      const detail = emailErr instanceof Error ? emailErr.message : String(emailErr);
-      console.error("Approval notification failed:", detail);
-      warning = `Approved, but the notification email didn't send: ${detail}`;
-    }
+    // Kept rather than deleted outright: the response still carries a
+    // warning field, because client_applications.html reads it, and
+    // returning a key that is always null is cheaper than coordinating a
+    // change on both sides of the wire.
+    const warning: string | null = null;
 
     return jsonResponse({
       ok: true,
@@ -317,13 +201,3 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: e instanceof Error ? e.message : "Unexpected error." }, 500);
   }
 });
-
-// .split/.join rather than regex literals -- a bare `/</g` token in an Edge
-// Function file has tripped up Supabase's deploy-time parser before.
-function escapeHtml(str: string) {
-  return String(str)
-    .split("&").join("&amp;")
-    .split("<").join("&lt;")
-    .split(">").join("&gt;")
-    .split('"').join("&quot;");
-}
