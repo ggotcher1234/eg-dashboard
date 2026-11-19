@@ -303,6 +303,18 @@
      magically appears and i can extract the questions right there where i
      need them." Both conditions, or nothing is rendered at all. */
   .cdx-empty-wrap { padding: 4px 0 6px; }
+  /* Greg (19/11/26): "when a controlling document is replaced it should
+     update the research questions." The loud button belongs to the empty
+     state; once questions exist this is a correction, not the main event,
+     so it is a quiet line under the list. */
+  .cdx-reread { padding: 10px 2px 2px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .cdx-reread button {
+    font-family: inherit; font-size: 12px; font-weight: 700; color: var(--navy-light);
+    background: none; border: none; padding: 0; cursor: pointer;
+    text-decoration: underline; text-underline-offset: 2px;
+  }
+  .cdx-reread button:hover { color: var(--navy); }
+  .cdx-reread .cdx-file { font-size: 11.5px; }
   .cdx-btn { font-family: inherit; cursor: pointer; border: 1px solid var(--accent); border-radius: 7px;
              font-size: 13px; padding: 9px 16px; font-weight: 700; background: var(--accent); color: #fff; }
   .cdx-btn:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
@@ -2125,14 +2137,36 @@
     }
   }
 
+  // Two questions that read the same are the same question. Compared on
+  // the words alone -- case, punctuation and whitespace all vary between a
+  // Word document and what the reader returns, and none of them change what
+  // is being asked.
+  function cdxQuestionKey(text) {
+    return (text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  }
+
   async function confirmExtractedQuestions() {
     if (!cdxFound.length || !currentClient) return;
     const btn = $("cdx-confirm");
     btn.disabled = true;
     btn.textContent = "Adding…";
     try {
+      // Greg (19/11/26), re-reading a Controlling Document that gained a
+      // third question: add what is new, leave what is already here. An
+      // existing question may carry an assignment, a due date, filed
+      // research and a completion -- all of which a fresh insert would
+      // orphan and a delete-and-replace would destroy.
+      const have = new Set((allQuestions || []).map((q) => cdxQuestionKey(q.question)));
+      const incoming = cdxFound.filter((q) => !have.has(cdxQuestionKey(q.question)));
+      const skipped = cdxFound.length - incoming.length;
+      if (!incoming.length) {
+        closeExtractModal();
+        showBanner(`Nothing new \u2014 all ${cdxFound.length} question${cdxFound.length === 1 ? " is" : "s are"} already here.`, "success");
+        cdxFound = [];
+        return;
+      }
       const nextSort = { market_dynamics: 1, outbound: 1, inbound: 1, watering_holes: 1 };
-      const rows = cdxFound.map((q) => {
+      const rows = incoming.map((q) => {
         const area = CDX_AREA_ORDER.includes(q.research_area) ? q.research_area : "market_dynamics";
         return {
           client_id: currentClient.id,
@@ -2151,7 +2185,10 @@
       closeExtractModal();
       await loadResearchQuestions();
       renderTaskList();
-      showBanner(`${rows.length} question${rows.length === 1 ? "" : "s"} added. Assign each one to a specialist and they can start.`, "success");
+      const added = `${rows.length} question${rows.length === 1 ? "" : "s"} added`;
+      showBanner(skipped
+        ? `${added}; ${skipped} ${skipped === 1 ? "was" : "were"} already here. Assign the new ${rows.length === 1 ? "one" : "ones"} to a specialist and they can start.`
+        : `${added}. Assign each one to a specialist and they can start.`, "success");
     } catch (e) {
       showBanner("Could not add the questions: " + (e.message || "unknown error"), "error");
     } finally {
@@ -2631,8 +2668,38 @@
       if (docs.length) wireDocRowHandlers(el);
     });
 
+    renderRereadLine(list);
     applyTailSpace(card);
     wireTaskHandlers(list);
+  }
+
+  // Greg (19/11/26): "we just updated the CD for Meals for All with a 3rd
+  // question but the upload research is still only showing the first two
+  // questions. when a controlling document is replaced it should update the
+  // research questions and the evaluation sheet."
+  //
+  // The extract button was built for the empty state only -- once questions
+  // existed it disappeared, so a replaced Word document had no way back in.
+  // This is that way back: the same reader, offered as a quiet line under an
+  // existing list.
+  //
+  // It does NOT fire on its own when the file changes. Questions carry
+  // assignments, due dates, completion and filed research; re-reading a
+  // document silently could not know which of those to keep, and the person
+  // replacing the file is the one who knows what changed. The modal adds
+  // only what is new (see confirmExtractedQuestions) and never removes.
+  //
+  // The evaluation sheet needs nothing: it reads client_research_questions
+  // live through its own view function, so a question added here is on the
+  // sheet immediately.
+  function renderRereadLine(listEl) {
+    if (!cdDocPath) return;
+    const line = document.createElement("div");
+    line.className = "cdx-reread";
+    line.innerHTML = `<button type="button" id="cdx-reread-btn">Re-read the Controlling Document</button>`
+      + `<span class="cdx-file">${escapeHtml(cdDocNiceName())}</span>`;
+    listEl.appendChild(line);
+    $("cdx-reread-btn").addEventListener("click", openExtractModal);
   }
 
   // Room to scroll, below the card, while anything is open.
