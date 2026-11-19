@@ -233,7 +233,23 @@
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 14px; }
   .tpl-row { display: flex; align-items: flex-start; gap: 14px; padding: 14px 0; border-bottom: 1px solid #f0f2f4; }
   .tpl-row:last-child { border-bottom: none; }
-  .tpl-handle { color: var(--muted); font-size: 12px; padding-top: 30px; width: 20px; text-align: center; flex-shrink: 0; }
+  /* Greg (19/11/26): "i need to be able to modify the order of the
+     resources in the vault." The same handle, the same gesture and the same
+     drop markers the per-engagement vault has carried since 9/26 -- nobody
+     should have to learn a second way to drag a list in this app. */
+  .tpl-handle {
+    flex-shrink: 0; cursor: grab; color: var(--muted); font-size: 17px; line-height: 1;
+    padding: 4px 3px; margin-top: 26px; border-radius: 5px; user-select: none;
+    background: none; border: none; font-family: inherit;
+  }
+  .tpl-handle:hover { background: #eef1f4; color: var(--navy); }
+  .tpl-handle:active { cursor: grabbing; }
+  .tpl-handle:focus-visible { outline: 2px solid var(--navy-light); outline-offset: -1px; }
+  .tpl-row.is-dragging { opacity: 0.4; }
+  /* A line showing the gap the row lands in, rather than a placeholder that
+     can fall out of step with the pointer. */
+  .tpl-row.drop-above { box-shadow: inset 0 2px 0 0 var(--navy-light); }
+  .tpl-row.drop-below { box-shadow: inset 0 -2px 0 0 var(--navy-light); }
   .tpl-fields { display: flex; gap: 16px; flex-wrap: wrap; flex: 1; }
   .tpl-fields .field { flex: 1; min-width: 160px; margin-bottom: 0; }
   .field label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 5px; }
@@ -824,13 +840,127 @@
     renderTemplates();
   }
 
+  // ---------- Reordering the default list (Greg, 19/11/26) ----------
+  // Ported from the per-engagement vault in client_profile.html rather than
+  // invented: same handle, same drop markers, same arrow-key fallback.
+  //
+  // The write goes through one RPC, not a loop of updates, because a
+  // template's position lives in two tables -- here, and on every
+  // engagement's own copy of the row. See migration 198 for the rule it
+  // applies: an engagement moves only if it was still sitting at the old
+  // default position, so a list a Team Lead has arranged by hand is left
+  // alone.
+  let dragTplId = null;
+
+  function clearTplDropMarkers(listEl) {
+    listEl.querySelectorAll(".tpl-row").forEach((r) => r.classList.remove("drop-above", "drop-below"));
+  }
+
+  function wireTemplateDragHandlers(listEl) {
+    listEl.querySelectorAll(".tpl-handle").forEach((handle) => {
+      const row = handle.closest(".tpl-row");
+
+      handle.addEventListener("dragstart", (e) => {
+        dragTplId = handle.dataset.dragTpl;
+        e.dataTransfer.effectAllowed = "move";
+        // Firefox will not start a drag unless some data is set.
+        e.dataTransfer.setData("text/plain", dragTplId);
+        if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(row, 20, row.offsetHeight / 2);
+        row.classList.add("is-dragging");
+      });
+
+      handle.addEventListener("dragend", () => {
+        row.classList.remove("is-dragging");
+        clearTplDropMarkers(listEl);
+        dragTplId = null;
+      });
+
+      // Dragging is unreachable without a pointer, so the handle takes the
+      // arrow keys once focused.
+      handle.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+        e.preventDefault();
+        moveTemplateBy(handle.dataset.dragTpl, e.key === "ArrowUp" ? -1 : 1);
+      });
+    });
+
+    listEl.querySelectorAll(".tpl-row").forEach((row) => {
+      row.addEventListener("dragover", (e) => {
+        if (!dragTplId || row.dataset.rowTpl === dragTplId) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const box = row.getBoundingClientRect();
+        const below = e.clientY > box.top + box.height / 2;
+        clearTplDropMarkers(listEl);
+        row.classList.add(below ? "drop-below" : "drop-above");
+      });
+
+      row.addEventListener("drop", (e) => {
+        if (!dragTplId || row.dataset.rowTpl === dragTplId) return;
+        e.preventDefault();
+        const box = row.getBoundingClientRect();
+        const below = e.clientY > box.top + box.height / 2;
+        clearTplDropMarkers(listEl);
+        reorderTemplate(dragTplId, row.dataset.rowTpl, below);
+      });
+    });
+  }
+
+  function reorderTemplate(movingId, targetId, below) {
+    const rows = templates.slice();
+    const from = rows.findIndex((t) => t.id === movingId);
+    if (from === -1) return;
+    const moved = rows.splice(from, 1)[0];
+    let to = rows.findIndex((t) => t.id === targetId);
+    if (to === -1) return;
+    if (below) to += 1;
+    rows.splice(to, 0, moved);
+    applyTemplateOrder(rows);
+  }
+
+  function moveTemplateBy(id, delta) {
+    const rows = templates.slice();
+    const from = rows.findIndex((t) => t.id === id);
+    const to = from + delta;
+    if (from === -1 || to < 0 || to >= rows.length) return;
+    rows.splice(to, 0, rows.splice(from, 1)[0]);
+    applyTemplateOrder(rows).then(() => {
+      // Keep the keyboard on the row that just moved, or the next arrow press
+      // would act on whatever landed under the old focus.
+      const handle = document.querySelector(`.tpl-handle[data-drag-tpl="${id}"]`);
+      if (handle) handle.focus();
+    });
+  }
+
+  async function applyTemplateOrder(ordered) {
+    const previous = templates.slice();
+    // Draw it first -- a drag that waits on the round trip feels broken.
+    templates = ordered;
+    renderTemplates();
+
+    const { error } = await sb.rpc("reorder_resource_templates", { p_ids: ordered.map((t) => t.id) });
+    if (error) {
+      // Put the list back rather than leaving the screen showing an order the
+      // database does not have.
+      templates = previous;
+      renderTemplates();
+      showBanner("Couldn't save the new order: " + error.message, "error");
+      return;
+    }
+    await loadTemplates();
+    showBanner("Order saved — applied to every client that hasn't arranged their own.", "success");
+  }
+
   function renderTemplates() {
     const list = $("tpl-list");
     $("tpl-empty").classList.toggle("hidden", templates.length !== 0);
     if (!templates.length) { list.innerHTML = ""; return; }
 
     list.innerHTML = templates.map((t) => `
-      <div class="tpl-row">
+      <div class="tpl-row" data-row-tpl="${t.id}">
+        <button type="button" class="tpl-handle" draggable="true" data-drag-tpl="${t.id}"
+                title="Drag to reorder (or focus and press the up/down arrows)"
+                aria-label="Reorder ${escapeHtml(t.title)}">&#8942;&#8942;</button>
         <div class="tpl-fields">
           <div class="field">
             <label>Title</label>
@@ -855,6 +985,8 @@
         </div>
       </div>
     `).join("");
+
+    wireTemplateDragHandlers(list);
 
     list.querySelectorAll(".tpl-input").forEach((inp) => {
       const original = inp.value;
