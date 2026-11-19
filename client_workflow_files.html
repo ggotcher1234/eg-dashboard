@@ -1833,6 +1833,32 @@
       .filter(Boolean);
   }
 
+  // Greg (19/11/26), on moving these four composers onto the Roster
+  // checkbox: "yes add those."
+  //
+  // The Cc line is now exactly who is ticked, so nobody ticked means a
+  // customer email leaves with no NCEG copy at all -- and an empty line
+  // looks the same as a line somebody meant to leave empty. The Scheduling
+  // Letter has said so since 9/18; these four were the ones still silent.
+  //
+  // Built next to the Cc field rather than as four hidden divs in the
+  // markup: one note, one place to change the wording, and no fifth copy to
+  // forget when a composer is added.
+  function renderCcNote(prefix) {
+    const box = $(`${prefix}-cc`);
+    if (!box) return;
+    const id = `${prefix}-cc-note`;
+    const existing = $(id);
+    if ((listData.alwaysCc || []).length) { if (existing) existing.remove(); return; }
+    if (existing) return;
+    const note = document.createElement("div");
+    note.id = id;
+    note.style.cssText = "font-size:12.5px; color:var(--amber); margin-top:6px;";
+    note.textContent = "Nobody is set to be copied on client correspondence. "
+      + "Tick \"CC on client correspondence\" on the Roster for anyone who should be.";
+    box.insertAdjacentElement("afterend", note);
+  }
+
   function customerCcList(exclude, extra) {
     const excluded = new Set((exclude || "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean));
     const teamRows = listData.team || [];
@@ -2991,6 +3017,7 @@
 
     const ceoFirstName = ceoContact && ceoContact.name ? ceoContact.name.split(" ")[0] : "there";
     $("eem-cc").value = customerCcList($("eem-to").value);
+    renderCcNote("eem");
     $("eem-subject").value = customerSubject("Close-Out Call and Evaluation Sheet", "for completion");
     const sponsorLine = programName
       ? `It also gets shared with ${programName}, your program sponsor, so it carries real weight heading into that conversation.`
@@ -3442,6 +3469,7 @@ ${leadSignature || teamLeadName || teamLeadFirstName || "Your NCEG Team Lead"}`;
 
     const ceoFirstName = ceoContact && ceoContact.name ? ceoContact.name.split(" ")[0] : "there";
     $("cdem-cc").value = customerCcList($("cdem-to").value);
+    renderCcNote("cdem");
     $("cdem-subject").value = customerSubject("Controlling Document", "for review");
     $("cdem-body-text").value = `Hi ${ceoFirstName},
 
@@ -3540,6 +3568,7 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
     $("ddem-to").value = recipients.map((c) => c.email.trim()).join(", ");
     $("ddem-no-contact").classList.toggle("hidden", recipients.length > 0);
     $("ddem-cc").value = customerCcList($("ddem-to").value);
+    renderCcNote("ddem");
     $("ddem-subject").value = customerSubject("Discovery Call", "now on your dashboard");
 
     const url = clientDashboardUrl();
@@ -3647,6 +3676,7 @@ ${leadSignature || teamLeadFirstName || "Your NCEG Team Lead"}`;
     $("rrem-to").value = recipients.map((c) => c.email.trim()).join(", ");
     $("rrem-no-contact").classList.toggle("hidden", recipients.length > 0);
     $("rrem-cc").value = customerCcList($("rrem-to").value, egTeamEmails());
+    renderCcNote("rrem");
     $("rrem-subject").value = customerSubject("Research Completed", "Schedule Review");
 
     const url = clientDashboardUrl();
