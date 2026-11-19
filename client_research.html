@@ -2083,9 +2083,19 @@
     if (ov) ov.classList.remove("open");
   }
 
-  async function openExtractModal() {
+  // Greg (19/11/26): "it just took a while and gave me no indication it was
+  // doing anything."
+  //
+  // The progress label was looked up by id, and the only id it knew was the
+  // empty-state button's. The re-read line added the same day has a
+  // different one, so the lookup found nothing, the guard quietly skipped
+  // the label, and a twenty-second read of a four-page document looked like
+  // a dead button. Whoever was clicked now says so, and gets its own label
+  // back afterwards rather than the empty-state wording.
+  async function openExtractModal(trigger) {
     if (!cdDocPath || !currentClient) return;
-    const btn = $("cdx-extract");
+    const btn = (trigger && trigger.nodeType === 1) ? trigger : $("cdx-extract");
+    const wasLabel = btn ? btn.innerHTML : "";
     if (btn) { btn.disabled = true; btn.textContent = "Reading the document…"; }
     try {
       const { data: { session } } = await sb.auth.getSession();
@@ -2133,7 +2143,7 @@
     } catch (e) {
       showBanner(e.message || "Could not read that Word document.", "error");
     } finally {
-      if (btn) { btn.disabled = false; btn.innerHTML = "&#10022;&nbsp; Extract Questions from the Word document"; }
+      if (btn) { btn.disabled = false; btn.innerHTML = wasLabel; }
     }
   }
 
@@ -2454,7 +2464,7 @@
             <div class="cdx-file">${escapeHtml(cdDocNiceName())}</div>
           </div>` : "");
       const exBtn = $("cdx-extract");
-      if (exBtn) exBtn.addEventListener("click", openExtractModal);
+      if (exBtn) exBtn.addEventListener("click", () => openExtractModal(exBtn));
       applyTailSpace(card);
       wireTaskHandlers(list);
       return;
@@ -2699,7 +2709,8 @@
     line.innerHTML = `<button type="button" id="cdx-reread-btn">Re-read the Controlling Document</button>`
       + `<span class="cdx-file">${escapeHtml(cdDocNiceName())}</span>`;
     listEl.appendChild(line);
-    $("cdx-reread-btn").addEventListener("click", openExtractModal);
+    const rb = $("cdx-reread-btn");
+    rb.addEventListener("click", () => openExtractModal(rb));
   }
 
   // Room to scroll, below the card, while anything is open.
