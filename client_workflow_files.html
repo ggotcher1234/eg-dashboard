@@ -1739,6 +1739,24 @@
       .order("is_team_lead", { ascending: false });
     listData.team = team || [];
 
+    // Chris (19/11/26): "General principle: Use cc list, not new email. It
+    // tends to drift toward bloatware."
+    //
+    // Who is copied on a customer email is now one answer for the whole app:
+    // "CC on client correspondence" on the Roster profile. The Scheduling
+    // Letter has read that checkbox since 128; these five composers kept two
+    // addresses compiled into the page instead, which is why "does admin@
+    // replace Rita and me?" had no straight answer last week.
+    //
+    // Archived staff are excluded for the same reason the Scheduling Letter
+    // excludes them: their sign-in is revoked, so copying them on live client
+    // correspondence would be sending EG business to someone who has left.
+    const { data: alwaysCc } = await sb.from("users")
+      .select("full_name, email")
+      .eq("cc_on_client_email", true)
+      .is("archived_at", null);
+    listData.alwaysCc = alwaysCc || [];
+
     // Everyone who gets copied on a customer email (Greg, 9/11/26):
     // "all customer emails should cc the team leader, PA and assigned cc
     // list, cgibbons@economicgardening.org and rbenson@economicgardening.org"
@@ -1771,11 +1789,13 @@
   // "all customer emails should cc the team leader, PA and assigned cc list,
   // cgibbons@economicgardening.org and rbenson@economicgardening.org"
   //
-  // Chris and Rita are on every customer email regardless of Program, so they
-  // are constants here rather than data -- if that ever stops being true it
-  // becomes a row in organization_settings, but two hard-coded addresses beat
-  // a settings screen nobody will find.
-  const CUSTOMER_CC_ALWAYS = ["cgibbons@economicgardening.org", "rbenson@economicgardening.org"];
+  // Those two names were compiled into this page until 19/11/26 -- the
+  // comment here used to argue that two hard-coded addresses beat a settings
+  // screen nobody would find. The screen turned out to exist: the Roster
+  // profile has carried a "CC on client correspondence" checkbox since 128,
+  // and the Scheduling Letter has read it ever since, so the app had two
+  // answers to the same question depending on which email you opened.
+  // listData.alwaysCc is that checkbox, loaded above.
 
   // Built in Greg's stated order -- Team Lead, PAs, assigned CC list, then
   // Chris and Rita -- and deduped case-insensitively while keeping the first
@@ -1823,7 +1843,7 @@
       ...(listData.programAdmins || []).map((c) => c && c.email),
       ...(listData.ccContacts || []).map((c) => c && c.email),
       ...(listData.engagementCc || []).map((c) => c && c.email),
-      ...CUSTOMER_CC_ALWAYS,
+      ...(listData.alwaysCc || []).map((u) => u && u.email),
     ];
     const seen = new Set();
     const out = [];
