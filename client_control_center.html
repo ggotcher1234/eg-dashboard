@@ -3995,7 +3995,16 @@
     // Gmail, U+2705 is the green check in every client's emoji font. It is
     // a character, not an image, so Paste as Plain Text keeps it -- which is
     // the whole reason it can be used here at all.
-    const TICK = "\u2705 ";
+    // Greg (20/11/26): "these bullets are all jammed up." Two gaps were
+    // missing, and the emoji is why both read worse than they measure. A
+    // single space after a glyph that wide looks like none at all, so the
+    // check and the first letter ran together; and seven consecutive lines
+    // of tall glyphs have no air between them at all in Outlook, where
+    // every other paragraph in this letter is separated by a blank line.
+    //
+    // A non-breaking space, so a mail client cannot collapse or wrap on it
+    // the way it may with the plain one beside it.
+    const TICK = "\u2705\u00a0 ";
     const L = [];
 
     // Chris (20/11/26) supplied this letter whole. It is a rewrite, not an
@@ -4041,7 +4050,12 @@
         "Keirsey Temperament Sorter",
         "Intercept Marketing",
         "Signals of Change",
-      ].forEach((item) => L.push(IN + TICK + item));
+      ].forEach((item, i, all) => {
+        L.push(IN + TICK + item);
+        // Blank line between items, not after the last one -- the paragraph
+        // that follows brings its own.
+        if (i < all.length - 1) L.push("");
+      });
       L.push("");
     }
 
