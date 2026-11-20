@@ -3827,14 +3827,33 @@
   // autoformat turn a line of three or more -, _, =, * or ~ into a border
   // the moment it is pasted, which would eat the marker. ">" is not on
   // that list.
+  // Greg (20/11/26): "we would like this text to be red... Since we are
+  // pasting plain text, we can't use color. do you have any ideas using
+  // glyphs to make this stand out so they don't forget to replace the
+  // text."
+  //
+  // Colour IS available, just not through formatting: an emoji carries its
+  // own colour in the font, which is the same reason the green check
+  // survives Paste as Plain Text. U+1F7E5 is a solid red square, so a run
+  // of them is a red bar that no mail client can strip, reflow or grey out
+  // -- a row of ">" could only ever be the same black as the letter around
+  // it.
+  //
+  // Squares rather than circles because they butt together into a bar;
+  // circles read as beads with gaps. Twelve is wide enough to be a band at
+  // the widths Outlook wraps at, without wrapping itself on a phone.
+  //
+  // The no-entry sign on the instruction line is deliberately a different
+  // shape from the bar: the bar catches the eye, the sign says what to do.
+  const WELCOME_AVAILABILITY_BAR = "\u{1F7E5}".repeat(12);
   const WELCOME_AVAILABILITY_MARKER = [
-    ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>",
+    WELCOME_AVAILABILITY_BAR,
     "",
-    "   REPLACE THIS BLOCK BEFORE YOU SEND",
+    "   \u26D4 REPLACE THIS BLOCK BEFORE YOU SEND",
     "",
     "   Your available dates and times, or your scheduling link.",
     "",
-    ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>",
+    WELCOME_AVAILABILITY_BAR,
   ].join("\n");
 
   // PLAIN TEXT, NO LINKS, THE TWO DOCUMENTS ATTACHED. Greg (10/9/26), after
@@ -4301,6 +4320,23 @@
       const ta = $("welcome-body");
       ta.focus(); ta.select();
       showBanner("Draft opening, but your browser wouldn't let the page copy the letter \u2014 it is below and selected, so press " + (WELCOME_PASTE_KEY === "Cmd+V" ? "Cmd+C" : "Ctrl+C") + " to copy it yourself.", "error");
+      recordWelcomeTaken();
+      return;
+    }
+
+    // Greg (20/11/26), on the red block: "so that the TLs don't miss it."
+    //
+    // The bar is the reminder; this is the catch. A letter that still
+    // carries the placeholder is one Cmd+V away from a CEO being told to
+    // replace a block before they send it -- and the Team Lead has already
+    // left this screen by then. Said plainly here, where there is still
+    // time, rather than relying on anybody reading their own letter twice.
+    //
+    // Not a block, only a warning: a Team Lead who means to fill the dates
+    // in once the letter is in Outlook is doing nothing wrong, and a page
+    // that refused to copy would be the more annoying of the two mistakes.
+    if (($("welcome-body").value || "").includes("REPLACE THIS BLOCK")) {
+      showBanner("Letter copied \u2014 but your availability block is still in it. Replace the red block with your dates or scheduling link before you send.", "error");
       recordWelcomeTaken();
       return;
     }
