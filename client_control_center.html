@@ -3984,47 +3984,58 @@
     // with nice green ones." U+2611 renders as a grey ballot box in Outlook
     // and Gmail; U+2705 is the green check in every client's emoji font, and
     // it survives a plain-text body intact.
-    const TICK = "✅ ";
     const IN = "   ";
     const L = [];
 
+    // Chris (20/11/26) supplied this letter whole. It is a rewrite, not an
+    // edit: the green ticks, the per-document links, the frameworks
+    // password and the preference-sorter instructions are all gone, and the
+    // Resource Vault is named once instead of being unpacked into the body.
+    //
+    // His reasoning is the same principle he gave on the CC list -- "it
+    // tends to drift toward bloatware". A letter that reproduces the
+    // dashboard is a second copy of it to keep in step; this one points at
+    // the dashboard and lists what is waiting there.
+    //
+    // The green TICK constant went with the blocks it marked. If ticks come
+    // back, the note that earned them is in the history: U+2611 renders as
+    // a grey ballot box in Outlook and Gmail, U+2705 does not.
     L.push("Greetings,", "");
-    L.push("Congratulations on your acceptance into the Economic Gardening program. I am your team leader for this engagement. For the next several weeks you will have the services of a high-powered team to conduct strategic and market research for you. Our first step is scheduling a Discovery Call to learn about you, your company, and your business issues. You can invite key management staff members to attend if you want.", "");
-    L.push("The Discovery Call runs 1.5 hours and we will meet on Zoom. Here is my availability:", "");
+    L.push("Congratulations on your acceptance into the Economic Gardening program. I am your team leader for this engagement. For the next several weeks you will have the services of a high-powered team to conduct strategic and market research for you. Our mission is to increase your sales using advanced marketing techniques.", "");
+    L.push("Our first step is scheduling a Discovery Call to learn about you, your company, and your business issues. You can invite key management staff members to attend if you want. The Discovery Call runs 1.5 hours and we will meet on Zoom. Here is my availability:", "");
     L.push(WELCOME_AVAILABILITY_MARKER, "");
-    L.push("Following the Discovery Call, a research team will start work for you immediately.", "");
+    L.push("Following the Discovery Call, we will create a Controlling Document with the questions you want answered, and then a research team will start work for you immediately.", "");
     L.push("Please note that we avoid rescheduling calls if possible. Coordinating 5-7 people will eat into your sponsor's budget for the engagement.", "");
 
-    // Links, not attachments (Chris, 10/23/26): "Chris doesn't think the
-    // CEO will open the dashboard and locate the files but if we could just
-    // create a simple link in the email that opens each document from their
-    // own dashboard that would work." Each address resolves the document
-    // and forwards to it, freshly signed, on every click -- so the letter
-    // stays short, nothing has to be attached by hand, and replacing the
-    // file behind the Resource Vault row changes what the link serves
-    // without touching a letter already sitting in an inbox.
-    L.push(TICK + "Please read these two before the Discovery Call. They give a good overview of where we are going.", "");
-    L.push(IN + "Frequently Asked Questions", IN + PUBLIC_SITE_BASE + "doc/faq", "");
-    L.push(IN + "What to Expect in an Economic Gardening Engagement", IN + PUBLIC_SITE_BASE + "doc/what-to-expect", "");
-
-    L.push(TICK + "There are two sets of videos that cover basic principles of the Economic Gardening program. The first is an overview of the analytical frameworks we use in trouble shooting business issues. The second is examples of deliverables in a marketing campaign.", "");
-    L.push(IN + "The five frameworks", IN + "https://economicgardening.org/training-videos-frameworks/", IN + "Password is nceg2019 (all lowercase)", "");
-    L.push(IN + "Sample deliverables", IN + "https://economicgardening.org/nceg-sample-deliverables/", "");
-
-    L.push(TICK + "This preference sorter will help us understand your work style and communication preferences (and those of any management people you wish to include). Please provide the results (4 letters) before your Discovery Call, or we can discuss them during the call.", "");
-    L.push(IN + "https://claude.ai/public/artifacts/15e8c292-005b-4f20-81a3-8b637d504601", "");
-
-    L.push(TICK + "Finally, please provide me with a list of your top 10 customers and at least 5 competitors (larger, smaller, same size). This will help us build a customer profile. We will also look at your competitors' website activity.", "");
-
+    // The dashboard line only appears when there is one to point at. The
+    // engagement has no slug until it is accepted, and a letter that says
+    // "this is a link to your Dashboard" above nothing is worse than a
+    // letter that does not mention it (see the note in #welcome-note, which
+    // tells the Team Lead what is missing).
     if (dashboardUrl) {
-      // Comma, not a full stop, after the name: plenty of these end in
-      // "Inc." and "Fuel Efficiency Inc.." is exactly the kind of thing a
-      // CEO notices in a letter about being thorough.
-      L.push("We have set up an NCEG Dashboard for " + companyName + ", where our contact information, the videos, our discussion notes and all of the research we produce are kept — through your engagement and after it ends.", "");
-      L.push(IN + dashboardUrl, "");
+      L.push("This is a link to your Dashboard during the engagement.", IN + dashboardUrl, "");
+      L.push("All deliverables will be posted here for your convenience. At the bottom, note there is a \u201cresource vault\u201d that has some important documents, including", "");
+      // Chris's own names for these, which are fuller than the Resource
+      // Vault's own titles ("Frequently Asked Questions", not "NCEG FAQs").
+      // Written out rather than read from resource_vault_templates: the
+      // vault is a live list an Admin can reorder or add to, and a letter
+      // that silently grows a line every time somebody files a document is
+      // the bloat Chris is trying to avoid. The cost is that this list and
+      // the vault can drift -- worth a look whenever a default changes.
+      [
+        "Frequently Asked Questions",
+        "What to Expect in an Economic Gardening Engagement",
+        "Sample Deliverables",
+        "Frameworks Videos",
+        "Keirsey Temperament Sorter",
+        "Intercept Marketing",
+        "Signals of Change",
+      ].forEach((item) => L.push(IN + item));
+      L.push("");
     }
 
-    L.push("Feel free to let me know if you have questions. We look forward to working with your company.", "");
+    L.push("Finally, please provide me with a list of your top 10 customers and at least 5 competitors (larger, smaller, same size). This will help us build a customer profile. We will also look at your competitors' website activity.", "");
+    L.push("Feel free to contact me with questions. We look forward to working with your company.", "");
     L.push("Thank you,");
     if (signature) {
       // The Team Lead's own block from the Roster, in place of the three
