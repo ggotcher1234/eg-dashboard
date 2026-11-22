@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NCEG Dashboard — Who Has Signed In</title>
+<!-- Greg (22/11/26): "i have no need to secure this page in any way. it can
+     easily be an open web page. it's just a list of who has logged in."
+
+     So it is one: no sign-in, no connector, no consent prompt. It calls
+     get_roster_signins_public() (migration 199) with the same anon key every
+     public page in this app uses -- the same route discovery_document_public
+     and the client dashboards already take.
+
+     This replaces the claude.ai artifact that did the same job through
+     Greg's personal Supabase connector. That worked until the grant lapsed,
+     and then showed a raw protocol error to the one person who could fix it.
+     Nothing here can lapse.
+
+     No email addresses on purpose: they add nothing to "who has logged in",
+     and thirty staff addresses on an open page is a mailing list for whoever
+     finds it. -->
+<style>
+  :root {
+    --navy: #14304d; --navy-light: #1f4a75; --accent: #5c7248; --accent-dark: #46592f;
+    --amber: #a9740f; --bg: #a3b9aa; --card: #fff; --border: #dde3e9;
+    --text: #1f2937; --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 28px 16px 56px;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+  h1 { font-size: 23px; margin: 0; line-height: 1.2; color: var(--navy); letter-spacing: -0.01em; }
+  .sub { color: #3f5243; font-size: 13px; margin-top: 4px; }
+  button {
+    font: inherit; font-size: 14px; border: 1px solid var(--border); background: var(--card);
+    color: var(--text); padding: 8px 15px; border-radius: 8px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: 0.6; cursor: default; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .stat { flex: 1 1 150px; min-width: 0; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 15px; }
+  .stat .n { font-size: 25px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--navy); }
+  .stat .l { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
+  table { width: 100%; border-collapse: collapse; min-width: 520px; }
+  th, td { padding: 11px 15px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { text-align: left; white-space: normal; }
+  th { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.empty { text-align: center; color: var(--muted); padding: 30px; }
+  td .small { display: block; font-size: 11.5px; color: var(--muted); white-space: normal; }
+  tr.never td { color: #8d9790; }
+  tr.never td:first-child { color: var(--text); }
+
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; padding: 2px 9px; border-radius: 999px; text-transform: uppercase; }
+  .pill.in { background: #eaf0e4; color: var(--accent-dark); }
+  .pill.wait { background: #fdf4e3; color: var(--amber); }
+  .pill.none { background: transparent; color: #8d9790; border: 1px solid var(--border); }
+
+  .note { background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--amber); border-radius: 10px; padding: 12px 15px; margin-bottom: 14px; font-size: 13.5px; display: none; }
+  .note.show { display: block; }
+  .foot { color: #3f5243; font-size: 12.5px; margin-top: 16px; line-height: 1.55; }
+  .foot b { color: var(--navy); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Who has signed in to EGDB</h1>
+      <div class="sub" id="sub">Loading&hellip;</div>
+    </div>
+    <button id="refresh" type="button">Refresh</button>
+  </header>
+
+  <div class="note" id="note"></div>
+
+  <div class="stats" id="stats" hidden>
+    <div class="stat"><div class="n" id="s-total">&mdash;</div><div class="l">On the Roster</div></div>
+    <div class="stat"><div class="n" id="s-in">&mdash;</div><div class="l">Have signed in</div></div>
+    <div class="stat"><div class="n" id="s-never">&mdash;</div><div class="l">Never signed in</div></div>
+    <div class="stat"><div class="n" id="s-week">&mdash;</div><div class="l">In the last 7 days</div></div>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr>
+        <th>Roster member</th><th>Role</th><th>Status</th><th>Last sign-in</th>
+      </tr></thead>
+      <tbody id="rows"><tr><td class="empty" colspan="4">Loading&hellip;</td></tr></tbody>
+    </table>
+  </div>
+
+  <p class="foot"><b>About a login count.</b> Supabase keeps only each person's most
+    recent sign-in, not a history, so there is no number of logins to show, for anyone.
+    Counting them would mean recording each sign-in from now on; it cannot be worked out
+    backwards. Archived members are left off this list.</p>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
+  const RPC_URL = `${SUPABASE_URL}/rest/v1/rpc/get_roster_signins_public`;
+
+  const $ = (id) => document.getElementById(id);
+  const ROLE_LABELS = { super_admin: "Admin", team_lead: "Team Lead", consultant: "Specialist" };
+
+  function showNote(text) { const n = $("note"); n.textContent = text; n.classList.add("show"); }
+  function hideNote() { $("note").classList.remove("show"); }
+  function message(text) {
+    $("rows").innerHTML = `<tr><td class="empty" colspan="4">${text}</td></tr>`;
+    $("stats").hidden = true;
+  }
+
+  const daysBetween = (then, now) => Math.floor((now - then) / 86400000);
+  function whenText(d, now) {
+    const days = daysBetween(d, now);
+    if (days <= 0) return "Today";
+    if (days === 1) return "Yesterday";
+    if (days < 30) return days + " days ago";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+  // Names arrive from the database, so they are escaped rather than written
+  // into innerHTML -- a roster entry is typed by a person.
+  function cell(text, small) {
+    const td = document.createElement("td");
+    td.appendChild(document.createTextNode(text));
+    if (small) {
+      const s = document.createElement("span");
+      s.className = "small";
+      s.textContent = small;
+      td.appendChild(s);
+    }
+    return td;
+  }
+
+  function render(rows) {
+    if (!rows.length) { message("No roster members found."); return; }
+    const now = Date.now();
+    const body = $("rows");
+    body.textContent = "";
+    let signedIn = 0, never = 0, week = 0;
+
+    rows.forEach((r) => {
+      const last = r.last_sign_in_at ? new Date(r.last_sign_in_at) : null;
+      const invited = r.invited_at ? new Date(r.invited_at) : null;
+      const tr = document.createElement("tr");
+      if (!last) tr.className = "never";
+
+      tr.appendChild(cell(r.full_name || "—"));
+      tr.appendChild(cell(ROLE_LABELS[r.role] || r.role || "—"));
+
+      const tdState = document.createElement("td");
+      const pill = document.createElement("span");
+      if (last) { pill.className = "pill in"; pill.textContent = "Active"; signedIn++; if (daysBetween(last, now) < 7) week++; }
+      else if (invited) { pill.className = "pill wait"; pill.textContent = "Invited"; never++; }
+      else { pill.className = "pill none"; pill.textContent = "No invite"; never++; }
+      tdState.appendChild(pill);
+      tr.appendChild(tdState);
+
+      tr.appendChild(last
+        ? cell(whenText(last, now), last.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }))
+        : cell("—", invited ? "invited " + whenText(invited, now).toLowerCase() : ""));
+
+      body.appendChild(tr);
+    });
+
+    $("s-total").textContent = rows.length;
+    $("s-in").textContent = signedIn;
+    $("s-never").textContent = never;
+    $("s-week").textContent = week;
+    $("stats").hidden = false;
+  }
+
+  async function load() {
+    const btn = $("refresh");
+    btn.disabled = true; btn.textContent = "Loading…";
+    try {
+      const res = await fetch(RPC_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: "{}",
+      });
+      if (!res.ok) throw new Error(`The server returned ${res.status}.`);
+      const rows = await res.json();
+      hideNote();
+      render(Array.isArray(rows) ? rows : []);
+      $("sub").textContent = "Updated " + new Date().toLocaleString(undefined,
+        { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    } catch (e) {
+      showNote("Couldn't load the sign-ins: " + (e.message || "something went wrong") + " Press Refresh to try again.");
+      message("No data loaded.");
+      $("sub").textContent = "Not loaded";
+    } finally {
+      btn.disabled = false; btn.textContent = "Refresh";
+    }
+  }
+
+  $("refresh").addEventListener("click", load);
+  load();
+</script>
+</body>
+</html>
