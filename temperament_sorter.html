@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Temperament Sorter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: calm, encouraging, self-reflective — a consultant's assessment, not a pop quiz
+   IDEA: a deck of question cards dealt one at a time onto a grey desk
+   PICTURE: the question card itself; the four-temperament grid on intro and results
+   COLOUR and TYPE: light grey ground, white cards, four temperament hues; Playfair Display + DM Sans
+   LAYOUT: one centred column, max 760px; cards stack; options side by side above 600px */
+:root{color-scheme:light dark;
+ --bg:light-dark(#eceef1,#15171b);--card:light-dark(#fff,#1f2228);--ink:light-dark(#1c222a,#e8ebef);
+ --mute:light-dark(#5b6470,#a0a9b5);--line:light-dark(#dce0e5,#30353e);--soft:light-dark(#f4f5f7,#262a31);
+ --btn:light-dark(#1f3a5a,#a9c8ea);--btnInk:light-dark(#fff,#10161d);
+ --G:#2f6690;--A:#c9701f;--I:#2a8466;--R:#b23a48}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "DM Sans",system-ui,sans-serif;overflow-x:clip}
+main{max-width:760px;margin:0 auto;padding:clamp(24px,5vw,56px) max(4vw,14px) 64px}
+h1,h2,h3{font-family:"Playfair Display",Georgia,serif;line-height:1.1;margin:0;text-wrap:balance}
+h1{font-size:clamp(32px,6vw,46px)}h2{font-size:clamp(24px,4vw,30px)}h3{font-size:19px}
+p{margin:0 0 14px}.mute{color:var(--mute)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:clamp(20px,4vw,32px);box-shadow:0 1px 2px #0000000a,0 8px 24px #0000000d;margin-top:18px}
+.lede{font-size:17px;margin-top:12px;max-width:62ch}
+.btn{font:600 16px "DM Sans",sans-serif;border:0;border-radius:12px;min-height:48px;padding:0 26px;cursor:pointer;background:var(--btn);color:var(--btnInk)}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn:focus-visible,.opt:focus-visible{outline:3px solid var(--G);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:20px}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0 4px}
+.facts div{background:var(--soft);border-radius:12px;padding:12px 14px}
+.facts b{display:block;font:700 24px "Playfair Display",serif}
+.facts span{font-size:14px;color:var(--mute)}
+.quad{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
+.tile{border-radius:14px;padding:16px;color:#fff;transition:opacity .3s,transform .3s}
+.tile b{font:700 20px "Playfair Display",serif;display:block}
+.tile small{font-size:14px;opacity:.92;display:block;margin-top:2px}
+.tile .lt{font-weight:700;font-size:13px;opacity:.85;letter-spacing:.02em}
+.quad.dim .tile{opacity:.28}.quad.dim .tile.me{opacity:1;transform:scale(1.02)}
+/* quiz */
+.top{display:flex;align-items:center;gap:14px}
+.track{flex:1;height:10px;background:var(--line);border-radius:99px;overflow:hidden}
+.fill{height:100%;width:0;background:linear-gradient(90deg,var(--G),var(--I),var(--A),var(--R));background-size:760px 100%;transition:width .35s}
+.count{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.meta{display:flex;justify-content:space-between;gap:10px;font-size:14px;color:var(--mute);margin-top:8px;flex-wrap:wrap}
+.qcard{min-height:330px;display:flex;flex-direction:column}
+.qn{font-size:14px;color:var(--mute);font-weight:500}
+.stem{font:600 clamp(23px,4.2vw,30px)/1.2 "Playfair Display",serif;margin:10px 0 22px;text-wrap:balance}
+.opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:auto}
+.opt{display:flex;gap:12px;align-items:flex-start;text-align:left;font:500 17px/1.4 "DM Sans",sans-serif;color:var(--ink);background:var(--soft);border:2px solid transparent;border-radius:14px;padding:18px;cursor:pointer;min-height:96px;transition:border-color .15s,background .15s,transform .12s}
+.opt:hover{border-color:var(--btn)}
+.opt:active{transform:scale(.98)}
+.opt .k{flex:none;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-weight:700;background:var(--card);border:1px solid var(--line)}
+.opt.sel{border-color:var(--btn);background:light-dark(#e3ebf5,#2a3546)}
+.opt.sel .k{background:var(--btn);color:var(--btnInk);border-color:var(--btn)}
+.hint{font-size:14px;color:var(--mute);margin-top:16px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}
+.link{background:none;border:0;color:var(--ink);font:500 15px "DM Sans",sans-serif;cursor:pointer;padding:10px 4px;text-decoration:underline;text-underline-offset:3px}
+.link:disabled{opacity:.35;cursor:default}
+.out{animation:out .2s ease-in forwards}.in{animation:in .28s ease-out}
+@keyframes out{to{opacity:0;transform:translateX(-40px)}}
+@keyframes in{from{opacity:0;transform:translateX(40px)}}
+@media(prefers-reduced-motion:reduce){.out,.in{animation:none}.fill,.tile{transition:none}}
+/* results */
+.hero{color:#fff;border:0}
+.hero .code{font:700 clamp(44px,10vw,72px)/1 "Playfair Display",serif;letter-spacing:.04em}
+.hero h2{margin-top:10px;font-size:clamp(26px,5vw,36px)}
+.hero p{opacity:.95;margin-top:12px;font-size:17px}
+.dim{margin:14px 0}
+.dimHead{display:flex;justify-content:space-between;font-size:15px;gap:10px}
+.dimHead b{font-weight:700}
+.bar{display:flex;height:14px;border-radius:99px;overflow:hidden;background:var(--line);margin-top:6px}
+.bar i{display:block;height:100%}
+.note{font-size:14px;color:var(--mute);margin-top:4px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.grid2 .card{margin-top:0}
+ul{margin:8px 0 0;padding-left:20px}li{margin:4px 0}
+.foot{font-size:13px;color:var(--mute);margin-top:28px;text-align:center}
+#toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:12px 20px;border-radius:12px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;max-width:90vw;text-align:center}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+.field{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--mute);flex:1 1 220px;max-width:320px}
+.field input{font:16px "DM Sans",sans-serif;min-height:48px;padding:0 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)}
+.field input:focus-visible{outline:3px solid var(--G);outline-offset:1px}
+@media print{body{background:#fff}.row,.foot,#toast{display:none}.card{box-shadow:none;break-inside:avoid}.hero,.tile{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+@media(max-width:600px){.opts,.grid2{grid-template-columns:minmax(0,1fr)}.opt{min-height:72px}.qcard{min-height:0}.facts b{font-size:20px}}
+</style>
+</head>
+<body>
+<main>
+ <section id="intro">
+  <h1>Temperament Sorter</h1>
+  <p class="lede">The Temperament Sorter is a self-assessment based on David Keirsey's temperament theory, which grew out of the same four preference pairs used in the Myers-Briggs model: where you get your energy (Extraversion or Introversion), how you take in information (Sensing or Intuition), how you make decisions (Thinking or Feeling), and how you approach the outside world (Judging or Perceiving). Keirsey grouped the sixteen resulting combinations into four temperaments, each with a distinct pattern of values, talents and communication style. Knowing yours helps you understand how you work best, and why others may see the same situation very differently.</p>
+  <div class="quad" id="quadIntro"></div>
+  <div class="card">
+   <h3>How it works</h3>
+   <div class="facts">
+    <div><b>70</b><span>questions</span></div>
+    <div><b>A or B</b><span>one click each</span></div>
+    <div><b>~8 min</b><span>to finish</span></div>
+   </div>
+   <p class="mute" style="margin-top:12px">You'll see one question at a time. Choose A or B and the next question appears automatically. There are no right or wrong answers — pick the one that fits you most of the time, and go with your first instinct. Keyboard: press <b>A</b> or <b>B</b> to answer, <b>Backspace</b> to go back. Your progress is saved in this browser if you need to step away.</p>
+   <div class="row">
+    <button class="btn" id="start">Start test</button>
+    <button class="btn ghost" id="resume" hidden></button>
+   </div>
+  </div>
+ </section>
+
+ <section id="quiz" hidden>
+  <div class="top"><div class="track"><div class="fill" id="fill"></div></div><span class="count" id="count">1 / 70</span></div>
+  <div class="meta"><span id="left"></span><span>Go with your first instinct</span></div>
+  <div class="card qcard" id="qcard">
+   <div class="qn" id="qn"></div>
+   <div class="stem" id="stem"></div>
+   <div class="opts">
+    <button class="opt" id="optA"><span class="k">A</span><span id="tA"></span></button>
+    <button class="opt" id="optB"><span class="k">B</span><span id="tB"></span></button>
+   </div>
+  </div>
+  <div class="hint"><button class="link" id="back">← Previous question</button><span>Keys: A / B · Backspace</span></div>
+ </section>
+
+ <section id="result" hidden>
+  <div class="card hero" id="hero"></div>
+  <div class="card">
+   <h3>Your four preferences</h3>
+   <div id="dims"></div>
+  </div>
+  <div class="grid2" id="detail" style="margin-top:18px"></div>
+  <div class="card">
+   <h3>Where you sit among the four temperaments</h3>
+   <div class="quad dim" id="quadResult"></div>
+  </div>
+  <div class="row" style="align-items:flex-end">
+   <label class="field" for="pname">Name for the PDF (optional)<input id="pname" type="text" autocomplete="name" placeholder="e.g. Jordan Smith"></label>
+   <button class="btn" id="pdf">Save as PDF</button>
+   <button class="btn ghost" id="retake">Retake the test</button>
+  </div>
+ </section>
+
+ <p class="foot" id="footText">Questions are original and follow the four-dimension structure of Keirsey's temperament model; this is not the official Keirsey Temperament Sorter (KTS-II). For self-reflection and team discussion, not clinical or hiring decisions.</p>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+{
+const OPP={E:'I',I:'E',S:'N',N:'S',T:'F',F:'T',J:'P',P:'J'};
+// [stem, letter for A, A text, B text]  — B is the opposite letter
+const Q=[
+['At a party or networking event, you usually…','E','Talk with lots of people, including strangers','Stick with a few people you already know'],
+['You are more drawn to…','S','What is real and proven','What might be possible'],
+['When following instructions, you prefer…','S','Clear, step-by-step specifics','The big picture, then work out the rest'],
+['When making a tough call, you lean on…','T','Logic and objective criteria','How the people involved will be affected'],
+['Which compliment means more to you?','F','"You\'re a caring person"','"You\'re a clear thinker"'],
+['You generally prefer to…','J','Have plans settled ahead of time','Keep options open and decide as you go'],
+['Your workspace is usually…','P','A creative sprawl only you can navigate','Organized, with everything in its place'],
+['After a long week, you recharge by…','I','Quiet time alone or with one close friend','Getting out with a group of friends'],
+['Your conversations tend to drift toward…','N','Ideas, theories and what-ifs','Events, facts and practical matters'],
+['You trust…','S','Your direct experience','Your hunches'],
+['In a disagreement, you care more about…','F','Keeping the peace','Getting to the right answer'],
+['Rules should be…','T','Applied the same way to everyone','Bent when circumstances call for compassion'],
+['Deadlines are…','P','A target — you do your best work in the final push','Something to beat, ideally early'],
+['A free Saturday looks like…','J','A list of things to get done','Seeing where the day takes you'],
+['In a discussion, you tend to…','E','Think out loud as you talk','Think it through before you speak'],
+['You\'d rather be known as…','S','Practical and grounded','Imaginative and inventive'],
+['When learning something new, you like…','N','Concepts and underlying principles','Real examples and hands-on practice'],
+['When a friend shares a problem, your first instinct is to…','F','Offer sympathy and support','Offer solutions'],
+['Which would you rather be accused of?','T','Being too blunt','Being too soft-hearted'],
+['You feel more at ease…','J','Once a decision has been made','While options are still open'],
+['When you travel, you…','P','Mostly wing it','Book a full itinerary'],
+['In a new group, you usually…','I','Wait for others to approach you','Introduce yourself first'],
+['You tend to notice…','S','Details','Patterns and connections'],
+['You prefer work that…','N','Invents new ways of doing things','Improves proven methods'],
+['Business decisions should rest mainly on…','T','Data and analysis','Values and people'],
+['You are moved more by…','F','A touching story','A convincing argument'],
+['Last-minute changes to your plans…','P','Energize you','Annoy you'],
+['To-do lists are…','J','Essential','Usually forgotten'],
+['Your friendships are mostly…','E','A wide circle of people','A few deep connections'],
+['You prefer writers who…','S','Say exactly what they mean','Use metaphor and symbolism'],
+['You\'re more likely to…','N','Daydream about the future','Focus on the here and now'],
+['When giving feedback, you…','T','Are direct and to the point','Choose your words to spare feelings'],
+['The bigger compliment for a leader is…','F','Compassionate','Competent'],
+['You prefer projects that…','J','Have clear structure and milestones','Evolve freely as you go'],
+['When shopping for something big, you…','P','Keep browsing in case something better turns up','Research, then decide and buy'],
+['In meetings, you…','E','Speak up early and often','Listen first and contribute later'],
+['Which appeals more?','S','A sensible, time-tested plan','A bold, untried idea'],
+['Describing a movie you just saw, you\'d…','N','Talk about what it meant','Recount what happened'],
+['You\'re more often…','T','Cool-headed','Warm-hearted'],
+['A colleague makes a costly mistake. You first…','F','Consider how they\'re feeling','Work out what went wrong'],
+['Your approach to work is to…','J','Finish one thing before starting the next','Juggle several things at once'],
+['A fixed schedule feels…','P','Confining','Comforting'],
+['Being the center of attention is…','E','Fun','Uncomfortable'],
+['You value more…','S','Common sense','Vision'],
+['You tend to…','N','Read between the lines','Take things at face value'],
+['When settling a dispute, you lean toward…','T','Fairness and consistency','Mercy and forgiveness'],
+['You\'d rather work alongside…','F','Supportive, encouraging people','Sharp, analytical people'],
+['Unfinished tasks…','J','Nag at you','Don\'t bother you much'],
+['Starting a new project, you…','P','Dive in and figure it out','Plan before diving in'],
+['When you get exciting news, you…','I','Keep it to yourself for a while','Tell people right away'],
+['You\'re better at…','S','Remembering facts and specifics','Seeing the meaning behind them'],
+['You\'d rather work on…','N','A theory or strategy','Something tangible you can see finished'],
+['You consider yourself more…','T','Analytical','Empathetic'],
+['It\'s worse to be…','F','Unkind','Unfair'],
+['Your email inbox is usually…','J','Sorted and close to empty','Piling up'],
+['Faced with an open question, you\'d rather…','P','Wait and see','Settle it now'],
+['You do your best work…','E','Collaborating in a group','Working on your own'],
+['You get more satisfaction from…','S','Mastering a skill through practice','Grasping a new concept'],
+['You generally prefer…','N','The novel and untried','The familiar and reliable'],
+['Choosing between two job offers, what matters most?','T','The numbers','The people'],
+['Which bothers you more?','F','Insensitive behavior','Illogical reasoning'],
+['For appointments, you\'re…','J','Early or right on time','Roughly on time, give or take'],
+['You\'d describe your life as…','P','Spontaneous','Orderly'],
+['Interruptions while you work are…','E','Welcome breaks','Frustrating'],
+['When someone explains something, you want…','S','The concrete facts','The underlying idea'],
+['You admire more…','N','Original thinking','Practical know-how'],
+['You\'d rather be…','T','Respected for your reasoning','Appreciated for your kindness'],
+['You make most decisions with…','F','Your heart','Your head'],
+['In a game, you prefer…','J','A clear strategy from the start','Adapting as you go'],
+['Once a decision is made, you…','P','Keep revisiting it','Move on']
+];
+const N=Q.length;
+const TEMP={
+ G:{name:'Guardian',pair:'SJ',color:'var(--G)',tag:'Dependable stewards of order and duty',
+  desc:'Guardians are responsible, loyal and practical. They value stability, belonging and doing things the right way, and they are often the people organizations quietly depend on to keep commitments and protect what works.',
+  strengths:['Reliable follow-through','Strong sense of duty and loyalty','Organized and detail-aware','Protects proven systems'],
+  work:'Thrives with clear roles, procedures and accountability. Often the backbone of operations, finance, quality and administration.',
+  comm:'Be specific, cite precedent, give timelines, and follow through on what you promise.',
+  watch:'Can resist untested change and become rigid or pessimistic under stress.'},
+ A:{name:'Artisan',pair:'SP',color:'var(--A)',tag:'Adaptable, hands-on doers who seek impact',
+  desc:'Artisans are bold, practical and spontaneous. They read a situation quickly, act on it, and love freedom to improvise. They make an immediate impact and keep things moving when others stall.',
+  strengths:['Quick tactical thinking','Hands-on skill and craft','Calm and resourceful in a crisis','Persuasive, energetic presence'],
+  work:'Excels in fast-moving, practical roles — sales, operations, trades, troubleshooting — where results show quickly.',
+  comm:'Keep it brief and action-oriented; show rather than lecture; leave room to improvise.',
+  watch:'May lose interest in long-range planning and routine follow-up.'},
+ I:{name:'Idealist',pair:'NF',color:'var(--I)',tag:'Warm seekers of meaning and growth',
+  desc:'Idealists are empathetic, insightful and driven by purpose. They look for the potential in people and ideas, care deeply about authenticity, and naturally build harmony and commitment in a group.',
+  strengths:['Reads people and motives well','Inspires and motivates others','Strong personal values','Brings out others\' potential'],
+  work:'Shines in roles that develop people — coaching, HR, marketing, teaching, counseling — and in mission-driven work.',
+  comm:'Connect to the purpose, acknowledge contributions, and give feedback with care.',
+  watch:'Can take criticism personally and overextend for others.'},
+ R:{name:'Rational',pair:'NT',color:'var(--R)',tag:'Strategic, independent problem-solvers',
+  desc:'Rationals are logical, curious and strategic. They want to understand how systems work and how to improve them, value competence above all, and are at their best tackling complex, long-range problems.',
+  strengths:['Strategic, long-range thinking','Designs systems and models','Objective, rigorous analysis','Learns quickly and independently'],
+  work:'Drawn to strategy, engineering, research and any role that rewards competence and innovation.',
+  comm:'Bring logic and evidence, skip the small talk, and welcome debate.',
+  watch:'May seem detached and grow impatient with inefficiency or emotion.'}
+};
+const ROLE={
+ ESTJ:['Supervisor','Takes charge, sets standards and makes sure rules are followed.'],
+ ISTJ:['Inspector','Thorough and dependable; checks that everything is done correctly.'],
+ ESFJ:['Provider','Sociable and generous; looks after the needs of the group.'],
+ ISFJ:['Protector','Quietly devoted to keeping people safe and supported.'],
+ ESTP:['Promoter','Bold negotiator who spots and seizes opportunities.'],
+ ISTP:['Crafter','Masters tools and techniques; cool troubleshooter.'],
+ ESFP:['Performer','Lively and engaging; brings energy and fun to any room.'],
+ ISFP:['Composer','Artistic and sensitive; expresses through craft and design.'],
+ ENFJ:['Teacher','Natural developer of people and builder of teams.'],
+ INFJ:['Counselor','Insightful guide who helps others find their path.'],
+ ENFP:['Champion','Enthusiastic advocate for people, ideas and causes.'],
+ INFP:['Healer','Idealistic and loyal; seeks harmony and integrity.'],
+ ENTJ:['Fieldmarshal','Organizes people and resources to achieve long-range goals.'],
+ INTJ:['Mastermind','Strategic planner who sees how to get from here to there.'],
+ ENTP:['Inventor','Ingenious builder of new approaches and devices.'],
+ INTP:['Architect','Designer of theories, models and logical systems.']
+};
+const DIMS=[['E','I','Extraversion','Introversion','Where you get your energy'],['S','N','Sensing','Intuition','How you take in information'],['T','F','Thinking','Feeling','How you make decisions'],['J','P','Judging','Perceiving','How you approach the outside world']];
+const KEY='temperament-sorter-v1';
+const $=id=>document.getElementById(id);
+const art=w=>/^[AEIOU]/i.test(w)?'an':'a';
+const HEX={G:[47,102,144],A:[201,112,31],I:[42,132,102],R:[178,58,72]};
+let last=null;
+let ans=new Array(N).fill(null),i=0,busy=false;
+
+const quadHTML=me=>['G','A','I','R'].map(k=>{const t=TEMP[k];return `<div class="tile${k===me?' me':''}" style="background:${t.color}"><span class="lt">${t.pair}</span><b>${t.name}</b><small>${t.tag}</small></div>`}).join('');
+$('quadIntro').innerHTML=quadHTML();
+
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(ans))}catch(e){}};
+const load=()=>{try{const a=JSON.parse(localStorage.getItem(KEY));if(Array.isArray(a)&&a.length===N)return a}catch(e){}return null};
+const show=v=>{for(const s of ['intro','quiz','result'])$(s).hidden=s!==v;window.scrollTo(0,0)};
+let tt;const toast=m=>{const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2200)};
+
+const saved=load();
+if(saved){const done=saved.filter(Boolean).length;if(done>0){const r=$('resume');r.hidden=false;r.textContent=done===N?'View my last result':`Resume (${done} of ${N} answered)`;}}
+
+function render(anim){
+ const q=Q[i];
+ $('qn').textContent=`Question ${i+1}`;
+ $('stem').textContent=q[0];$('tA').textContent=q[2];$('tB').textContent=q[3];
+ $('optA').classList.toggle('sel',ans[i]==='a');$('optB').classList.toggle('sel',ans[i]==='b');
+ const done=ans.filter(Boolean).length;
+ $('fill').style.width=(done/N*100)+'%';
+ $('count').textContent=`${i+1} / ${N}`;
+ const mins=Math.max(1,Math.round((N-i)*7/60));
+ $('left').textContent=`About ${mins} min left`;
+ $('back').disabled=i===0;
+ if(anim){const c=$('qcard');c.classList.remove('in');void c.offsetWidth;c.classList.add('in')}
+}
+const MILE={17:'A quarter of the way there — nice pace.',35:'Halfway done. Keep trusting your first instinct.',52:'Three-quarters done. Home stretch!',65:'Just five to go.'};
+function choose(c){
+ if(busy)return;busy=true;
+ ans[i]=c;save();
+ $('optA').classList.toggle('sel',c==='a');$('optB').classList.toggle('sel',c==='b');
+ const c2=$('qcard');
+ setTimeout(()=>{
+  c2.classList.add('out');
+  setTimeout(()=>{
+   c2.classList.remove('out');
+   if(MILE[i])toast(MILE[i]);
+   const next=ans.findIndex((a,k)=>k>i&&!a);
+   if(i===N-1||ans.every(Boolean)&&next===-1){busy=false;results();return}
+   i=next===-1?Math.min(i+1,N-1):next;
+   render(true);busy=false;
+  },180);
+ },140);
+}
+function goBack(){if(busy||i===0)return;i--;render(true)}
+
+function score(){
+ const s={E:0,I:0,S:0,N:0,T:0,F:0,J:0,P:0};
+ ans.forEach((a,k)=>{if(!a)return;const L=Q[k][1];s[a==='a'?L:OPP[L]]++});
+ return s;
+}
+function results(){
+ const s=score();
+ // Keirsey convention: ties resolve to I, N, F, P
+ const pick=(x,y,tie)=>s[x]>s[y]?x:s[y]>s[x]?y:tie;
+ const code=pick('E','I','I')+pick('S','N','N')+pick('T','F','F')+pick('J','P','P');
+ const tk=code[1]==='S'?(code[3]==='J'?'G':'A'):(code[2]==='F'?'I':'R');
+ const t=TEMP[tk],r=ROLE[code];
+ $('hero').style.background=t.color;
+ $('hero').innerHTML=`<div class="code">${code}</div><h2>${t.name} · ${r[0]}</h2><p>${t.desc}</p><p><b>As ${art(r[0])} ${r[0]}:</b> ${r[1]}</p>`;
+ $('dims').innerHTML=DIMS.map(([a,b,na,nb,lab])=>{
+  const tot=s[a]+s[b]||1,pa=Math.round(s[a]/tot*100),pb=100-pa,w=code.includes(a)?a:b;
+  const tie=s[a]===s[b];const strength=Math.abs(pa-50);
+  const word=tie?'An even split — tie resolved by convention':strength>=30?'Clear preference':strength>=15?'Moderate preference':'Slight preference — you can flex either way';
+  return `<div class="dim"><div class="dimHead"><span><b>${na}</b> ${s[a]}</span><span class="mute">${lab}</span><span>${s[b]} <b>${nb}</b></span></div>
+  <div class="bar"><i style="width:${pa}%;background:${w===a?t.color:'var(--mute)'}"></i><i style="width:${pb}%;background:${w===b?t.color:'var(--mute)'};opacity:${w===b?1:.35}"></i></div>
+  <div class="note">${word}</div></div>`}).join('');
+ $('detail').innerHTML=`<div class="card"><h3>Natural strengths</h3><ul>${t.strengths.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+ <div class="card"><h3>At work</h3><p>${t.work}</p></div>
+ <div class="card"><h3>How to communicate with ${art(t.name)} ${t.name}</h3><p>${t.comm}</p></div>
+ <div class="card"><h3>Watch out for</h3><p>${t.watch}</p></div>`;
+ $('quadResult').innerHTML=quadHTML(tk);
+ last={code,tk,s};
+ $('fill').style.width='100%';
+ show('result');
+}
+
+// Save as PDF replaces Copy results (Greg, 11/23/26). The PDF is drawn with
+// jsPDF rather than window.print so it's one consistent one-page letter-size
+// report everywhere. Inside a claude.ai artifact the frame blocks downloads,
+// so it goes through the artifact "downloads" capability; on Netlify (EGDB)
+// window.claude doesn't exist and jsPDF's own save() is used. If jsPDF fails
+// to load at all, fall back to the browser print dialog (print CSS above).
+async function savePdf(){
+ if(!last)return;
+ const {code,tk,s}=last,t=TEMP[tk],r=ROLE[code],col=HEX[tk],name=$('pname').value.trim();
+ if(!window.jspdf){window.print();return}
+ const doc=new window.jspdf.jsPDF({unit:'pt',format:'letter'});
+ const W=612,M=54,bw=W-2*M;let y;
+ doc.setFillColor(...col);doc.rect(0,0,W,170,'F');
+ doc.setTextColor(255,255,255);doc.setFont('times','bold');doc.setFontSize(46);doc.text(code,M,80);
+ doc.setFontSize(24);doc.text(`${t.name} \u00b7 ${r[0]}`,M,114);
+ doc.setFont('helvetica','normal');doc.setFontSize(11);
+ doc.text(`${name?name+'  \u00b7  ':''}Temperament Sorter results  \u00b7  ${new Date().toLocaleDateString()}`,M,144);
+ y=204;doc.setTextColor(28,34,42);
+ const para=txt=>{doc.setFont('helvetica','normal');doc.setFontSize(11);const L=doc.splitTextToSize(txt,bw);doc.text(L,M,y);y+=L.length*15+10};
+ const head=h=>{doc.setFont('times','bold');doc.setFontSize(15);doc.text(h,M,y);y+=19};
+ para(t.desc);para(`As ${art(r[0])} ${r[0]}: ${r[1]}`);
+ head('Your four preferences');
+ DIMS.forEach(([a,b,na,nb])=>{const pa=s[a]/((s[a]+s[b])||1);
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text(`${na} ${s[a]}`,M,y);doc.text(`${s[b]} ${nb}`,W-M,y,{align:'right'});y+=6;
+  doc.setFillColor(220,224,229);doc.rect(M,y,bw,9,'F');doc.setFillColor(...col);
+  if(code.includes(a))doc.rect(M,y,bw*pa,9,'F');else doc.rect(M+bw*pa,y,bw*(1-pa),9,'F');y+=26});
+ head('Natural strengths');doc.setFont('helvetica','normal');doc.setFontSize(11);
+ t.strengths.forEach(x=>{doc.text('\u2022  '+x,M,y);y+=16});y+=8;
+ head('At work');para(t.work);
+ head(`How to communicate with ${art(t.name)} ${t.name}`);para(t.comm);
+ head('Watch out for');para(t.watch);
+ doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(110,110,110);
+ doc.text(doc.splitTextToSize($('footText').textContent,bw),M,758);
+ const fn=`Temperament-${code}${name?'-'+name.replace(/[^A-Za-z0-9]+/g,'-'):''}.pdf`;
+ let dl=null;try{if(window.claude&&window.claude.use)dl=await window.claude.use('downloads')}catch(e){}
+ if(dl){try{await dl.save({filename:fn,data:doc.output('blob')});toast('PDF saved')}catch(e){if(!e||e.code!=='declined')toast('The PDF could not be saved here')}}
+ else{doc.save(fn);toast('PDF downloaded')}
+}
+$('pdf').onclick=savePdf;
+$('start').onclick=()=>{ans=new Array(N).fill(null);i=0;save();show('quiz');render(true)};
+$('resume').onclick=()=>{ans=saved||ans;if(ans.every(Boolean)){results();return}i=ans.findIndex(a=>!a);show('quiz');render(true)};
+$('retake').onclick=()=>{ans=new Array(N).fill(null);i=0;save();show('quiz');render(true)};
+$('optA').onclick=()=>choose('a');$('optB').onclick=()=>choose('b');
+$('back').onclick=goBack;
+document.addEventListener('keydown',e=>{
+ if($('quiz').hidden||e.metaKey||e.ctrlKey||e.altKey)return;
+ const k=e.key.toLowerCase();
+ if(k==='a'||k==='1'||k==='arrowleft'){e.preventDefault();choose('a')}
+ else if(k==='b'||k==='2'||k==='arrowright'){e.preventDefault();choose('b')}
+ else if(k==='backspace'){e.preventDefault();goBack()}
+});
+}
+</script>
+</body>
+</html>
