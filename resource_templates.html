@@ -258,6 +258,14 @@
   .tpl-file-link { cursor: pointer; color: var(--navy-light); font-weight: 600; font-size: 13px; }
   .tpl-file-link:hover { text-decoration: underline; }
   .field-hint { font-size: 12px; color: var(--muted); }
+  /* Link-type resources (Greg, 11/23/26): a template can be a file OR a
+     link -- migration 035 gave resource_vault_templates a url column and the
+     client dashboards have rendered it ever since, but this page only ever
+     looked at storage_path, so a link resource showed as an empty
+     "Upload file" slot and there was no way to add a new one here. */
+  .tpl-url-row { display: flex; gap: 6px; align-items: center; }
+  .field input[type="url"] { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13.5px; font-family: inherit; }
+  .tpl-file-choice { display: flex; gap: 8px; flex-wrap: wrap; }
   .tpl-actions { flex-shrink: 0; padding-top: 22px; }
   .add-card { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
   .add-card .field { flex: 1; min-width: 160px; }
@@ -479,7 +487,7 @@
     </div>
 
     <div class="intro">
-      These are the standard resources shown in every client's Resource Vault. Upload or replace a file here and it
+      These are the standard resources shown in every client's Resource Vault. Each one is a file or a link. Upload or replace a file (or edit a link) here and it
       updates immediately for every client that has it — no need to re-upload it per client. Title and description
       changes work the same way.
     </div>
@@ -504,6 +512,10 @@
         <div class="field">
           <label for="add-file">File (optional)</label>
           <input type="file" id="add-file" />
+        </div>
+        <div class="field">
+          <label for="add-url">…or a link (optional)</label>
+          <input type="url" id="add-url" placeholder="https://…" />
         </div>
         <button type="submit" class="btn-primary btn-sm">+ Add Resource</button>
       </form>
@@ -971,13 +983,20 @@
             <input type="text" class="tpl-input" data-id="${t.id}" data-field="description" value="${escapeHtml(t.description || "")}" />
           </div>
           <div class="field tpl-file-col">
-            <label>File</label>
+            <label>${t.url && !t.storage_path ? "Link" : "File or link"}</label>
             ${t.storage_path
               ? `<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                    <span class="tpl-file-link" data-path="${escapeHtml(t.storage_path)}">${fileIconFor(t.storage_path)} ${escapeHtml(fileNameFromPath(t.storage_path))}</span>
                    <button type="button" class="btn-secondary btn-sm" data-replace="${t.id}">Replace</button>
                  </div>`
-              : `<label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload file<input type="file" class="tpl-upload-input" data-id="${t.id}" style="display:none;" /></label>`}
+              : `<div class="tpl-url-row${t.url ? "" : " hidden"}" data-url-row="${t.id}">
+                   <input type="url" class="tpl-url" data-id="${t.id}" value="${escapeHtml(t.url || "")}" placeholder="https://…" />
+                   <a class="btn-secondary btn-sm${t.url ? "" : " hidden"}" data-url-open="${t.id}" href="${escapeHtml(t.url || "#")}" target="_blank" rel="noopener" title="Open the link in a new tab">Open</a>
+                 </div>
+                 <div class="tpl-file-choice${t.url ? " hidden" : ""}" data-url-choice="${t.id}">
+                   <label class="btn-secondary btn-sm" style="display:inline-block; cursor:pointer;">Upload file<input type="file" class="tpl-upload-input" data-id="${t.id}" style="display:none;" /></label>
+                   <button type="button" class="btn-secondary btn-sm" data-url-add="${t.id}">Paste a link</button>
+                 </div>`}
           </div>
         </div>
         <div class="tpl-actions">
@@ -999,6 +1018,36 @@
         const { error } = await egWrite(sb.from("resource_vault_templates").update({ [fieldName]: value || null }).eq("id", id));
         if (error) { showBanner("Couldn't save: " + error.message, "error"); inp.value = original; return; }
         showBanner("Saved — updated for every client.", "success");
+      });
+    });
+
+    // Link resources save on blur, like Title and Description. Clearing the
+    // box removes the link and brings back the Upload file / Paste a link
+    // choice (Greg, 11/23/26).
+    list.querySelectorAll("[data-url-add]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.urlAdd;
+        list.querySelector(`[data-url-choice="${id}"]`).classList.add("hidden");
+        list.querySelector(`[data-url-row="${id}"]`).classList.remove("hidden");
+        list.querySelector(`.tpl-url[data-id="${id}"]`).focus();
+      });
+    });
+
+    list.querySelectorAll(".tpl-url").forEach((inp) => {
+      const original = inp.value;
+      inp.addEventListener("blur", async () => {
+        const id = inp.dataset.id;
+        let value = inp.value.trim();
+        if (value && !/^https?:\/\//i.test(value)) value = "https://" + value;
+        if (value === original) {
+          if (!value) await loadTemplates(); // opened, left empty: put the choice back
+          return;
+        }
+        if (value) { try { new URL(value); } catch (e) { showBanner("That doesn't look like a web address.", "error"); inp.value = original; return; } }
+        const { error } = await egWrite(sb.from("resource_vault_templates").update({ url: value || null }).eq("id", id));
+        if (error) { showBanner("Couldn't save link: " + error.message, "error"); inp.value = original; return; }
+        showBanner(value ? "Link saved — updated for every client." : "Link removed.", "success");
+        await loadTemplates();
       });
     });
 
@@ -1043,7 +1092,7 @@
     const path = `resource-templates/${currentUser.organization_id}/${Date.now()}-${sanitizeFilename(file.name)}`;
     const { error: uploadErr } = await sb.storage.from("client-documents").upload(path, file);
     if (uploadErr) { showBanner("Couldn't upload file: " + uploadErr.message, "error"); return; }
-    const { error } = await egWrite(sb.from("resource_vault_templates").update({ storage_path: path }).eq("id", templateId));
+    const { error } = await egWrite(sb.from("resource_vault_templates").update({ storage_path: path, url: null }).eq("id", templateId));
     if (error) { showBanner("Couldn't save file: " + error.message, "error"); return; }
     if (oldPath) await sb.storage.from("client-documents").remove([oldPath]);
     showBanner("File uploaded — updated for every client.", "success");
@@ -1055,7 +1104,11 @@
     const title = $("add-title").value.trim();
     const description = $("add-description").value.trim();
     const fileInput = $("add-file");
+    let url = $("add-url").value.trim();
     if (!title) { showBanner("Title is required.", "error"); return; }
+    if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+    if (url && fileInput.files.length) { showBanner("Choose a file or a link, not both.", "error"); return; }
+    if (url) { try { new URL(url); } catch (e) { showBanner("That doesn't look like a web address.", "error"); return; } }
 
     let storagePath = null;
     if (fileInput.files.length) {
@@ -1071,6 +1124,7 @@
       title,
       description: description || null,
       storage_path: storagePath,
+      url: url || null,
       sort_order: sortOrder,
     });
     if (error) { showBanner("Couldn't add resource: " + error.message, "error"); return; }
