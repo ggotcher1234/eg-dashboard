@@ -1035,6 +1035,13 @@
   // Control Center -- kept as a literal constant here too (rather than
   // imported) since each page in this app is a standalone file.
   const PUBLIC_SITE_BASE = "https://dashboard.economicgardening.org/";
+  // Staff-only links into the client dashboard (View Dashboard and the
+  // like) stay on whichever address this page was opened from (Greg,
+  // 11/23/26). A login is per address: signed in at egdb.netlify.app, a
+  // jump to dashboard.economicgardening.org arrives signed OUT, so the
+  // dashboard took you for a client and hid its staff-only Back link.
+  // PUBLIC_SITE_BASE stays the address for anything a CLIENT is sent.
+  const STAFF_SITE_BASE = /^https?:$/.test(location.protocol) ? location.origin + "/" : PUBLIC_SITE_BASE;
   const SUPABASE_URL = "https://ezujkumaxevuevlxtrxd.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_AuMDgu7pOU9xkh-f9lhkkQ_YIiLuFTo";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1439,7 +1446,7 @@
     AI_CONTEXT_LABEL = `${client.name} — Research`;
     const dashboardLink = $("header-dashboard-link");
     if (client.slug) {
-      dashboardLink.href = new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href;
+      dashboardLink.href = new URL(`c/${encodeURIComponent(client.slug)}`, STAFF_SITE_BASE).href;
       dashboardLink.classList.remove("disabled-link");
     } else {
       dashboardLink.href = "#";

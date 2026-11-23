@@ -1457,6 +1457,13 @@
   // Always build client-facing links against the real hosted site, never
   // against wherever this internal tool happens to be opened from.
   const PUBLIC_SITE_BASE = "https://dashboard.economicgardening.org/";
+  // Staff-only links into the client dashboard (View Dashboard and the
+  // like) stay on whichever address this page was opened from (Greg,
+  // 11/23/26). A login is per address: signed in at egdb.netlify.app, a
+  // jump to dashboard.economicgardening.org arrives signed OUT, so the
+  // dashboard took you for a client and hid its staff-only Back link.
+  // PUBLIC_SITE_BASE stays the address for anything a CLIENT is sent.
+  const STAFF_SITE_BASE = /^https?:$/.test(location.protocol) ? location.origin + "/" : PUBLIC_SITE_BASE;
   const RECENTS_KEY = "eg_recent_clients"; // shared with index.html
 
   let currentUser = null;
@@ -2225,7 +2232,7 @@
 
   let navItems = [];
   function renderNav(client) {
-    const dashboardHref = client.slug ? new URL(`c/${encodeURIComponent(client.slug)}`, PUBLIC_SITE_BASE).href : null;
+    const dashboardHref = client.slug ? new URL(`c/${encodeURIComponent(client.slug)}`, STAFF_SITE_BASE).href : null;
     navItems = [
       // Greg (9/5/26), per Chris's reference mockup: dropped the
       // "Engagement Workspace" section label that used to sit above Team &
