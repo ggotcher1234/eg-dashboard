@@ -185,6 +185,13 @@
   @media print {
     .cd-q-personprint:not(:empty) { display: inline; }
   }
+  /* The research area, as a picker on the question rather than a property
+     of the card the question happens to sit in. Changing it MOVES the row to
+     that card -- see moveQuestionRow. No print variant: on paper the card's
+     own heading already says which area you are reading. */
+  .cd-q-areawrap { flex-shrink: 0; }
+  .cd-q-area { max-width: 160px; height: 26px; padding: 0 4px 0 6px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--navy); cursor: pointer; }
+  .cd-q-area:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,74,117,0.12); }
   .cd-q-del { flex-shrink: 0; width: 30px; height: 30px; border: 1.5px solid var(--border); background: #fff; color: var(--danger); border-radius: 6px; font-size: 17px; line-height: 1; cursor: pointer; font-family: inherit; }
   .cd-q-del:hover { background: #fdecea; }
   .cd-q-field { margin-bottom: 12px; }
@@ -466,6 +473,16 @@
   // form (new columns in 101_controlling_doc_question_fields.sql).
   const RESEARCH_AREAS = ["market_dynamics", "outbound", "inbound", "watering_holes"];
 
+  // Short forms for the per-question area picker. The cards keep their full
+  // headings ("Market Dynamics Research", "Inbound Marketing"); a dropdown
+  // sitting on one header line needs the name and nothing else.
+  const AREA_LABEL = {
+    market_dynamics: "Market Dynamics",
+    outbound: "Outbound",
+    inbound: "Inbound",
+    watering_holes: "Watering Holes",
+  };
+
   // ---------- Assigned Person (Greg, 10/10/26) ----------
   // "add the Assigned Person from the Hours page to each question here."
   //
@@ -672,6 +689,11 @@
                   ${[1,2,3,4,5,6,7,8,9].map((n) => `<option value="${n}"${String(row.question_number) === String(n) ? " selected" : ""}>${n}</option>`).join("")}
                 </select>
               </span>
+              <span class="cd-q-areawrap no-print">
+                <select class="cd-q-area" aria-label="Research area" title="Which research area this question belongs to \u2014 changing it moves the question to that card">
+                  ${RESEARCH_AREAS.map((a) => `<option value="${a}"${a === area ? " selected" : ""}>${escapeHtml(AREA_LABEL[a])}</option>`).join("")}
+                </select>
+              </span>
               <span class="cd-q-personwrap no-print">
                 <select class="cd-q-person" aria-label="Assigned person" title="Who on this engagement owns this question">
                   ${specialistOptionsHtml(row.assigned_user_id || "")}
@@ -783,6 +805,44 @@
     if (rows.length === 0) rows.push(blankQuestion(area));
     renderQuestions();
   }
+
+  // Greg (24/11/26): Riker's Q4 was filed under Inbound Marketing and he
+  // went looking for it under Watering Holes. Until now the only way to move
+  // a question between cards was to delete it from one and retype it in the
+  // other, and the delete confirm says why that is a bad trade -- the row
+  // carries the question's number, its assigned person and every research
+  // file linked to it on the Research page, and all of that goes with the
+  // row. So the area is a picker ON the question, and the move keeps the row
+  // intact. submitResearchQuestions writes the new research_area; nothing is
+  // moved in the database until Save, same as every other field here.
+  function moveQuestionRow(fromArea, idx, toArea) {
+    if (!RESEARCH_AREAS.includes(fromArea) || !RESEARCH_AREAS.includes(toArea)) return;
+    if (fromArea === toArea) return;
+    syncQuestionModelFromDom();
+    const from = questionsByArea[fromArea] || [];
+    const row = from[idx];
+    if (!row) return;
+    from.splice(idx, 1);
+    // renderQuestions puts a blank row back into an emptied area anyway;
+    // doing it here keeps the model and the screen in step.
+    if (from.length === 0) from.push(blankQuestion(fromArea));
+    (questionsByArea[toArea] = questionsByArea[toArea] || []).push(row);
+    renderQuestions();
+    // The row is now at the bottom of a card that may be off screen, so go
+    // to it -- a question that silently vanishes from where you were looking
+    // is the problem this control exists to fix.
+    const container = document.querySelector(`.cd-questions[data-cd-area="${toArea}"]`);
+    const moved = container && container.querySelector(".cd-q-row:last-child");
+    if (moved) moved.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
+  document.addEventListener("change", (e) => {
+    const areaEl = e.target.closest ? e.target.closest(".cd-q-area") : null;
+    if (!areaEl) return;
+    const rowEl = areaEl.closest(".cd-q-row");
+    if (!rowEl) return;
+    moveQuestionRow(rowEl.dataset.area, parseInt(rowEl.dataset.idx, 10), areaEl.value);
+  });
 
   document.addEventListener("change", (e) => {
     const numEl = e.target.closest ? e.target.closest(".cd-q-num") : null;
@@ -936,8 +996,13 @@
           ? null : parseInt(row.question_number, 10);
         const who = row.assigned_user_id || null;
         if (row.id) {
-          const original = areaAll.find((q) => q.id === row.id);
-          const changed = !original
+          // Searched across ALL questions, not this area's: a row the area
+          // picker moved is being saved under one area while its stored copy
+          // still sits under another, and looking only at areaAll would find
+          // nothing and so compare against nothing.
+          const original = allQuestions.find((q) => q.id === row.id);
+          const movedArea = !original || area !== (original.research_area || "");
+          const changed = movedArea
             || value !== (original.question || "")
             || bg !== (original.background || "")
             || rank !== (original.ranking || "")
@@ -945,9 +1010,12 @@
             || qnum !== (original.question_number == null ? null : Number(original.question_number))
             || who !== (original.assigned_user_id || null);
           if (changed) {
+            const patch = { question: value || null, background: bg || null, ranking: rank || null, customer_notes: notes || null, question_number: qnum, assigned_user_id: who };
+            // Only on a move. An unmoved row keeps the sort_order it has, so
+            // saving an edit never reshuffles the card it sits in.
+            if (movedArea) { patch.research_area = area; patch.sort_order = nextSort++; }
             const { error } = await egWrite(sb.from("client_research_questions")
-              .update({ question: value || null, background: bg || null, ranking: rank || null, customer_notes: notes || null, question_number: qnum, assigned_user_id: who })
-              .eq("id", row.id));
+              .update(patch).eq("id", row.id));
             if (error) throw new Error(error.message);
           }
         } else if (value) {
