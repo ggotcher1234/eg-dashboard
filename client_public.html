@@ -1588,7 +1588,13 @@
   // dropped on the way to the screen.
   function stripTypedNumber(text, number) {
     if (!number) return text;
-    const m = /^\s*(\d+)\s*[.)]\s+/.exec(text);
+    // "4. " and "4) " were the original shapes. "QUESTION 4: " joined them
+    // on 24/11/26 -- the inbound-traffic question is pasted into Controlling
+    // Documents with its own number written out (Riker Products, Love Heal
+    // Grow), which rendered as "Q4  QUESTION 4: What can ...". The word is
+    // optional and the number still has to match the real one, so a question
+    // that genuinely opens "3 - 5 year horizon" is untouched.
+    const m = /^\s*(?:(?:question|q)\s*)?(\d+)\s*[.):]\s+/i.exec(text);
     return m && Number(m[1]) === Number(number) ? text.slice(m[0].length) : text;
   }
 
