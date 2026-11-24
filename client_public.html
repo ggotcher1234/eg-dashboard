@@ -1146,7 +1146,35 @@
   const BACKSTAGE_SPECIALTIES = new Set(["admin", "quality_control"]);
 
   function clientFacingTeam(rows) {
-    return (rows || []).filter((r) => r && !BACKSTAGE_SPECIALTIES.has(r.specialty));
+    const shown = (rows || []).filter((r) => r && !BACKSTAGE_SPECIALTIES.has(r.specialty));
+
+    // Greg (24/11/26): "The EG Team just needs one contact even if that
+    // contact is answering two questions... the purpose of this section is
+    // to identify all the players that the CEO will be working with."
+    //
+    // The rows come from client_assignments, one per work area, so anybody
+    // holding two areas was listed twice with identical contact details --
+    // Mary Ellen as Market Research and again as Watering Holes. To a CEO
+    // reading a team list that looks like two people with one phone number,
+    // or like a mistake. One row per person now.
+    //
+    // The FIRST row wins, and the order it arrives in is the order the
+    // workspace shows: Team Lead first, then the work areas in sequence. So
+    // the label kept is the person's leading role, which is the one worth
+    // printing when only one fits.
+    //
+    // Keyed on the email address, which is the thing that is actually the
+    // same person -- two roster entries could share a name, and the public
+    // view carries no id. A row with no email falls back to its name rather
+    // than collapsing every anonymous row into one.
+    const seen = new Set();
+    return shown.filter((r) => {
+      const key = ((r.email || "").trim().toLowerCase()) || ("name:" + (r.name || "").trim().toLowerCase());
+      if (!key || key === "name:") return true;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   function renderActionBars(row, expandAll) {
