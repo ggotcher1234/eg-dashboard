@@ -3527,8 +3527,14 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
   // is rebuilt in its new order and renumbered 1..n. Renumbering also
   // quietly repairs rows that arrived with duplicate or missing sort_order.
   async function persistDocOrder(ordered) {
+    // egWrite, not a bare update: row-level security answers a refused
+    // UPDATE with 200 and an empty body, so a bare update reports a reorder
+    // nobody was allowed to make as a success. cd25130 swept these up across
+    // the app and missed this one. Nobody should hit it -- documents_write
+    // lets anyone assigned to the engagement reorder -- which is exactly why
+    // it must not fail quietly if someone does.
     const writes = ordered.map((d, i) =>
-      sb.from("documents").update({ sort_order: i + 1 }).eq("id", d.id));
+      egWrite(sb.from("documents").update({ sort_order: i + 1 }).eq("id", d.id)));
     const results = await Promise.all(writes);
     const failed = results.find((r) => r.error);
     if (failed) { showBanner("Couldn't reorder: " + failed.error.message, "error"); return false; }
@@ -3555,6 +3561,15 @@ ${signature || `${specialistName}\n${specialtyLabel} — National Center for Eco
 
     const rest = allDocuments.filter((d) => d.research_area !== area);
     allDocuments = rest.concat(areaOrdered.map((d, i) => ({ ...d, sort_order: i + 1 })));
+    // THE REPAINT. 88564e6 removed the area boxes, and renderAreaDocs(area)
+    // -- which used to stand right here -- went with them. From then on a
+    // drag wrote the new order to the database and nothing on screen moved,
+    // so the file appeared to snap back and the reorder looked broken; it
+    // was only ever invisible, and a reload showed it had worked. Greg
+    // (24/11/26): "i can't reorder the uploaded documents and links."
+    // renderTaskList is the repaint now. openTaskIds is module state, so the
+    // Upload Research pills that were open stay open through it.
+    renderTaskList();
     if (!(await persistDocOrder(areaOrdered))) {
       // Put the screen back to what the database actually holds -- which
       // takes a redraw, not just a reload of the array (10/13/26, same
