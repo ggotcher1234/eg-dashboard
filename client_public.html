@@ -109,6 +109,19 @@
   .company-main { flex: 1 1 auto; min-width: 0; display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
   .company-ident { flex: 1 1 260px; min-width: 0; }
   .company-name { font-size: 21px; font-weight: 700; color: var(--navy); margin: 0; line-height: 1.2; }
+  /* The company's own contact, sitting opposite the ident block exactly as
+     Program sits opposite the app name in the masthead above. Greg
+     (24/11/26): "i can always remember who i'm working for as i move in and
+     out of files and engagements." company-main was already a two-column
+     flex with nothing in the second column, so this line costs no height at
+     all -- the right half of the row was empty. Narrow enough to wrap, it
+     drops under the address and re-aligns left rather than hanging off the
+     right edge of a phone. */
+  .company-contact { flex: 0 0 auto; text-align: right; line-height: 1.35; }
+  .company-contact .cl { font-size: 12.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+  .company-contact .cn { font-size: 15px; font-weight: 700; color: var(--navy); margin-top: 3px; }
+  .company-contact .ct { font-size: 12.5px; color: var(--muted); margin-top: 1px; }
+  @media (max-width: 620px) { .company-contact { text-align: left; } }
   .company-address { font-size: 13px; color: var(--text); margin-top: 4px; }
 
   /* The Program had been in the footer only, which on a client dashboard is
@@ -620,6 +633,11 @@
             <div class="company-links hidden" id="company-links"></div>
           </div>
         </div>
+        <div class="company-contact hidden" id="company-contact">
+          <div class="cl">Primary Contact</div>
+          <div class="cn" id="company-contact-name"></div>
+          <div class="ct hidden" id="company-contact-title"></div>
+        </div>
       </div>
     </div>
 
@@ -1048,6 +1066,19 @@
     const updatedText = formatUpdatedDate(c.updated_at);
     updatedEl.textContent = updatedText ? `Updated: ${updatedText}` : "";
     updatedEl.classList.toggle("hidden", !updatedText);
+
+    // The engagement's first contact -- get_client_public_view returns them
+    // ordered by sort_order, so [0] is the CEO or whoever signed the
+    // application. The whole block stays hidden when there is none, rather
+    // than printing a PRIMARY CONTACT label with nothing under it.
+    const primary = (row.contacts || []).filter(Boolean)[0];
+    if (primary && primary.name) {
+      $("company-contact-name").textContent = primary.name;
+      const titleEl = $("company-contact-title");
+      titleEl.textContent = primary.title || "";
+      titleEl.classList.toggle("hidden", !primary.title);
+      $("company-contact").classList.remove("hidden");
+    }
 
     renderCompanyLinks(c);
 

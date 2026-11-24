@@ -264,6 +264,13 @@
   #cm-program { font-size: 13.5px; color: var(--muted); margin-top: 4px; display: flex; align-items: center; gap: 6px; }
   #cm-program svg { color: var(--muted); flex-shrink: 0; }
   #cm-team-lead { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+  /* Who we are doing this FOR, in the same shape this header already uses
+     for Program and Team Lead (Greg, 24/11/26). The client dashboard's
+     header carries the same fact as its own right-hand column; here the
+     right-hand column is the status panel, and a third labelled line is the
+     pattern already on the page. */
+  #cm-contact { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+  #cm-contact b { color: var(--navy); font-weight: 700; }
   /* The "You here: …" chip (Greg, 9/11/26) is gone as of 9/19/26: "this box
      seems redundant." On the engagement you lead it repeated the Team Lead
      line directly above it, and for a specialist who isn't on the team the
@@ -1104,6 +1111,7 @@
             <h2 id="cm-name"></h2>
             <div id="cm-program"></div>
             <div id="cm-team-lead"></div>
+            <div id="cm-contact" class="hidden"></div>
             <span class="status-badge-wrap">
               <!-- Greg (11/1/26): the green status dot that sat here is gone.
                    An open engagement is in progress by definition, so a dot
@@ -2080,6 +2088,26 @@
       }
     }
     $("cm-team-lead").textContent = `Team Lead: ${teamLead || "—"}`;
+
+    // Greg (24/11/26): "so i can always remember who i'm working for as i
+    // move in and out of files and engagements." First contact by
+    // sort_order is the CEO or whoever signed the application -- the same
+    // one the client dashboard's header names. Not awaited by anything
+    // below it; the line fills itself in when the row arrives.
+    sb.from("client_contacts")
+      .select("name, title")
+      .eq("client_id", client.id)
+      .order("sort_order", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .then(({ data: contactRows }) => {
+        const primary = (contactRows || [])[0];
+        const el = $("cm-contact");
+        if (!el) return;
+        if (!primary || !primary.name) { el.classList.add("hidden"); return; }
+        el.innerHTML = `Contact: <b>${escapeHtml(primary.name)}</b>${primary.title ? ", " + escapeHtml(primary.title) : ""}`;
+        el.classList.remove("hidden");
+      });
     // Must agree with is_team_lead_of_client() in the database, which is
     // what actually decides whether a write lands:
     //   override <> 'consultant' AND an is_team_lead row on this client.
