@@ -918,16 +918,13 @@
               <div class="wf-action-row">
                 <div id="wf-controlling-client"></div>
                 <div id="wf-controlling-file"></div>
-                <!-- Greg (11/6/26): "move Try the fillable form link under Add
-                     Document not Open & Paste." It was a loose flex item that
-                     wrapped to the next line and landed at the left edge,
-                     under the wrong button. Stacked with the control it is
-                     about, it sits where it points. -->
+                <!-- "Try the fillable form" sat under this button until
+                     24/11/26. It was an aside pointing at one of two ways to
+                     do this step; now that the form is the only way, there is
+                     nothing to point at. The stack stays because the CSS that
+                     pushes these controls to the right of the row keys on it. -->
                 <div class="wf-stack">
                   <div id="wf-controlling-actions"></div>
-                  <div id="wf-controlling-form-hint">
-                    <button type="button" class="wf-form-link" id="wf-controlling-form-link">Try the fillable form</button>
-                  </div>
                 </div>
                 <div id="wf-controlling-share"></div>
               </div>
@@ -2006,7 +2003,20 @@
       openLabel: "Recorded Call",
       pathColumn: "discovery_notes_storage_path", urlColumn: "discovery_notes_url",
       passcodeColumn: "discovery_notes_passcode" },
-    { key: "controlling", label: "Controlling Document", addLabel: "Add Document", pathColumn: "controlling_doc_storage_path", urlColumn: "controlling_doc_url" },
+    // Greg (24/11/26): "going forward we are only going to allow the use of
+    // our form and not a Word document. remove the option from the page."
+    // formOnly takes Upload file, Add a link, Replace file and Edit link off
+    // this row, leaving Create Controlling Document as the only way in.
+    //
+    // The COLUMNS stay, and so does everything that reads them. Eleven
+    // engagements already have a Word Controlling Document attached: they
+    // still show Open Document, the client dashboard still links it, and the
+    // Research page still reads controlling_doc_storage_path for its
+    // re-read-the-document button. What is gone is the ability to attach a
+    // NEW one -- those eleven finish on what they have, and an engagement
+    // that wants off a Word file removes it and uses the form.
+    { key: "controlling", label: "Controlling Document", addLabel: "Add Document", formOnly: true,
+      pathColumn: "controlling_doc_storage_path", urlColumn: "controlling_doc_url" },
     { key: "review", label: "Debriefing Recording", pathColumn: "research_review_storage_path", urlColumn: "research_review_url" },
     // 10/10/26. NOT closeout_survey_* -- those two are the Evaluation
     // Sheet's own attachment slot (a signed sheet an admin uploads on the
@@ -2046,8 +2056,7 @@
   // every load and would stack a listener each time.
   document.getElementById("wf-discovery-form-link")
     ?.addEventListener("click", () => openDiscoveryCallNotesForm());
-  document.getElementById("wf-controlling-form-link")
-    ?.addEventListener("click", () => openControllingDocumentForm());
+
 
   function openDiscoveryCallNotesForm() {
     window.open(`discovery_call_notes.html?client=${currentClient.id}`, "_blank");
@@ -2114,7 +2123,7 @@
     // The prompt beside "+ Add file" only makes sense while that button says
     // "+ Add file". Once something is attached it reads "Change", and the
     // form is one of the choices inside it.
-    if (f.key === "discovery" || f.key === "controlling") {
+    if (f.key === "discovery") {
       const formHint = $(`wf-${f.key}-form-hint`);
       if (formHint) formHint.classList.toggle("hidden", !!path || !!url);
     }
@@ -2125,14 +2134,14 @@
           <button type="button" class="wf-btn" data-wf-change>Change &#9662;</button>
           <div class="wf-menu hidden">
             ${createBtnHtml}
-            <button type="button" data-wf-replace>Replace file</button>
+            ${f.formOnly ? "" : `<button type="button" data-wf-replace>Replace file</button>`}
             <button type="button" class="wf-menu-danger" data-wf-remove>Remove file</button>
           </div>
         </div>
       `;
       wireWfChangeMenu(actions, [
         ...createAction,
-        { sel: "[data-wf-replace]", fn: () => pickWorkflowFile(f) },
+        ...(f.formOnly ? [] : [{ sel: "[data-wf-replace]", fn: () => pickWorkflowFile(f) }]),
         { sel: "[data-wf-remove]", fn: () => removeWorkflowItem(f) },
       ]);
       container.innerHTML = `
@@ -2151,14 +2160,14 @@
           <button type="button" class="wf-btn" data-wf-change>Change &#9662;</button>
           <div class="wf-menu hidden">
             ${createBtnHtml}
-            <button type="button" data-wf-edit-link>Edit link</button>
+            ${f.formOnly ? "" : `<button type="button" data-wf-edit-link>Edit link</button>`}
             <button type="button" class="wf-menu-danger" data-wf-remove>Remove link</button>
           </div>
         </div>
       `;
       wireWfChangeMenu(actions, [
         ...createAction,
-        { sel: "[data-wf-edit-link]", fn: () => renderWorkflowLinkForm(f, url) },
+        ...(f.formOnly ? [] : [{ sel: "[data-wf-edit-link]", fn: () => renderWorkflowLinkForm(f, url) }]),
         { sel: "[data-wf-remove]", fn: () => removeWorkflowItem(f) },
       ]);
       // Greg (11/6/26): "get rid of the link as it junks up the look of the
@@ -2173,6 +2182,15 @@
           <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="btn-primary wf-open-btn">&#128279; ${f.openLabel || "Open Document"} &#8599;</a>
         </div>
       `;
+      return;
+    }
+
+    // One way in means no menu to choose it from: the row offers the single
+    // thing you can do, as a button.
+    if (f.formOnly) {
+      actions.innerHTML = `<button type="button" class="wf-btn" data-wf-create>Create Controlling Document</button>`;
+      actions.querySelector("[data-wf-create]").addEventListener("click", () => openControllingDocumentForm());
+      container.innerHTML = "";
       return;
     }
 
