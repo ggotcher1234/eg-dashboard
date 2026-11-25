@@ -332,6 +332,25 @@
   .bs-this-month:hover { background: #e2e6ea; }
   .bs-total-row td { font-weight: 700; background: #f4f7fa; border-top: 2px solid var(--border); }
   .bs-zero { color: var(--muted); }
+  /* Greg (25/11/26): "if October Invoices is displaying, and you clicked on
+     Greater Rochester, it would open the Greater Rochester October invoice."
+     Only a figure with invoices behind it is a link. A dash is not clickable
+     and must not look like one, or the row invites a click the page cannot
+     answer. */
+  .bs-link { background: none; border: none; padding: 0; font: inherit; color: var(--navy-light);
+             cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+             text-decoration-color: rgba(31,74,117,0.35); }
+  .bs-link:hover { text-decoration-color: currentColor; }
+  .bs-link:focus-visible { outline: 2px solid var(--navy-light); outline-offset: 2px; border-radius: 3px; }
+  /* Shown over Past Invoices when a Billed-by-Program figure sent you there,
+     so a short list never reads as the whole list. */
+  .pi-filter { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 7px 14px;
+               background: #eef4fb; border: 1px solid #d6e2f0; border-radius: 999px;
+               font-size: 12.5px; color: var(--navy); width: fit-content; max-width: 100%; }
+  .pi-filter b { font-weight: 700; }
+  .pi-filter button { background: none; border: none; cursor: pointer; font-size: 16px; line-height: 1;
+                      color: var(--muted); padding: 0 2px; font-family: inherit; flex-shrink: 0; }
+  .pi-filter button:hover { color: var(--navy); }
 
   .rate-input-wrap { display: flex; align-items: center; gap: 6px; }
   .rate-input-wrap .rate-prefix { color: var(--muted); font-size: 13.5px; }
@@ -808,6 +827,10 @@
     <div id="past-invoices-section" class="card">
       <h2>Past Invoices</h2>
       <div class="card-hint">Every Program invoice ever generated. Click one to reopen and print it again.</div>
+      <div id="pi-filter" class="pi-filter hidden">
+        <span id="pi-filter-text"></span>
+        <button type="button" id="pi-filter-clear" title="Show every invoice" aria-label="Show every invoice">&times;</button>
+      </div>
       <div class="table-scroll">
         <table class="pi-table" id="past-invoices-table">
           <thead><tr>
@@ -940,6 +963,16 @@
   let previewClients = []; // computed per-client line groups for the current Program+Month
   let previewTotalDue = 0;
   let pastInvoices = [];
+  // Set when a figure in Billed by Program sends you to a short list below;
+  // null means Past Invoices is showing everything, which is its normal
+  // state. Holds ids rather than a predicate so the list cannot drift from
+  // the figure that was clicked.
+  let pastInvoicesFilter = null;
+  // The rows Billed by Program last drew, each carrying the invoices behind
+  // each of its three figures. Click handlers read these rather than
+  // recomputing, so what opens is exactly what was added up.
+  let billedRows = [];
+  let billedTotalRow = null;
   let activeInvoiceRow = null; // the invoice currently shown in the print view
   let activeInvoiceProgram = ""; // its Program's name, for the email subject
 
@@ -1308,13 +1341,17 @@
     wireSplitCountyField();
     $("pi-month").addEventListener("change", refreshPreview);
     $("bs-month").value = thisMonthValue();
-    $("bs-month").addEventListener("change", renderBilledSummary);
+    // Changing the month re-scopes every figure, so a filter named after
+    // the old one stops describing what you are looking at.
+    $("bs-month").addEventListener("change", () => { clearPastInvoicesFilter(); renderBilledSummary(); });
     $("bs-month-prev").addEventListener("click", () => shiftBilledMonth(-1));
     $("bs-month-next").addEventListener("click", () => shiftBilledMonth(1));
     $("bs-this-month").addEventListener("click", () => {
       $("bs-month").value = thisMonthValue();
+      clearPastInvoicesFilter();
       renderBilledSummary();
     });
+    $("pi-filter-clear").addEventListener("click", clearPastInvoicesFilter);
 
     $("pi-month-prev").addEventListener("click", () => shiftMonth(-1));
     $("pi-month-next").addEventListener("click", () => shiftMonth(1));
@@ -1800,6 +1837,9 @@
       .order("created_at", { ascending: false });
     if (error) { showBanner("Couldn't load past invoices: " + error.message, "error"); return; }
     pastInvoices = data || [];
+    // Generating or voiding reloads this list, and ids held from before are
+    // then a snapshot of a state that no longer exists.
+    pastInvoicesFilter = null;
     renderPastInvoicesTable();
     renderBilledSummary();
   }
@@ -1848,44 +1888,130 @@
       var name = (p && p.name) || "Unknown Program";
       var bm = inv.billing_month || "";
       var amt = Number(inv.total_due) || 0;
-      var row = byProgram[name] || (byProgram[name] = { name: name, month: 0, ytd: 0, all: 0 });
-      row.all += amt;
-      if (bm === month) row.month += amt;
+      var row = byProgram[name] || (byProgram[name] = {
+        name: name, month: 0, ytd: 0, all: 0, monthInv: [], ytdInv: [], allInv: [],
+      });
+      // Each figure keeps the invoices it is the sum of. One pass, so the
+      // total and the list behind it can never disagree.
+      row.all += amt; row.allInv.push(inv);
+      if (bm === month) { row.month += amt; row.monthInv.push(inv); }
       // Year to date means January through the selected month, so a later
       // month of the same year is not in it -- looking back at March should
       // not sweep in what was billed in November.
-      if (bm.slice(0, 4) === year && bm <= month) row.ytd += amt;
+      if (bm.slice(0, 4) === year && bm <= month) { row.ytd += amt; row.ytdInv.push(inv); }
     });
 
     var rows = Object.keys(byProgram).map(function (k) { return byProgram[k]; })
       .sort(function (a, b) { return b.ytd - a.ytd || a.name.localeCompare(b.name); });
 
-    var cell = function (n) {
-      return n ? money(n) : '<span class="bs-zero">&mdash;</span>';
+    billedRows = rows;
+    var sum = function (f) { return rows.reduce(function (t, r) { return t + r[f]; }, 0); };
+    var pool = function (f) {
+      return rows.reduce(function (t, r) { return t.concat(r[f]); }, []);
+    };
+    billedTotalRow = {
+      name: "All Programs",
+      month: sum("month"), ytd: sum("ytd"), all: sum("all"),
+      monthInv: pool("monthInv"), ytdInv: pool("ytdInv"), allInv: pool("allInv"),
     };
 
-    tbody.innerHTML = rows.map(function (r) {
+    // The index, not the Program name, goes in the attribute: escapeHtml
+    // here is the textContent/innerHTML trick, which leaves quotes alone, so
+    // a Program called 5" Pipe Co would break out of the attribute.
+    var cell = function (r, key, scope, idx) {
+      var list = r[scope === "month" ? "monthInv" : scope === "ytd" ? "ytdInv" : "allInv"];
+      if (!list.length) return '<span class="bs-zero">&mdash;</span>';
+      return '<button type="button" class="bs-link" data-bs-row="' + idx +
+             '" data-bs-scope="' + scope + '">' + money(r[key]) + "</button>";
+    };
+
+    tbody.innerHTML = rows.map(function (r, i) {
+      // The Program name is the selected month's invoice -- Greg's rule
+      // exactly. Plain text, not a dead link, in a month it was not billed.
+      var nameCell = r.monthInv.length
+        ? '<button type="button" class="bs-link" data-bs-row="' + i +
+          '" data-bs-scope="month">' + escapeHtml(r.name) + "</button>"
+        : escapeHtml(r.name);
       return "<tr>" +
-        "<td>" + escapeHtml(r.name) + "</td>" +
-        '<td class="num">' + cell(r.month) + "</td>" +
-        '<td class="num">' + cell(r.ytd) + "</td>" +
-        '<td class="num">' + cell(r.all) + "</td>" +
+        "<td>" + nameCell + "</td>" +
+        '<td class="num">' + cell(r, "month", "month", i) + "</td>" +
+        '<td class="num">' + cell(r, "ytd", "ytd", i) + "</td>" +
+        '<td class="num">' + cell(r, "all", "all", i) + "</td>" +
       "</tr>";
     }).join("");
 
-    var sum = function (f) { return rows.reduce(function (t, r) { return t + r[f]; }, 0); };
+    var t = billedTotalRow;
     tbody.innerHTML += '<tr class="bs-total-row">' +
       "<td>All Programs</td>" +
-      '<td class="num">' + cell(sum("month")) + "</td>" +
-      '<td class="num">' + cell(sum("ytd")) + "</td>" +
-      '<td class="num">' + cell(sum("all")) + "</td>" +
+      '<td class="num">' + cell(t, "month", "month", "total") + "</td>" +
+      '<td class="num">' + cell(t, "ytd", "ytd", "total") + "</td>" +
+      '<td class="num">' + cell(t, "all", "all", "total") + "</td>" +
     "</tr>";
+
+    tbody.querySelectorAll("[data-bs-row]").forEach(function (el) {
+      el.addEventListener("click", function () {
+        var key = el.dataset.bsRow;
+        var row = key === "total" ? billedTotalRow : billedRows[Number(key)];
+        if (row) openBilledScope(row, el.dataset.bsScope);
+      });
+    });
+  }
+
+  // ---------- From a figure to the invoice behind it (Greg, 25/11/26) ----------
+  //
+  // "i was thinking of the program name for a given month. so if October
+  // Invoices is displaying, and you clicked on Greater Rochester, it would
+  // open the Greater Rochester October invoice."
+  //
+  // Which is what it does. Two things that rule does not cover are handled
+  // rather than designed around, both already true of the live data:
+  //
+  //   A month can hold SEVERAL invoices. Alloy's August is 2026-1 and
+  //   2026-6; Sacramento's August is 2026-2 and 2026-4. Split Invoice by
+  //   County exists to produce exactly that, so one invoice opens and
+  //   several filter the list below -- the page never picks one of two.
+  //
+  //   A month can be EMPTY while the row still shows money. In November
+  //   every month figure is a dash, because the newest invoice is October.
+  //   So Year to Date and All Time are clickable on their own terms and the
+  //   row is never dead.
+  function scopeLabel(scope) {
+    var month = billedMonthValue();
+    if (scope === "month") return monthLongLabel(month);
+    if (scope === "ytd") return "Year to Date " + month.slice(0, 4);
+    return "All Time";
+  }
+
+  function openBilledScope(row, scope) {
+    var list = scope === "month" ? row.monthInv : scope === "ytd" ? row.ytdInv : row.allInv;
+    if (!list.length) return;
+    if (list.length === 1) {
+      var inv = list[0];
+      showInvoiceView(inv,
+        (inv.econ_dev_companies && inv.econ_dev_companies.name) || "",
+        (inv.econ_dev_companies && inv.econ_dev_companies.address) || "");
+      return;
+    }
+    pastInvoicesFilter = {
+      ids: list.map(function (i) { return i.id; }),
+      label: row.name + " \u00b7 " + scopeLabel(scope) + " \u00b7 " + list.length + " invoices",
+    };
+    renderPastInvoicesTable();
+    var sec = $("past-invoices-section");
+    if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function clearPastInvoicesFilter() {
+    if (!pastInvoicesFilter) return;
+    pastInvoicesFilter = null;
+    renderPastInvoicesTable();
   }
 
   function shiftBilledMonth(delta) {
     var parts = billedMonthValue().split("-").map(Number);
     var d = new Date(parts[0], parts[1] - 1 + delta, 1);
     $("bs-month").value = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    clearPastInvoicesFilter();
     renderBilledSummary();
   }
 
@@ -1937,7 +2063,22 @@
 
   function renderPastInvoicesTable() {
     const tbody = $("past-invoices-tbody");
-    if (!pastInvoices.length) {
+    // A filter set by Billed by Program narrows this to the invoices behind
+    // one figure. The chip above the table says so, because a short list
+    // that looks like the whole list is how someone concludes invoices are
+    // missing.
+    const shown = pastInvoicesFilter
+      ? pastInvoices.filter((i) => pastInvoicesFilter.ids.indexOf(i.id) >= 0)
+      : pastInvoices;
+    const chip = $("pi-filter");
+    if (chip) {
+      chip.classList.toggle("hidden", !pastInvoicesFilter);
+      if (pastInvoicesFilter) {
+        $("pi-filter-text").innerHTML = "Showing <b>" + escapeHtml(pastInvoicesFilter.label) + "</b>";
+      }
+    }
+
+    if (!shown.length) {
       $("past-invoices-table").classList.add("hidden");
       $("past-invoices-empty").classList.remove("hidden");
       return;
@@ -1946,7 +2087,7 @@
     $("past-invoices-empty").classList.add("hidden");
     updatePastInvoicesSortIndicators();
 
-    tbody.innerHTML = sortPastInvoices(pastInvoices).map((inv) => `
+    tbody.innerHTML = sortPastInvoices(shown).map((inv) => `
       <tr>
         <td><span class="invoice-number-badge">${escapeHtml(inv.invoice_number)}</span>${inv.billing_segment ? ` <span class="county-tag">${escapeHtml(inv.billing_segment)}</span>` : ""}${inv.voided ? ' <span class="voided-badge">Voided</span>' : ""}</td>
         <td>${escapeHtml((inv.econ_dev_companies && inv.econ_dev_companies.name) || "—")}</td>
